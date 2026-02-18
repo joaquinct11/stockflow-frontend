@@ -54,6 +54,13 @@ export const suscripcionService = {
     return data;
   },
 
+  activate: async (id: number): Promise<SuscripcionDTO> => {
+    const { data } = await axiosInstance.put<SuscripcionDTO>(
+      API_ENDPOINTS.SUSCRIPCIONES.ACTIVATE(id)
+    );
+    return data;
+  },
+
   delete: async (id: number): Promise<void> => {
     await axiosInstance.delete(API_ENDPOINTS.SUSCRIPCIONES.DELETE(id));
   },
