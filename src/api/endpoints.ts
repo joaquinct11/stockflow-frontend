@@ -10,6 +10,7 @@ export const API_ENDPOINTS = {
     GET: (id: number) => `/usuarios/${id}`,
     GET_BY_EMAIL: (email: string) => `/usuarios/email/${email}`,
     GET_BY_TENANT: (tenantId: string) => `/usuarios/tenant/${tenantId}`,
+    CREATE: '/usuarios',
     UPDATE: (id: number) => `/usuarios/${id}`,
     DEACTIVATE: (id: number) => `/usuarios/${id}/desactivar`,
     ACTIVATE: (id: number) => `/usuarios/${id}/activar`,

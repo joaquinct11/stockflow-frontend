@@ -24,6 +24,14 @@ export const usuarioService = {
     return data;
   },
 
+  create: async (usuario: Usuario): Promise<Usuario> => {
+    const { data } = await axiosInstance.post<Usuario>(
+      API_ENDPOINTS.USUARIOS.CREATE,
+      usuario
+    );
+    return data;
+  },
+
   update: async (id: number, usuario: Usuario): Promise<Usuario> => {
     const { data } = await axiosInstance.put<Usuario>(
       API_ENDPOINTS.USUARIOS.UPDATE(id),

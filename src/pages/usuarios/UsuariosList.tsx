@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
+import { Dialog } from '../../components/ui/Dialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck } from 'lucide-react';
@@ -14,7 +15,7 @@ import toast from 'react-hot-toast';
 export function UsuariosList() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -45,36 +46,37 @@ export function UsuariosList() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    if (editingId) {
-      // Crear objeto con SOLO los campos que se actualizan
-      const usuarioToUpdate = {
-        nombre: formData.nombre,
-        rolNombre: formData.rolNombre,
-        tenantId: formData.tenantId,
-        activo: formData.activo,
-      };
+    e.preventDefault();
+    try {
+      if (editingId) {
+        // EDITAR usuario existente
+        const usuarioToUpdate = {
+          nombre: formData.nombre,
+          rolNombre: formData.rolNombre,
+          tenantId: formData.tenantId,
+          activo: formData.activo,
+        };
+        
+        console.log('📤 Actualizando usuario:', usuarioToUpdate);
+        
+        await usuarioService.update(editingId, usuarioToUpdate as Usuario);
+        toast.success('Usuario actualizado exitosamente');
+      } else {
+        // CREAR nuevo usuario
+        console.log('📤 Creando usuario:', formData);
+        
+        await usuarioService.create(formData);
+        toast.success('Usuario creado exitosamente');
+      }
       
-      console.log('📤 Enviando:', usuarioToUpdate);
-      
-      await usuarioService.update(editingId, usuarioToUpdate as Usuario);
-      toast.success('Usuario actualizado');
       resetForm();
       await fetchUsuarios();
-    } else {
-      toast('Para crear un nuevo usuario, usa el formulario de registro', {
-        icon: 'ℹ️',
-        duration: 4000,
-      });
-      return;
+    } catch (error: any) {
+      console.error('❌ Error:', error.response?.data);
+      const message = error.response?.data?.mensaje || error.response?.data?.error || 'Error al guardar usuario';
+      toast.error(message);
     }
-  } catch (error: any) {
-    console.error('❌ Error:', error.response?.data);
-    const message = error.response?.data?.mensaje || error.response?.data?.error || 'Error al guardar usuario';
-    toast.error(message);
-  }
-};
+  };
 
   const handleEdit = (usuario: Usuario) => {
     setFormData({
@@ -82,7 +84,7 @@ export function UsuariosList() {
       contraseña: '', // No mostrar la contraseña
     });
     setEditingId(usuario.id!);
-    setShowForm(true);
+    setIsDialogOpen(true);
   };
 
   const handleDeactivate = async (id: number) => {
@@ -131,7 +133,7 @@ export function UsuariosList() {
       activo: true,
     });
     setEditingId(null);
-    setShowForm(false);
+    setIsDialogOpen(false);
   };
 
   const filteredUsuarios = usuarios.filter(u =>
@@ -153,9 +155,9 @@ export function UsuariosList() {
             Gestiona los usuarios del sistema
           </p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)} className="w-full sm:w-auto">
+        <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
-          Editar Usuario
+          Nuevo Usuario
         </Button>
       </div>
 
@@ -207,102 +209,6 @@ export function UsuariosList() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Form */}
-      {showForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{editingId ? 'Editar Usuario' : 'Nuevo Usuario'}</CardTitle>
-            <CardDescription>
-              {editingId 
-                ? 'Actualiza la información del usuario' 
-                : 'Para crear un nuevo usuario, usa el formulario de registro'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Nombre Completo</label>
-                <Input
-                  placeholder="Juan Pérez"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
-                <Input
-                  type="email"
-                  placeholder="usuario@email.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                  disabled={!!editingId} // No permitir cambiar email al editar
-                />
-              </div>
-
-              {!editingId && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Contraseña</label>
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    value={formData.contraseña}
-                    onChange={(e) => setFormData({ ...formData, contraseña: e.target.value })}
-                    required={!editingId}
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Rol</label>
-                <select
-                  value={formData.rolNombre}
-                  onChange={(e) => setFormData({ ...formData, rolNombre: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="VENDEDOR">Vendedor</option>
-                  <option value="ADMIN">Administrador</option>
-                  <option value="ALMACEN">Almacén</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Tenant ID</label>
-                <Input
-                  placeholder="farmacia-001"
-                  value={formData.tenantId}
-                  onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.activo}
-                    onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
-                    className="rounded border-gray-300"
-                  />
-                  Usuario Activo
-                </label>
-              </div>
-
-              <div className="md:col-span-2 flex gap-2">
-                <Button type="submit" className="flex-1">
-                  {editingId ? 'Actualizar' : 'Crear'} Usuario
-                </Button>
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Search */}
       <Card>
@@ -413,6 +319,103 @@ export function UsuariosList() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog/Modal */}
+      <Dialog
+        isOpen={isDialogOpen}
+        onClose={resetForm}
+        title={editingId ? 'Editar Usuario' : 'Nuevo Usuario'}
+        description={
+          editingId 
+            ? 'Actualiza la información del usuario' 
+            : 'Completa los datos para crear un nuevo usuario'
+        }
+        size="lg"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nombre Completo</label>
+              <Input
+                placeholder="Juan Pérez"
+                value={formData.nombre}
+                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Email</label>
+              <Input
+                type="email"
+                placeholder="usuario@email.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                disabled={!!editingId}
+                required
+              />
+            </div>
+
+            {!editingId && (
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">Contraseña</label>
+                <Input
+                  type="password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={formData.contraseña}
+                  onChange={(e) => setFormData({ ...formData, contraseña: e.target.value })}
+                  required
+                  minLength={6}
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Rol</label>
+              <select
+                value={formData.rolNombre}
+                onChange={(e) => setFormData({ ...formData, rolNombre: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="VENDEDOR">Vendedor</option>
+                <option value="ADMIN">Administrador</option>
+                <option value="ALMACEN">Almacén</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tenant ID</label>
+              <Input
+                placeholder="farmacia-001"
+                value={formData.tenantId}
+                onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-2 flex items-center md:col-span-2">
+              <label className="text-sm font-medium flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.activo}
+                  onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
+                  className="rounded border-gray-300"
+                />
+                Usuario Activo
+              </label>
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4 border-t">
+            <Button type="button" variant="outline" onClick={resetForm}>
+              Cancelar
+            </Button>
+            <Button type="submit">
+              {editingId ? 'Actualizar' : 'Crear'} Usuario
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }
