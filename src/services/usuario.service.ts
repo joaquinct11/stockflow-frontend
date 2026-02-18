@@ -36,6 +36,10 @@ export const usuarioService = {
     await axiosInstance.patch(API_ENDPOINTS.USUARIOS.DEACTIVATE(id));
   },
 
+  activate: async (id: number): Promise<void> => {
+    await axiosInstance.patch(API_ENDPOINTS.USUARIOS.ACTIVATE(id));
+  },
+
   delete: async (id: number): Promise<void> => {
     await axiosInstance.delete(API_ENDPOINTS.USUARIOS.DELETE(id));
   },

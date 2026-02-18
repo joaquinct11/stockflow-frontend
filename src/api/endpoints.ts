@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
     GET_BY_TENANT: (tenantId: string) => `/usuarios/tenant/${tenantId}`,
     UPDATE: (id: number) => `/usuarios/${id}`,
     DEACTIVATE: (id: number) => `/usuarios/${id}/desactivar`,
+    ACTIVATE: (id: number) => `/usuarios/${id}/activar`,
     DELETE: (id: number) => `/usuarios/${id}`,
   },
   
