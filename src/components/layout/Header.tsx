@@ -20,7 +20,7 @@ export function Header({ onMenuClick }: HeaderProps) {
     try {
       await authService.logout();
       logout();
-      toast.success('Sesi��n cerrada exitosamente');
+      toast.success('Sesión cerrada exitosamente');
       navigate('/login');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
