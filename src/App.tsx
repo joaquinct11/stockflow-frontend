@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
+import { useInactivityLogout } from './hooks/useInactivityLogout';
 
 // Layout
 import { AppLayout } from './components/layout/AppLayout';
@@ -19,10 +20,13 @@ import { VentasList } from './pages/ventas/VentasList';
 import { UsuariosList } from './pages/usuarios/UsuariosList';
 import { SuscripcionesList } from './pages/suscripciones/SuscripcionesList';
 import { InventarioList } from './pages/inventario/InventarioList';
+import { ProveedoresList } from './pages/proveedores/ProveedoresList';
 
 function App() {
   const { initialize } = useAuthStore();
   const { isDark, setTheme } = useThemeStore();
+
+  useInactivityLogout();
 
   useEffect(() => {
     initialize();
@@ -55,6 +59,7 @@ function App() {
             <Route path="usuarios" element={<UsuariosList />} />
             <Route path="suscripciones" element={<SuscripcionesList />} />
             <Route path="inventario" element={<InventarioList />} />
+            <Route path="proveedores" element={<ProveedoresList />} />
             
             {/* Placeholder routes */}
             <Route path="reportes" element={<div className="text-center py-12"><h2 className="text-2xl font-bold">Módulo de Reportes</h2><p className="text-muted-foreground">Próximamente...</p></div>} />

@@ -34,8 +34,9 @@ export interface ProductoDTO {
   stockMaximo: number;
   costoUnitario: number;
   precioVenta: number;
-  fechaVencimiento?: string;
+ fechaVencimiento?: string;
   lote?: string;
+  proveedorId?: number;
   activo?: boolean;
   tenantId: string;
 }
@@ -43,16 +44,19 @@ export interface ProductoDTO {
 export interface VentaDTO {
   id?: number;
   vendedorId: number;
+  vendedorNombre?: string;
   total: number;
   metodoPago: string;
   estado: string;
   tenantId: string;
+  createdAt?: string;
   detalles: DetalleVentaDTO[];
 }
 
 export interface DetalleVentaDTO {
   id?: number;
   productoId: number;
+  productoNombre?: string;
   cantidad: number;
   precioUnitario: number;
   subtotal?: number;
@@ -105,4 +109,16 @@ export interface KardexDTO {
   stockActual: number;
   stockMinimo: number;
   stockMaximo: number;
+}
+
+export interface ProveedorDTO {
+  id?: number;
+  nombre: string;
+  ruc?: string;
+  contacto?: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  activo?: boolean;
+  tenantId: string;
 }

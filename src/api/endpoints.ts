@@ -69,4 +69,17 @@ export const API_ENDPOINTS = {
     UPDATE: (id: number) => `/roles/${id}`,
     DELETE: (id: number) => `/roles/${id}`,
   },
+
+  PROVEEDORES: {
+    LIST: '/proveedores',
+    LIST_ACTIVOS: '/proveedores/activos', // ✅ NUEVO
+    GET: (id: number) => `/proveedores/${id}`,
+    GET_BY_RUC: (ruc: string) => `/proveedores/ruc/${ruc}`,
+    SEARCH: (nombre: string) => `/proveedores/buscar?nombre=${nombre}`,
+    CREATE: '/proveedores',
+    UPDATE: (id: number) => `/proveedores/${id}`,
+    DELETE: (id: number) => `/proveedores/${id}`,
+    ACTIVATE: (id: number) => `/proveedores/${id}/activar`, // ✅ NUEVO
+    DEACTIVATE: (id: number) => `/proveedores/${id}/desactivar`, // ✅ NUEVO
+  },
 };

@@ -10,7 +10,9 @@ import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { Plus, Trash2, ShoppingCart, Search, DollarSign, Eye } from 'lucide-react';
+import { Autocomplete } from '../../components/ui/Autocomplete';
+import { Pagination } from '../../components/ui/Pagination';
+import { Plus, Trash2, ShoppingCart, Search, DollarSign, Eye, User, Calendar, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -24,6 +26,16 @@ export function VentasList() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVenta, setSelectedVenta] = useState<VentaDTO | null>(null);
+
+  // ✅ NUEVO - Estados de paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // ✅ NUEVO - Estados de filtro por fecha
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+
+  const [selectedProductos, setSelectedProductos] = useState<{ [key: number]: any }>({});
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -57,6 +69,11 @@ export function VentasList() {
     fetchData();
   }, []);
 
+  // ✅ NUEVO - Resetear página al buscar o filtrar
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, fechaDesde, fechaHasta]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -64,6 +81,8 @@ export function VentasList() {
         ventaService.getAll(),
         productoService.getAll(),
       ]);
+      console.log('📦 Ventas recibidas:', ventasData);
+    console.log('📅 Primera venta createdAt:', ventasData[0]?.createdAt);
       setVentas(ventasData);
       setProductos(productosData);
     } catch (error) {
@@ -73,6 +92,12 @@ export function VentasList() {
       setLoading(false);
     }
   };
+
+  const productosOptions = productos.map((p) => ({
+    id: p.id!,
+    label: p.nombre,
+    subtitle: `Código: ${p.codigoBarras} | Stock: ${p.stockActual} | S/.${p.precioVenta.toFixed(2)}`,
+  }));
 
   const handleAddDetalle = () => {
     setFormData({
@@ -96,7 +121,6 @@ export function VentasList() {
     const newDetalles = [...formData.detalles];
     newDetalles[index] = { ...newDetalles[index], [field]: value };
 
-    // Si cambia el producto, actualizar el precio
     if (field === 'productoId') {
       const producto = productos.find(p => p.id === parseInt(value));
       if (producto) {
@@ -108,6 +132,10 @@ export function VentasList() {
   };
 
   const handleRemoveDetalle = (index: number) => {
+    const newSelectedProductos = { ...selectedProductos };
+    delete newSelectedProductos[index];
+    setSelectedProductos(newSelectedProductos);
+
     setFormData({
       ...formData,
       detalles: formData.detalles.filter((_, i) => i !== index),
@@ -182,13 +210,63 @@ export function VentasList() {
       tenantId: 'farmacia-001',
       detalles: [],
     });
+    setSelectedProductos({});
     setIsDialogOpen(false);
   };
 
-  const filteredVentas = ventas.filter(v =>
-    v.metodoPago?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.estado?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // ✅ NUEVO - Limpiar filtros de fecha
+  const clearDateFilters = () => {
+    setFechaDesde('');
+    setFechaHasta('');
+  };
+
+  // ✅ ACTUALIZADO - Filtrar ventas por búsqueda y fechas
+  const filteredVentas = ventas.filter(v => {
+    // Filtro por búsqueda de texto
+    const matchesSearch = 
+      v.metodoPago?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.estado?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.vendedorNombre?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    // Filtro por fecha
+    if (fechaDesde || fechaHasta) {
+      const fechaVenta = v.createdAt ? new Date(v.createdAt) : null;
+      if (!fechaVenta) return false;
+
+      // ✅ CORRECCIÓN: Normalizar fechas en hora local (no UTC)
+      const ventaDate = new Date(
+        fechaVenta.getFullYear(), 
+        fechaVenta.getMonth(), 
+        fechaVenta.getDate()
+      );
+
+      if (fechaDesde) {
+        // ✅ CORRECCIÓN: Parsear fecha en formato local
+        const [year, month, day] = fechaDesde.split('-').map(Number);
+        const desdeNormalized = new Date(year, month - 1, day);
+        
+        if (ventaDate < desdeNormalized) return false;
+      }
+
+      if (fechaHasta) {
+        // ✅ CORRECCIÓN: Parsear fecha en formato local
+        const [year, month, day] = fechaHasta.split('-').map(Number);
+        const hastaNormalized = new Date(year, month - 1, day);
+        
+        if (ventaDate > hastaNormalized) return false;
+      }
+    }
+
+    return true;
+  });
+
+  // ✅ NUEVO - Calcular paginación
+  const totalPages = Math.ceil(filteredVentas.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentVentas = filteredVentas.slice(startIndex, endIndex);
 
   const totalVentas = ventas.length;
   const totalIngresos = ventas.reduce((sum, v) => sum + v.total, 0);
@@ -259,18 +337,78 @@ export function VentasList() {
         </Card>
       </div>
 
-      {/* Search */}
+      {/* ✅ NUEVO - Filtros (Búsqueda y Fechas) */}
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por método de pago o estado..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* Búsqueda */}
+            <div className="md:col-span-5">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por vendedor, método de pago o estado..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+
+            {/* Fecha Desde */}
+            <div className="md:col-span-3">
+              <div className="relative">
+                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="date"
+                  placeholder="Desde"
+                  value={fechaDesde}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+
+            {/* Fecha Hasta */}
+            <div className="md:col-span-3">
+              <div className="relative">
+                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="date"
+                  placeholder="Hasta"
+                  value={fechaHasta}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+
+            {/* Botón Limpiar Filtros */}
+            {(fechaDesde || fechaHasta) && (
+              <div className="md:col-span-1 flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={clearDateFilters}
+                  title="Limpiar filtros de fecha"
+                  className="w-full"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
+
+          {/* Indicador de filtros activos */}
+          {(fechaDesde || fechaHasta) && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              <span>
+                Filtrando ventas
+                {fechaDesde && ` desde ${fechaDesde.split('-').reverse().join('/')}`}
+                {fechaHasta && ` hasta ${fechaHasta.split('-').reverse().join('/')}`}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -289,69 +427,99 @@ export function VentasList() {
               description="Comienza registrando tu primera venta"
             />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Vendedor</TableHead>
-                    <TableHead>Método de Pago</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Productos</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredVentas.map((venta) => (
-                    <TableRow key={venta.id}>
-                      <TableCell className="font-medium">#{venta.id}</TableCell>
-                      <TableCell>ID: {venta.vendedorId}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{venta.metodoPago}</Badge>
-                      </TableCell>
-                      <TableCell className="font-semibold">S/.{venta.total.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            venta.estado === 'COMPLETADA'
-                              ? 'success'
-                              : venta.estado === 'PENDIENTE'
-                              ? 'warning'
-                              : 'destructive'
-                          }
-                        >
-                          {venta.estado}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{venta.detalles.length} producto(s)</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleViewDetail(venta)}
-                            title="Ver detalle"
-                          >
-                            <Eye className="h-4 w-4 text-blue-600" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(venta.id!)}
-                            title="Eliminar venta"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Vendedor</TableHead>
+                      <TableHead>Método de Pago</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Productos</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {/* ✅ CAMBIAR - Usar currentVentas en lugar de filteredVentas */}
+                    {currentVentas.map((venta) => (
+                      <TableRow key={venta.id}>
+                        <TableCell className="font-medium">#{venta.id}</TableCell>
+                        {/* ✅ NUEVO - Mostrar fecha */}
+                        <TableCell>
+                          <div className="text-sm">
+                            {venta.createdAt ? new Date(venta.createdAt).toLocaleDateString('es-PE') : '-'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {venta.createdAt ? new Date(venta.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-sm">{venta.vendedorNombre || 'Sin nombre'}</p>
+                              <p className="text-xs text-muted-foreground">ID: {venta.vendedorId}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{venta.metodoPago}</Badge>
+                        </TableCell>
+                        <TableCell className="font-semibold">S/.{venta.total.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              venta.estado === 'COMPLETADA'
+                                ? 'success'
+                                : venta.estado === 'PENDIENTE'
+                                ? 'warning'
+                                : 'destructive'
+                            }
+                          >
+                            {venta.estado}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{venta.detalles.length} producto(s)</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleViewDetail(venta)}
+                              title="Ver detalle"
+                            >
+                              <Eye className="h-4 w-4 text-blue-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(venta.id!)}
+                              title="Eliminar venta"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* ✅ NUEVO - Paginación */}
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={filteredVentas.length}
+                itemsPerPage={itemsPerPage}
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -395,7 +563,6 @@ export function VentasList() {
             </div>
           </div>
 
-          {/* Detalles */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold">Productos</h3>
@@ -424,29 +591,34 @@ export function VentasList() {
 
                   return (
                     <div key={index} className="border rounded-lg p-4 bg-card space-y-3">
-                      {/* Fila 1: Producto */}
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Producto</label>
-                        <select
-                          value={detalle.productoId}
-                          onChange={(e) =>
-                            handleDetalleChange(index, 'productoId', parseInt(e.target.value))
-                          }
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          required
-                        >
-                          <option value={0}>Seleccionar producto</option>
-                          {productos.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nombre}
-                            </option>
-                          ))}
-                        </select>
+                        <Autocomplete
+                          options={productosOptions}
+                          value={selectedProductos[index] || null}
+                          onChange={(option) => {
+                            if (option) {
+                              const producto = productos.find((p) => p.id === option.id);
+                              if (producto) {
+                                setSelectedProductos({
+                                  ...selectedProductos,
+                                  [index]: option,
+                                });
+                                handleDetalleChange(index, 'productoId', producto.id);
+                              }
+                            } else {
+                              const newSelectedProductos = { ...selectedProductos };
+                              delete newSelectedProductos[index];
+                              setSelectedProductos(newSelectedProductos);
+                              handleDetalleChange(index, 'productoId', 0);
+                            }
+                          }}
+                          placeholder="Buscar producto por nombre..."
+                          emptyMessage="No se encontró el producto"
+                        />
                       </div>
 
-                      {/* Fila 2: Stock, Cantidad, Precio y Total */}
                       <div className="grid grid-cols-12 gap-3 items-end">
-                        {/* Stock Actual - Más largo */}
                         <div className="col-span-2 space-y-2">
                           <label className="text-sm font-medium">Stock Actual</label>
                           <Input
@@ -454,14 +626,13 @@ export function VentasList() {
                             value={productoSeleccionado?.stockActual || 0}
                             disabled
                             className={`h-10 font-bold text-center ${
-                              productoSeleccionado && productoSeleccionado.stockActual <= productoSeleccionado.stockMinimo
+                              productoSeleccionado && productoSeleccionado.stockActual! <= productoSeleccionado.stockMinimo!
                                 ? 'bg-red-50 border-red-300 text-destructive'
                                 : 'bg-green-50 border-green-300 text-green-600'
                             }`}
                           />
                         </div>
 
-                        {/* Cantidad - Más largo */}
                         <div className="col-span-3 space-y-2">
                           <label className="text-sm font-medium">Cantidad</label>
                           <Input
@@ -471,9 +642,9 @@ export function VentasList() {
                             value={detalle.cantidad}
                             onChange={(e) => {
                               const cantidad = parseInt(e.target.value);
-                              if (productoSeleccionado && cantidad > productoSeleccionado.stockActual) {
+                              if (productoSeleccionado && cantidad > productoSeleccionado.stockActual!) {
                                 toast.error(`Solo hay ${productoSeleccionado.stockActual} unidades disponibles`);
-                                handleDetalleChange(index, 'cantidad', productoSeleccionado.stockActual);
+                                handleDetalleChange(index, 'cantidad', productoSeleccionado.stockActual!);
                               } else {
                                 handleDetalleChange(index, 'cantidad', cantidad);
                               }
@@ -483,7 +654,6 @@ export function VentasList() {
                           />
                         </div>
 
-                        {/* Precio Unit - Más largo */}
                         <div className="col-span-3 space-y-2">
                           <label className="text-sm font-medium">Precio Unit.</label>
                           <Input
@@ -495,7 +665,6 @@ export function VentasList() {
                           />
                         </div>
 
-                        {/* Total - Más largo */}
                         <div className="col-span-3 space-y-2">
                           <label className="text-sm font-medium">Total</label>
                           <div className="h-10 rounded-md border-2 border-primary bg-primary/10 px-3 py-2 flex items-center justify-center font-bold text-primary">
@@ -503,7 +672,6 @@ export function VentasList() {
                           </div>
                         </div>
 
-                        {/* Tacho - Mismo tamaño */}
                         <div className="col-span-1 flex items-end justify-center h-10">
                           <Button
                             type="button"
@@ -524,7 +692,6 @@ export function VentasList() {
             )}
           </div>
 
-          {/* Total */}
           <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
             <div className="flex justify-between items-center">
               <span className="text-lg font-semibold">Total:</span>
@@ -553,7 +720,6 @@ export function VentasList() {
       >
         {selectedVenta && (
           <div className="space-y-4">
-            {/* Info General */}
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1 p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground font-medium">Método de Pago</p>
@@ -575,12 +741,12 @@ export function VentasList() {
                 </Badge>
               </div>
               <div className="space-y-1 p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground font-medium">Vendedor ID</p>
-                <p className="font-semibold text-sm">{selectedVenta.vendedorId}</p>
+                <p className="text-xs text-muted-foreground font-medium">Vendedor</p>
+                <p className="font-semibold text-sm">{selectedVenta.vendedorNombre || 'Sin nombre'}</p>
+                <p className="text-xs text-muted-foreground">ID: {selectedVenta.vendedorId}</p>
               </div>
             </div>
 
-            {/* Tabla de Productos */}
             <div className="border rounded-lg overflow-hidden">
               <Table>
                 <TableHeader>
@@ -601,7 +767,7 @@ export function VentasList() {
                     return (
                       <TableRow key={index}>
                         <TableCell className="font-medium">
-                          {productoInfo?.nombre || `Producto #${detalle.productoId}`}
+                          {detalle.productoNombre || productoInfo?.nombre || `Producto #${detalle.productoId}`}
                         </TableCell>
                         <TableCell className="text-center">{detalle.cantidad}</TableCell>
                         <TableCell className="text-right">S/.{detalle.precioUnitario.toFixed(2)}</TableCell>
@@ -615,7 +781,6 @@ export function VentasList() {
               </Table>
             </div>
 
-            {/* Resumen */}
             <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground font-medium">Cantidad de productos:</span>

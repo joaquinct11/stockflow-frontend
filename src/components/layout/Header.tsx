@@ -20,7 +20,7 @@ export function Header({ onMenuClick }: HeaderProps) {
     try {
       await authService.logout();
       logout();
-      toast.success('Sesión cerrada exitosamente');
+      toast.success('Sesi��n cerrada exitosamente');
       navigate('/login');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
@@ -42,7 +42,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       </Button>
 
       {/* Search */}
-      <div className="flex-1 max-w-md hidden sm:block">
+      {/* <div className="max-w-2xl w-full hidden sm:block">
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -51,10 +51,10 @@ export function Header({ onMenuClick }: HeaderProps) {
             className="pl-8 w-full"
           />
         </div>
-      </div>
+      </div> */}
 
-      {/* Spacer en móvil */}
-      <div className="flex-1 sm:hidden" />
+      {/* ✅ SPACER - Empuja todo a la derecha */}
+      <div className="flex-1" />
 
       {/* Right Section */}
       <div className="flex items-center gap-2">
@@ -69,28 +69,33 @@ export function Header({ onMenuClick }: HeaderProps) {
         </Button>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" title="Notificaciones" className="hidden sm:flex">
+        <Button variant="ghost" size="icon" title="Notificaciones" className="hidden sm:flex relative">
           <Bell size={20} />
+          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500"></span>
         </Button>
 
-        {/* User Menu */}
-        <div className="flex items-center gap-2 pl-2 border-l">
+        {/* ✅ User Section - Pegado a la derecha */}
+        <div className="flex items-center gap-2 pl-3 border-l">
+          {/* Nombre y Rol */}
           <div className="text-right hidden md:block">
-            <p className="text-sm font-medium">{user?.nombre || 'Usuario'}</p>
-            <p className="text-xs text-muted-foreground">{user?.rol || 'ADMIN'}</p>
+            <p className="text-sm font-medium leading-tight">{user?.nombre || 'Usuario'}</p>
+            <p className="text-xs text-muted-foreground uppercase font-medium">{user?.rol || 'ADMIN'}</p>
           </div>
-          
-          <Button variant="ghost" size="icon" title="Perfil" className="hidden sm:flex">
-            <User size={20} />
-          </Button>
 
+          {/* Avatar */}
+          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <User className="h-4 w-4 text-primary" />
+          </div>
+
+          {/* Logout Button */}
           <Button
             variant="ghost"
             size="icon"
             onClick={handleLogout}
             title="Cerrar sesión"
+            className="text-muted-foreground hover:text-foreground"
           >
-            <LogOut size={20} />
+            <LogOut size={18} />
           </Button>
         </div>
       </div>

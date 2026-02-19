@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Building2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { usePermissions } from '../../hooks/usePermissions'; // ← AGREGAR
@@ -21,6 +22,11 @@ const menuItems = [
     title: 'Dashboard',
     href: '/',
     icon: LayoutDashboard,
+  },
+  {
+    title: 'Proveedores',
+    href: '/proveedores',
+    icon: Building2,
   },
   {
     title: 'Productos',

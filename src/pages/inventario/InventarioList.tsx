@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
+import { Autocomplete } from '../../components/ui/Autocomplete'; // ← NUEVO
 import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -22,6 +23,9 @@ export function InventarioList() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // ✅ NUEVO - Estado para producto seleccionado en el autocomplete
+  const [selectedProducto, setSelectedProducto] = useState<any>(null);
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -72,6 +76,13 @@ export function InventarioList() {
       setLoading(false);
     }
   };
+
+  // ✅ NUEVO - Convertir productos a opciones de autocomplete
+  const productosOptions = productos.map((p) => ({
+    id: p.id!,
+    label: p.nombre,
+    subtitle: `Código: ${p.codigoBarras} | Stock: ${p.stockActual} | Categoría: ${p.categoria}`,
+  }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,6 +150,7 @@ export function InventarioList() {
       usuarioId: userId || 0,
       tenantId: 'farmacia-001',
     });
+    setSelectedProducto(null); // ✅ NUEVO - Limpiar producto seleccionado
     setIsDialogOpen(false);
   };
 
@@ -356,24 +368,30 @@ export function InventarioList() {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* ✅ NUEVO - Autocomplete de Producto */}
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Producto
                 <span className="text-red-500">*</span>
               </label>
-              <select
-                value={formData.productoId}
-                onChange={(e) => setFormData({ ...formData, productoId: parseInt(e.target.value) })}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                required
-              >
-                <option value={0}>Seleccionar producto</option>
-                {productos.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre} (Stock: {p.stockActual})
-                  </option>
-                ))}
-              </select>
+              <Autocomplete
+                options={productosOptions}
+                value={selectedProducto}
+                onChange={(option) => {
+                  if (option) {
+                    const producto = productos.find((p) => p.id === option.id);
+                    if (producto) {
+                      setSelectedProducto(option);
+                      setFormData({ ...formData, productoId: producto.id! });
+                    }
+                  } else {
+                    setSelectedProducto(null);
+                    setFormData({ ...formData, productoId: 0 });
+                  }
+                }}
+                placeholder="Buscar producto por nombre..."
+                emptyMessage="No se encontró el producto"
+              />
             </div>
 
             <div className="space-y-2">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { productoService } from '../../services/producto.service';
-import type { ProductoDTO } from '../../types';
+import { proveedorService } from '../../services/proveedor.service';
+import type { ProductoDTO, ProveedorDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -10,15 +11,23 @@ import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, DollarSign } from 'lucide-react';
+import { Autocomplete } from '../../components/ui/Autocomplete';
+import { Pagination } from '../../components/ui/Pagination';
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, DollarSign, Building2, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function ProductosList() {
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
+  const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [selectedProveedor, setSelectedProveedor] = useState<any>(null);
+
+  // ✅ NUEVO - Estados de paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -38,25 +47,44 @@ export function ProductosList() {
     stockMaximo: 500,
     costoUnitario: 0,
     precioVenta: 0,
+    fechaVencimiento: undefined,
+    lote: '',
+    proveedorId: undefined,
+    activo: true,
     tenantId: 'farmacia-001',
   });
 
   useEffect(() => {
-    fetchProductos();
+    fetchData();
   }, []);
 
-  const fetchProductos = async () => {
+  // ✅ NUEVO - Resetear página al buscar
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const data = await productoService.getAll();
-      setProductos(data);
+      const [productosData, proveedoresData] = await Promise.all([
+        productoService.getAll(),
+        proveedorService.getActivos(),
+      ]);
+      setProductos(productosData);
+      setProveedores(proveedoresData);
     } catch (error) {
-      toast.error('Error al cargar productos');
+      toast.error('Error al cargar datos');
       console.error(error);
     } finally {
       setLoading(false);
     }
   };
+
+  const proveedoresOptions = proveedores.map((p) => ({
+    id: p.id!,
+    label: p.nombre,
+    subtitle: `RUC: ${p.ruc || 'N/A'} | Contacto: ${p.contacto || 'N/A'}`,
+  }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +100,7 @@ export function ProductosList() {
         toast.success('Producto creado');
       }
       resetForm();
-      await fetchProductos();
+      await fetchData();
     } catch (error: any) {
       console.log('❌ Error completo:', error);
       console.log('❌ Response data:', error.response?.data);
@@ -92,7 +120,7 @@ export function ProductosList() {
         try {
           await productoService.delete(id);
           toast.success('Producto eliminado');
-          await fetchProductos();
+          await fetchData();
           setConfirmDialog({ ...confirmDialog, isOpen: false });
         } catch (error) {
           toast.error('Error al eliminar producto');
@@ -102,7 +130,33 @@ export function ProductosList() {
   };
 
   const handleEdit = (producto: ProductoDTO) => {
-    setFormData(producto);
+    setFormData({
+      nombre: producto.nombre,
+      codigoBarras: producto.codigoBarras || '',
+      categoria: producto.categoria || '',
+      stockActual: producto.stockActual || 0,
+      stockMinimo: producto.stockMinimo || 10,
+      stockMaximo: producto.stockMaximo || 500,
+      costoUnitario: producto.costoUnitario,
+      precioVenta: producto.precioVenta,
+      fechaVencimiento: producto.fechaVencimiento,
+      lote: producto.lote || '',
+      proveedorId: producto.proveedorId,
+      activo: producto.activo,
+      tenantId: producto.tenantId,
+    });
+
+    if (producto.proveedorId) {
+      const proveedor = proveedores.find((p) => p.id === producto.proveedorId);
+      if (proveedor) {
+        setSelectedProveedor({
+          id: proveedor.id!,
+          label: proveedor.nombre,
+          subtitle: `RUC: ${proveedor.ruc || 'N/A'} | Contacto: ${proveedor.contacto || 'N/A'}`,
+        });
+      }
+    }
+
     setEditingId(producto.id!);
     setIsDialogOpen(true);
   };
@@ -117,19 +171,32 @@ export function ProductosList() {
       stockMaximo: 500,
       costoUnitario: 0,
       precioVenta: 0,
+      fechaVencimiento: undefined,
+      lote: '',
+      proveedorId: undefined,
+      activo: true,
       tenantId: 'farmacia-001',
     });
+    setSelectedProveedor(null);
     setEditingId(null);
     setIsDialogOpen(false);
   };
 
+  // ✅ ACTUALIZADO - Filtrar productos
   const filteredProductos = productos.filter(p =>
     p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.codigoBarras.includes(searchTerm)
+    p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const productosConStockBajo = productos.filter(p => p.stockActual <= p.stockMinimo).length;
-  const valorTotalInventario = productos.reduce((sum, p) => sum + (p.precioVenta * p.stockActual), 0);
+  // ✅ NUEVO - Calcular paginación
+  const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentProductos = filteredProductos.slice(startIndex, endIndex);
+
+  const productosConStockBajo = productos.filter(p => p.stockActual! <= p.stockMinimo!).length;
+  const valorTotalInventario = productos.reduce((sum, p) => sum + (p.precioVenta * p.stockActual!), 0);
   const margenPromedio = productos.length > 0
     ? (productos.reduce((sum, p) => sum + ((p.precioVenta - p.costoUnitario) / p.costoUnitario * 100), 0) / productos.length).toFixed(1)
     : '0';
@@ -203,7 +270,7 @@ export function ProductosList() {
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nombre o código de barras..."
+              placeholder="Buscar por nombre, código de barras o categoría..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-8"
@@ -227,73 +294,114 @@ export function ProductosList() {
               description="Comienza agregando tu primer producto al inventario"
             />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Categoría</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Precio</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProductos.map((producto) => (
-                    <TableRow key={producto.id}>
-                      <TableCell className="font-medium">#{producto.id}</TableCell>
-                      <TableCell className="font-medium">{producto.nombre}</TableCell>
-                      <TableCell className="font-mono text-sm">{producto.codigoBarras}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{producto.categoria}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            producto.stockActual <= producto.stockMinimo
-                              ? 'destructive'
-                              : producto.stockActual <= producto.stockMinimo * 1.5
-                              ? 'warning'
-                              : 'success'
-                          }
-                        >
-                          {producto.stockActual}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-semibold">S/.{producto.precioVenta.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge variant={producto.activo ? 'success' : 'secondary'}>
-                          {producto.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(producto)}
-                            title="Editar"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(producto.id!)}
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead>Lote</TableHead>
+                      <TableHead>Vencimiento</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {/* ✅ CAMBIAR - Usar currentProductos en lugar de filteredProductos */}
+                    {currentProductos.map((producto) => {
+                      const proveedor = proveedores.find((p) => p.id === producto.proveedorId);
+                      
+                      return (
+                        <TableRow key={producto.id}>
+                          <TableCell className="font-medium">#{producto.id}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{producto.nombre}</p>
+                              {proveedor && (
+                                <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
+                                  <Building2 className="h-3 w-3" />
+                                  {proveedor.nombre}
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{producto.codigoBarras}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{producto.categoria}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                producto.stockActual! <= producto.stockMinimo!
+                                  ? 'destructive'
+                                  : producto.stockActual! <= producto.stockMinimo! * 1.5
+                                  ? 'warning'
+                                  : 'success'
+                              }
+                            >
+                              {producto.stockActual}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-semibold">S/.{producto.precioVenta.toFixed(2)}</TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">{producto.lote || '-'}</span>
+                          </TableCell>
+                          <TableCell>
+                            {producto.fechaVencimiento ? (
+                              <div className="flex items-center gap-1 text-sm">
+                                <Calendar className="h-3 w-3" />
+                                {new Date(producto.fechaVencimiento).toLocaleDateString('es-PE')}
+                              </div>
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={producto.activo ? 'success' : 'secondary'}>
+                              {producto.activo ? 'Activo' : 'Inactivo'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(producto)}
+                                title="Editar"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(producto.id!)}
+                                title="Eliminar"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* ✅ NUEVO - Paginación */}
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={filteredProductos.length}
+                itemsPerPage={itemsPerPage}
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -308,11 +416,11 @@ export function ProductosList() {
             ? 'Actualiza la información del producto'
             : 'Agrega un nuevo producto al inventario'
         }
-        size="lg"
+        size="xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-medium">
                 Nombre
                 <span className="text-red-500">*</span>
@@ -349,6 +457,43 @@ export function ProductosList() {
                 value={formData.categoria}
                 onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
                 required
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium">Proveedor</label>
+              <Autocomplete
+                options={proveedoresOptions}
+                value={selectedProveedor}
+                onChange={(option) => {
+                  if (option) {
+                    setSelectedProveedor(option);
+                    setFormData({ ...formData, proveedorId: option.id as number });
+                  } else {
+                    setSelectedProveedor(null);
+                    setFormData({ ...formData, proveedorId: undefined });
+                  }
+                }}
+                placeholder="Buscar proveedor..."
+                emptyMessage="No se encontró el proveedor"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Lote</label>
+              <Input
+                placeholder="Ej: L123456"
+                value={formData.lote}
+                onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Fecha de Vencimiento</label>
+              <Input
+                type="date"
+                value={formData.fechaVencimiento || ''}
+                onChange={(e) => setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })}
               />
             </div>
 
