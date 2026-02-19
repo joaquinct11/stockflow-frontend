@@ -10,6 +10,7 @@ export interface Usuario {
 }
 
 export interface JwtResponse {
+  id?: number;
   token: string;
   tipo: string;
   usuarioId: number;
@@ -68,17 +69,6 @@ export interface SuscripcionDTO {
   ultimos4Digitos?: string;
 }
 
-export interface MovimientoInventarioDTO {
-  id?: number;
-  productoId: number;
-  cantidad: number;
-  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'DEVOLUCION';
-  ventaId?: number;
-  usuarioId: number;
-  descripcion?: string;
-  tenantId: string;
-}
-
 export interface RolDTO {
   id?: number;
   nombre: string;
@@ -91,4 +81,28 @@ export interface ErrorResponse {
   error: string;
   mensaje: string;
   path: string;
+}
+
+// Movimiento de Inventario
+export interface MovimientoInventarioDTO {
+  id?: number;
+  productoId: number;
+  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'DEVOLUCION';
+  cantidad: number;
+  descripcion: string;
+  referencia?: string; // Número de compra, número de venta, etc.
+  usuarioId?: number;
+  tenantId: string;
+  createdAt?: string;
+}
+
+// Kardex (Historial de movimientos por producto)
+export interface KardexDTO {
+  id?: number;
+  productoId: number;
+  productoNombre?: string;
+  movimientos: MovimientoInventarioDTO[];
+  stockActual: number;
+  stockMinimo: number;
+  stockMaximo: number;
 }

@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { usePermissions } from '../../hooks/usePermissions'; // ← AGREGAR
 
 const menuItems = [
   {
@@ -66,6 +67,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const { rol } = usePermissions(); // ← AGREGAR
 
   return (
     <>
@@ -81,10 +83,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <aside
         className={cn(
           'fixed left-0 top-0 z-50 h-screen border-r bg-card transition-all duration-300',
-          // Desktop
           'lg:translate-x-0',
           collapsed ? 'lg:w-16' : 'lg:w-64',
-          // Mobile
           isOpen ? 'translate-x-0' : '-translate-x-full',
           'w-64 lg:z-40'
         )}
@@ -98,7 +98,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </div>
           )}
           
-          {/* Botón de cerrar en móvil */}
           <button
             onClick={onClose}
             className="rounded-md p-2 hover:bg-accent lg:hidden"
@@ -106,7 +105,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <X size={18} />
           </button>
 
-          {/* Botón de colapsar en desktop */}
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="hidden lg:block rounded-md p-2 hover:bg-accent"
@@ -115,8 +113,26 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
+        {/* Badge de Rol - AGREGAR ESTO */}
+        {!collapsed && (
+          <div className="border-b px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">ROL</span>
+              <span className={cn(
+                'px-2 py-1 rounded-full text-xs font-bold',
+                rol === 'ADMIN' && 'bg-red-100 text-red-800',
+                rol === 'GERENTE' && 'bg-blue-100 text-blue-800',
+                rol === 'VENDEDOR' && 'bg-green-100 text-green-800',
+                rol === 'ALMACENERO' && 'bg-yellow-100 text-yellow-800',
+              )}>
+                {rol}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Navigation */}
-        <nav className="space-y-1 p-2 overflow-y-auto h-[calc(100vh-8rem)]">
+        <nav className="space-y-1 p-2 overflow-y-auto h-[calc(100vh-12rem)]">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
@@ -125,7 +141,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <Link
                 key={item.href}
                 to={item.href}
-                onClick={onClose} // Cerrar sidebar en móvil al hacer clic
+                onClick={onClose}
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   isActive
@@ -149,8 +165,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <Users size={16} className="text-primary" />
               </div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium truncate">Usuario Admin</p>
-                <p className="text-xs text-muted-foreground truncate">admin@stockflow.com</p>
+                <p className="text-sm font-medium truncate">Usuario</p>
+                <p className="text-xs text-muted-foreground truncate">usuario@stockflow.com</p>
               </div>
             </div>
           </div>

@@ -18,16 +18,14 @@ import { ProductosList } from './pages/productos/ProductosList';
 import { VentasList } from './pages/ventas/VentasList';
 import { UsuariosList } from './pages/usuarios/UsuariosList';
 import { SuscripcionesList } from './pages/suscripciones/SuscripcionesList';
+import { InventarioList } from './pages/inventario/InventarioList';
 
 function App() {
   const { initialize } = useAuthStore();
   const { isDark, setTheme } = useThemeStore();
 
   useEffect(() => {
-    // Inicializar auth store
     initialize();
-
-    // Inicializar tema
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {
       setTheme(true);
@@ -56,9 +54,9 @@ function App() {
             <Route path="ventas" element={<VentasList />} />
             <Route path="usuarios" element={<UsuariosList />} />
             <Route path="suscripciones" element={<SuscripcionesList />} />
+            <Route path="inventario" element={<InventarioList />} />
             
             {/* Placeholder routes */}
-            <Route path="inventario" element={<div className="text-center py-12"><h2 className="text-2xl font-bold">Módulo de Inventario</h2><p className="text-muted-foreground">Próximamente...</p></div>} />
             <Route path="reportes" element={<div className="text-center py-12"><h2 className="text-2xl font-bold">Módulo de Reportes</h2><p className="text-muted-foreground">Próximamente...</p></div>} />
             <Route path="configuracion" element={<div className="text-center py-12"><h2 className="text-2xl font-bold">Configuración</h2><p className="text-muted-foreground">Próximamente...</p></div>} />
           </Route>

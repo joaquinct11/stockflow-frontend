@@ -7,6 +7,7 @@ import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { Dialog } from '../../components/ui/Dialog';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck } from 'lucide-react';
@@ -18,6 +19,15 @@ export function UsuariosList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    type: 'info' as 'warning' | 'danger' | 'success' | 'info',
+    title: '',
+    description: '',
+    confirmText: '',
+    action: null as (() => Promise<void>) | null,
+  });
 
   const [formData, setFormData] = useState<Usuario>({
     nombre: '',
@@ -87,40 +97,64 @@ export function UsuariosList() {
     setIsDialogOpen(true);
   };
 
-  const handleDeactivate = async (id: number) => {
-    if (window.confirm('¿Estás seguro de desactivar este usuario?')) {
-      try {
-        await usuarioService.deactivate(id);
-        toast.success('Usuario desactivado');
-        await fetchUsuarios();
-      } catch (error) {
-        toast.error('Error al desactivar usuario');
-      }
-    }
+  const handleDeactivate = (id: number) => {
+    setConfirmDialog({
+      isOpen: true,
+      type: 'warning',
+      title: 'Desactivar Usuario',
+      description: '¿Estás seguro de que deseas desactivar este usuario? Podrá ser reactivado más tarde.',
+      confirmText: 'Desactivar',
+      action: async () => {
+        try {
+          await usuarioService.deactivate(id);
+          toast.success('Usuario desactivado');
+          await fetchUsuarios();
+          setConfirmDialog({ ...confirmDialog, isOpen: false });
+        } catch (error) {
+          toast.error('Error al desactivar usuario');
+        }
+      },
+    });
   };
 
-  const handleActivate = async (id: number) => {
-    if (window.confirm('¿Estás seguro de activar este usuario?')) {
-      try {
-        await usuarioService.activate(id);
-        toast.success('Usuario activado');
-        await fetchUsuarios();
-      } catch (error) {
-        toast.error('Error al activar usuario');
-      }
-    }
+  const handleActivate = (id: number) => {
+    setConfirmDialog({
+      isOpen: true,
+      type: 'success',
+      title: 'Activar Usuario',
+      description: '¿Estás seguro de que deseas activar este usuario?',
+      confirmText: 'Activar',
+      action: async () => {
+        try {
+          await usuarioService.activate(id);
+          toast.success('Usuario activado');
+          await fetchUsuarios();
+          setConfirmDialog({ ...confirmDialog, isOpen: false });
+        } catch (error) {
+          toast.error('Error al activar usuario');
+        }
+      },
+    });
   };
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('⚠️ ¿Estás COMPLETAMENTE seguro de ELIMINAR este usuario? Esta acción no se puede deshacer.')) {
-      try {
-        await usuarioService.delete(id);
-        toast.success('Usuario eliminado');
-        await fetchUsuarios();
-      } catch (error) {
-        toast.error('Error al eliminar usuario');
-      }
-    }
+  const handleDelete = (id: number) => {
+    setConfirmDialog({
+      isOpen: true,
+      type: 'danger',
+      title: 'Eliminar Usuario',
+      description: '⚠️ Estás a punto de eliminar este usuario de forma permanente. Esta acción no se puede deshacer. ¿Continuar?',
+      confirmText: 'Eliminar Permanentemente',
+      action: async () => {
+        try {
+          await usuarioService.delete(id);
+          toast.success('Usuario eliminado');
+          await fetchUsuarios();
+          setConfirmDialog({ ...confirmDialog, isOpen: false });
+        } catch (error) {
+          toast.error('Error al eliminar usuario');
+        }
+      },
+    });
   };
 
   const resetForm = () => {
@@ -320,7 +354,7 @@ export function UsuariosList() {
         </CardContent>
       </Card>
 
-      {/* Dialog/Modal */}
+      {/* Dialog/Modal para crear/editar */}
       <Dialog
         isOpen={isDialogOpen}
         onClose={resetForm}
@@ -335,17 +369,28 @@ export function UsuariosList() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Nombre Completo</label>
+              <label className="text-sm font-medium">
+                Nombre Completo
+                <span className="text-red-500">*</span>
+              </label>
               <Input
                 placeholder="Juan Pérez"
                 value={formData.nombre}
                 onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                 required
+                minLength={3}
+                maxLength={150}
               />
+              <p className="text-xs text-muted-foreground">
+                Mínimo 3, máximo 150 caracteres
+              </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
+              <label className="text-sm font-medium">
+                Email
+                <span className="text-red-500">*</span>
+              </label>
               <Input
                 type="email"
                 placeholder="usuario@email.com"
@@ -354,11 +399,19 @@ export function UsuariosList() {
                 disabled={!!editingId}
                 required
               />
+              {editingId && (
+                <p className="text-xs text-muted-foreground">
+                  No se puede cambiar al editar
+                </p>
+              )}
             </div>
 
             {!editingId && (
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium">Contraseña</label>
+                <label className="text-sm font-medium">
+                  Contraseña
+                  <span className="text-red-500">*</span>
+                </label>
                 <Input
                   type="password"
                   placeholder="Mínimo 6 caracteres"
@@ -371,12 +424,17 @@ export function UsuariosList() {
             )}
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Rol</label>
+              <label className="text-sm font-medium">
+                Rol
+                <span className="text-red-500">*</span>
+              </label>
               <select
                 value={formData.rolNombre}
                 onChange={(e) => setFormData({ ...formData, rolNombre: e.target.value })}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                required
               >
+                <option value="">Seleccionar rol</option>
                 <option value="VENDEDOR">Vendedor</option>
                 <option value="ADMIN">Administrador</option>
                 <option value="ALMACEN">Almacén</option>
@@ -384,7 +442,10 @@ export function UsuariosList() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Tenant ID</label>
+              <label className="text-sm font-medium">
+                Tenant ID
+                <span className="text-red-500">*</span>
+              </label>
               <Input
                 placeholder="farmacia-001"
                 value={formData.tenantId}
@@ -410,12 +471,27 @@ export function UsuariosList() {
             <Button type="button" variant="outline" onClick={resetForm}>
               Cancelar
             </Button>
-            <Button type="submit">
+            <Button type="submit" disabled={formData.nombre.length < 3}>
               {editingId ? 'Actualizar' : 'Crear'} Usuario
             </Button>
           </div>
         </form>
       </Dialog>
+
+      {/* Confirm Dialog para acciones destructivas */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        type={confirmDialog.type}
+        onConfirm={async () => {
+          if (confirmDialog.action) {
+            await confirmDialog.action();
+          }
+        }}
+        onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+      />
     </div>
   );
 }

@@ -37,7 +37,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     console.log('🔑 Token en localStorage:', token ? 'Existe' : 'No existe'); // ← Log para debug
     
     if (storedUser && token) {
-      const user = JSON.parse(storedUser);
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
       console.log('✅ Sesión restaurada para:', user.email); // ← Log para debug
       set({ user, isAuthenticated: true });
     } else {

@@ -54,9 +54,11 @@ export const API_ENDPOINTS = {
   MOVIMIENTOS: {
     LIST: '/movimientos-inventario',
     GET: (id: number) => `/movimientos-inventario/${id}`,
-    GET_BY_PRODUCT: (productoId: number) => `/movimientos-inventario/producto/${productoId}`,
-    GET_BY_TENANT: (tenantId: string) => `/movimientos-inventario/tenant/${tenantId}`,
+    GET_BY_PRODUCTO: (productoId: number) => `/movimientos-inventario/producto/${productoId}`,
+    GET_BY_TIPO: (tipo: string) => `/movimientos-inventario/tipo/${tipo}`,
+    GET_KARDEX: (productoId: number) => `/movimientos-inventario/kardex/${productoId}`,
     CREATE: '/movimientos-inventario',
+    UPDATE: (id: number) => `/movimientos-inventario/${id}`,
     DELETE: (id: number) => `/movimientos-inventario/${id}`,
   },
   
