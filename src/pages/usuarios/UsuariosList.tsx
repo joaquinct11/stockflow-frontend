@@ -10,6 +10,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
+import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
 import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -19,6 +20,10 @@ export function UsuariosList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // ✅ NUEVO - Estados de paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -41,6 +46,11 @@ export function UsuariosList() {
   useEffect(() => {
     fetchUsuarios();
   }, []);
+
+  // ✅ NUEVO - Resetear página al buscar
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const fetchUsuarios = async () => {
     try {
@@ -66,19 +76,19 @@ export function UsuariosList() {
           tenantId: formData.tenantId,
           activo: formData.activo,
         };
-        
+
         console.log('📤 Actualizando usuario:', usuarioToUpdate);
-        
+
         await usuarioService.update(editingId, usuarioToUpdate as Usuario);
         toast.success('Usuario actualizado exitosamente');
       } else {
         // CREAR nuevo usuario
         console.log('📤 Creando usuario:', formData);
-        
+
         await usuarioService.create(formData);
         toast.success('Usuario creado exitosamente');
       }
-      
+
       resetForm();
       await fetchUsuarios();
     } catch (error: any) {
@@ -170,10 +180,17 @@ export function UsuariosList() {
     setIsDialogOpen(false);
   };
 
+  // ✅ ACTUALIZADO - Filtrar usuarios
   const filteredUsuarios = usuarios.filter(u =>
     u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // ✅ NUEVO - Calcular paginación
+  const totalPages = Math.ceil(filteredUsuarios.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentUsuarios = filteredUsuarios.slice(startIndex, endIndex);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -274,82 +291,94 @@ export function UsuariosList() {
               description="No se encontraron usuarios en el sistema"
             />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Rol</TableHead>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsuarios.map((usuario) => (
-                    <TableRow key={usuario.id}>
-                      <TableCell className="font-medium">#{usuario.id}</TableCell>
-                      <TableCell>{usuario.nombre}</TableCell>
-                      <TableCell>{usuario.email}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{usuario.rolNombre}</Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {usuario.tenantId}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={usuario.activo ? 'success' : 'secondary'}>
-                          {usuario.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(usuario)}
-                            title="Editar"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          
-                          {usuario.activo ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeactivate(usuario.id!)}
-                              title="Desactivar"
-                            >
-                              <UserX className="h-4 w-4 text-orange-600" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleActivate(usuario.id!)}
-                              title="Activar"
-                            >
-                              <UserCheck className="h-4 w-4 text-green-600" />
-                            </Button>
-                          )}
-                          
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(usuario.id!)}
-                            title="Eliminar permanentemente"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Rol</TableHead>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {/* ✅ CAMBIAR - Usar currentUsuarios en lugar de filteredUsuarios */}
+                    {currentUsuarios.map((usuario) => (
+                      <TableRow key={usuario.id}>
+                        <TableCell className="font-medium">#{usuario.id}</TableCell>
+                        <TableCell>{usuario.nombre}</TableCell>
+                        <TableCell>{usuario.email}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{usuario.rolNombre}</Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {usuario.tenantId}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={usuario.activo ? 'success' : 'secondary'}>
+                            {usuario.activo ? 'Activo' : 'Inactivo'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(usuario)}
+                              title="Editar"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+
+                            {usuario.activo ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeactivate(usuario.id!)}
+                                title="Desactivar"
+                              >
+                                <UserX className="h-4 w-4 text-orange-600" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleActivate(usuario.id!)}
+                                title="Activar"
+                              >
+                                <UserCheck className="h-4 w-4 text-green-600" />
+                              </Button>
+                            )}
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(usuario.id!)}
+                              title="Eliminar permanentemente"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* ✅ NUEVO - Paginación */}
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={filteredUsuarios.length}
+                itemsPerPage={itemsPerPage}
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -360,8 +389,8 @@ export function UsuariosList() {
         onClose={resetForm}
         title={editingId ? 'Editar Usuario' : 'Nuevo Usuario'}
         description={
-          editingId 
-            ? 'Actualiza la información del usuario' 
+          editingId
+            ? 'Actualiza la información del usuario'
             : 'Completa los datos para crear un nuevo usuario'
         }
         size="lg"

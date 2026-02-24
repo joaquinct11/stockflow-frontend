@@ -11,7 +11,8 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
-import { Autocomplete } from '../../components/ui/Autocomplete'; // ← NUEVO
+import { Autocomplete } from '../../components/ui/Autocomplete';
+import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
 import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -23,9 +24,11 @@ export function InventarioList() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-
-  // ✅ NUEVO - Estado para producto seleccionado en el autocomplete
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
+
+  // ✅ NUEVO - Estados de paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -60,6 +63,11 @@ export function InventarioList() {
     fetchData();
   }, []);
 
+  // ✅ NUEVO - Resetear página al buscar
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -77,7 +85,6 @@ export function InventarioList() {
     }
   };
 
-  // ✅ NUEVO - Convertir productos a opciones de autocomplete
   const productosOptions = productos.map((p) => ({
     id: p.id!,
     label: p.nombre,
@@ -86,27 +93,27 @@ export function InventarioList() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-  
+
     if (formData.productoId === 0) {
       toast.error('Debes seleccionar un producto');
       return;
     }
-  
+
     if (!formData.usuarioId) {
       toast.error('Usuario requerido');
       return;
     }
-  
+
     if (formData.cantidad <= 0) {
       toast.error('La cantidad debe ser mayor a 0');
       return;
     }
-  
+
     if (!formData.descripcion) {
       toast.error('La descripción es requerida');
       return;
     }
-  
+
     try {
       console.log('📤 Enviando movimiento:', formData);
       await movimientoService.create(formData);
@@ -150,10 +157,11 @@ export function InventarioList() {
       usuarioId: userId || 0,
       tenantId: 'farmacia-001',
     });
-    setSelectedProducto(null); // ✅ NUEVO - Limpiar producto seleccionado
+    setSelectedProducto(null);
     setIsDialogOpen(false);
   };
 
+  // ✅ ACTUALIZADO - Filtrar movimientos
   const filteredMovimientos = movimientos.filter(m => {
     const producto = productos.find(p => p.id === m.productoId);
     return (
@@ -162,6 +170,12 @@ export function InventarioList() {
       m.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
+
+  // ✅ NUEVO - Calcular paginación
+  const totalPages = Math.ceil(filteredMovimientos.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentMovimientos = filteredMovimientos.slice(startIndex, endIndex);
 
   const getMovimientoIcon = (tipo: string) => {
     switch (tipo) {
@@ -309,51 +323,63 @@ export function InventarioList() {
               description="Comienza registrando tu primer movimiento de inventario"
             />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Producto</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-center">Cantidad</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Referencia</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredMovimientos.map((movimiento) => {
-                    const producto = productos.find(p => p.id === movimiento.productoId);
-                    return (
-                      <TableRow key={movimiento.id}>
-                        <TableCell className="font-medium">#{movimiento.id}</TableCell>
-                        <TableCell>{producto?.nombre || `Producto #${movimiento.productoId}`}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getMovimientoIcon(movimiento.tipo)}
-                            {getMovimientoBadge(movimiento.tipo)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center font-semibold">{movimiento.cantidad}</TableCell>
-                        <TableCell className="text-muted-foreground">{movimiento.descripcion}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{movimiento.referencia || '-'}</TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(movimiento.id!)}
-                            title="Eliminar movimiento"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead className="text-center">Cantidad</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead>Referencia</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* ✅ CAMBIAR - Usar currentMovimientos en lugar de filteredMovimientos */}
+                    {currentMovimientos.map((movimiento) => {
+                      const producto = productos.find(p => p.id === movimiento.productoId);
+                      return (
+                        <TableRow key={movimiento.id}>
+                          <TableCell className="font-medium">#{movimiento.id}</TableCell>
+                          <TableCell>{producto?.nombre || `Producto #${movimiento.productoId}`}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getMovimientoIcon(movimiento.tipo)}
+                              {getMovimientoBadge(movimiento.tipo)}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center font-semibold">{movimiento.cantidad}</TableCell>
+                          <TableCell className="text-muted-foreground">{movimiento.descripcion}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{movimiento.referencia || '-'}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(movimiento.id!)}
+                              title="Eliminar movimiento"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* ✅ NUEVO - Paginación */}
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={filteredMovimientos.length}
+                itemsPerPage={itemsPerPage}
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -368,7 +394,6 @@ export function InventarioList() {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* ✅ NUEVO - Autocomplete de Producto */}
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Producto

@@ -25,7 +25,7 @@ export function ProductosList() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedProveedor, setSelectedProveedor] = useState<any>(null);
 
-  // ✅ NUEVO - Estados de paginación
+  // ✅ Estados de paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -54,11 +54,25 @@ export function ProductosList() {
     tenantId: 'farmacia-001',
   });
 
+  // ✅ NUEVO - Helpers para formatear fechas correctamente
+  const formatearFecha = (fechaString: string | undefined): string => {
+    if (!fechaString) return '';
+    const [year, month, day] = fechaString.split('-').map(Number);
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  };
+
+  const mostrarFecha = (fechaString: string | undefined): string => {
+    if (!fechaString) return '-';
+    const [year, month, day] = fechaString.split('-').map(Number);
+    const fechaLocal = new Date(year, month - 1, day);
+    return fechaLocal.toLocaleDateString('es-PE');
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
 
-  // ✅ NUEVO - Resetear página al buscar
+  // ✅ Resetear página al buscar
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -131,6 +145,7 @@ export function ProductosList() {
 
   const handleEdit = (producto: ProductoDTO) => {
     setFormData({
+      id: producto.id,
       nombre: producto.nombre,
       codigoBarras: producto.codigoBarras || '',
       categoria: producto.categoria || '',
@@ -182,14 +197,14 @@ export function ProductosList() {
     setIsDialogOpen(false);
   };
 
-  // ✅ ACTUALIZADO - Filtrar productos
+  // ✅ Filtrar productos
   const filteredProductos = productos.filter(p =>
     p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // ✅ NUEVO - Calcular paginación
+  // ✅ Calcular paginación
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -312,10 +327,9 @@ export function ProductosList() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* ✅ CAMBIAR - Usar currentProductos en lugar de filteredProductos */}
                     {currentProductos.map((producto) => {
                       const proveedor = proveedores.find((p) => p.id === producto.proveedorId);
-                      
+
                       return (
                         <TableRow key={producto.id}>
                           <TableCell className="font-medium">#{producto.id}</TableCell>
@@ -355,7 +369,7 @@ export function ProductosList() {
                             {producto.fechaVencimiento ? (
                               <div className="flex items-center gap-1 text-sm">
                                 <Calendar className="h-3 w-3" />
-                                {new Date(producto.fechaVencimiento).toLocaleDateString('es-PE')}
+                                {mostrarFecha(producto.fechaVencimiento)}
                               </div>
                             ) : (
                               '-'
@@ -393,7 +407,7 @@ export function ProductosList() {
                 </Table>
               </div>
 
-              {/* ✅ NUEVO - Paginación */}
+              {/* ✅ Paginación */}
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -492,7 +506,7 @@ export function ProductosList() {
               <label className="text-sm font-medium">Fecha de Vencimiento</label>
               <Input
                 type="date"
-                value={formData.fechaVencimiento || ''}
+                value={formatearFecha(formData.fechaVencimiento)}
                 onChange={(e) => setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })}
               />
             </div>
