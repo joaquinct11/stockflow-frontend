@@ -1,7 +1,7 @@
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/auth/login',
-    REGISTER: '/auth/registro',
+    REGISTER: '/auth/register',  // ✅ CAMBIADO de /auth/registro
     LOGOUT: '/auth/logout',
   },
   
@@ -15,6 +15,8 @@ export const API_ENDPOINTS = {
     DEACTIVATE: (id: number) => `/usuarios/${id}/desactivar`,
     ACTIVATE: (id: number) => `/usuarios/${id}/activar`,
     DELETE: (id: number) => `/usuarios/${id}`,
+    VALIDAR_ELIMINACION: (id: number) => `/usuarios/${id}/validar-eliminacion`,  // ✅ NUEVO
+    DELETE_CUENTA_COMPLETA: (id: number) => `/usuarios/${id}/cuenta-completa`,  // ✅ NUEVO
   },
   
   PRODUCTOS: {
@@ -72,14 +74,14 @@ export const API_ENDPOINTS = {
 
   PROVEEDORES: {
     LIST: '/proveedores',
-    LIST_ACTIVOS: '/proveedores/activos', // ✅ NUEVO
+    LIST_ACTIVOS: '/proveedores/activos',
     GET: (id: number) => `/proveedores/${id}`,
     GET_BY_RUC: (ruc: string) => `/proveedores/ruc/${ruc}`,
     SEARCH: (nombre: string) => `/proveedores/buscar?nombre=${nombre}`,
     CREATE: '/proveedores',
     UPDATE: (id: number) => `/proveedores/${id}`,
     DELETE: (id: number) => `/proveedores/${id}`,
-    ACTIVATE: (id: number) => `/proveedores/${id}/activar`, // ✅ NUEVO
-    DEACTIVATE: (id: number) => `/proveedores/${id}/desactivar`, // ✅ NUEVO
+    ACTIVATE: (id: number) => `/proveedores/${id}/activar`,
+    DEACTIVATE: (id: number) => `/proveedores/${id}/desactivar`,
   },
 };

@@ -15,7 +15,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { useState } from 'react';
-import { usePermissions } from '../../hooks/usePermissions'; // ← AGREGAR
+import { useAuthStore } from '../../store/authStore';  // ✅ ACTUALIZADO
 
 const menuItems = [
   {
@@ -73,7 +73,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const { rol } = usePermissions(); // ← AGREGAR
+  const { user } = useAuthStore();  // ✅ ACTUALIZADO
 
   return (
     <>
@@ -119,19 +119,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Badge de Rol - AGREGAR ESTO */}
-        {!collapsed && (
+        {/* Badge de Rol */}
+        {!collapsed && user && (
           <div className="border-b px-4 py-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">ROL</span>
               <span className={cn(
                 'px-2 py-1 rounded-full text-xs font-bold',
-                rol === 'ADMIN' && 'bg-red-100 text-red-800',
-                rol === 'GERENTE' && 'bg-blue-100 text-blue-800',
-                rol === 'VENDEDOR' && 'bg-green-100 text-green-800',
-                rol === 'ALMACENERO' && 'bg-yellow-100 text-yellow-800',
+                user.rol === 'ADMIN' && 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
+                user.rol === 'GERENTE' && 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
+                user.rol === 'VENDEDOR' && 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
+                user.rol === 'GESTOR_INVENTARIO' && 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100',
               )}>
-                {rol}
+                {user.rol}
               </span>
             </div>
           </div>
@@ -164,15 +164,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         </nav>
 
         {/* User Info */}
-        {!collapsed && (
+        {!collapsed && user && (
           <div className="absolute bottom-0 w-full border-t p-4 bg-card">
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                 <Users size={16} className="text-primary" />
               </div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium truncate">Usuario</p>
-                <p className="text-xs text-muted-foreground truncate">usuario@stockflow.com</p>
+                <p className="text-sm font-medium truncate">{user.nombre}</p>
+                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
             </div>
           </div>

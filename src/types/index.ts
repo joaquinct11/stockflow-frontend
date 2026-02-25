@@ -1,3 +1,7 @@
+// ========================================
+// AUTH & USUARIOS
+// ========================================
+
 export interface Usuario {
   id?: number;
   email: string;
@@ -7,6 +11,7 @@ export interface Usuario {
   activo?: boolean;
   tenantId: string;
   ultimoLogin?: string;
+  deletedAt?: string;  // ✅ AGREGADO
 }
 
 export interface JwtResponse {
@@ -17,12 +22,27 @@ export interface JwtResponse {
   email: string;
   nombre: string;
   rol: string;
+  tenantId: string;  // ✅ AGREGADO
+  suscripcion?: SuscripcionDTO;  // ✅ AGREGADO
 }
 
 export interface LoginDTO {
   email: string;
   contraseña: string;
 }
+
+// ✅ NUEVO: Para registro de nueva farmacia
+export interface RegistrationRequestDTO {
+  email: string;
+  contraseña: string;
+  nombre: string;
+  nombreFarmacia: string;
+  planId: 'FREE' | 'BASICO' | 'PRO';
+}
+
+// ========================================
+// PRODUCTOS
+// ========================================
 
 export interface ProductoDTO {
   id?: number;
@@ -34,12 +54,17 @@ export interface ProductoDTO {
   stockMaximo: number;
   costoUnitario: number;
   precioVenta: number;
- fechaVencimiento?: string;
+  fechaVencimiento?: string;
   lote?: string;
   proveedorId?: number;
   activo?: boolean;
+  deletedAt?: string;  // ✅ AGREGADO
   tenantId: string;
 }
+
+// ========================================
+// VENTAS
+// ========================================
 
 export interface VentaDTO {
   id?: number;
@@ -62,16 +87,45 @@ export interface DetalleVentaDTO {
   subtotal?: number;
 }
 
+// ========================================
+// SUSCRIPCIONES
+// ========================================
+
 export interface SuscripcionDTO {
   id?: number;
   usuarioPrincipalId: number;
   planId: string;
   precioMensual: number;
   preapprovalId?: string;
+  intentosFallidos?: number;  // ✅ AGREGADO
   estado: string;
   metodoPago?: string;
   ultimos4Digitos?: string;
+  tenantId?: string;  // ✅ AGREGADO
+  fechaInicio?: string;  // ✅ AGREGADO
+  fechaProximoCobro?: string;  // ✅ AGREGADO
+  fechaCancelacion?: string;  // ✅ AGREGADO
+  deletedAt?: string;  // ✅ AGREGADO
 }
+
+// ========================================
+// TENANTS
+// ========================================
+
+// ✅ NUEVO
+export interface TenantDTO {
+  id?: number;
+  tenantId: string;
+  nombre: string;
+  activo: boolean;
+  deletedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ========================================
+// ROLES
+// ========================================
 
 export interface RolDTO {
   id?: number;
@@ -79,28 +133,22 @@ export interface RolDTO {
   descripcion?: string;
 }
 
-export interface ErrorResponse {
-  timestamp: string;
-  status: number;
-  error: string;
-  mensaje: string;
-  path: string;
-}
+// ========================================
+// MOVIMIENTOS DE INVENTARIO
+// ========================================
 
-// Movimiento de Inventario
 export interface MovimientoInventarioDTO {
   id?: number;
   productoId: number;
   tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'DEVOLUCION';
   cantidad: number;
   descripcion: string;
-  referencia?: string; // Número de compra, número de venta, etc.
+  referencia?: string;
   usuarioId?: number;
   tenantId: string;
   createdAt?: string;
 }
 
-// Kardex (Historial de movimientos por producto)
 export interface KardexDTO {
   id?: number;
   productoId: number;
@@ -111,6 +159,10 @@ export interface KardexDTO {
   stockMaximo: number;
 }
 
+// ========================================
+// PROVEEDORES
+// ========================================
+
 export interface ProveedorDTO {
   id?: number;
   nombre: string;
@@ -120,5 +172,66 @@ export interface ProveedorDTO {
   email?: string;
   direccion?: string;
   activo?: boolean;
+  deletedAt?: string;  // ✅ AGREGADO
   tenantId: string;
 }
+
+// ========================================
+// ERROR HANDLING
+// ========================================
+
+export interface ErrorResponse {
+  timestamp: string;
+  status: number;
+  error: string;
+  mensaje: string;
+  path: string;
+}
+
+export interface DeleteAccountValidationDTO {
+  requiereConfirmacion: boolean;
+  tipo: 'USUARIO_NORMAL' | 'TENANT_OWNER';
+  mensaje: string;
+  datosAEliminar?: DatosEliminacionDTO;
+}
+
+// ✅ NUEVO
+export interface DatosEliminacionDTO {
+  usuarios: number;
+  productos: number;
+  ventas: number;
+  proveedores: number;
+  suscripciones: number;
+  tenantId: string;
+  nombreFarmacia: string;
+}
+
+// ========================================
+// ENUMS
+// ========================================
+
+// export enum PlanSuscripcion {
+//   FREE = 'FREE',
+//   BASICO = 'BASICO',
+//   PRO = 'PRO',
+// }
+
+// export enum EstadoSuscripcion {
+//   ACTIVA = 'ACTIVA',
+//   CANCELADA = 'CANCELADA',
+//   VENCIDA = 'VENCIDA',
+//   PENDIENTE = 'PENDIENTE',
+// }
+
+// export enum TipoMovimiento {
+//   ENTRADA = 'ENTRADA',
+//   SALIDA = 'SALIDA',
+//   AJUSTE = 'AJUSTE',
+//   DEVOLUCION = 'DEVOLUCION',
+// }
+
+// export enum EstadoVenta {
+//   COMPLETADA = 'COMPLETADA',
+//   PENDIENTE = 'PENDIENTE',
+//   CANCELADA = 'CANCELADA',
+// }

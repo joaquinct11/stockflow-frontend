@@ -1,6 +1,6 @@
 import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
-import type { Usuario } from '../types';
+import type { Usuario, DeleteAccountValidationDTO } from '../types';
 
 export const usuarioService = {
   getAll: async (): Promise<Usuario[]> => {
@@ -50,5 +50,29 @@ export const usuarioService = {
 
   delete: async (id: number): Promise<void> => {
     await axiosInstance.delete(API_ENDPOINTS.USUARIOS.DELETE(id));
+  },
+  
+  /**
+   * Validar si la eliminación requiere confirmación especial
+   */
+  validarEliminacion: async (id: number): Promise<DeleteAccountValidationDTO> => {
+    const { data } = await axiosInstance.get<DeleteAccountValidationDTO>(
+      API_ENDPOINTS.USUARIOS.VALIDAR_ELIMINACION(id)
+    );
+    return data;
+  },
+
+  /**
+   * Eliminar usuario (soft delete)
+   */
+  eliminarUsuario: async (id: number): Promise<void> => {
+    await axiosInstance.delete(API_ENDPOINTS.USUARIOS.DELETE(id));
+  },
+
+  /**
+   * Eliminar cuenta completa (tenant + todo)
+   */
+  eliminarCuentaCompleta: async (id: number): Promise<void> => {
+    await axiosInstance.delete(API_ENDPOINTS.USUARIOS.DELETE_CUENTA_COMPLETA(id));
   },
 };

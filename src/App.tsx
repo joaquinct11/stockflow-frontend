@@ -21,6 +21,7 @@ import { UsuariosList } from './pages/usuarios/UsuariosList';
 import { SuscripcionesList } from './pages/suscripciones/SuscripcionesList';
 import { InventarioList } from './pages/inventario/InventarioList';
 import { ProveedoresList } from './pages/proveedores/ProveedoresList';
+import { AccountSettings } from './pages/settings/AccountSettings';  // ✅ NUEVO
 
 function App() {
   const { initialize } = useAuthStore();
@@ -60,10 +61,10 @@ function App() {
             <Route path="suscripciones" element={<SuscripcionesList />} />
             <Route path="inventario" element={<InventarioList />} />
             <Route path="proveedores" element={<ProveedoresList />} />
+            <Route path="configuracion" element={<AccountSettings />} />  {/* ✅ ACTUALIZADO */}
             
             {/* Placeholder routes */}
             <Route path="reportes" element={<div className="text-center py-12"><h2 className="text-2xl font-bold">Módulo de Reportes</h2><p className="text-muted-foreground">Próximamente...</p></div>} />
-            <Route path="configuracion" element={<div className="text-center py-12"><h2 className="text-2xl font-bold">Configuración</h2><p className="text-muted-foreground">Próximamente...</p></div>} />
           </Route>
 
           {/* Catch all - redirect to login */}

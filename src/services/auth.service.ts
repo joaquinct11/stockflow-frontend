@@ -1,8 +1,11 @@
 import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
-import type { LoginDTO, Usuario, JwtResponse } from '../types';
+import type { LoginDTO, RegistrationRequestDTO, Usuario, JwtResponse } from '../types';
 
 export const authService = {
+  /**
+   * Login de usuario existente
+   */
   login: async (credentials: LoginDTO): Promise<JwtResponse> => {
     const { data } = await axiosInstance.post<JwtResponse>(
       API_ENDPOINTS.AUTH.LOGIN,
@@ -13,9 +16,26 @@ export const authService = {
     return data;
   },
 
-  register: async (userData: Usuario): Promise<JwtResponse> => {
+  /**
+   * Registro de nueva farmacia (tenant + admin + suscripción)
+   */
+  register: async (registrationData: RegistrationRequestDTO): Promise<JwtResponse> => {
     const { data } = await axiosInstance.post<JwtResponse>(
       API_ENDPOINTS.AUTH.REGISTER,
+      registrationData
+    );
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data));
+    return data;
+  },
+
+  /**
+   * Registro de usuario interno (dentro de un tenant existente)
+   * NOTA: Este endpoint ya no se usará desde el frontend público
+   */
+  registerUsuario: async (userData: Usuario): Promise<JwtResponse> => {
+    const { data } = await axiosInstance.post<JwtResponse>(
+      '/auth/registro',  // Endpoint viejo, mantener para usuarios internos
       userData
     );
     localStorage.setItem('token', data.token);
@@ -39,5 +59,13 @@ export const authService = {
 
   isAuthenticated: (): boolean => {
     return !!localStorage.getItem('token');
+  },
+
+  /**
+   * Verificar si la suscripción está activa
+   */
+  hasActiveSuscripcion: (): boolean => {
+    const user = authService.getCurrentUser();
+    return user?.suscripcion?.estado === 'ACTIVA';
   },
 };
