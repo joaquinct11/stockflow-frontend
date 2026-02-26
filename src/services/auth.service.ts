@@ -1,6 +1,6 @@
 import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
-import type { LoginDTO, RegistrationRequestDTO, Usuario, JwtResponse } from '../types';
+import type { LoginDTO, RegistrationRequestDTO, JwtResponse } from '../types';
 
 export const authService = {
   /**
@@ -30,19 +30,8 @@ export const authService = {
   },
 
   /**
-   * Registro de usuario interno (dentro de un tenant existente)
-   * NOTA: Este endpoint ya no se usará desde el frontend público
+   * Cerrar sesión
    */
-  registerUsuario: async (userData: Usuario): Promise<JwtResponse> => {
-    const { data } = await axiosInstance.post<JwtResponse>(
-      '/auth/registro',  // Endpoint viejo, mantener para usuarios internos
-      userData
-    );
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data));
-    return data;
-  },
-
   logout: async (): Promise<void> => {
     try {
       await axiosInstance.post(API_ENDPOINTS.AUTH.LOGOUT);
@@ -52,11 +41,17 @@ export const authService = {
     }
   },
 
+  /**
+   * Obtener usuario actual del localStorage
+   */
   getCurrentUser: (): JwtResponse | null => {
     const user = localStorage.getItem('user');
     return user ? JSON.parse(user) : null;
   },
 
+  /**
+   * Verificar si el usuario está autenticado
+   */
   isAuthenticated: (): boolean => {
     return !!localStorage.getItem('token');
   },
@@ -67,5 +62,13 @@ export const authService = {
   hasActiveSuscripcion: (): boolean => {
     const user = authService.getCurrentUser();
     return user?.suscripcion?.estado === 'ACTIVA';
+  },
+
+  /**
+   * Obtener tenantId del usuario actual
+   */
+  getTenantId: (): string | null => {
+    const user = authService.getCurrentUser();
+    return user?.tenantId || null;
   },
 };

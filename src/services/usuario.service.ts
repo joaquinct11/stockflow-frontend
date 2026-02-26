@@ -3,6 +3,9 @@ import { API_ENDPOINTS } from '../api/endpoints';
 import type { Usuario, DeleteAccountValidationDTO } from '../types';
 
 export const usuarioService = {
+  /**
+   * Obtener todos los usuarios del tenant actual
+   */
   getAll: async (): Promise<Usuario[]> => {
     const { data } = await axiosInstance.get<Usuario[]>(
       API_ENDPOINTS.USUARIOS.LIST
@@ -10,6 +13,9 @@ export const usuarioService = {
     return data;
   },
 
+  /**
+   * Obtener usuario por ID
+   */
   getById: async (id: number): Promise<Usuario> => {
     const { data } = await axiosInstance.get<Usuario>(
       API_ENDPOINTS.USUARIOS.GET(id)
@@ -17,14 +23,10 @@ export const usuarioService = {
     return data;
   },
 
-  getByTenant: async (tenantId: string): Promise<Usuario[]> => {
-    const { data } = await axiosInstance.get<Usuario[]>(
-      API_ENDPOINTS.USUARIOS.GET_BY_TENANT(tenantId)
-    );
-    return data;
-  },
-
-  create: async (usuario: Usuario): Promise<Usuario> => {
+  /**
+   * Crear usuario (se asigna automáticamente al tenant del usuario logueado)
+   */
+  create: async (usuario: Omit<Usuario, 'id' | 'tenantId'>): Promise<Usuario> => {
     const { data } = await axiosInstance.post<Usuario>(
       API_ENDPOINTS.USUARIOS.CREATE,
       usuario
@@ -32,7 +34,10 @@ export const usuarioService = {
     return data;
   },
 
-  update: async (id: number, usuario: Usuario): Promise<Usuario> => {
+  /**
+   * Actualizar usuario
+   */
+  update: async (id: number, usuario: Partial<Usuario>): Promise<Usuario> => {
     const { data } = await axiosInstance.put<Usuario>(
       API_ENDPOINTS.USUARIOS.UPDATE(id),
       usuario
@@ -40,14 +45,23 @@ export const usuarioService = {
     return data;
   },
 
+  /**
+   * Desactivar usuario
+   */
   deactivate: async (id: number): Promise<void> => {
     await axiosInstance.patch(API_ENDPOINTS.USUARIOS.DEACTIVATE(id));
   },
 
+  /**
+   * Activar usuario
+   */
   activate: async (id: number): Promise<void> => {
     await axiosInstance.patch(API_ENDPOINTS.USUARIOS.ACTIVATE(id));
   },
 
+  /**
+   * Eliminar usuario (soft delete)
+   */
   delete: async (id: number): Promise<void> => {
     await axiosInstance.delete(API_ENDPOINTS.USUARIOS.DELETE(id));
   },
