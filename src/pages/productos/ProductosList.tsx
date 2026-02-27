@@ -314,7 +314,7 @@ export function ProductosList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ID</TableHead>
+                      {/* <TableHead>ID</TableHead> */}
                       <TableHead>Producto</TableHead>
                       <TableHead>Código</TableHead>
                       <TableHead>Categoría</TableHead>
@@ -332,7 +332,7 @@ export function ProductosList() {
 
                       return (
                         <TableRow key={producto.id}>
-                          <TableCell className="font-medium">#{producto.id}</TableCell>
+                          {/* <TableCell className="font-medium">#{producto.id}</TableCell> */}
                           <TableCell>
                             <div>
                               <p className="font-medium">{producto.nombre}</p>

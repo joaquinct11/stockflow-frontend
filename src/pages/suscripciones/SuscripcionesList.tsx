@@ -11,7 +11,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { CreditCard, Plus, Edit2, Trash2, XCircle, CheckCircle, Search, DollarSign } from 'lucide-react';
+import { CreditCard, Plus, Edit2, Trash2, XCircle, CheckCircle, Search, DollarSign, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
@@ -322,7 +322,7 @@ export function SuscripcionesList() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
+                    {/* <TableHead>ID</TableHead> */}
                     <TableHead>Usuario</TableHead>
                     <TableHead>Plan</TableHead>
                     <TableHead>Precio</TableHead>
@@ -334,8 +334,17 @@ export function SuscripcionesList() {
                 <TableBody>
                   {filteredSuscripciones.map((suscripcion) => (
                     <TableRow key={suscripcion.id}>
-                      <TableCell className="font-medium">#{suscripcion.id}</TableCell>
-                      <TableCell>Usuario #{suscripcion.usuarioPrincipalId}</TableCell>
+                      {/* <TableCell className="font-medium">#{suscripcion.id}</TableCell> */}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-sm">{usuarios.find(u => u.id === suscripcion.usuarioPrincipalId)?.nombre || 'Sin nombre'}</p>
+                              {/* <p className="text-xs text-muted-foreground">ID: {venta.vendedorId}</p> */}
+                            </div>
+                          </div>
+                        {/* {usuarios.find(u => u.id === suscripcion.usuarioPrincipalId)?.nombre || 'Usuario Desconocido'} */}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">{suscripcion.planId}</Badge>
                       </TableCell>

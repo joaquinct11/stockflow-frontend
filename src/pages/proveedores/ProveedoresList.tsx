@@ -274,7 +274,7 @@ export function ProveedoresList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ID</TableHead>
+                      {/* <TableHead>ID</TableHead> */}
                       <TableHead>Nombre</TableHead>
                       <TableHead>RUC</TableHead>
                       <TableHead>Contacto</TableHead>
@@ -288,7 +288,7 @@ export function ProveedoresList() {
                     {/* ✅ CAMBIAR - Usar currentProveedores en lugar de filteredProveedores */}
                     {currentProveedores.map((proveedor) => (
                       <TableRow key={proveedor.id}>
-                        <TableCell className="font-medium">#{proveedor.id}</TableCell>
+                        {/* <TableCell className="font-medium">#{proveedor.id}</TableCell> */}
                         <TableCell className="font-semibold">{proveedor.nombre}</TableCell>
                         <TableCell>
                           <span className="text-sm text-muted-foreground">{proveedor.ruc || '-'}</span>
