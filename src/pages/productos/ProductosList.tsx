@@ -15,8 +15,10 @@ import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
 import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, DollarSign, Building2, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export function ProductosList() {
+  const { canCreate, canEdit, canDelete } = usePermissions();
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +27,6 @@ export function ProductosList() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedProveedor, setSelectedProveedor] = useState<any>(null);
 
-  // ✅ Estados de paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -54,7 +55,6 @@ export function ProductosList() {
     tenantId: 'farmacia-001',
   });
 
-  // ✅ NUEVO - Helpers para formatear fechas correctamente
   const formatearFecha = (fechaString: string | undefined): string => {
     if (!fechaString) return '';
     const [year, month, day] = fechaString.split('-').map(Number);
@@ -72,7 +72,6 @@ export function ProductosList() {
     fetchData();
   }, []);
 
-  // ✅ Resetear página al buscar
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -197,14 +196,12 @@ export function ProductosList() {
     setIsDialogOpen(false);
   };
 
-  // ✅ Filtrar productos
   const filteredProductos = productos.filter(p =>
     p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // ✅ Calcular paginación
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -230,10 +227,12 @@ export function ProductosList() {
             Gestiona tu inventario de productos
           </p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Producto
-        </Button>
+        {canCreate('PRODUCTOS') && (
+          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Producto
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -314,7 +313,6 @@ export function ProductosList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {/* <TableHead>ID</TableHead> */}
                       <TableHead>Producto</TableHead>
                       <TableHead>Código</TableHead>
                       <TableHead>Categoría</TableHead>
@@ -332,7 +330,6 @@ export function ProductosList() {
 
                       return (
                         <TableRow key={producto.id}>
-                          {/* <TableCell className="font-medium">#{producto.id}</TableCell> */}
                           <TableCell>
                             <div>
                               <p className="font-medium">{producto.nombre}</p>
@@ -382,22 +379,33 @@ export function ProductosList() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(producto)}
-                                title="Editar"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(producto.id!)}
-                                title="Eliminar"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                              {canEdit('PRODUCTOS') && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEdit(producto)}
+                                  title="Editar"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                              
+                              {canDelete('PRODUCTOS') && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDelete(producto.id!)}
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              )}
+                              
+                              {!canEdit('PRODUCTOS') && !canDelete('PRODUCTOS') && (
+                                <span className="text-xs text-muted-foreground italic">
+                                  Solo lectura
+                                </span>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -407,7 +415,6 @@ export function ProductosList() {
                 </Table>
               </div>
 
-              {/* ✅ Paginación */}
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}

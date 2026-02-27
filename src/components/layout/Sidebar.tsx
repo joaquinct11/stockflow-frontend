@@ -14,56 +14,9 @@ import {
   X,
   Building2,
 } from 'lucide-react';
-import { useState } from 'react';
-import { useAuthStore } from '../../store/authStore';  // ✅ ACTUALIZADO
-
-const menuItems = [
-  {
-    title: 'Dashboard',
-    href: '/',
-    icon: LayoutDashboard,
-  },
-  {
-    title: 'Proveedores',
-    href: '/proveedores',
-    icon: Building2,
-  },
-  {
-    title: 'Productos',
-    href: '/productos',
-    icon: Package,
-  },
-  {
-    title: 'Ventas',
-    href: '/ventas',
-    icon: ShoppingCart,
-  },
-  {
-    title: 'Inventario',
-    href: '/inventario',
-    icon: PackageOpen,
-  },
-  {
-    title: 'Usuarios',
-    href: '/usuarios',
-    icon: Users,
-  },
-  {
-    title: 'Suscripciones',
-    href: '/suscripciones',
-    icon: CreditCard,
-  },
-  {
-    title: 'Reportes',
-    href: '/reportes',
-    icon: BarChart3,
-  },
-  {
-    title: 'Configuración',
-    href: '/configuracion',
-    icon: Settings,
-  },
-];
+import { useState, useEffect } from 'react'; // ✅ Agregar useEffect
+import { useAuthStore } from '../../store/authStore';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -73,7 +26,79 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const { user } = useAuthStore();  // ✅ ACTUALIZADO
+  const { user } = useAuthStore();
+  const { isAdmin, isVendedor, rol } = usePermissions(); // ✅ Agregar rol
+
+  // ✅ DEBUG - Ver qué está pasando
+  useEffect(() => {
+    console.log('🔍 SIDEBAR - Usuario:', user);
+    console.log('🔍 SIDEBAR - Rol:', rol);
+    console.log('🔍 SIDEBAR - isAdmin:', isAdmin);
+    console.log('🔍 SIDEBAR - isVendedor:', isVendedor);
+  }, [user, rol, isAdmin, isVendedor]);
+
+  const menuItems = [
+    {
+      title: 'Dashboard',
+      href: '/',
+      icon: LayoutDashboard,
+      show: true,
+    },
+    {
+      title: 'Proveedores',
+      href: '/proveedores',
+      icon: Building2,
+      show: isAdmin,
+    },
+    {
+      title: 'Productos',
+      href: '/productos',
+      icon: Package,
+      show: isAdmin || isVendedor,
+    },
+    {
+      title: 'Ventas',
+      href: '/ventas',
+      icon: ShoppingCart,
+      show: isAdmin || isVendedor,
+    },
+    {
+      title: 'Inventario',
+      href: '/inventario',
+      icon: PackageOpen,
+      show: isAdmin,
+    },
+    {
+      title: 'Usuarios',
+      href: '/usuarios',
+      icon: Users,
+      show: isAdmin,
+    },
+    {
+      title: 'Suscripciones',
+      href: '/suscripciones',
+      icon: CreditCard,
+      show: isAdmin,
+    },
+    {
+      title: 'Reportes',
+      href: '/reportes',
+      icon: BarChart3,
+      show: isAdmin,
+    },
+    {
+      title: 'Configuración',
+      href: '/configuracion',
+      icon: Settings,
+      show: true,
+    },
+  ];
+
+  // ✅ DEBUG - Ver qué items se están mostrando
+  useEffect(() => {
+    const visibleItems = menuItems.filter((item) => item.show);
+    console.log('📋 SIDEBAR - Items visibles:', visibleItems.map(i => i.title));
+  }, [isAdmin, isVendedor]);
 
   return (
     <>
@@ -139,28 +164,30 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="space-y-1 p-2 overflow-y-auto h-[calc(100vh-12rem)]">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.href;
+          {menuItems
+            .filter((item) => item.show)
+            .map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.href;
 
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                onClick={onClose}
-                className={cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )}
-                title={collapsed ? item.title : undefined}
-              >
-                <Icon size={20} className="flex-shrink-0" />
-                {!collapsed && <span>{item.title}</span>}
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  onClick={onClose}
+                  className={cn(
+                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  )}
+                  title={collapsed ? item.title : undefined}
+                >
+                  <Icon size={20} className="flex-shrink-0" />
+                  {!collapsed && <span>{item.title}</span>}
+                </Link>
+              );
+            })}
         </nav>
 
         {/* User Info */}

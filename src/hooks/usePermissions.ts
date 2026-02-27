@@ -1,67 +1,128 @@
 import { useAuthStore } from '../store/authStore';
 
-type Permission = 
-  | 'dashboard'
-  | 'usuarios'
-  | 'suscripciones'
-  | 'productos'
-  | 'ventas'
-  | 'inventario'
-  | 'reportes'
-  | 'configuracion';
+type Permission = 'crear' | 'editar' | 'eliminar' | 'ver' | 'ver_todas' | 'ver_propias' | 'ver_global' | 'ver_personal';
 
-const PERMISOS_POR_ROL: Record<string, Permission[]> = {
-  ADMIN: [
-    'dashboard',
-    'usuarios',
-    'suscripciones',
-    'productos',
-    'ventas',
-    'inventario',
-    'reportes',
-    'configuracion',
-  ],
-  GERENTE: [
-    'dashboard',
-    'usuarios',
-    'suscripciones',
-    'productos',
-    'ventas',
-    'inventario',
-    'reportes',
-  ],
-  VENDEDOR: [
-    'dashboard',
-    'productos',
-    'ventas',
-    'inventario',
-  ],
-  ALMACENERO: [
-    'dashboard',
-    'productos',
-    'ventas',
-    'inventario',
-  ],
+type Module = 
+  | 'DASHBOARD'
+  | 'PRODUCTOS'
+  | 'VENTAS'
+  | 'USUARIOS'
+  | 'INVENTARIO'
+  | 'PROVEEDORES'
+  | 'SUSCRIPCIONES'
+  | 'REPORTES'
+  | 'CONFIGURACION';
+
+type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+
+const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
+  DASHBOARD: {
+    ADMIN: ['ver_global', 'ver_personal'],
+    GERENTE: ['ver_global', 'ver_personal'],
+    VENDEDOR: ['ver_personal'],
+    GESTOR_INVENTARIO: ['ver_personal'],
+  },
+  
+  PRODUCTOS: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'eliminar', 'ver'],
+    VENDEDOR: ['ver'],
+    GESTOR_INVENTARIO: ['crear', 'editar', 'eliminar', 'ver'],
+  },
+  
+  VENTAS: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'ver_todas'],
+    GERENTE: ['crear', 'editar', 'eliminar', 'ver_todas'],
+    VENDEDOR: ['crear', 'ver_propias'],
+    GESTOR_INVENTARIO: [],
+  },
+  
+  USUARIOS: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: [],
+  },
+  
+  INVENTARIO: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: ['crear', 'editar', 'eliminar', 'ver'],
+  },
+  
+  PROVEEDORES: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
+  },
+  
+  SUSCRIPCIONES: {
+    ADMIN: ['ver', 'editar'],
+    GERENTE: [],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: [],
+  },
+  
+  REPORTES: {
+    ADMIN: ['ver'],
+    GERENTE: ['ver'],
+    VENDEDOR: ['ver'],
+    GESTOR_INVENTARIO: ['ver'],
+  },
+  
+  CONFIGURACION: {
+    ADMIN: ['ver', 'editar'],
+    GERENTE: ['ver'],
+    VENDEDOR: ['ver'],
+    GESTOR_INVENTARIO: ['ver'],
+  },
 };
 
 export function usePermissions() {
-  const user = useAuthStore((state) => state.user);
-  const rol = user?.rol || 'VENDEDOR'; // Default a vendedor por seguridad
+  const { user } = useAuthStore();
+  const rol = (user?.rol || 'VENDEDOR') as Role;
 
-  const permisos = PERMISOS_POR_ROL[rol] || [];
+  // ✅ DEBUG temporal
+  console.log('👤 Usuario:', user);
+  console.log('🎭 Rol detectado:', rol);
+  console.log('✅ isAdmin:', rol === 'ADMIN');
+  console.log('✅ isVendedor:', rol === 'VENDEDOR');
 
-  const puede = (permiso: Permission): boolean => {
-    return permisos.includes(permiso);
+  const hasPermission = (module: Module, permission: Permission): boolean => {
+    const modulePermissions = PERMISSIONS[module]?.[rol] || [];
+    return modulePermissions.includes(permission);
   };
 
-  const noPermitido = (permiso: Permission): boolean => {
-    return !puede(permiso);
-  };
+  const canCreate = (module: Module) => hasPermission(module, 'crear');
+  const canEdit = (module: Module) => hasPermission(module, 'editar');
+  const canDelete = (module: Module) => hasPermission(module, 'eliminar');
+  const canView = (module: Module) => hasPermission(module, 'ver');
+  const canViewAll = (module: Module) => hasPermission(module, 'ver_todas');
+  const canViewOwn = (module: Module) => hasPermission(module, 'ver_propias');
+  const canViewGlobal = (module: Module) => hasPermission(module, 'ver_global');
+  const canViewPersonal = (module: Module) => hasPermission(module, 'ver_personal');
+
+  const isAdmin = rol === 'ADMIN';
+  const isGerente = rol === 'GERENTE';
+  const isVendedor = rol === 'VENDEDOR';
+  const isGestorInventario = rol === 'GESTOR_INVENTARIO';
 
   return {
     rol,
-    permisos,
-    puede,
-    noPermitido,
+    hasPermission,
+    canCreate,
+    canEdit,
+    canDelete,
+    canView,
+    canViewAll,
+    canViewOwn,
+    canViewGlobal,
+    canViewPersonal,
+    isAdmin,
+    isGerente,
+    isVendedor,
+    isGestorInventario,
   };
 }

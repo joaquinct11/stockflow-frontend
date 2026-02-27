@@ -8,6 +8,7 @@ import { useInactivityLogout } from './hooks/useInactivityLogout';
 // Layout
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
+import { RoleProtectedRoute } from './components/shared/RoleProtectedRoute'; // ✅ NUEVO
 
 // Auth Pages
 import { Login } from './pages/auth/Login';
@@ -21,7 +22,7 @@ import { UsuariosList } from './pages/usuarios/UsuariosList';
 import { SuscripcionesList } from './pages/suscripciones/SuscripcionesList';
 import { InventarioList } from './pages/inventario/InventarioList';
 import { ProveedoresList } from './pages/proveedores/ProveedoresList';
-import { AccountSettings } from './pages/settings/AccountSettings';  // ✅ NUEVO
+import { AccountSettings } from './pages/settings/AccountSettings';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -54,17 +55,84 @@ function App() {
               </ProtectedRoute>
             }
           >
+            {/* Dashboard - Todos pueden acceder */}
             <Route index element={<Dashboard />} />
-            <Route path="productos" element={<ProductosList />} />
-            <Route path="ventas" element={<VentasList />} />
-            <Route path="usuarios" element={<UsuariosList />} />
-            <Route path="suscripciones" element={<SuscripcionesList />} />
-            <Route path="inventario" element={<InventarioList />} />
-            <Route path="proveedores" element={<ProveedoresList />} />
-            <Route path="configuracion" element={<AccountSettings />} />  {/* ✅ ACTUALIZADO */}
             
-            {/* Placeholder routes */}
-            <Route path="reportes" element={<div className="text-center py-12"><h2 className="text-2xl font-bold">Módulo de Reportes</h2><p className="text-muted-foreground">Próximamente...</p></div>} />
+            {/* Proveedores - Solo ADMIN */}
+            <Route
+              path="proveedores"
+              element={
+                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                  <ProveedoresList />
+                </RoleProtectedRoute>
+              }
+            />
+            
+            {/* Productos - ADMIN y VENDEDOR */}
+            <Route
+              path="productos"
+              element={
+                <RoleProtectedRoute allowedRoles={['ADMIN', 'VENDEDOR']}>
+                  <ProductosList />
+                </RoleProtectedRoute>
+              }
+            />
+            
+            {/* Ventas - ADMIN y VENDEDOR */}
+            <Route
+              path="ventas"
+              element={
+                <RoleProtectedRoute allowedRoles={['ADMIN', 'VENDEDOR']}>
+                  <VentasList />
+                </RoleProtectedRoute>
+              }
+            />
+            
+            {/* Inventario - Solo ADMIN */}
+            <Route
+              path="inventario"
+              element={
+                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                  <InventarioList />
+                </RoleProtectedRoute>
+              }
+            />
+            
+            {/* Usuarios - Solo ADMIN */}
+            <Route
+              path="usuarios"
+              element={
+                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                  <UsuariosList />
+                </RoleProtectedRoute>
+              }
+            />
+            
+            {/* Suscripciones - Solo ADMIN */}
+            <Route
+              path="suscripciones"
+              element={
+                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                  <SuscripcionesList />
+                </RoleProtectedRoute>
+              }
+            />
+            
+            {/* Configuración - Todos pueden acceder */}
+            <Route path="configuracion" element={<AccountSettings />} />
+            
+            {/* Reportes - Solo ADMIN (por ahora) */}
+            <Route
+              path="reportes"
+              element={
+                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                  <div className="text-center py-12">
+                    <h2 className="text-2xl font-bold">Módulo de Reportes</h2>
+                    <p className="text-muted-foreground">Próximamente...</p>
+                  </div>
+                </RoleProtectedRoute>
+              }
+            />
           </Route>
 
           {/* Catch all - redirect to login */}
