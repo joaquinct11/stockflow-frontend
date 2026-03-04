@@ -1,8 +1,9 @@
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/auth/login',
-    REGISTER: '/auth/register',  // ✅ CAMBIADO de /auth/registro
-    LOGOUT: '/auth/logout',
+    REGISTER: '/auth/register',
+    REFRESH: '/auth/refresh',      // ✅ NUEVO
+    LOGOUT: '/auth/logout',        // ✅ ACTUALIZAR
   },
   
   USUARIOS: {

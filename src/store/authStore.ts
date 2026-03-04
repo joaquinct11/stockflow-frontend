@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { JwtResponse } from '../types';
+import { authService } from '../services/auth.service';
 
 interface AuthState {
   user: JwtResponse | null;
@@ -7,41 +8,75 @@ interface AuthState {
   setUser: (user: JwtResponse) => void;
   logout: () => void;
   initialize: () => void;
+  refreshUser: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
 
   setUser: (user) => {
-    console.log('✅ Usuario establecido:', user); // ← Log para debug
+    console.log('✅ Usuario establecido:', user.email);
     set({ user, isAuthenticated: true });
     localStorage.setItem('user', JSON.stringify(user));
-    localStorage.setItem('token', user.token);
+    localStorage.setItem('accessToken', user.accessToken);
+    localStorage.setItem('refreshToken', user.refreshToken);
   },
 
   logout: () => {
-    console.log('🚪 Cerrando sesión'); // ← Log para debug
+    console.log('🚪 Cerrando sesión');
     set({ user: null, isAuthenticated: false });
     localStorage.removeItem('user');
-    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('token'); // ✅ Eliminar token viejo si existe
+  },
+
+  // ✅ NUEVO: Refrescar tokens automáticamente
+  refreshUser: async () => {
+    try {
+      console.log('🔄 Intentando refrescar tokens...');
+      const refreshedData = await authService.refresh();
+      
+      // Actualizar el usuario con los nuevos datos
+      const currentUser = get().user;
+      if (currentUser) {
+        const updatedUser = {
+          ...currentUser,
+          ...refreshedData,
+        };
+        set({ user: updatedUser });
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        localStorage.setItem('accessToken', refreshedData.accessToken);
+        localStorage.setItem('refreshToken', refreshedData.refreshToken);
+        console.log('✅ Tokens refrescados exitosamente');
+      }
+    } catch (error) {
+      console.error('❌ Error refrescando tokens:', error);
+      // Si falla el refresh, hacer logout
+      get().logout();
+      throw error;
+    }
   },
 
   initialize: () => {
-    console.log('🔄 Inicializando AuthStore...'); // ← Log para debug
+    console.log('🔄 Inicializando AuthStore...');
     
+    const accessToken = localStorage.getItem('accessToken');
+    const refreshToken = localStorage.getItem('refreshToken');
     const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
     
-    console.log('📦 Usuario en localStorage:', storedUser); // ← Log para debug
-    console.log('🔑 Token en localStorage:', token ? 'Existe' : 'No existe'); // ← Log para debug
+    console.log('📦 Datos en localStorage:');
+    console.log('  - accessToken:', accessToken ? '✅' : '❌');
+    console.log('  - refreshToken:', refreshToken ? '✅' : '❌');
+    console.log('  - user:', storedUser ? '✅' : '❌');
     
-    if (storedUser && token) {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      console.log('✅ Sesión restaurada para:', user.email); // ← Log para debug
+    if (storedUser && accessToken && refreshToken) {
+      const user = JSON.parse(storedUser);
+      console.log('✅ Sesión restaurada para:', user.email);
       set({ user, isAuthenticated: true });
     } else {
-      console.log('❌ No hay sesión guardada'); // ← Log para debug
+      console.log('❌ No hay sesión guardada o tokens incompletos');
       set({ user: null, isAuthenticated: false });
     }
   },

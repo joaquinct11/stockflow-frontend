@@ -15,14 +15,16 @@ export interface Usuario {
 }
 
 export interface JwtResponse {
-  id?: number;
-  token: string;
+  // id?: number;
+  accessToken: string;      // ✅ Token corto (15 min)
+  refreshToken: string;     // ✅ Token largo (7 días)
   tipo: string;
   usuarioId: number;
   email: string;
   nombre: string;
   rol: string;
   tenantId: string;  // ✅ AGREGADO
+  expiresIn: number;        // Segundos (ej: 900 para 15 min)
   suscripcion?: SuscripcionDTO;  // ✅ AGREGADO
 }
 

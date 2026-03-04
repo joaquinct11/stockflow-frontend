@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useInactivityLogout } from './hooks/useInactivityLogout';
+import { setupAxiosInterceptors } from './api/axios.interceptor'; // ✅ NUEVO
 
 // Layout
 import { AppLayout } from './components/layout/AppLayout';
@@ -30,6 +31,8 @@ function App() {
   useInactivityLogout();
 
   useEffect(() => {
+    // ✅ NUEVO: Configurar interceptores
+    setupAxiosInterceptors();
     initialize();
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {

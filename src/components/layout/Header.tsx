@@ -18,12 +18,14 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const handleLogout = async () => {
     try {
+      console.log('🚪 Iniciando logout...');
       await authService.logout();
       logout();
       toast.success('Sesión cerrada exitosamente');
       navigate('/login');
     } catch (error) {
-      console.error('Error al cerrar sesión:', error);
+      console.error('⚠️ Error al cerrar sesión:', error);
+      // Aunque falle el logout en backend, hacer logout local
       logout();
       navigate('/login');
     }
