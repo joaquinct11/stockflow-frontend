@@ -27,13 +27,15 @@ export function VentasList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVenta, setSelectedVenta] = useState<VentaDTO | null>(null);
 
-  // ✅ NUEVO - Estados de paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // ✅ NUEVO - Estados de filtro por fecha
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+
+  // ✅ NUEVO - Estados para manejo de efectivo
+  const [montoRecibido, setMontoRecibido] = useState<number>(0);
+  const [vuelto, setVuelto] = useState<number>(0);
 
   const [selectedProductos, setSelectedProductos] = useState<{ [key: number]: any }>({});
 
@@ -69,10 +71,21 @@ export function VentasList() {
     fetchData();
   }, []);
 
-  // ✅ NUEVO - Resetear página al buscar o filtrar
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, fechaDesde, fechaHasta]);
+
+  // ✅ NUEVO - Calcular vuelto automáticamente
+  useEffect(() => {
+    if (formData.metodoPago === 'EFECTIVO') {
+      const total = calculateTotal();
+      const cambio = montoRecibido - total;
+      setVuelto(cambio >= 0 ? cambio : 0);
+    } else {
+      setMontoRecibido(0);
+      setVuelto(0);
+    }
+  }, [montoRecibido, formData.detalles, formData.metodoPago]);
 
   const fetchData = async () => {
     try {
@@ -82,7 +95,7 @@ export function VentasList() {
         productoService.getAll(),
       ]);
       console.log('📦 Ventas recibidas:', ventasData);
-    console.log('📅 Primera venta createdAt:', ventasData[0]?.createdAt);
+      console.log('📅 Primera venta createdAt:', ventasData[0]?.createdAt);
       setVentas(ventasData);
       setProductos(productosData);
     } catch (error) {
@@ -156,6 +169,15 @@ export function VentasList() {
       return;
     }
 
+    // ✅ NUEVO - Validar monto recibido en efectivo
+    if (formData.metodoPago === 'EFECTIVO') {
+      const total = calculateTotal();
+      if (montoRecibido < total) {
+        toast.error(`El monto recibido (S/.${montoRecibido.toFixed(2)}) es menor al total (S/.${total.toFixed(2)})`);
+        return;
+      }
+    }
+
     try {
       const ventaToSend = {
         ...formData,
@@ -163,6 +185,12 @@ export function VentasList() {
       };
       await ventaService.create(ventaToSend);
       toast.success('Venta creada exitosamente');
+      
+      // ✅ NUEVO - Mostrar vuelto si es efectivo
+      if (formData.metodoPago === 'EFECTIVO' && vuelto > 0) {
+        toast.success(`Vuelto: S/.${vuelto.toFixed(2)}`, { duration: 5000 });
+      }
+      
       resetForm();
       await fetchData();
     } catch (error) {
@@ -211,18 +239,17 @@ export function VentasList() {
       detalles: [],
     });
     setSelectedProductos({});
+    setMontoRecibido(0);
+    setVuelto(0);
     setIsDialogOpen(false);
   };
 
-  // ✅ NUEVO - Limpiar filtros de fecha
   const clearDateFilters = () => {
     setFechaDesde('');
     setFechaHasta('');
   };
 
-  // ✅ ACTUALIZADO - Filtrar ventas por búsqueda y fechas
   const filteredVentas = ventas.filter(v => {
-    // Filtro por búsqueda de texto
     const matchesSearch = 
       v.metodoPago?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.estado?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -230,12 +257,10 @@ export function VentasList() {
 
     if (!matchesSearch) return false;
 
-    // Filtro por fecha
     if (fechaDesde || fechaHasta) {
       const fechaVenta = v.createdAt ? new Date(v.createdAt) : null;
       if (!fechaVenta) return false;
 
-      // ✅ CORRECCIÓN: Normalizar fechas en hora local (no UTC)
       const ventaDate = new Date(
         fechaVenta.getFullYear(), 
         fechaVenta.getMonth(), 
@@ -243,7 +268,6 @@ export function VentasList() {
       );
 
       if (fechaDesde) {
-        // ✅ CORRECCIÓN: Parsear fecha en formato local
         const [year, month, day] = fechaDesde.split('-').map(Number);
         const desdeNormalized = new Date(year, month - 1, day);
         
@@ -251,7 +275,6 @@ export function VentasList() {
       }
 
       if (fechaHasta) {
-        // ✅ CORRECCIÓN: Parsear fecha en formato local
         const [year, month, day] = fechaHasta.split('-').map(Number);
         const hastaNormalized = new Date(year, month - 1, day);
         
@@ -262,7 +285,6 @@ export function VentasList() {
     return true;
   });
 
-  // ✅ NUEVO - Calcular paginación
   const totalPages = Math.ceil(filteredVentas.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -337,11 +359,10 @@ export function VentasList() {
         </Card>
       </div>
 
-      {/* ✅ NUEVO - Filtros (Búsqueda y Fechas) */}
+      {/* Filtros */}
       <Card>
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            {/* Búsqueda */}
             <div className="md:col-span-5">
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -354,7 +375,6 @@ export function VentasList() {
               </div>
             </div>
 
-            {/* Fecha Desde */}
             <div className="md:col-span-3">
               <div className="relative">
                 <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -368,7 +388,6 @@ export function VentasList() {
               </div>
             </div>
 
-            {/* Fecha Hasta */}
             <div className="md:col-span-3">
               <div className="relative">
                 <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -382,7 +401,6 @@ export function VentasList() {
               </div>
             </div>
 
-            {/* Botón Limpiar Filtros */}
             {(fechaDesde || fechaHasta) && (
               <div className="md:col-span-1 flex items-center">
                 <Button
@@ -398,7 +416,6 @@ export function VentasList() {
             )}
           </div>
 
-          {/* Indicador de filtros activos */}
           {(fechaDesde || fechaHasta) && (
             <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="h-4 w-4" />
@@ -432,7 +449,6 @@ export function VentasList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ID</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Vendedor</TableHead>
                       <TableHead>Método de Pago</TableHead>
@@ -443,11 +459,8 @@ export function VentasList() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* ✅ CAMBIAR - Usar currentVentas en lugar de filteredVentas */}
                     {currentVentas.map((venta) => (
                       <TableRow key={venta.id}>
-                        <TableCell className="font-medium">#{venta.id}</TableCell>
-                        {/* ✅ NUEVO - Mostrar fecha */}
                         <TableCell>
                           <div className="text-sm">
                             {venta.createdAt ? new Date(venta.createdAt).toLocaleDateString('es-PE') : '-'}
@@ -461,7 +474,6 @@ export function VentasList() {
                             <User className="h-4 w-4 text-muted-foreground" />
                             <div>
                               <p className="font-medium text-sm">{venta.vendedorNombre || 'Sin nombre'}</p>
-                              <p className="text-xs text-muted-foreground">ID: {venta.vendedorId}</p>
                             </div>
                           </div>
                         </TableCell>
@@ -511,7 +523,6 @@ export function VentasList() {
                 </Table>
               </div>
 
-              {/* ✅ NUEVO - Paginación */}
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -562,6 +573,72 @@ export function VentasList() {
               <input type="hidden" value="COMPLETADA" />
             </div>
           </div>
+
+          {/* ✅ NUEVO - Sección de Efectivo */}
+          {formData.metodoPago === 'EFECTIVO' && formData.detalles.length > 0 && (
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3">
+              <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Pago en Efectivo
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Total a Pagar
+                  </label>
+                  <div className="h-10 rounded-md border-2 border-blue-300 dark:border-blue-700 bg-blue-100 dark:bg-blue-900 px-3 py-2 flex items-center justify-between font-bold text-blue-900 dark:text-blue-100">
+                    <span>S/.</span>
+                    <span>{calculateTotal().toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Monto Recibido
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={montoRecibido || ''}
+                    onChange={(e) => setMontoRecibido(parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="h-10 font-bold text-right"
+                    required={formData.metodoPago === 'EFECTIVO'}
+                  />
+                </div>
+              </div>
+
+              {montoRecibido > 0 && (
+                <div className={`rounded-lg p-3 border-2 ${
+                  vuelto >= 0 
+                    ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800' 
+                    : 'bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800'
+                }`}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-sm">
+                      {vuelto >= 0 ? 'Vuelto:' : 'Falta:'}
+                    </span>
+                    <span className={`text-2xl font-bold ${
+                      vuelto >= 0 
+                        ? 'text-green-700 dark:text-green-300' 
+                        : 'text-red-700 dark:text-red-300'
+                    }`}>
+                      S/.{Math.abs(vuelto).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {montoRecibido > 0 && vuelto < 0 && (
+                <div className="bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-lg p-2 text-sm text-red-800 dark:text-red-200">
+                  ⚠️ El monto recibido es insuficiente
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -703,7 +780,13 @@ export function VentasList() {
             <Button type="button" variant="outline" onClick={resetForm}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={formData.detalles.length === 0}>
+            <Button 
+              type="submit" 
+              disabled={
+                formData.detalles.length === 0 || 
+                (formData.metodoPago === 'EFECTIVO' && montoRecibido < calculateTotal())
+              }
+            >
               Crear Venta
             </Button>
           </div>
@@ -743,7 +826,6 @@ export function VentasList() {
               <div className="space-y-1 p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground font-medium">Vendedor</p>
                 <p className="font-semibold text-sm">{selectedVenta.vendedorNombre || 'Sin nombre'}</p>
-                <p className="text-xs text-muted-foreground">ID: {selectedVenta.vendedorId}</p>
               </div>
             </div>
 
@@ -807,7 +889,7 @@ export function VentasList() {
         )}
       </Dialog>
 
-      {/* Confirm Dialog para eliminar */}
+      {/* Confirm Dialog */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}

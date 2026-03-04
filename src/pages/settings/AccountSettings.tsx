@@ -37,7 +37,7 @@ export function AccountSettings() {
       await usuarioService.eliminarCuentaCompleta(user.usuarioId);
     } else {
       // Eliminar usuario normal
-      await usuarioService.eliminarUsuario(user.usuarioId);
+      await usuarioService.deactivate(user.usuarioId);
     }
   };
 
@@ -120,7 +120,7 @@ export function AccountSettings() {
             <h3 className="font-semibold mb-2">Eliminar Cuenta</h3>
             <p className="text-sm text-muted-foreground mb-4">
               {user?.rol === 'ADMIN' 
-                ? 'Como administrador, eliminar tu cuenta eliminará toda la información de tu farmacia de forma permanente.'
+                ? 'Como administrador, eliminar tu cuenta eliminará toda la información de tu empresa de forma permanente.'
                 : 'Tu usuario será desactivado pero puede ser recuperado por un administrador.'}
             </p>
             <Button

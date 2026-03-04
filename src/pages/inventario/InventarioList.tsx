@@ -328,7 +328,7 @@ export function InventarioList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ID</TableHead>
+                      {/* <TableHead>ID</TableHead> */}
                       <TableHead>Producto</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead className="text-center">Cantidad</TableHead>
@@ -343,7 +343,7 @@ export function InventarioList() {
                       const producto = productos.find(p => p.id === movimiento.productoId);
                       return (
                         <TableRow key={movimiento.id}>
-                          <TableCell className="font-medium">#{movimiento.id}</TableCell>
+                          {/* <TableCell className="font-medium">#{movimiento.id}</TableCell> */}
                           <TableCell>{producto?.nombre || `Producto #${movimiento.productoId}`}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">

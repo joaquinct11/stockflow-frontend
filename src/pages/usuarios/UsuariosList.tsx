@@ -10,8 +10,8 @@ import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
-import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck } from 'lucide-react';
+import { Pagination } from '../../components/ui/Pagination';
+import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function UsuariosList() {
@@ -21,7 +21,6 @@ export function UsuariosList() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // ✅ NUEVO - Estados de paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
@@ -34,12 +33,11 @@ export function UsuariosList() {
     action: null as (() => Promise<void>) | null,
   });
 
-  const [formData, setFormData] = useState<Usuario>({
+  const [formData, setFormData] = useState<Omit<Usuario, 'id' | 'tenantId'>>({
     nombre: '',
     email: '',
     contraseña: '',
     rolNombre: 'VENDEDOR',
-    tenantId: 'farmacia-001',
     activo: true,
   });
 
@@ -47,7 +45,6 @@ export function UsuariosList() {
     fetchUsuarios();
   }, []);
 
-  // ✅ NUEVO - Resetear página al buscar
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -73,19 +70,14 @@ export function UsuariosList() {
         const usuarioToUpdate = {
           nombre: formData.nombre,
           rolNombre: formData.rolNombre,
-          tenantId: formData.tenantId,
           activo: formData.activo,
         };
-
-        console.log('📤 Actualizando usuario:', usuarioToUpdate);
 
         await usuarioService.update(editingId, usuarioToUpdate as Usuario);
         toast.success('Usuario actualizado exitosamente');
       } else {
-        // CREAR nuevo usuario
-        console.log('📤 Creando usuario:', formData);
-
-        await usuarioService.create(formData);
+        // CREAR nuevo usuario (sin tenantId, se asigna automáticamente en backend)
+        await usuarioService.create(formData as Usuario);
         toast.success('Usuario creado exitosamente');
       }
 
@@ -100,8 +92,11 @@ export function UsuariosList() {
 
   const handleEdit = (usuario: Usuario) => {
     setFormData({
-      ...usuario,
+      nombre: usuario.nombre,
+      email: usuario.email,
       contraseña: '', // No mostrar la contraseña
+      rolNombre: usuario.rolNombre,
+      activo: usuario.activo ?? true,
     });
     setEditingId(usuario.id!);
     setIsDialogOpen(true);
@@ -173,20 +168,17 @@ export function UsuariosList() {
       email: '',
       contraseña: '',
       rolNombre: 'VENDEDOR',
-      tenantId: 'farmacia-001',
       activo: true,
     });
     setEditingId(null);
     setIsDialogOpen(false);
   };
 
-  // ✅ ACTUALIZADO - Filtrar usuarios
   const filteredUsuarios = usuarios.filter(u =>
     u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // ✅ NUEVO - Calcular paginación
   const totalPages = Math.ceil(filteredUsuarios.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -296,27 +288,31 @@ export function UsuariosList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ID</TableHead>
+                      {/* <TableHead>ID</TableHead> */}
                       <TableHead>Nombre</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Rol</TableHead>
-                      <TableHead>Tenant</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* ✅ CAMBIAR - Usar currentUsuarios en lugar de filteredUsuarios */}
                     {currentUsuarios.map((usuario) => (
                       <TableRow key={usuario.id}>
-                        <TableCell className="font-medium">#{usuario.id}</TableCell>
-                        <TableCell>{usuario.nombre}</TableCell>
+                        {/* <TableCell className="font-medium">#{usuario.id}</TableCell> */}
+                        <TableCell>
+                          {/* {usuario.nombre} */}
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-sm">{usuario.nombre || 'Sin nombre'}</p>
+                              {/* <p className="text-xs text-muted-foreground">ID: {venta.vendedorId}</p> */}
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell>{usuario.email}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{usuario.rolNombre}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {usuario.tenantId}
                         </TableCell>
                         <TableCell>
                           <Badge variant={usuario.activo ? 'success' : 'secondary'}>
@@ -370,7 +366,6 @@ export function UsuariosList() {
                 </Table>
               </div>
 
-              {/* ✅ NUEVO - Paginación */}
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -452,7 +447,7 @@ export function UsuariosList() {
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-medium">
                 Rol
                 <span className="text-red-500">*</span>
@@ -463,24 +458,10 @@ export function UsuariosList() {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 required
               >
-                <option value="">Seleccionar rol</option>
                 <option value="VENDEDOR">Vendedor</option>
                 <option value="ADMIN">Administrador</option>
-                <option value="ALMACEN">Almacén</option>
+                <option value="GESTOR_INVENTARIO">Gestor de Inventario</option>
               </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Tenant ID
-                <span className="text-red-500">*</span>
-              </label>
-              <Input
-                placeholder="farmacia-001"
-                value={formData.tenantId}
-                onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
-                required
-              />
             </div>
 
             <div className="space-y-2 flex items-center md:col-span-2">
@@ -507,7 +488,7 @@ export function UsuariosList() {
         </form>
       </Dialog>
 
-      {/* Confirm Dialog para acciones destructivas */}
+      {/* Confirm Dialog */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}

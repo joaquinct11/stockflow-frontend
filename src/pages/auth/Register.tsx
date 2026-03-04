@@ -54,18 +54,18 @@ export function Register() {
               <Package className="h-8 w-8 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Registra tu Farmacia</CardTitle>
+          <CardTitle className="text-2xl font-bold">Registra tu Empresa</CardTitle>
           <CardDescription>
             Crea tu cuenta y comienza a gestionar tu inventario
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Nombre de la Farmacia */}
+            {/* Nombre de la Empresa */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-2" htmlFor="nombreFarmacia">
                 <Building2 className="h-4 w-4" />
-                Nombre de tu Farmacia
+                Nombre de tu Empresa
               </label>
               <Input
                 id="nombreFarmacia"
