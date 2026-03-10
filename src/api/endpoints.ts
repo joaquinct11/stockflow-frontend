@@ -2,8 +2,12 @@ export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/auth/login',
     REGISTER: '/auth/register',
-    REFRESH: '/auth/refresh',      // ✅ NUEVO
-    LOGOUT: '/auth/logout',        // ✅ ACTUALIZAR
+    REFRESH: '/auth/refresh',
+    LOGOUT: '/auth/logout',
+    ME: '/auth/me',                        // ✅ NUEVO
+    CHANGE_PASSWORD: '/auth/cambiar-contraseña',  // ✅ NUEVO
+    FORGOT_PASSWORD: '/auth/forgot-password',      // ✅ NUEVO
+    RESET_PASSWORD: '/auth/reset-password',        // ✅ NUEVO
   },
   
   USUARIOS: {

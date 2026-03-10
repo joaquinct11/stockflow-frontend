@@ -1,4 +1,5 @@
-import { Bell, Search, Moon, Sun, LogOut, User, Menu } from 'lucide-react';
+import { useState } from 'react';
+import { Bell, Search, Moon, Sun, LogOut, User, Menu, ChevronDown } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useThemeStore } from '../../store/themeStore';
@@ -15,20 +16,24 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { isDark, toggleTheme } = useThemeStore();
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
-      console.log('🚪 Iniciando logout...');
       await authService.logout();
       logout();
       toast.success('Sesión cerrada exitosamente');
       navigate('/login');
     } catch (error) {
-      console.error('⚠️ Error al cerrar sesión:', error);
-      // Aunque falle el logout en backend, hacer logout local
+      console.error('Error al cerrar sesión:', error);
       logout();
       navigate('/login');
     }
+  };
+
+  const handleProfileClick = () => {
+    setIsDropdownOpen(false);
+    navigate('/perfil');
   };
 
   return (
@@ -42,18 +47,6 @@ export function Header({ onMenuClick }: HeaderProps) {
       >
         <Menu size={20} />
       </Button>
-
-      {/* Search */}
-      {/* <div className="max-w-2xl w-full hidden sm:block">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Buscar..."
-            className="pl-8 w-full"
-          />
-        </div>
-      </div> */}
 
       {/* ✅ SPACER - Empuja todo a la derecha */}
       <div className="flex-1" />
@@ -76,31 +69,68 @@ export function Header({ onMenuClick }: HeaderProps) {
           <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500"></span>
         </Button>
 
-        {/* ✅ User Section - Pegado a la derecha */}
-        <div className="flex items-center gap-2 pl-3 border-l">
-          {/* Nombre y Rol */}
-          <div className="text-right hidden md:block">
-            <p className="text-sm font-medium leading-tight">{user?.nombre || 'Usuario'}</p>
-            <p className="text-xs text-muted-foreground uppercase font-medium">{user?.rol || 'ADMIN'}</p>
-          </div>
-
-          {/* Avatar */}
-          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <User className="h-4 w-4 text-primary" />
-          </div>
-
-          {/* Logout Button */}
+        {/* ✅ User Dropdown - Reemplaza el antiguo User Section */}
+        <div className="relative">
           <Button
             variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-            title="Cerrar sesión"
-            className="text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-2 pl-3 pr-2 border-l"
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           >
-            <LogOut size={18} />
+            {/* Nombre y Rol */}
+            <div className="text-right hidden md:block">
+              <p className="text-sm font-medium leading-tight">{user?.nombre || 'Usuario'}</p>
+              <p className="text-xs text-muted-foreground uppercase font-medium">{user?.rol || 'ADMIN'}</p>
+            </div>
+
+            {/* Avatar */}
+            <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <User className="h-4 w-4 text-primary" />
+            </div>
+
+            {/* Chevron */}
+            <ChevronDown size={16} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
           </Button>
+
+          {/* ✅ NUEVO: Dropdown Menu */}
+          {isDropdownOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-background border rounded-lg shadow-lg py-2 z-50">
+              {/* User Info */}
+              <div className="px-4 py-3 border-b">
+                <p className="font-medium text-sm">{user?.nombre}</p>
+                <p className="text-xs text-muted-foreground">{user?.email}</p>
+              </div>
+
+              {/* Menu Items */}
+              <button
+                onClick={handleProfileClick}
+                className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-2 text-sm"
+              >
+                <User size={16} />
+                Mi Perfil
+              </button>
+
+              <div className="border-t my-2"></div>
+
+              {/* Logout */}
+              <button
+                onClick={handleLogout}
+                className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-2 text-sm text-red-500 hover:text-red-600"
+              >
+                <LogOut size={16} />
+                Cerrar Sesión
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* ✅ Cerrar dropdown si haces click fuera */}
+      {isDropdownOpen && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setIsDropdownOpen(false)}
+        />
+      )}
     </header>
   );
 }

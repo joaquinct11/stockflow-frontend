@@ -2,6 +2,38 @@ import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
 import type { LoginDTO, RegistrationRequestDTO, JwtResponse } from '../types';
 
+// ✅ NUEVO: DTO para cambiar contraseña
+export interface ChangePasswordRequest {
+  contraseñaActual: string;
+  nuevaContraseña: string;
+  confirmarContraseña: string;
+}
+
+// ✅ NUEVO: DTO para recuperar contraseña
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+// ✅ NUEVO: DTO para resetear contraseña
+export interface ResetPasswordRequest {
+  token: string;
+  nuevaContraseña: string;
+  confirmarContraseña: string;
+}
+
+// ✅ NUEVO: DTO del perfil del usuario
+export interface UserProfile {
+  usuarioId: number;
+  email: string;
+  nombre: string;
+  rol: string;
+  tenantId: string;
+  creadoEn: string;
+  ultimoLogin: string | null;
+  activo: boolean;
+  nombreFarmacia: string;
+}
+
 export const authService = {
   /**
    * Login de usuario existente
@@ -12,18 +44,18 @@ export const authService = {
       API_ENDPOINTS.AUTH.LOGIN,
       credentials
     );
-
+    
     // ✅ Guardar AMBOS tokens
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('refreshToken', data.refreshToken);
     localStorage.setItem('user', JSON.stringify(data));
-
+    
     console.log('✅ Tokens guardados:', {
       accessToken: data.accessToken.substring(0, 20) + '...',
       refreshToken: data.refreshToken.substring(0, 20) + '...',
       expiresIn: data.expiresIn,
     });
-
+    
     return data;
   },
 
@@ -35,17 +67,60 @@ export const authService = {
       API_ENDPOINTS.AUTH.REGISTER,
       registrationData
     );
-
+    
     // ✅ Guardar AMBOS tokens
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('refreshToken', data.refreshToken);
     localStorage.setItem('user', JSON.stringify(data));
-
+    
     return data;
   },
 
   /**
-   * ✅ NUEVO: Refrescar tokens
+   * ✅ NUEVO: Obtener perfil del usuario actual
+   */
+  obtenerPerfil: async (): Promise<UserProfile> => {
+    const { data } = await axiosInstance.get<UserProfile>(
+      API_ENDPOINTS.AUTH.ME
+    );
+    return data;
+  },
+
+  /**
+   * ✅ NUEVO: Cambiar contraseña
+   */
+  cambiarContraseña: async (request: ChangePasswordRequest): Promise<{ mensaje: string }> => {
+    const { data } = await axiosInstance.post<{ mensaje: string }>(
+      API_ENDPOINTS.AUTH.CHANGE_PASSWORD,
+      request
+    );
+    return data;
+  },
+
+  /**
+   * ✅ NUEVO: Solicitar recuperación de contraseña
+   */
+  solicitarRecuperacionContraseña: async (request: ForgotPasswordRequest): Promise<{ mensaje: string }> => {
+    const { data } = await axiosInstance.post<{ mensaje: string }>(
+      API_ENDPOINTS.AUTH.FORGOT_PASSWORD,
+      request
+    );
+    return data;
+  },
+
+  /**
+   * ✅ NUEVO: Resetear contraseña
+   */
+  resetearContraseña: async (request: ResetPasswordRequest): Promise<{ mensaje: string }> => {
+    const { data } = await axiosInstance.post<{ mensaje: string }>(
+      API_ENDPOINTS.AUTH.RESET_PASSWORD,
+      request
+    );
+    return data;
+  },
+
+  /**
+   * Refrescar tokens
    * Usa el refreshToken para obtener nuevos accessToken + refreshToken
    */
   refresh: async (): Promise<JwtResponse> => {

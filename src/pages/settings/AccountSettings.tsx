@@ -43,66 +43,6 @@ export function AccountSettings() {
 
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Configuración de Cuenta</h1>
-        <p className="text-muted-foreground">
-          Administra tu cuenta y preferencias
-        </p>
-      </div>
-
-      {/* Información de cuenta */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Información de la Cuenta
-          </CardTitle>
-          <CardDescription>
-            Datos de tu cuenta en StockFlow
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Nombre</p>
-              <p className="font-medium">{user?.nombre}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Email</p>
-              <p className="font-medium">{user?.email}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Rol</p>
-              <p className="font-medium">{user?.rol}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Tenant ID</p>
-              <p className="font-mono text-xs">{user?.tenantId}</p>
-            </div>
-          </div>
-
-          {user?.suscripcion && (
-            <div className="mt-4 p-4 bg-primary/5 rounded-lg border">
-              <p className="text-sm font-semibold mb-2">Plan Actual</p>
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-lg">{user.suscripcion.planId}</p>
-                  <p className="text-sm text-muted-foreground">
-                    S/ {user.suscripcion.precioMensual} / mes
-                  </p>
-                </div>
-                <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  user.suscripcion.estado === 'ACTIVA' 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-red-100 text-red-700'
-                }`}>
-                  {user.suscripcion.estado}
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Zona de peligro */}
       <Card className="border-destructive">

@@ -13,6 +13,7 @@ import {
   ChevronRight,
   X,
   Building2,
+  User,
 } from 'lucide-react';
 import { useState, useEffect } from 'react'; // ✅ Agregar useEffect
 import { useAuthStore } from '../../store/authStore';
@@ -86,6 +87,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: BarChart3,
       show: isAdmin,
     },
+    // {
+    //   title: 'Mi Perfil',
+    //   href: '/perfil',
+    //   icon: User,
+    //   show: true, // Todos pueden ver su perfil
+    // },
     {
       title: 'Configuración',
       href: '/configuracion',

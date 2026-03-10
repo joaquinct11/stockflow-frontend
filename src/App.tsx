@@ -4,12 +4,12 @@ import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useInactivityLogout } from './hooks/useInactivityLogout';
-import { setupAxiosInterceptors } from './api/axios.interceptor'; // ✅ NUEVO
+import { setupAxiosInterceptors } from './api/axios.interceptor';
 
 // Layout
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
-import { RoleProtectedRoute } from './components/shared/RoleProtectedRoute'; // ✅ NUEVO
+import { RoleProtectedRoute } from './components/shared/RoleProtectedRoute';
 
 // Auth Pages
 import { Login } from './pages/auth/Login';
@@ -24,6 +24,7 @@ import { SuscripcionesList } from './pages/suscripciones/SuscripcionesList';
 import { InventarioList } from './pages/inventario/InventarioList';
 import { ProveedoresList } from './pages/proveedores/ProveedoresList';
 import { AccountSettings } from './pages/settings/AccountSettings';
+import { UserProfile } from './pages/settings/UserProfile';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -32,7 +33,6 @@ function App() {
   useInactivityLogout();
 
   useEffect(() => {
-    // ✅ NUEVO: Configurar interceptores
     setupAxiosInterceptors();
     initialize();
     const savedTheme = localStorage.getItem('theme');
@@ -45,7 +45,7 @@ function App() {
     <>
       <BrowserRouter>
         <Routes>
-          {/* Auth Routes */}
+          {/* Auth Routes - Públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
@@ -60,6 +60,9 @@ function App() {
           >
             {/* Dashboard - Todos pueden acceder */}
             <Route index element={<Dashboard />} />
+            
+            {/* ✅ MI PERFIL - TODOS ACCEDEN */}
+            <Route path="perfil" element={<UserProfile />} />
             
             {/* Proveedores - Solo ADMIN */}
             <Route
