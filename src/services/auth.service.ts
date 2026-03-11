@@ -28,7 +28,7 @@ export interface UserProfile {
   nombre: string;
   rol: string;
   tenantId: string;
-  creadoEn: string;
+  createdAt: string | null;
   ultimoLogin: string | null;
   activo: boolean;
   nombreFarmacia: string;

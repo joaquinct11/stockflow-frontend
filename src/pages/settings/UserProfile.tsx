@@ -178,7 +178,9 @@ export function UserProfile() {
                 Miembro desde
               </label>
               <div className="p-3 bg-muted rounded-md text-sm">
-                {new Date(profile.creadoEn).toLocaleDateString('es-PE')}
+                {profile.createdAt
+                  ? new Date(profile.createdAt).toLocaleDateString('es-PE')
+                  : 'Not found'}
               </div>
             </div>
 
