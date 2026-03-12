@@ -11,10 +11,12 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Pagination } from '../../components/ui/Pagination';
+import { useAuthStore } from '../../store/authStore'; // ✅ AGREGAR
 import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function UsuariosList() {
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -71,6 +73,7 @@ export function UsuariosList() {
           nombre: formData.nombre,
           rolNombre: formData.rolNombre,
           activo: formData.activo,
+          tenantId: tenantId!,
         };
 
         await usuarioService.update(editingId, usuarioToUpdate as Usuario);
