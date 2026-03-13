@@ -6,6 +6,10 @@ import toast from 'react-hot-toast';
 let isRefreshing = false;
 let refreshSubscribers: ((token: string) => void)[] = [];
 
+// Throttle flag to avoid spamming 403 toasts
+let forbiddenToastTimeout: ReturnType<typeof setTimeout> | null = null;
+let forbiddenToastShown = false;
+
 const onRefreshed = (token: string) => {
   refreshSubscribers.forEach(callback => callback(token));
   refreshSubscribers = [];
@@ -16,13 +20,36 @@ const addRefreshSubscriber = (callback: (token: string) => void) => {
 };
 
 /**
- * Configurar interceptor de respuestas para manejar tokens expirados
+ * Show a 403 toast at most once per 3 seconds to avoid spam.
+ */
+function showForbiddenToast(message: string) {
+  if (forbiddenToastShown) return;
+  forbiddenToastShown = true;
+  toast.error(message);
+  if (forbiddenToastTimeout) clearTimeout(forbiddenToastTimeout);
+  forbiddenToastTimeout = setTimeout(() => {
+    forbiddenToastShown = false;
+    forbiddenToastTimeout = null;
+  }, 3000);
+}
+
+/**
+ * Configurar interceptor de respuestas para manejar tokens expirados y acceso denegado
  */
 export function setupAxiosInterceptors() {
   axiosInstance.interceptors.response.use(
     (response) => response,
     async (error) => {
       const originalRequest = error.config;
+
+      // Handle 403 Forbidden — show toast, do NOT logout
+      if (error.response?.status === 403) {
+        const mensaje =
+          error.response?.data?.mensaje ||
+          'No tienes permisos para realizar esta acción';
+        showForbiddenToast(mensaje);
+        return Promise.reject(error);
+      }
 
       // Si obtenemos 401, probablemente el accessToken expiró
       if (error.response?.status === 401 && !originalRequest._retry) {
@@ -40,8 +67,6 @@ export function setupAxiosInterceptors() {
         isRefreshing = true;
 
         try {
-          console.log('⏰ Access token expirado, intentando refrescar...');
-          
           // Intentar refrescar el token
           const refreshedData = await authService.refresh();
           
@@ -66,8 +91,6 @@ export function setupAxiosInterceptors() {
           // Reintentar la petición original con el nuevo token
           return axiosInstance(originalRequest);
         } catch (refreshError) {
-          console.error('❌ Error refrescando token:', refreshError);
-          
           isRefreshing = false;
           
           // Si el refresh falla, hacer logout
