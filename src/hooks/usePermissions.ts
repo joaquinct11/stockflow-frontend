@@ -1,6 +1,6 @@
 import { useAuthStore } from '../store/authStore';
 
-type Permission = 'crear' | 'editar' | 'eliminar' | 'ver' | 'ver_todas' | 'ver_propias' | 'ver_global' | 'ver_personal';
+type Permission = 'crear'| 'activar' | 'editar' | 'eliminar' | 'ver' | 'ver_todas' | 'ver_propias' | 'ver_global' | 'ver_personal';
 
 type Module = 
   | 'DASHBOARD'
@@ -22,6 +22,13 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     VENDEDOR: ['ver_personal'],
     GESTOR_INVENTARIO: ['ver_personal'],
   },
+
+  PROVEEDORES: {
+    ADMIN: ['crear', 'editar', 'activar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
+  },
   
   PRODUCTOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
@@ -36,6 +43,13 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     VENDEDOR: ['crear', 'ver_propias'],
     GESTOR_INVENTARIO: [],
   },
+
+  INVENTARIO: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: ['crear', 'editar', 'eliminar', 'ver'],
+  },
   
   USUARIOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
@@ -44,22 +58,8 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     GESTOR_INVENTARIO: [],
   },
   
-  INVENTARIO: {
-    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'ver'],
-    VENDEDOR: [],
-    GESTOR_INVENTARIO: ['crear', 'editar', 'eliminar', 'ver'],
-  },
-  
-  PROVEEDORES: {
-    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'ver'],
-    VENDEDOR: [],
-    GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
-  },
-  
   SUSCRIPCIONES: {
-    ADMIN: ['ver', 'editar'],
+    ADMIN: ['ver', 'activar','eliminar'],
     GERENTE: [],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
@@ -68,8 +68,8 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
   REPORTES: {
     ADMIN: ['ver'],
     GERENTE: ['ver'],
-    VENDEDOR: ['ver'],
-    GESTOR_INVENTARIO: ['ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: [],
   },
   
   CONFIGURACION: {
@@ -92,6 +92,7 @@ export function usePermissions() {
   const canCreate = (module: Module) => hasPermission(module, 'crear');
   const canEdit = (module: Module) => hasPermission(module, 'editar');
   const canDelete = (module: Module) => hasPermission(module, 'eliminar');
+  const canActive = (module: Module) => hasPermission(module, 'activar');
   const canView = (module: Module) => hasPermission(module, 'ver');
   const canViewAll = (module: Module) => hasPermission(module, 'ver_todas');
   const canViewOwn = (module: Module) => hasPermission(module, 'ver_propias');
@@ -109,6 +110,7 @@ export function usePermissions() {
     canCreate,
     canEdit,
     canDelete,
+    canActive,
     canView,
     canViewAll,
     canViewOwn,

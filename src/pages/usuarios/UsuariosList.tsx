@@ -252,26 +252,12 @@ export function UsuariosList() {
           </p>
         </div>
 
-        <Button
-          onClick={() => {
-            if (!canCreate('USUARIOS')) {
-              toast.error('No tienes permisos para crear usuarios');
-              return;
-            }
-            // Asegurar rol por defecto válido al abrir
-            setFormData((prev) => ({
-              ...prev,
-              rolNombre: prev.rolNombre || defaultRolNombre,
-            }));
-            setIsDialogOpen(true);
-          }}
-          className="w-full sm:w-auto"
-          disabled={!canCreate('USUARIOS')}
-          title={!canCreate('USUARIOS') ? 'No tienes permisos' : undefined}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Usuario
-        </Button>
+        {canCreate('USUARIOS') && (
+          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Usuario
+          </Button>
+        )}
       </div>
 
       {/* Stats */}

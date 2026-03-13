@@ -24,7 +24,7 @@ const PLAN_PRICES: Record<string, number> = {
 
 export function SuscripcionesList() {
   const { userId } = useCurrentUser();
-  const { canView, canEdit } = usePermissions();
+  const { canView, canEdit, canDelete, canActive } = usePermissions();
   const [suscripciones, setSuscripciones] = useState<SuscripcionDTO[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -377,7 +377,7 @@ export function SuscripcionesList() {
                             </Button>
                           )}
 
-                          {canEdit('SUSCRIPCIONES') && (
+                          {canActive('SUSCRIPCIONES') && (
                             suscripcion.estado === 'ACTIVA' ? (
                               <Button
                                 variant="ghost"
@@ -399,7 +399,7 @@ export function SuscripcionesList() {
                             )
                           )}
 
-                          {canEdit('SUSCRIPCIONES') && (
+                          {canDelete('SUSCRIPCIONES') && (
                             <Button
                               variant="ghost"
                               size="icon"

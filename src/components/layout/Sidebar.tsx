@@ -76,7 +76,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Reportes',
       href: '/reportes',
       icon: BarChart3,
-      show: isAdmin || isGerente || isVendedor || isGestorInventario,
+      show: isAdmin || isGerente,
     },
     {
       title: 'Configuración',
