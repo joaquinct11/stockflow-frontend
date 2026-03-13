@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usuarioService } from '../../services/usuario.service';
 import type { Usuario } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -15,8 +15,36 @@ import { useAuthStore } from '../../store/authStore'; // ✅ AGREGAR
 import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+
 export function UsuariosList() {
   const tenantId = useAuthStore((s) => s.user?.tenantId);
+  const currentUserRole = (useAuthStore((s) => s.user?.rol) || 'VENDEDOR') as Role;
+
+  // ✅ HARD-CODEADO: Opciones según el rol del logueado
+  const allowedRoleOptions = useMemo(() => {
+    const map: Record<Role, Array<{ value: Role; label: string }>> = {
+      ADMIN: [
+        { value: 'GERENTE', label: 'Gerente' },
+        { value: 'VENDEDOR', label: 'Vendedor' },
+        { value: 'GESTOR_INVENTARIO', label: 'Gestor de Inventario' },
+      ],
+      GERENTE: [
+        { value: 'VENDEDOR', label: 'Vendedor' },
+        { value: 'GESTOR_INVENTARIO', label: 'Gestor de Inventario' },
+      ],
+      VENDEDOR: [],
+      GESTOR_INVENTARIO: [],
+    };
+
+    return map[currentUserRole] ?? [];
+  }, [currentUserRole]);
+
+  // ✅ Por defecto: primera opción permitida (si no hay, VENDEDOR)
+  const defaultRolNombre = useMemo(() => {
+    return (allowedRoleOptions[0]?.value ?? 'VENDEDOR') as any;
+  }, [allowedRoleOptions]);
+
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -51,6 +79,17 @@ export function UsuariosList() {
     setCurrentPage(1);
   }, [searchTerm]);
 
+  // ✅ Si cambia el rol del logueado, asegura que el form tenga un rol válido cuando NO se edita
+  useEffect(() => {
+    if (!editingId) {
+      setFormData((prev) => ({
+        ...prev,
+        rolNombre: (prev.rolNombre as any) ?? defaultRolNombre,
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultRolNombre]);
+
   const fetchUsuarios = async () => {
     try {
       setLoading(true);
@@ -79,6 +118,12 @@ export function UsuariosList() {
         await usuarioService.update(editingId, usuarioToUpdate as Usuario);
         toast.success('Usuario actualizado exitosamente');
       } else {
+        // ✅ Validación simple en front: si no tiene opciones, no permite crear
+        if (allowedRoleOptions.length === 0) {
+          toast.error('No tienes permisos para crear usuarios');
+          return;
+        }
+
         // CREAR nuevo usuario (sin tenantId, se asigna automáticamente en backend)
         await usuarioService.create(formData as Usuario);
         toast.success('Usuario creado exitosamente');
@@ -170,14 +215,14 @@ export function UsuariosList() {
       nombre: '',
       email: '',
       contraseña: '',
-      rolNombre: 'VENDEDOR',
+      rolNombre: defaultRolNombre,
       activo: true,
     });
     setEditingId(null);
     setIsDialogOpen(false);
   };
 
-  const filteredUsuarios = usuarios.filter(u =>
+  const filteredUsuarios = usuarios.filter((u) =>
     u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -191,6 +236,8 @@ export function UsuariosList() {
     return <LoadingSpinner />;
   }
 
+  const canCreateUsers = allowedRoleOptions.length > 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -200,8 +247,28 @@ export function UsuariosList() {
           <p className="text-muted-foreground">
             Gestiona los usuarios del sistema
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Rol actual: <span className="font-medium">{currentUserRole}</span>
+          </p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+
+        <Button
+          onClick={() => {
+            if (!canCreateUsers) {
+              toast.error('No tienes permisos para crear usuarios');
+              return;
+            }
+            // Asegurar rol por defecto válido al abrir
+            setFormData((prev) => ({
+              ...prev,
+              rolNombre: prev.rolNombre || defaultRolNombre,
+            }));
+            setIsDialogOpen(true);
+          }}
+          className="w-full sm:w-auto"
+          disabled={!canCreateUsers}
+          title={!canCreateUsers ? 'No tienes permisos' : undefined}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Usuario
         </Button>
@@ -226,7 +293,7 @@ export function UsuariosList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {usuarios.filter(u => u.activo).length}
+              {usuarios.filter((u) => u.activo).length}
             </div>
           </CardContent>
         </Card>
@@ -238,7 +305,7 @@ export function UsuariosList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {usuarios.filter(u => !u.activo).length}
+              {usuarios.filter((u) => !u.activo).length}
             </div>
           </CardContent>
         </Card>
@@ -250,7 +317,7 @@ export function UsuariosList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {usuarios.filter(u => u.rolNombre === 'ADMIN').length}
+              {usuarios.filter((u) => u.rolNombre === 'ADMIN').length}
             </div>
           </CardContent>
         </Card>
@@ -304,24 +371,26 @@ export function UsuariosList() {
                       <TableRow key={usuario.id}>
                         {/* <TableCell className="font-medium">#{usuario.id}</TableCell> */}
                         <TableCell>
-                          {/* {usuario.nombre} */}
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground" />
                             <div>
                               <p className="font-medium text-sm">{usuario.nombre || 'Sin nombre'}</p>
-                              {/* <p className="text-xs text-muted-foreground">ID: {venta.vendedorId}</p> */}
                             </div>
                           </div>
                         </TableCell>
+
                         <TableCell>{usuario.email}</TableCell>
+
                         <TableCell>
                           <Badge variant="outline">{usuario.rolNombre}</Badge>
                         </TableCell>
+
                         <TableCell>
                           <Badge variant={usuario.activo ? 'success' : 'secondary'}>
                             {usuario.activo ? 'Activo' : 'Inactivo'}
                           </Badge>
                         </TableCell>
+
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
@@ -455,16 +524,30 @@ export function UsuariosList() {
                 Rol
                 <span className="text-red-500">*</span>
               </label>
+
               <select
                 value={formData.rolNombre}
                 onChange={(e) => setFormData({ ...formData, rolNombre: e.target.value })}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 required
+                disabled={!canCreateUsers || allowedRoleOptions.length === 0}
               >
-                <option value="VENDEDOR">Vendedor</option>
-                <option value="ADMIN">Administrador</option>
-                <option value="GESTOR_INVENTARIO">Gestor de Inventario</option>
+                {allowedRoleOptions.length === 0 ? (
+                  <option value="">No tienes permisos para crear usuarios</option>
+                ) : (
+                  allowedRoleOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))
+                )}
               </select>
+
+              {!canCreateUsers && (
+                <p className="text-xs text-muted-foreground">
+                  Tu rol (<span className="font-medium">{currentUserRole}</span>) no puede crear usuarios.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2 flex items-center md:col-span-2">
@@ -484,7 +567,7 @@ export function UsuariosList() {
             <Button type="button" variant="outline" onClick={resetForm}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={formData.nombre.length < 3}>
+            <Button type="submit" disabled={formData.nombre.length < 3 || (!editingId && !canCreateUsers)}>
               {editingId ? 'Actualizar' : 'Crear'} Usuario
             </Button>
           </div>
