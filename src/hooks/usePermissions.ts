@@ -84,12 +84,6 @@ export function usePermissions() {
   const { user } = useAuthStore();
   const rol = (user?.rol || 'VENDEDOR') as Role;
 
-  // ✅ DEBUG temporal
-  console.log('👤 Usuario:', user);
-  console.log('🎭 Rol detectado:', rol);
-  console.log('✅ isAdmin:', rol === 'ADMIN');
-  console.log('✅ isVendedor:', rol === 'VENDEDOR');
-
   const hasPermission = (module: Module, permission: Permission): boolean => {
     const modulePermissions = PERMISSIONS[module]?.[rol] || [];
     return modulePermissions.includes(permission);

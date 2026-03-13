@@ -68,51 +68,51 @@ function App() {
             {/* ✅ MI PERFIL - TODOS ACCEDEN */}
             <Route path="perfil" element={<UserProfile />} />
             
-            {/* Proveedores - Solo ADMIN */}
+            {/* Proveedores - ADMIN, GERENTE, GESTOR_INVENTARIO */}
             <Route
               path="proveedores"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'GESTOR_INVENTARIO']}>
                   <ProveedoresList />
                 </RoleProtectedRoute>
               }
             />
             
-            {/* Productos - ADMIN y VENDEDOR */}
+            {/* Productos - ADMIN, GERENTE, VENDEDOR, GESTOR_INVENTARIO */}
             <Route
               path="productos"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN', 'VENDEDOR']}>
+                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'VENDEDOR', 'GESTOR_INVENTARIO']}>
                   <ProductosList />
                 </RoleProtectedRoute>
               }
             />
             
-            {/* Ventas - ADMIN y VENDEDOR */}
+            {/* Ventas - ADMIN, GERENTE, VENDEDOR */}
             <Route
               path="ventas"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN', 'VENDEDOR']}>
+                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'VENDEDOR']}>
                   <VentasList />
                 </RoleProtectedRoute>
               }
             />
             
-            {/* Inventario - Solo ADMIN */}
+            {/* Inventario - ADMIN, GERENTE, GESTOR_INVENTARIO */}
             <Route
               path="inventario"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'GESTOR_INVENTARIO']}>
                   <InventarioList />
                 </RoleProtectedRoute>
               }
             />
             
-            {/* Usuarios - Solo ADMIN */}
+            {/* Usuarios - ADMIN, GERENTE */}
             <Route
               path="usuarios"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE']}>
                   <UsuariosList />
                 </RoleProtectedRoute>
               }
@@ -131,11 +131,11 @@ function App() {
             {/* Configuración - Todos pueden acceder */}
             <Route path="configuracion" element={<AccountSettings />} />
             
-            {/* Reportes - Solo ADMIN (por ahora) */}
+            {/* Reportes - Todos los roles (restricciones finas manejadas por backend con 403) */}
             <Route
               path="reportes"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'VENDEDOR', 'GESTOR_INVENTARIO']}>
                   <div className="text-center py-12">
                     <h2 className="text-2xl font-bold">Módulo de Reportes</h2>
                     <p className="text-muted-foreground">Próximamente...</p>

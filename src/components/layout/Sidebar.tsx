@@ -13,9 +13,8 @@ import {
   ChevronRight,
   X,
   Building2,
-  User,
 } from 'lucide-react';
-import { useState, useEffect } from 'react'; // ✅ Agregar useEffect
+import { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
 
@@ -28,15 +27,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuthStore();
-  const { isAdmin, isVendedor, rol } = usePermissions(); // ✅ Agregar rol
-
-  // ✅ DEBUG - Ver qué está pasando
-  useEffect(() => {
-    console.log('🔍 SIDEBAR - Usuario:', user);
-    console.log('🔍 SIDEBAR - Rol:', rol);
-    console.log('🔍 SIDEBAR - isAdmin:', isAdmin);
-    console.log('🔍 SIDEBAR - isVendedor:', isVendedor);
-  }, [user, rol, isAdmin, isVendedor]);
+  const { isAdmin, isGerente, isVendedor, isGestorInventario } = usePermissions();
 
   const menuItems = [
     {
@@ -49,31 +40,31 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Proveedores',
       href: '/proveedores',
       icon: Building2,
-      show: isAdmin,
+      show: isAdmin || isGerente || isGestorInventario,
     },
     {
       title: 'Productos',
       href: '/productos',
       icon: Package,
-      show: isAdmin || isVendedor,
+      show: isAdmin || isGerente || isVendedor || isGestorInventario,
     },
     {
       title: 'Ventas',
       href: '/ventas',
       icon: ShoppingCart,
-      show: isAdmin || isVendedor,
+      show: isAdmin || isGerente || isVendedor,
     },
     {
       title: 'Inventario',
       href: '/inventario',
       icon: PackageOpen,
-      show: isAdmin,
+      show: isAdmin || isGerente || isGestorInventario,
     },
     {
       title: 'Usuarios',
       href: '/usuarios',
       icon: Users,
-      show: isAdmin,
+      show: isAdmin || isGerente,
     },
     {
       title: 'Suscripciones',
@@ -85,14 +76,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Reportes',
       href: '/reportes',
       icon: BarChart3,
-      show: isAdmin,
+      show: isAdmin || isGerente || isVendedor || isGestorInventario,
     },
-    // {
-    //   title: 'Mi Perfil',
-    //   href: '/perfil',
-    //   icon: User,
-    //   show: true, // Todos pueden ver su perfil
-    // },
     {
       title: 'Configuración',
       href: '/configuracion',
@@ -100,12 +85,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       show: true,
     },
   ];
-
-  // ✅ DEBUG - Ver qué items se están mostrando
-  useEffect(() => {
-    const visibleItems = menuItems.filter((item) => item.show);
-    console.log('📋 SIDEBAR - Items visibles:', visibleItems.map(i => i.title));
-  }, [isAdmin, isVendedor]);
 
   return (
     <>
