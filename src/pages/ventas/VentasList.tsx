@@ -16,9 +16,12 @@ import { Plus, Trash2, ShoppingCart, Search, DollarSign, Eye, User, Calendar, X 
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useAuthStore } from '../../store/authStore';
 
 export function VentasList() {
   const { userId } = useCurrentUser();
+  const { user } = useAuthStore();
+
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,9 +70,13 @@ export function VentasList() {
     }
   }, [userId]);
 
+  // ✅ Importante: cargar data cuando ya tengamos userId (evita llamar al endpoint incorrecto muy temprano)
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (userId) {
+      fetchData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, user?.rol]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -90,17 +97,30 @@ export function VentasList() {
   const fetchData = async () => {
     try {
       setLoading(true);
+
+      const ventasPromise = (() => {
+        // Si es vendedor: solo sus ventas (evita 403 del endpoint /ventas)
+        if (user?.rol === 'VENDEDOR') {
+          return ventaService.getByVendor(userId!);
+        }
+        // Admin/Gerente/etc: todas
+        return ventaService.getAll();
+      })();
+
       const [ventasData, productosData] = await Promise.all([
-        ventaService.getAll(),
+        ventasPromise,
         productoService.getAll(),
       ]);
+
       console.log('📦 Ventas recibidas:', ventasData);
       console.log('📅 Primera venta createdAt:', ventasData[0]?.createdAt);
+
       setVentas(ventasData);
       setProductos(productosData);
     } catch (error) {
       toast.error('Error al cargar datos');
       console.error(error);
+      setVentas([]);
     } finally {
       setLoading(false);
     }
@@ -183,14 +203,15 @@ export function VentasList() {
         ...formData,
         total: calculateTotal(),
       };
+
       await ventaService.create(ventaToSend);
       toast.success('Venta creada exitosamente');
-      
+
       // ✅ NUEVO - Mostrar vuelto si es efectivo
       if (formData.metodoPago === 'EFECTIVO' && vuelto > 0) {
         toast.success(`Vuelto: S/.${vuelto.toFixed(2)}`, { duration: 5000 });
       }
-      
+
       resetForm();
       await fetchData();
     } catch (error) {
@@ -250,7 +271,7 @@ export function VentasList() {
   };
 
   const filteredVentas = ventas.filter(v => {
-    const matchesSearch = 
+    const matchesSearch =
       v.metodoPago?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.estado?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.vendedorNombre?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -262,22 +283,22 @@ export function VentasList() {
       if (!fechaVenta) return false;
 
       const ventaDate = new Date(
-        fechaVenta.getFullYear(), 
-        fechaVenta.getMonth(), 
+        fechaVenta.getFullYear(),
+        fechaVenta.getMonth(),
         fechaVenta.getDate()
       );
 
       if (fechaDesde) {
         const [year, month, day] = fechaDesde.split('-').map(Number);
         const desdeNormalized = new Date(year, month - 1, day);
-        
+
         if (ventaDate < desdeNormalized) return false;
       }
 
       if (fechaHasta) {
         const [year, month, day] = fechaHasta.split('-').map(Number);
         const hastaNormalized = new Date(year, month - 1, day);
-        
+
         if (ventaDate > hastaNormalized) return false;
       }
     }
@@ -581,7 +602,7 @@ export function VentasList() {
                 <DollarSign className="h-4 w-4" />
                 Pago en Efectivo
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
@@ -613,8 +634,8 @@ export function VentasList() {
 
               {montoRecibido > 0 && (
                 <div className={`rounded-lg p-3 border-2 ${
-                  vuelto >= 0 
-                    ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800' 
+                  vuelto >= 0
+                    ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800'
                     : 'bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800'
                 }`}>
                   <div className="flex justify-between items-center">
@@ -622,8 +643,8 @@ export function VentasList() {
                       {vuelto >= 0 ? 'Vuelto:' : 'Falta:'}
                     </span>
                     <span className={`text-2xl font-bold ${
-                      vuelto >= 0 
-                        ? 'text-green-700 dark:text-green-300' 
+                      vuelto >= 0
+                        ? 'text-green-700 dark:text-green-300'
                         : 'text-red-700 dark:text-red-300'
                     }`}>
                       S/.{Math.abs(vuelto).toFixed(2)}
@@ -780,10 +801,10 @@ export function VentasList() {
             <Button type="button" variant="outline" onClick={resetForm}>
               Cancelar
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={
-                formData.detalles.length === 0 || 
+                formData.detalles.length === 0 ||
                 (formData.metodoPago === 'EFECTIVO' && montoRecibido < calculateTotal())
               }
             >
