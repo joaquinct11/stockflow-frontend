@@ -16,11 +16,11 @@ import { Plus, Trash2, ShoppingCart, Search, DollarSign, Eye, User, Calendar, X 
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useAuthStore } from '../../store/authStore';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export function VentasList() {
   const { userId } = useCurrentUser();
-  const { user } = useAuthStore();
+  const { canCreate, canDelete, canViewAll, canViewOwn, rol } = usePermissions();
 
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
@@ -76,7 +76,7 @@ export function VentasList() {
       fetchData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, user?.rol]);
+  }, [userId, rol]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -99,12 +99,14 @@ export function VentasList() {
       setLoading(true);
 
       const ventasPromise = (() => {
-        // Si es vendedor: solo sus ventas (evita 403 del endpoint /ventas)
-        if (user?.rol === 'VENDEDOR') {
+        if (canViewAll('VENTAS')) {
+          return ventaService.getAll();
+        }
+        if (canViewOwn('VENTAS')) {
           return ventaService.getByVendor(userId!);
         }
-        // Admin/Gerente/etc: todas
-        return ventaService.getAll();
+        // No tiene permiso de ver ventas
+        return Promise.resolve([] as typeof ventas);
       })();
 
       const [ventasData, productosData] = await Promise.all([
@@ -331,10 +333,12 @@ export function VentasList() {
             Gestiona las ventas y transacciones
           </p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva Venta
-        </Button>
+        {canCreate('VENTAS') && (
+          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva Venta
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -528,14 +532,16 @@ export function VentasList() {
                             >
                               <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(venta.id!)}
-                              title="Eliminar venta"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                            {canDelete('VENTAS') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(venta.id!)}
+                                title="Eliminar venta"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

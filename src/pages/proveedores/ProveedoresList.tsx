@@ -13,8 +13,10 @@ import { Input } from '../../components/ui/Input';
 import { Pagination } from '../../components/ui/Pagination';
 import { Plus, Trash2, Edit, Search, Building2, User, Phone, Mail, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export function ProveedoresList() {
+  const { canCreate, canEdit, canDelete } = usePermissions();
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -205,10 +207,12 @@ export function ProveedoresList() {
           <h1 className="text-3xl font-bold tracking-tight">Proveedores</h1>
           <p className="text-muted-foreground">Gestiona los proveedores de productos</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Proveedor
-        </Button>
+        {canCreate('PROVEEDORES') && (
+          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Proveedor
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -303,43 +307,49 @@ export function ProveedoresList() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {proveedor.activo ? (
+                            {canEdit('PROVEEDORES') && (
+                              proveedor.activo ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeactivate(proveedor.id!, proveedor.nombre)}
+                                  title="Desactivar proveedor"
+                                >
+                                  <XCircle className="h-4 w-4 text-orange-600" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleActivate(proveedor.id!, proveedor.nombre)}
+                                  title="Activar proveedor"
+                                >
+                                  <CheckCircle className="h-4 w-4 text-green-600" />
+                                </Button>
+                              )
+                            )}
+
+                            {canEdit('PROVEEDORES') && (
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleDeactivate(proveedor.id!, proveedor.nombre)}
-                                title="Desactivar proveedor"
+                                onClick={() => handleEdit(proveedor)}
+                                title="Editar proveedor"
                               >
-                                <XCircle className="h-4 w-4 text-orange-600" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleActivate(proveedor.id!, proveedor.nombre)}
-                                title="Activar proveedor"
-                              >
-                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <Edit className="h-4 w-4 text-blue-600" />
                               </Button>
                             )}
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(proveedor)}
-                              title="Editar proveedor"
-                            >
-                              <Edit className="h-4 w-4 text-blue-600" />
-                            </Button>
-
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(proveedor.id!, proveedor.nombre)}
-                              title="Eliminar proveedor"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                            {canDelete('PROVEEDORES') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(proveedor.id!, proveedor.nombre)}
+                                title="Eliminar proveedor"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

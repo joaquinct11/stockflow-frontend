@@ -16,9 +16,11 @@ import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
 import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export function InventarioList() {
   const { userId } = useCurrentUser();
+  const { canCreate, canDelete } = usePermissions();
   const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,10 +236,12 @@ export function InventarioList() {
             Gestiona los movimientos de inventario
           </p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Movimiento
-        </Button>
+        {canCreate('INVENTARIO') && (
+          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Movimiento
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -355,14 +359,16 @@ export function InventarioList() {
                           <TableCell className="text-muted-foreground">{movimiento.descripcion}</TableCell>
                           <TableCell className="text-muted-foreground text-sm">{movimiento.referencia || '-'}</TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(movimiento.id!)}
-                              title="Eliminar movimiento"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                            {canDelete('INVENTARIO') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(movimiento.id!)}
+                                title="Eliminar movimiento"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

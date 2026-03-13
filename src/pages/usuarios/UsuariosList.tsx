@@ -12,6 +12,7 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAuthStore } from '../../store/authStore'; // ✅ AGREGAR
+import { usePermissions } from '../../hooks/usePermissions';
 import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -20,6 +21,7 @@ type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 export function UsuariosList() {
   const tenantId = useAuthStore((s) => s.user?.tenantId);
   const currentUserRole = (useAuthStore((s) => s.user?.rol) || 'VENDEDOR') as Role;
+  const { canCreate, canEdit, canDelete } = usePermissions();
 
   // ✅ HARD-CODEADO: Opciones según el rol del logueado
   const allowedRoleOptions = useMemo(() => {
@@ -118,8 +120,8 @@ export function UsuariosList() {
         await usuarioService.update(editingId, usuarioToUpdate as Usuario);
         toast.success('Usuario actualizado exitosamente');
       } else {
-        // ✅ Validación simple en front: si no tiene opciones, no permite crear
-        if (allowedRoleOptions.length === 0) {
+        // ✅ Validación simple en front: si no tiene permisos, no permite crear
+        if (!canCreate('USUARIOS')) {
           toast.error('No tienes permisos para crear usuarios');
           return;
         }
@@ -236,8 +238,6 @@ export function UsuariosList() {
     return <LoadingSpinner />;
   }
 
-  const canCreateUsers = allowedRoleOptions.length > 0;
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -254,7 +254,7 @@ export function UsuariosList() {
 
         <Button
           onClick={() => {
-            if (!canCreateUsers) {
+            if (!canCreate('USUARIOS')) {
               toast.error('No tienes permisos para crear usuarios');
               return;
             }
@@ -266,8 +266,8 @@ export function UsuariosList() {
             setIsDialogOpen(true);
           }}
           className="w-full sm:w-auto"
-          disabled={!canCreateUsers}
-          title={!canCreateUsers ? 'No tienes permisos' : undefined}
+          disabled={!canCreate('USUARIOS')}
+          title={!canCreate('USUARIOS') ? 'No tienes permisos' : undefined}
         >
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Usuario
@@ -393,43 +393,49 @@ export function UsuariosList() {
 
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(usuario)}
-                              title="Editar"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-
-                            {usuario.activo ? (
+                            {canEdit('USUARIOS') && (
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleDeactivate(usuario.id!)}
-                                title="Desactivar"
+                                onClick={() => handleEdit(usuario)}
+                                title="Editar"
                               >
-                                <UserX className="h-4 w-4 text-orange-600" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleActivate(usuario.id!)}
-                                title="Activar"
-                              >
-                                <UserCheck className="h-4 w-4 text-green-600" />
+                                <Edit2 className="h-4 w-4" />
                               </Button>
                             )}
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(usuario.id!)}
-                              title="Eliminar permanentemente"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                            {canEdit('USUARIOS') && (
+                              usuario.activo ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeactivate(usuario.id!)}
+                                  title="Desactivar"
+                                >
+                                  <UserX className="h-4 w-4 text-orange-600" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleActivate(usuario.id!)}
+                                  title="Activar"
+                                >
+                                  <UserCheck className="h-4 w-4 text-green-600" />
+                                </Button>
+                              )
+                            )}
+
+                            {canDelete('USUARIOS') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(usuario.id!)}
+                                title="Eliminar permanentemente"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -530,7 +536,7 @@ export function UsuariosList() {
                 onChange={(e) => setFormData({ ...formData, rolNombre: e.target.value })}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 required
-                disabled={!canCreateUsers || allowedRoleOptions.length === 0}
+                disabled={!canCreate('USUARIOS') || allowedRoleOptions.length === 0}
               >
                 {allowedRoleOptions.length === 0 ? (
                   <option value="">No tienes permisos para crear usuarios</option>
@@ -543,7 +549,7 @@ export function UsuariosList() {
                 )}
               </select>
 
-              {!canCreateUsers && (
+              {!canCreate('USUARIOS') && (
                 <p className="text-xs text-muted-foreground">
                   Tu rol (<span className="font-medium">{currentUserRole}</span>) no puede crear usuarios.
                 </p>
@@ -567,7 +573,7 @@ export function UsuariosList() {
             <Button type="button" variant="outline" onClick={resetForm}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={formData.nombre.length < 3 || (!editingId && !canCreateUsers)}>
+            <Button type="submit" disabled={formData.nombre.length < 3 || (!editingId && !canCreate('USUARIOS'))}>
               {editingId ? 'Actualizar' : 'Crear'} Usuario
             </Button>
           </div>

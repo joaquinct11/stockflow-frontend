@@ -14,6 +14,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { CreditCard, Plus, Edit2, Trash2, XCircle, CheckCircle, Search, DollarSign, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const PLAN_PRICES: Record<string, number> = {
   FREE: 0,
@@ -23,6 +24,7 @@ const PLAN_PRICES: Record<string, number> = {
 
 export function SuscripcionesList() {
   const { userId } = useCurrentUser();
+  const { canView, canEdit } = usePermissions();
   const [suscripciones, setSuscripciones] = useState<SuscripcionDTO[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +68,10 @@ export function SuscripcionesList() {
   const fetchSuscripciones = async () => {
     try {
       setLoading(true);
+      if (!canView('SUSCRIPCIONES')) {
+        setSuscripciones([]);
+        return;
+      }
       const data = await suscripcionService.getAll();
       setSuscripciones(data);
     } catch (error) {
@@ -237,10 +243,12 @@ export function SuscripcionesList() {
             Gestiona las suscripciones y planes
           </p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva Suscripción
-        </Button>
+        {canEdit('SUSCRIPCIONES') && (
+          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva Suscripción
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -358,43 +366,49 @@ export function SuscripcionesList() {
                       <TableCell>{getEstadoBadge(suscripcion.estado || '')}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(suscripcion)}
-                            title="Editar"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-
-                          {suscripcion.estado === 'ACTIVA' ? (
+                          {canEdit('SUSCRIPCIONES') && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleCancel(suscripcion.id!)}
-                              title="Cancelar"
+                              onClick={() => handleEdit(suscripcion)}
+                              title="Editar"
                             >
-                              <XCircle className="h-4 w-4 text-orange-600" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleActivate(suscripcion.id!)}
-                              title="Activar"
-                            >
-                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <Edit2 className="h-4 w-4" />
                             </Button>
                           )}
 
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(suscripcion.id!)}
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {canEdit('SUSCRIPCIONES') && (
+                            suscripcion.estado === 'ACTIVA' ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleCancel(suscripcion.id!)}
+                                title="Cancelar"
+                              >
+                                <XCircle className="h-4 w-4 text-orange-600" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleActivate(suscripcion.id!)}
+                                title="Activar"
+                              >
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                              </Button>
+                            )
+                          )}
+
+                          {canEdit('SUSCRIPCIONES') && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(suscripcion.id!)}
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
