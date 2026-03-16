@@ -316,7 +316,7 @@ export function VentasList() {
   const totalVentas = ventas.length;
   const totalIngresos = ventas.reduce((sum, v) => sum + v.total, 0);
   const ventasCompletadas = ventas.filter(v => v.estado === 'COMPLETADA').length;
-  const ventasPendientes = ventas.filter(v => v.estado === 'PENDIENTE').length;
+  // const ventasPendientes = ventas.filter(v => v.estado === 'PENDIENTE').length;
   const totalProductosVendidos = ventas.reduce((sum, v) => sum + v.detalles.reduce((sum2, d) => sum2 + d.cantidad, 0), 0);
 
   if (loading) {
