@@ -473,12 +473,39 @@ export function ProductosList() {
                 Categoría
                 <span className="text-red-500">*</span>
               </label>
-              <Input
+              <select
+                value={formData.categoria}
+                onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                className="flex h-10 w-full rounded-md border px-3 py-2 text-sm"
+                required
+              >
+                <option value="">Seleccione una categoría</option>
+
+                <optgroup label="Farmacia">
+                  <option value="MEDICAMENTOS">Medicamentos</option>
+                  <option value="CUIDADO_PERSONAL">Cuidado Personal</option>
+                  <option value="HIGIENE">Higiene</option>
+                </optgroup>
+
+                <optgroup label="Bodega">
+                  <option value="BEBIDAS">Bebidas</option>
+                  <option value="SNACKS">Snacks</option>
+                  <option value="ABARROTES">Abarrotes</option>
+                </optgroup>
+
+                <optgroup label="Ferretería">
+                  <option value="HERRAMIENTAS">Herramientas</option>
+                  <option value="ELECTRICIDAD">Electricidad</option>
+                </optgroup>
+
+                <option value="OTROS">Otros</option>
+              </select>
+              {/* <Input
                 placeholder="Medicamentos, Cuidado Personal, etc."
                 value={formData.categoria}
                 onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
                 required
-              />
+              /> */}
             </div>
 
             <div className="space-y-2 md:col-span-2">
