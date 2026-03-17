@@ -36,7 +36,6 @@ export function VentasList() {
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
 
-  // ✅ NUEVO - Estados para manejo de efectivo
   const [montoRecibido, setMontoRecibido] = useState<number>(0);
   const [vuelto, setVuelto] = useState<number>(0);
 
