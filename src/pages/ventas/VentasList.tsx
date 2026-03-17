@@ -81,7 +81,6 @@ export function VentasList() {
     setCurrentPage(1);
   }, [searchTerm, fechaDesde, fechaHasta]);
 
-  // ✅ NUEVO - Calcular vuelto automáticamente
   useEffect(() => {
     if (formData.metodoPago === 'EFECTIVO') {
       const total = calculateTotal();
