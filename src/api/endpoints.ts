@@ -23,6 +23,14 @@ export const API_ENDPOINTS = {
     VALIDAR_ELIMINACION: (id: number) => `/usuarios/${id}/validar-eliminacion`,  // ✅ NUEVO
     DELETE_CUENTA_COMPLETA: (id: number) => `/usuarios/${id}/cuenta-completa`,  // ✅ NUEVO
   },
+
+  UNIDADES_MEDIDA: {
+    LIST: '/unidad-medida',
+    GET: (id: number) => `/unidad-medida/${id}`,
+    CREATE: '/unidad-medida',
+    UPDATE: (id: number) => `/unidad-medida/${id}`,
+    DELETE: (id: number) => `/unidad-medida/${id}`,
+  },
   
   PRODUCTOS: {
     LIST: '/productos',

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { productoService } from '../../services/producto.service';
 import { proveedorService } from '../../services/proveedor.service';
-import type { ProductoDTO, ProveedorDTO } from '../../types';
+import { unidadMedidaService } from '../../services/unidadMedida.service';
+import type { ProductoDTO, ProveedorDTO, UnidadMedidaDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -21,7 +22,10 @@ export function ProductosList() {
   const { canCreate, canEdit, canDelete } = usePermissions();
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
+  const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingUnidades, setLoadingUnidades] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -39,6 +43,9 @@ export function ProductosList() {
     action: null as (() => Promise<void>) | null,
   });
 
+  // ✅ IMPORTANTE:
+  // Asumo que tu ProductoDTO ahora tiene unidadMedidaId (FK a unidad_medida).
+  // Si el nombre real es otro, cámbialo aquí y en el select.
   const [formData, setFormData] = useState<ProductoDTO>({
     nombre: '',
     codigoBarras: '',
@@ -53,6 +60,7 @@ export function ProductosList() {
     proveedorId: undefined,
     activo: true,
     tenantId: 'farmacia-001',
+    unidadMedidaId: 0,
   });
 
   const formatearFecha = (fechaString: string | undefined): string => {
@@ -79,17 +87,31 @@ export function ProductosList() {
   const fetchData = async () => {
     try {
       setLoading(true);
+
       const [productosData, proveedoresData] = await Promise.all([
         productoService.getAll(),
         proveedorService.getActivos(),
       ]);
+
       setProductos(productosData);
       setProveedores(proveedoresData);
+
+      // ✅ Cargar unidades de medida (por tenant)
+      setLoadingUnidades(true);
+      const unidades = await unidadMedidaService.getAll();
+      const unidadesActivas = unidades.filter((u) => u.activo !== false);
+      setUnidadesMedida(unidadesActivas);
+
+      // ✅ Default en el form si no hay seleccionado aún
+      if (!formData.unidadMedidaId && unidadesActivas.length > 0) {
+        setFormData((prev) => ({ ...prev, unidadMedidaId: unidadesActivas[0].id }));
+      }
     } catch (error) {
       toast.error('Error al cargar datos');
       console.error(error);
     } finally {
       setLoading(false);
+      setLoadingUnidades(false);
     }
   };
 
@@ -98,6 +120,12 @@ export function ProductosList() {
     label: p.nombre,
     subtitle: `RUC: ${p.ruc || 'N/A'} | Contacto: ${p.contacto || 'N/A'}`,
   }));
+
+  const unidadById = useMemo(() => {
+    const m = new Map<number, UnidadMedidaDTO>();
+    unidadesMedida.forEach((u) => m.set(u.id, u));
+    return m;
+  }, [unidadesMedida]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,6 +186,7 @@ export function ProductosList() {
       proveedorId: producto.proveedorId,
       activo: producto.activo,
       tenantId: producto.tenantId,
+      unidadMedidaId: producto.unidadMedidaId || 0,
     });
 
     if (producto.proveedorId) {
@@ -190,6 +219,7 @@ export function ProductosList() {
       proveedorId: undefined,
       activo: true,
       tenantId: 'farmacia-001',
+      unidadMedidaId: unidadesMedida.length > 0 ? unidadesMedida[0].id : 0,
     });
     setSelectedProveedor(null);
     setEditingId(null);
@@ -316,6 +346,7 @@ export function ProductosList() {
                       <TableHead>Producto</TableHead>
                       <TableHead>Código</TableHead>
                       <TableHead>Categoría</TableHead>
+                      <TableHead>Unidad</TableHead>
                       <TableHead>Stock</TableHead>
                       <TableHead>Precio</TableHead>
                       <TableHead>Lote</TableHead>
@@ -327,6 +358,10 @@ export function ProductosList() {
                   <TableBody>
                     {currentProductos.map((producto) => {
                       const proveedor = proveedores.find((p) => p.id === producto.proveedorId);
+                      const unidadLabel =
+                        producto.unidadMedidaNombre ??
+                        unidadById.get(producto.unidadMedidaId)?.nombre ??
+                        '-';
 
                       return (
                         <TableRow key={producto.id}>
@@ -344,6 +379,9 @@ export function ProductosList() {
                           <TableCell className="font-mono text-sm">{producto.codigoBarras}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{producto.categoria}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">{unidadLabel}</span>
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -389,7 +427,7 @@ export function ProductosList() {
                                   <Edit2 className="h-4 w-4" />
                                 </Button>
                               )}
-                              
+
                               {canDelete('PRODUCTOS') && (
                                 <Button
                                   variant="ghost"
@@ -400,7 +438,7 @@ export function ProductosList() {
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
                               )}
-                              
+
                               {!canEdit('PRODUCTOS') && !canDelete('PRODUCTOS') && (
                                 <span className="text-xs text-muted-foreground italic">
                                   Solo lectura
@@ -500,12 +538,32 @@ export function ProductosList() {
 
                 <option value="OTROS">Otros</option>
               </select>
-              {/* <Input
-                placeholder="Medicamentos, Cuidado Personal, etc."
-                value={formData.categoria}
-                onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+            </div>
+
+            {/* ✅ NUEVO: Unidad de medida */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Unidad de Medida
+                <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.unidadMedidaId || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, unidadMedidaId: Number(e.target.value) })
+                }
+                className="flex h-10 w-full rounded-md border px-3 py-2 text-sm"
                 required
-              /> */}
+                disabled={loadingUnidades}
+              >
+                <option value="" disabled>
+                  {loadingUnidades ? 'Cargando unidades...' : 'Seleccione unidad de medida'}
+                </option>
+                {unidadesMedida.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-2 md:col-span-2">

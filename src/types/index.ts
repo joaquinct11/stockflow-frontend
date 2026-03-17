@@ -43,6 +43,18 @@ export interface RegistrationRequestDTO {
 }
 
 // ========================================
+// UNIDAD DE MEDIDA
+// ========================================
+
+export interface UnidadMedidaDTO {
+  id: number;
+  nombre: string;        // ej: "Kg", "Caja", "Unidad"
+  abreviatura?: string;  // ej: "kg", "caja", "und" (si la tienes)
+  activo?: boolean;
+  tenantId?: string;
+}
+
+// ========================================
 // PRODUCTOS
 // ========================================
 
@@ -60,8 +72,12 @@ export interface ProductoDTO {
   lote?: string;
   proveedorId?: number;
   activo?: boolean;
-  deletedAt?: string;  // ✅ AGREGADO
+  deletedAt?: string;
   tenantId: string;
+  // ✅ NUEVO (elige lo que tu backend exponga)
+  unidadMedidaId: number;
+  // opcional para mostrar sin otra llamada (si tu backend lo manda)
+  unidadMedidaNombre?: string;
 }
 
 // ========================================
