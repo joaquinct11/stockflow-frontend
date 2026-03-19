@@ -193,6 +193,7 @@ export function InventarioList() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentMovimientos = filteredMovimientos.slice(startIndex, endIndex);
+  // console.log('movimiento sample', currentMovimientos[0]);
 
   const getMovimientoIcon = (tipo: string) => {
     switch (tipo) {
@@ -352,6 +353,7 @@ export function InventarioList() {
                       <TableHead>Tipo</TableHead>
                       <TableHead className="text-center">Cantidad</TableHead>
                       <TableHead>Descripción</TableHead>
+                      <TableHead>Fecha</TableHead>
                       <TableHead>Referencia</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
@@ -371,6 +373,9 @@ export function InventarioList() {
                           </TableCell>
                           <TableCell className="text-center font-semibold">{movimiento.cantidad}</TableCell>
                           <TableCell className="text-muted-foreground">{movimiento.descripcion}</TableCell>
+                          <TableCell>
+                            {movimiento.createdAt ? new Date(movimiento.createdAt).toLocaleDateString('es-PE') : '-'}
+                          </TableCell>
                           <TableCell className="text-muted-foreground text-sm">{movimiento.referencia || '-'}</TableCell>
                           <TableCell className="text-right">
                             {canDelete('INVENTARIO') && (
