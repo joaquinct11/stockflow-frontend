@@ -14,7 +14,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
-import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight } from 'lucide-react';
+import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -29,6 +29,10 @@ export function InventarioList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
+  const [isKardexOpen, setIsKardexOpen] = useState(false);
+  const [kardexLoading, setKardexLoading] = useState(false);
+  const [kardexProducto, setKardexProducto] = useState<ProductoDTO | null>(null);
+  const [kardexMovimientos, setKardexMovimientos] = useState<MovimientoInventarioDTO[]>([]);
 
   // ✅ NUEVO - Estados de paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -42,6 +46,37 @@ export function InventarioList() {
     confirmText: '',
     action: null as (() => Promise<void>) | null,
   });
+
+  const openKardex = async (productoId: number) => {
+    try {
+      const prod = productos.find((p) => p.id === productoId) || null;
+      setKardexProducto(prod);
+      setIsKardexOpen(true);
+
+      setKardexLoading(true);
+      const data = await movimientoService.getByProducto(productoId);
+
+      // opcional: ordenar por fecha desc si tienes createdAt
+      const sorted = [...data].sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return db - da;
+      });
+
+      setKardexMovimientos(sorted);
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al cargar kardex');
+    } finally {
+      setKardexLoading(false);
+    }
+  };
+
+  const closeKardex = () => {
+    setIsKardexOpen(false);
+    setKardexProducto(null);
+    setKardexMovimientos([]);
+  };
 
   const [formData, setFormData] = useState<MovimientoInventarioDTO>({
     productoId: 0,
@@ -178,14 +213,18 @@ export function InventarioList() {
     setIsDialogOpen(false);
   };
 
-  // ✅ ACTUALIZADO - Filtrar movimientos
-  const filteredMovimientos = movimientos.filter(m => {
+  const [tipoFiltro, setTipoFiltro] = useState<'TODOS' | MovimientoInventarioDTO['tipo']>('TODOS');
+
+  const filteredMovimientos = movimientos.filter((m) => {
     const producto = productos.find(p => p.id === m.productoId);
-    return (
+    const matchSearch =
       producto?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+      m.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchTipo = tipoFiltro === 'TODOS' ? true : m.tipo === tipoFiltro;
+
+    return matchSearch && matchTipo;
   });
 
   // ✅ NUEVO - Calcular paginación
@@ -313,17 +352,35 @@ export function InventarioList() {
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search + Filtro */}
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por producto, tipo o descripción..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* Search input */}
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por producto, tipo o descripción..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+
+            {/* Tipo filtro */}
+            <div className="sm:w-[220px]">
+              <select
+                value={tipoFiltro}
+                onChange={(e) => setTipoFiltro(e.target.value as any)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="TODOS">Todos</option>
+                <option value="ENTRADA">Entradas</option>
+                <option value="SALIDA">Salidas</option>
+                <option value="AJUSTE">Ajustes</option>
+                <option value="DEVOLUCION">Devoluciones</option>
+              </select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -363,7 +420,19 @@ export function InventarioList() {
                       const producto = productos.find(p => p.id === movimiento.productoId);
                       return (
                         <TableRow key={movimiento.id}>
-                          <TableCell>{producto?.nombre || `Producto #${movimiento.productoId}`}</TableCell>
+                          <TableCell>
+                            {/* {producto?.nombre || `Producto #${movimiento.productoId}`} */}
+                            <div>
+                              <p className="font-medium">{producto?.nombre}</p>
+                              <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
+                                <Package className="h-3 w-3" />
+                                {producto?.codigoBarras}
+                              </p>
+                              <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
+                                {producto?.stockActual != null ? `Stock Actual: ${producto.stockActual}` : 'Stock: N/A'}
+                              </p>
+                            </div>
+                          </TableCell>
                           <TableCell>{unidadById.get(producto?.unidadMedidaId || 0)?.nombre || '-'}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -378,6 +447,14 @@ export function InventarioList() {
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm">{movimiento.referencia || '-'}</TableCell>
                           <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openKardex(movimiento.productoId)}
+                              title="Ver kardex"
+                            >
+                              <Eye className="h-4 w-4 text-blue-600" />
+                            </Button>
                             {canDelete('INVENTARIO') && (
                               <Button
                                 variant="ghost"
@@ -511,6 +588,65 @@ export function InventarioList() {
           </div>
         </form>
       </Dialog>
+
+      <Dialog
+          isOpen={isKardexOpen}
+          onClose={closeKardex}
+          title="Kardex del producto"
+          description={
+            kardexProducto
+              ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock: ${kardexProducto.stockActual ?? 0}`
+              : 'Historial de movimientos'
+          }
+          size="xl"
+        >
+          {kardexLoading ? (
+            <LoadingSpinner />
+          ) : kardexMovimientos.length === 0 ? (
+            <EmptyState
+              title="Sin movimientos"
+              description="Este producto no tiene movimientos registrados"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead className="text-center">Cantidad</TableHead>
+                    <TableHead>Descripción</TableHead>
+                    <TableHead>Referencia</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {kardexMovimientos.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {m.createdAt ? new Date(m.createdAt).toLocaleString('es-PE') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getMovimientoIcon(m.tipo)}
+                          {getMovimientoBadge(m.tipo)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center font-semibold">{m.cantidad}</TableCell>
+                      <TableCell className="text-muted-foreground">{m.descripcion}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{m.referencia || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-4 border-t">
+            <Button variant="outline" type="button" onClick={closeKardex}>
+              Cerrar
+            </Button>
+          </div>
+        </Dialog>
 
       {/* Confirm Dialog */}
       <ConfirmDialog
