@@ -195,6 +195,18 @@ export interface ProveedorDTO {
 }
 
 // ========================================
+// UM
+// ========================================
+
+export interface UnidadMedidaDTO {
+  id: number;
+  nombre: string;
+  abreviatura?: string;
+  activo?: boolean;
+  tenantId?: string;
+}
+
+// ========================================
 // ERROR HANDLING
 // ========================================
 

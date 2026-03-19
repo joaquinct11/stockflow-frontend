@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { movimientoService } from '../../services/movimiento.service';
 import { productoService } from '../../services/producto.service';
-import type { MovimientoInventarioDTO, ProductoDTO } from '../../types';
+import { unidadMedidaService } from '../../services/unidadMedida.service';
+import type { MovimientoInventarioDTO, ProductoDTO, UnidadMedidaDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -23,6 +24,7 @@ export function InventarioList() {
   const { canCreate, canDelete } = usePermissions();
   const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
+  const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -73,12 +75,17 @@ export function InventarioList() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [movimientosData, productosData] = await Promise.all([
+      const [movimientosData, productosData, unidadesData] = await Promise.all([
         movimientoService.getAll(),
         productoService.getAll(),
+        unidadMedidaService.getAll(),
       ]);
+
       setMovimientos(movimientosData);
       setProductos(productosData);
+
+      // si tu backend maneja "activo"
+      setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
     } catch (error) {
       toast.error('Error al cargar datos');
       console.error(error);
@@ -87,10 +94,18 @@ export function InventarioList() {
     }
   };
 
+  const unidadById = useMemo(() => {
+    const m = new Map<number, UnidadMedidaDTO>();
+    unidadesMedida.forEach((u) => m.set(u.id, u));
+    return m;
+  }, [unidadesMedida]);
+
   const productosOptions = productos.map((p) => ({
     id: p.id!,
     label: p.nombre,
-    subtitle: `Código: ${p.codigoBarras} | Stock: ${p.stockActual} | Categoría: ${p.categoria}`,
+    subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoria || 'N/A'} | UM: ${
+      unidadById.get(p.unidadMedidaId)?.nombre ?? '-'
+    }`,
   }));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -332,8 +347,8 @@ export function InventarioList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {/* <TableHead>ID</TableHead> */}
                       <TableHead>Producto</TableHead>
+                      <TableHead>Unidad Medida</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead className="text-center">Cantidad</TableHead>
                       <TableHead>Descripción</TableHead>
@@ -342,13 +357,12 @@ export function InventarioList() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* ✅ CAMBIAR - Usar currentMovimientos en lugar de filteredMovimientos */}
                     {currentMovimientos.map((movimiento) => {
                       const producto = productos.find(p => p.id === movimiento.productoId);
                       return (
                         <TableRow key={movimiento.id}>
-                          {/* <TableCell className="font-medium">#{movimiento.id}</TableCell> */}
                           <TableCell>{producto?.nombre || `Producto #${movimiento.productoId}`}</TableCell>
+                          <TableCell>{unidadById.get(producto?.unidadMedidaId || 0)?.nombre || '-'}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               {getMovimientoIcon(movimiento.tipo)}
@@ -377,7 +391,6 @@ export function InventarioList() {
                 </Table>
               </div>
 
-              {/* ✅ NUEVO - Paginación */}
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
