@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { movimientoService } from '../../services/movimiento.service';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
-import type { MovimientoInventarioDTO, ProductoDTO, UnidadMedidaDTO } from '../../types';
+import { proveedorService } from '../../services/proveedor.service';
+import type { MovimientoInventarioDTO, ProductoDTO, ProveedorDTO, UnidadMedidaDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -14,7 +15,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
-import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye } from 'lucide-react';
+import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye, Subtitles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -25,6 +26,7 @@ export function InventarioList() {
   const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
+  const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -110,14 +112,16 @@ export function InventarioList() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [movimientosData, productosData, unidadesData] = await Promise.all([
+      const [movimientosData, productosData, unidadesData, proveedoresData] = await Promise.all([
         movimientoService.getAll(),
         productoService.getAll(),
         unidadMedidaService.getAll(),
+        proveedorService.getAll(),
       ]);
 
       setMovimientos(movimientosData);
       setProductos(productosData);
+      setProveedores(proveedoresData);
 
       // si tu backend maneja "activo"
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
@@ -135,10 +139,17 @@ export function InventarioList() {
     return m;
   }, [unidadesMedida]);
 
+  const proveedorById = useMemo(() => {
+    const m = new Map<number, ProveedorDTO>();
+    proveedores.forEach((p) => m.set(p.id!, p));
+    return m;
+  }, [proveedores]);
+
   const productosOptions = productos.map((p) => ({
     id: p.id!,
-    label: p.nombre,
-    subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoria || 'N/A'} | UM: ${
+    label: `${p.nombre}`,
+    subtitle: `Proveedor: ${proveedorById.get(Number(p.proveedorId))?.nombre ?? 'N/A'}
+    Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoria || 'N/A'} | UM: ${
       unidadById.get(p.unidadMedidaId)?.nombre ?? '-'
     }`,
   }));
