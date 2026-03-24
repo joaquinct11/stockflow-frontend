@@ -31,6 +31,7 @@ export function InventarioList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
+  const [selectedProveedorMov, setSelectedProveedorMov] = useState<any>(null);
   const [isKardexOpen, setIsKardexOpen] = useState(false);
   const [kardexLoading, setKardexLoading] = useState(false);
   const [kardexProducto, setKardexProducto] = useState<ProductoDTO | null>(null);
@@ -88,6 +89,10 @@ export function InventarioList() {
     referencia: '',
     usuarioId: 0,
     tenantId: 'farmacia-001',
+    proveedorId: undefined,
+    costoUnitario: undefined,
+    lote: '',
+    fechaVencimiento: undefined,
   });
 
   useEffect(() => {
@@ -139,19 +144,16 @@ export function InventarioList() {
     return m;
   }, [unidadesMedida]);
 
-  const proveedorById = useMemo(() => {
-    const m = new Map<number, ProveedorDTO>();
-    proveedores.forEach((p) => m.set(p.id!, p));
-    return m;
-  }, [proveedores]);
-
   const productosOptions = productos.map((p) => ({
     id: p.id!,
     label: `${p.nombre}`,
-    subtitle: `Proveedor: ${proveedorById.get(Number(p.proveedorId))?.nombre ?? 'N/A'}
-    Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoria || 'N/A'} | UM: ${
-      unidadById.get(p.unidadMedidaId)?.nombre ?? '-'
-    }`,
+    subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoria || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
+  }));
+
+  const proveedoresOptions = proveedores.map((p) => ({
+    id: p.id!,
+    label: p.nombre,
+    subtitle: `RUC: ${p.ruc || 'N/A'} | Contacto: ${p.contacto || 'N/A'}`,
   }));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -177,9 +179,28 @@ export function InventarioList() {
       return;
     }
 
+    if (formData.tipo === 'ENTRADA' && formData.costoUnitario !== undefined && formData.costoUnitario <= 0) {
+      toast.error('El costo unitario debe ser mayor a 0');
+      return;
+    }
+
+    // Construir payload: solo incluir campos ENTRADA cuando tipo === 'ENTRADA'
+    const payload: MovimientoInventarioDTO =
+      formData.tipo === 'ENTRADA'
+        ? { ...formData }
+        : {
+            productoId: formData.productoId,
+            tipo: formData.tipo,
+            cantidad: formData.cantidad,
+            descripcion: formData.descripcion,
+            referencia: formData.referencia,
+            usuarioId: formData.usuarioId,
+            tenantId: formData.tenantId,
+          };
+
     try {
-      console.log('📤 Enviando movimiento:', formData);
-      await movimientoService.create(formData);
+      console.log('📤 Enviando movimiento:', payload);
+      await movimientoService.create(payload);
       toast.success(`Movimiento de ${formData.tipo} registrado`);
       resetForm();
       await fetchData();
@@ -219,8 +240,13 @@ export function InventarioList() {
       referencia: '',
       usuarioId: userId || 0,
       tenantId: 'farmacia-001',
+      proveedorId: undefined,
+      costoUnitario: undefined,
+      lote: '',
+      fechaVencimiento: undefined,
     });
     setSelectedProducto(null);
+    setSelectedProveedorMov(null);
     setIsDialogOpen(false);
   };
 
@@ -538,7 +564,21 @@ export function InventarioList() {
               </label>
               <select
                 value={formData.tipo}
-                onChange={(e) => setFormData({ ...formData, tipo: e.target.value as any })}
+                onChange={(e) => {
+                  const nuevoTipo = e.target.value as MovimientoInventarioDTO['tipo'];
+                  setFormData({
+                    ...formData,
+                    tipo: nuevoTipo,
+                    // Limpiar campos exclusivos de ENTRADA si cambia a otro tipo
+                    ...(nuevoTipo !== 'ENTRADA' && {
+                      proveedorId: undefined,
+                      costoUnitario: undefined,
+                      lote: '',
+                      fechaVencimiento: undefined,
+                    }),
+                  });
+                  if (nuevoTipo !== 'ENTRADA') setSelectedProveedorMov(null);
+                }}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 required
               >
@@ -587,6 +627,71 @@ export function InventarioList() {
                 required
               />
             </div>
+
+            {/* Campos exclusivos para ENTRADA (Compra) */}
+            {formData.tipo === 'ENTRADA' && (
+              <>
+                <div className="md:col-span-2 border-t pt-3">
+                  <p className="text-sm font-medium text-green-700 mb-3">Datos de la compra (Entrada)</p>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium">Proveedor</label>
+                  <Autocomplete
+                    options={proveedoresOptions}
+                    value={selectedProveedorMov}
+                    onChange={(option) => {
+                      if (option) {
+                        setSelectedProveedorMov(option);
+                        setFormData({ ...formData, proveedorId: option.id as number });
+                      } else {
+                        setSelectedProveedorMov(null);
+                        setFormData({ ...formData, proveedorId: undefined });
+                      }
+                    }}
+                    placeholder="Buscar proveedor..."
+                    emptyMessage="No se encontró el proveedor"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Costo Unitario</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={formData.costoUnitario ?? ''}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        costoUnitario: e.target.value !== '' ? parseFloat(e.target.value) : undefined,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Lote</label>
+                  <Input
+                    placeholder="Ej: L123456"
+                    value={formData.lote ?? ''}
+                    onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fecha de Vencimiento</label>
+                  <Input
+                    type="date"
+                    value={formData.fechaVencimiento ?? ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })
+                    }
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex gap-2 justify-end pt-4 border-t">

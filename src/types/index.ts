@@ -165,6 +165,11 @@ export interface MovimientoInventarioDTO {
   usuarioId?: number;
   tenantId: string;
   createdAt?: string;
+  // Campos exclusivos para tipo === 'ENTRADA'
+  proveedorId?: number;
+  costoUnitario?: number;
+  lote?: string;
+  fechaVencimiento?: string;
 }
 
 export interface KardexDTO {
