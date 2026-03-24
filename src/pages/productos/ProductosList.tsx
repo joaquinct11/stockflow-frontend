@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { productoService } from '../../services/producto.service';
-import { proveedorService } from '../../services/proveedor.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
-import type { ProductoDTO, ProveedorDTO, UnidadMedidaDTO } from '../../types';
+import type { ProductoDTO, UnidadMedidaDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -12,16 +11,14 @@ import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, DollarSign, Building2, Calendar } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
 export function ProductosList() {
   const { canCreate, canEdit, canDelete } = usePermissions();
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
-  const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingUnidades, setLoadingUnidades] = useState(false);
@@ -29,7 +26,6 @@ export function ProductosList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [selectedProveedor, setSelectedProveedor] = useState<any>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -43,9 +39,6 @@ export function ProductosList() {
     action: null as (() => Promise<void>) | null,
   });
 
-  // ✅ IMPORTANTE:
-  // Asumo que tu ProductoDTO ahora tiene unidadMedidaId (FK a unidad_medida).
-  // Si el nombre real es otro, cámbialo aquí y en el select.
   const [formData, setFormData] = useState<ProductoDTO>({
     nombre: '',
     codigoBarras: '',
@@ -55,26 +48,11 @@ export function ProductosList() {
     stockMaximo: 500,
     costoUnitario: 0,
     precioVenta: 0,
-    fechaVencimiento: undefined,
-    lote: '',
-    proveedorId: undefined,
     activo: true,
     tenantId: 'farmacia-001',
     unidadMedidaId: 0,
   });
 
-  const formatearFecha = (fechaString: string | undefined): string => {
-    if (!fechaString) return '';
-    const [year, month, day] = fechaString.split('-').map(Number);
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  };
-
-  const mostrarFecha = (fechaString: string | undefined): string => {
-    if (!fechaString) return '-';
-    const [year, month, day] = fechaString.split('-').map(Number);
-    const fechaLocal = new Date(year, month - 1, day);
-    return fechaLocal.toLocaleDateString('es-PE');
-  };
 
   useEffect(() => {
     fetchData();
@@ -88,21 +66,16 @@ export function ProductosList() {
     try {
       setLoading(true);
 
-      const [productosData, proveedoresData] = await Promise.all([
-        productoService.getAll(),
-        proveedorService.getActivos(),
-      ]);
-
+      const productosData = await productoService.getAll();
       setProductos(productosData);
-      setProveedores(proveedoresData);
 
-      // ✅ Cargar unidades de medida (por tenant)
+      // Cargar unidades de medida (por tenant)
       setLoadingUnidades(true);
       const unidades = await unidadMedidaService.getAll();
       const unidadesActivas = unidades.filter((u) => u.activo !== false);
       setUnidadesMedida(unidadesActivas);
 
-      // ✅ Default en el form si no hay seleccionado aún
+      // Default en el form si no hay seleccionado aún
       if (!formData.unidadMedidaId && unidadesActivas.length > 0) {
         setFormData((prev) => ({ ...prev, unidadMedidaId: unidadesActivas[0].id }));
       }
@@ -114,12 +87,6 @@ export function ProductosList() {
       setLoadingUnidades(false);
     }
   };
-
-  const proveedoresOptions = proveedores.map((p) => ({
-    id: p.id!,
-    label: p.nombre,
-    subtitle: `RUC: ${p.ruc || 'N/A'} | Contacto: ${p.contacto || 'N/A'}`,
-  }));
 
   const unidadById = useMemo(() => {
     const m = new Map<number, UnidadMedidaDTO>();
@@ -181,24 +148,10 @@ export function ProductosList() {
       stockMaximo: producto.stockMaximo || 500,
       costoUnitario: producto.costoUnitario,
       precioVenta: producto.precioVenta,
-      fechaVencimiento: producto.fechaVencimiento,
-      lote: producto.lote || '',
-      proveedorId: producto.proveedorId,
       activo: producto.activo,
       tenantId: producto.tenantId,
       unidadMedidaId: producto.unidadMedidaId || 0,
     });
-
-    if (producto.proveedorId) {
-      const proveedor = proveedores.find((p) => p.id === producto.proveedorId);
-      if (proveedor) {
-        setSelectedProveedor({
-          id: proveedor.id!,
-          label: proveedor.nombre,
-          subtitle: `RUC: ${proveedor.ruc || 'N/A'} | Contacto: ${proveedor.contacto || 'N/A'}`,
-        });
-      }
-    }
 
     setEditingId(producto.id!);
     setIsDialogOpen(true);
@@ -214,14 +167,10 @@ export function ProductosList() {
       stockMaximo: 500,
       costoUnitario: 0,
       precioVenta: 0,
-      fechaVencimiento: undefined,
-      lote: '',
-      proveedorId: undefined,
       activo: true,
       tenantId: 'farmacia-001',
       unidadMedidaId: unidadesMedida.length > 0 ? unidadesMedida[0].id : 0,
     });
-    setSelectedProveedor(null);
     setEditingId(null);
     setIsDialogOpen(false);
   };
@@ -349,15 +298,12 @@ export function ProductosList() {
                       <TableHead>Unidad</TableHead>
                       <TableHead>Stock</TableHead>
                       <TableHead>Precio</TableHead>
-                      <TableHead>Lote</TableHead>
-                      <TableHead>Vencimiento</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {currentProductos.map((producto) => {
-                      const proveedor = proveedores.find((p) => p.id === producto.proveedorId);
                       const unidadLabel =
                         producto.unidadMedidaNombre ??
                         unidadById.get(producto.unidadMedidaId)?.nombre ??
@@ -366,15 +312,7 @@ export function ProductosList() {
                       return (
                         <TableRow key={producto.id}>
                           <TableCell>
-                            <div>
-                              <p className="font-medium">{producto.nombre}</p>
-                              {proveedor && (
-                                <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
-                                  <Building2 className="h-3 w-3" />
-                                  {proveedor.nombre}
-                                </p>
-                              )}
-                            </div>
+                            <p className="font-medium">{producto.nombre}</p>
                           </TableCell>
                           <TableCell className="font-mono text-sm">{producto.codigoBarras}</TableCell>
                           <TableCell>
@@ -397,19 +335,6 @@ export function ProductosList() {
                             </Badge>
                           </TableCell>
                           <TableCell className="font-semibold">S/.{producto.precioVenta.toFixed(2)}</TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground">{producto.lote || '-'}</span>
-                          </TableCell>
-                          <TableCell>
-                            {producto.fechaVencimiento ? (
-                              <div className="flex items-center gap-1 text-sm">
-                                <Calendar className="h-3 w-3" />
-                                {mostrarFecha(producto.fechaVencimiento)}
-                              </div>
-                            ) : (
-                              '-'
-                            )}
-                          </TableCell>
                           <TableCell>
                             <Badge variant={producto.activo ? 'success' : 'secondary'}>
                               {producto.activo ? 'Activo' : 'Inactivo'}
@@ -540,7 +465,7 @@ export function ProductosList() {
               </select>
             </div>
 
-            {/* ✅ NUEVO: Unidad de medida */}
+            {/* Unidad de medida */}
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Unidad de Medida
@@ -564,57 +489,6 @@ export function ProductosList() {
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">Proveedor</label>
-              <Autocomplete
-                options={proveedoresOptions}
-                value={selectedProveedor}
-                onChange={(option) => {
-                  if (option) {
-                    setSelectedProveedor(option);
-                    setFormData({ ...formData, proveedorId: option.id as number });
-                  } else {
-                    setSelectedProveedor(null);
-                    setFormData({ ...formData, proveedorId: undefined });
-                  }
-                }}
-                placeholder="Buscar proveedor..."
-                emptyMessage="No se encontró el proveedor"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Lote</label>
-              <Input
-                placeholder="Ej: L123456"
-                value={formData.lote}
-                onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Fecha de Vencimiento</label>
-              <Input
-                type="date"
-                value={formatearFecha(formData.fechaVencimiento)}
-                onChange={(e) => setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Stock Actual
-                <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="number"
-                min="0"
-                value={formData.stockActual}
-                onChange={(e) => setFormData({ ...formData, stockActual: parseInt(e.target.value) })}
-                required
-              />
             </div>
 
             <div className="space-y-2">
@@ -647,16 +521,14 @@ export function ProductosList() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Costo Unitario
-                <span className="text-red-500">*</span>
+                Último Costo Unitario
               </label>
               <Input
                 type="number"
                 step="0.01"
-                min="0.01"
+                min="0"
                 value={formData.costoUnitario}
                 onChange={(e) => setFormData({ ...formData, costoUnitario: parseFloat(e.target.value) })}
-                required
               />
             </div>
 
