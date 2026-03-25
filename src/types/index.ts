@@ -26,6 +26,27 @@ export interface JwtResponse {
   tenantId: string;  // ✅ AGREGADO
   expiresIn: number;        // Segundos (ej: 900 para 15 min)
   suscripcion?: SuscripcionDTO;  // ✅ AGREGADO
+  permisos?: string[];      // Códigos de permisos del usuario (e.g. PRODUCTOS_VER)
+}
+
+// ========================================
+// ADMIN - PERMISOS
+// ========================================
+
+export interface AdminUsuario {
+  id: number;
+  email: string;
+  nombre: string;
+  rolNombre: string;
+  activo: boolean;
+  tenantId: string;
+}
+
+export interface Permiso {
+  id: number;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
 }
 
 export interface LoginDTO {
