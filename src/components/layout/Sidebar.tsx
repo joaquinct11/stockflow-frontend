@@ -28,7 +28,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuthStore();
-  const { isAdmin, isGerente, isVendedor, isGestorInventario } = usePermissions();
+  const { isAdmin, isGerente, isVendedor, isGestorInventario, canView } = usePermissions();
 
   const menuItems = [
     {
@@ -71,7 +71,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Suscripciones',
       href: '/suscripciones',
       icon: CreditCard,
-      show: isAdmin,
+      show: isAdmin || canView('SUSCRIPCIONES'),
     },
     {
       title: 'Reportes',
