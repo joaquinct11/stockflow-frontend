@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { adminService } from '../../services/admin.service';
 import type { AdminUsuario, Permiso } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -9,25 +9,48 @@ import { Input } from '../../components/ui/Input';
 import { Search, Shield, Users, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// Grouping of permission codes by module.
-// Must be kept in sync with backend permission code prefixes.
-// Any permission not matching these prefixes will appear under a fallback "Otros" group.
-const MODULE_GROUPS: { label: string; prefix: string }[] = [
-  { label: 'Productos', prefix: 'PRODUCTOS' },
-  { label: 'Inventario', prefix: 'INVENTARIO' },
-  { label: 'Ventas', prefix: 'VENTAS' },
-  { label: 'Proveedores', prefix: 'PROVEEDORES' },
-  { label: 'Usuarios / Admin', prefix: 'USUARIOS' },
+/**
+ * Backend permissions format:
+ *   ACCION_RECURSO e.g. CREAR_PRODUCTO, VER_INVENTARIO, ELIMINAR_VENTA
+ *
+ * In the backend response, the permission "code" is the field `nombre`.
+ * Example: { id: 1, nombre: "CREAR_PRODUCTO", descripcion: "...", rolId: 1 }
+ *
+ * We group by RECURSO (suffix after last underscore).
+ */
+const RESOURCE_GROUPS: { label: string; resource: string }[] = [
+  { label: 'Productos', resource: 'PRODUCTO' },
+  { label: 'Inventario', resource: 'INVENTARIO' },
+  { label: 'Ventas', resource: 'VENTA' },
+  { label: 'Proveedores', resource: 'PROVEEDOR' },
+  { label: 'Usuarios / Admin', resource: 'USUARIOS' }, // ajusta si en tu BD es USUARIO
+  { label: 'Reportes', resource: 'REPORTES' },
+  { label: 'Suscripciones', resource: 'SUSCRIPCIONES' },
 ];
 
 function getRoleBadgeClass(rol: string) {
   switch (rol) {
-    case 'ADMIN': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100';
-    case 'GERENTE': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100';
-    case 'VENDEDOR': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100';
-    case 'GESTOR_INVENTARIO': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100';
-    default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100';
+    case 'ADMIN':
+      return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100';
+    case 'GERENTE':
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100';
+    case 'VENDEDOR':
+      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100';
+    case 'GESTOR_INVENTARIO':
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100';
+    default:
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100';
   }
+}
+
+function getPermCode(p: Permiso): string {
+  return (p?.nombre ?? '').toString();
+}
+
+function getPermResource(code: string): string {
+  const parts = (code ?? '').split('_').filter(Boolean);
+  if (parts.length < 2) return 'OTROS';
+  return parts[parts.length - 1];
 }
 
 export function PermisosConfig() {
@@ -44,24 +67,40 @@ export function PermisosConfig() {
 
   useEffect(() => {
     fetchInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchInitialData = async () => {
     try {
       setLoadingInit(true);
+
       const [users, perms] = await Promise.all([
-        adminService.getUsuarios().catch(() => { throw new Error('usuarios'); }),
-        adminService.getPermisos().catch(() => { throw new Error('permisos'); }),
+        adminService.getUsuarios().catch(() => {
+          throw new Error('usuarios');
+        }),
+        adminService.getPermisos().catch(() => {
+          throw new Error('permisos');
+        }),
       ]);
+
       setUsuarios(users);
       setPermisosCatalog(perms);
+
       // expand all groups by default
       const expanded: Record<string, boolean> = {};
-      MODULE_GROUPS.forEach(g => { expanded[g.prefix] = true; });
+      RESOURCE_GROUPS.forEach((g) => {
+        expanded[g.resource] = true;
+      });
+      expanded.OTROS = true;
       setExpandedGroups(expanded);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
-      const resource = message === 'usuarios' ? 'usuarios' : message === 'permisos' ? 'catálogo de permisos' : 'datos';
+      const resource =
+        message === 'usuarios'
+          ? 'usuarios'
+          : message === 'permisos'
+            ? 'catálogo de permisos'
+            : 'datos';
       toast.error(`Error al cargar ${resource}`);
     } finally {
       setLoadingInit(false);
@@ -71,6 +110,7 @@ export function PermisosConfig() {
   const handleSelectUser = async (user: AdminUsuario) => {
     setSelectedUserId(user.id);
     setUserPermisos([]);
+
     try {
       setLoadingPermisos(true);
       const perms = await adminService.getUsuarioPermisos(user.id);
@@ -82,16 +122,15 @@ export function PermisosConfig() {
     }
   };
 
-  const togglePermiso = (codigo: string) => {
-    setUserPermisos(prev =>
-      prev.includes(codigo)
-        ? prev.filter(p => p !== codigo)
-        : [...prev, codigo]
+  const togglePermiso = (code: string) => {
+    setUserPermisos((prev) =>
+      prev.includes(code) ? prev.filter((p) => p !== code) : [...prev, code]
     );
   };
 
   const handleSave = async () => {
     if (selectedUserId === null) return;
+
     try {
       setSaving(true);
       await adminService.updateUsuarioPermisos(selectedUserId, userPermisos);
@@ -103,40 +142,55 @@ export function PermisosConfig() {
     }
   };
 
-  const toggleGroup = (prefix: string) => {
-    setExpandedGroups(prev => ({ ...prev, [prefix]: !prev[prefix] }));
+  const toggleGroup = (resource: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [resource]: !prev[resource] }));
   };
 
-  const selectedUser = usuarios.find(u => u.id === selectedUserId) ?? null;
+  const selectedUser = usuarios.find((u) => u.id === selectedUserId) ?? null;
 
-  const filteredUsuarios = usuarios.filter(u =>
-    u.nombre.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.email.toLowerCase().includes(userSearch.toLowerCase())
-  );
+  const filteredUsuarios = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return usuarios;
 
-  // Group permissions by module prefix, with fallback for unknown prefixes
-  const knownPrefixes = MODULE_GROUPS.map(g => g.prefix);
-  const groupedPermisos = [
-    ...MODULE_GROUPS.map(group => {
-      const perms = permisosCatalog.filter(p =>
-        p.codigo.startsWith(group.prefix + '_') &&
-        (permSearch === '' ||
-          p.nombre.toLowerCase().includes(permSearch.toLowerCase()) ||
-          p.codigo.toLowerCase().includes(permSearch.toLowerCase()))
-      );
-      return { ...group, perms };
-    }),
-    {
-      label: 'Otros',
-      prefix: 'OTROS',
-      perms: permisosCatalog.filter(p =>
-        !knownPrefixes.some(prefix => p.codigo.startsWith(prefix + '_')) &&
-        (permSearch === '' ||
-          p.nombre.toLowerCase().includes(permSearch.toLowerCase()) ||
-          p.codigo.toLowerCase().includes(permSearch.toLowerCase()))
-      ),
-    },
-  ].filter(g => g.perms.length > 0);
+    return usuarios.filter(
+      (u) => u.nombre.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+    );
+  }, [usuarios, userSearch]);
+
+  const groupedPermisos = useMemo(() => {
+    const catalog = Array.isArray(permisosCatalog) ? permisosCatalog : [];
+    const q = permSearch.trim().toLowerCase();
+    const knownResources = RESOURCE_GROUPS.map((g) => g.resource);
+
+    const matchesSearch = (p: Permiso) => {
+      if (!q) return true;
+      const code = getPermCode(p).toLowerCase();
+      const desc = (p.descripcion ?? '').toLowerCase();
+      return code.includes(q) || desc.includes(q);
+    };
+
+    const groups = [
+      ...RESOURCE_GROUPS.map((group) => {
+        const perms = catalog.filter((p) => {
+          const code = getPermCode(p);
+          const resource = getPermResource(code);
+          return resource === group.resource && matchesSearch(p);
+        });
+        return { label: group.label, resource: group.resource, perms };
+      }),
+      {
+        label: 'Otros',
+        resource: 'OTROS',
+        perms: catalog.filter((p) => {
+          const code = getPermCode(p);
+          const resource = getPermResource(code);
+          return !knownResources.includes(resource) && matchesSearch(p);
+        }),
+      },
+    ].filter((g) => g.perms.length > 0);
+
+    return groups;
+  }, [permisosCatalog, permSearch]);
 
   if (loadingInit) {
     return (
@@ -167,19 +221,24 @@ export function PermisosConfig() {
               <CardTitle className="text-base">Usuarios</CardTitle>
             </div>
             <CardDescription>Selecciona un usuario para editar sus permisos</CardDescription>
+
             <div className="relative mt-2">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
               <Input
                 placeholder="Buscar usuario..."
                 value={userSearch}
-                onChange={e => setUserSearch(e.target.value)}
+                onChange={(e) => setUserSearch(e.target.value)}
                 className="pl-9"
               />
             </div>
           </CardHeader>
+
           <CardContent className="p-0">
             <ul className="divide-y">
-              {filteredUsuarios.map(user => (
+              {filteredUsuarios.map((user) => (
                 <li key={user.id}>
                   <button
                     onClick={() => handleSelectUser(user)}
@@ -192,17 +251,21 @@ export function PermisosConfig() {
                         <p className="text-sm font-medium truncate">{user.nombre}</p>
                         <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${getRoleBadgeClass(user.rolNombre)}`}>
+
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${getRoleBadgeClass(
+                          user.rolNombre
+                        )}`}
+                      >
                         {user.rolNombre}
                       </span>
                     </div>
                   </button>
                 </li>
               ))}
+
               {filteredUsuarios.length === 0 && (
-                <li className="px-4 py-6 text-center text-sm text-muted-foreground">
-                  Sin resultados
-                </li>
+                <li className="px-4 py-6 text-center text-sm text-muted-foreground">Sin resultados</li>
               )}
             </ul>
           </CardContent>
@@ -222,6 +285,7 @@ export function PermisosConfig() {
                     : 'Selecciona un usuario para ver y editar sus permisos'}
                 </CardDescription>
               </div>
+
               {selectedUser && (
                 <Button onClick={handleSave} disabled={saving || loadingPermisos} className="flex-shrink-0">
                   <Save size={16} className="mr-2" />
@@ -229,18 +293,23 @@ export function PermisosConfig() {
                 </Button>
               )}
             </div>
+
             {selectedUser && (
               <div className="relative mt-2">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                />
                 <Input
                   placeholder="Buscar permiso..."
                   value={permSearch}
-                  onChange={e => setPermSearch(e.target.value)}
+                  onChange={(e) => setPermSearch(e.target.value)}
                   className="pl-9"
                 />
               </div>
             )}
           </CardHeader>
+
           <CardContent>
             {!selectedUser && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -257,13 +326,17 @@ export function PermisosConfig() {
 
             {selectedUser && !loadingPermisos && (
               <div className="space-y-4">
-                {/* Summary badge */}
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">
-                    {userPermisos.length} permiso{userPermisos.length !== 1 ? 's' : ''} asignado{userPermisos.length !== 1 ? 's' : ''}
+                    {userPermisos.length} permiso{userPermisos.length !== 1 ? 's' : ''} asignado
+                    {userPermisos.length !== 1 ? 's' : ''}
                   </Badge>
+
                   {selectedUser.rolNombre === 'ADMIN' && (
-                    <Badge variant="default" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
+                    <Badge
+                      variant="default"
+                      className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+                    >
                       Admin — acceso total por rol
                     </Badge>
                   )}
@@ -275,43 +348,52 @@ export function PermisosConfig() {
                   </p>
                 )}
 
-                {groupedPermisos.map(group => (
-                  <div key={group.prefix} className="border rounded-lg overflow-hidden">
+                {groupedPermisos.map((group) => (
+                  <div key={group.resource} className="border rounded-lg overflow-hidden">
                     <button
-                      onClick={() => toggleGroup(group.prefix)}
+                      onClick={() => toggleGroup(group.resource)}
                       className="w-full flex items-center justify-between px-4 py-3 bg-muted/50 hover:bg-muted transition-colors font-medium text-sm"
                     >
                       <span>{group.label}</span>
+
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">
-                          {group.perms.filter(p => userPermisos.includes(p.codigo)).length}/{group.perms.length}
+                          {group.perms.filter((p) => userPermisos.includes(getPermCode(p))).length}/
+                          {group.perms.length}
                         </span>
-                        {expandedGroups[group.prefix] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        {expandedGroups[group.resource] ? (
+                          <ChevronUp size={16} />
+                        ) : (
+                          <ChevronDown size={16} />
+                        )}
                       </div>
                     </button>
 
-                    {expandedGroups[group.prefix] && (
+                    {expandedGroups[group.resource] && (
                       <div className="divide-y">
-                        {group.perms.map(perm => (
-                          <label
-                            key={perm.id}
-                            className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={userPermisos.includes(perm.codigo)}
-                              onChange={() => togglePermiso(perm.codigo)}
-                              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary cursor-pointer"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium">{perm.nombre}</p>
-                              {perm.descripcion && (
-                                <p className="text-xs text-muted-foreground">{perm.descripcion}</p>
-                              )}
-                              <code className="text-xs text-muted-foreground font-mono">{perm.codigo}</code>
-                            </div>
-                          </label>
-                        ))}
+                        {group.perms.map((perm) => {
+                          const code = getPermCode(perm);
+                          return (
+                            <label
+                              key={perm.id}
+                              className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={userPermisos.includes(code)}
+                                onChange={() => togglePermiso(code)}
+                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary cursor-pointer"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium">{code}</p>
+                                {perm.descripcion && (
+                                  <p className="text-xs text-muted-foreground">{perm.descripcion}</p>
+                                )}
+                                <code className="text-xs text-muted-foreground font-mono">{code}</code>
+                              </div>
+                            </label>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

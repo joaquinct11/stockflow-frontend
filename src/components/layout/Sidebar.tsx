@@ -80,16 +80,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       show: isAdmin || isGerente,
     },
     {
-      title: 'Configuración',
-      href: '/configuracion',
-      icon: Settings,
-      show: true,
-    },
-    {
       title: 'Gestión de Permisos',
       href: '/admin/permisos',
       icon: ShieldCheck,
       show: isAdmin,
+    },
+    {
+      title: 'Configuración',
+      href: '/configuracion',
+      icon: Settings,
+      show: true,
     },
   ];
 
