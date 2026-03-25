@@ -461,7 +461,12 @@ export function VentasList() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredVentas.length === 0 ? (
+          {!canViewAll('VENTAS') && !canViewOwn('VENTAS') ? (
+            <EmptyState
+              title="Sin permisos"
+              description="No tienes permisos para ver ventas"
+            />
+          ) : filteredVentas.length === 0 ? (
             <EmptyState
               title="No hay ventas"
               description="Comienza registrando tu primera venta"

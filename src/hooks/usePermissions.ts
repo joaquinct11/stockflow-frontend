@@ -15,9 +15,7 @@ type Module =
 
 type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 
-// Mapping from frontend Permission names to backend permission code suffixes.
-// Note: ver_todas, ver_propias, ver_global, ver_personal all map to 'VER' because
-// the backend permission system uses a single VER code per module (intentional simplification).
+// Mapping from frontend Permission names to backend verb prefixes (verb-first format).
 const PERMISSION_CODE_MAP: Record<Permission, string> = {
   crear: 'CREAR',
   editar: 'EDITAR',
@@ -28,6 +26,26 @@ const PERMISSION_CODE_MAP: Record<Permission, string> = {
   ver_propias: 'VER',
   ver_global: 'VER',
   ver_personal: 'VER',
+};
+
+// Direct mapping to exact backend permission codes (verb-first, e.g. VER_VENTAS).
+// Handles module-specific naming (singular/plural) and special permissions like VER_MIS_VENTAS.
+const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, string>>>> = {
+  VENTAS: {
+    ver: 'VER_VENTAS',
+    ver_todas: 'VER_VENTAS',
+    ver_propias: 'VER_MIS_VENTAS',
+    ver_global: 'VER_VENTAS',
+    crear: 'CREAR_VENTA',
+    editar: 'EDITAR_VENTA',
+    eliminar: 'ELIMINAR_VENTA',
+  },
+  SUSCRIPCIONES: {
+    ver: 'VER_SUSCRIPCIONES',
+    ver_todas: 'VER_SUSCRIPCIONES',
+    activar: 'ACTIVAR_SUSCRIPCION',
+    eliminar: 'ELIMINAR_SUSCRIPCION',
+  },
 };
 
 // Fallback role-based permission table (used when no backend permisos are assigned)
@@ -105,11 +123,16 @@ export function usePermissions() {
     // ADMIN always has full access (backward compatibility)
     if (isAdmin) return true;
 
-    const permisos = user?.permisos;
+    const permisos = user?.permisos ?? [];
 
-    if (permisos && permisos.length > 0) {
-      // Use backend permisos codes: e.g. PRODUCTOS_CREAR
-      const code = `${module}_${PERMISSION_CODE_MAP[permission]}`;
+    if (permisos.length > 0) {
+      // Check module-specific backend code first (handles singular/plural and special cases)
+      const backendCode = BACKEND_PERMISSION_MAP[module]?.[permission];
+      if (backendCode !== undefined) {
+        return permisos.includes(backendCode);
+      }
+      // Default: verb-first format (e.g. VER_PRODUCTOS, CREAR_INVENTARIO)
+      const code = `${PERMISSION_CODE_MAP[permission]}_${module}`;
       return permisos.includes(code);
     }
 
