@@ -27,7 +27,13 @@ export function Login() {
       
       console.log('✅ Login exitoso:', response); // ← Log
       
-      setUser(response); // Esto guarda en localStorage y en el store
+      // Fetch permisos from /api/auth/me and merge into user object
+      try {
+        const profile = await authService.obtenerPerfil();
+        setUser({ ...response, permisos: profile.permisos || [] });
+      } catch {
+        setUser(response); // fallback: set user without permisos
+      }
       
       toast.success(`¡Bienvenido ${response.nombre}!`);
       navigate('/');

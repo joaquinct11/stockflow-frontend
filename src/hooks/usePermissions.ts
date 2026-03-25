@@ -15,6 +15,22 @@ type Module =
 
 type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 
+// Mapping from frontend Permission names to backend permission code suffixes.
+// Note: ver_todas, ver_propias, ver_global, ver_personal all map to 'VER' because
+// the backend permission system uses a single VER code per module (intentional simplification).
+const PERMISSION_CODE_MAP: Record<Permission, string> = {
+  crear: 'CREAR',
+  editar: 'EDITAR',
+  eliminar: 'ELIMINAR',
+  activar: 'ACTIVAR',
+  ver: 'VER',
+  ver_todas: 'VER',
+  ver_propias: 'VER',
+  ver_global: 'VER',
+  ver_personal: 'VER',
+};
+
+// Fallback role-based permission table (used when no backend permisos are assigned)
 const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
   DASHBOARD: {
     ADMIN: ['ver_global', 'ver_personal'],
@@ -83,8 +99,21 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
 export function usePermissions() {
   const { user } = useAuthStore();
   const rol = (user?.rol || 'VENDEDOR') as Role;
+  const isAdmin = rol === 'ADMIN';
 
   const hasPermission = (module: Module, permission: Permission): boolean => {
+    // ADMIN always has full access (backward compatibility)
+    if (isAdmin) return true;
+
+    const permisos = user?.permisos;
+
+    if (permisos && permisos.length > 0) {
+      // Use backend permisos codes: e.g. PRODUCTOS_CREAR
+      const code = `${module}_${PERMISSION_CODE_MAP[permission]}`;
+      return permisos.includes(code);
+    }
+
+    // Fallback: role-based table (backward compatibility for existing roles)
     const modulePermissions = PERMISSIONS[module]?.[rol] || [];
     return modulePermissions.includes(permission);
   };
@@ -99,7 +128,6 @@ export function usePermissions() {
   const canViewGlobal = (module: Module) => hasPermission(module, 'ver_global');
   const canViewPersonal = (module: Module) => hasPermission(module, 'ver_personal');
 
-  const isAdmin = rol === 'ADMIN';
   const isGerente = rol === 'GERENTE';
   const isVendedor = rol === 'VENDEDOR';
   const isGestorInventario = rol === 'GESTOR_INVENTARIO';

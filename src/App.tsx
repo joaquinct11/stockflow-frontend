@@ -27,6 +27,7 @@ import { InventarioList } from './pages/inventario/InventarioList';
 import { ProveedoresList } from './pages/proveedores/ProveedoresList';
 import { AccountSettings } from './pages/settings/AccountSettings';
 import { UserProfile } from './pages/settings/UserProfile';
+import { PermisosConfig } from './pages/admin/PermisosConfig';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -130,6 +131,16 @@ function App() {
             
             {/* Configuración - Todos pueden acceder */}
             <Route path="configuracion" element={<AccountSettings />} />
+
+            {/* Gestión de Permisos - Solo ADMIN */}
+            <Route
+              path="admin/permisos"
+              element={
+                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                  <PermisosConfig />
+                </RoleProtectedRoute>
+              }
+            />
             
             {/* Reportes - Todos los roles (restricciones finas manejadas por backend con 403) */}
             <Route

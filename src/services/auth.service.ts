@@ -32,6 +32,7 @@ export interface UserProfile {
   ultimoLogin: string | null;
   activo: boolean;
   nombreFarmacia: string;
+  permisos: string[];
 }
 
 export const authService = {

@@ -13,6 +13,7 @@ import {
   ChevronRight,
   X,
   Building2,
+  ShieldCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -83,6 +84,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: '/configuracion',
       icon: Settings,
       show: true,
+    },
+    {
+      title: 'Gestión de Permisos',
+      href: '/admin/permisos',
+      icon: ShieldCheck,
+      show: isAdmin,
     },
   ];
 

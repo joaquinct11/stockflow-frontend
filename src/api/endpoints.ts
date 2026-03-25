@@ -97,4 +97,10 @@ export const API_ENDPOINTS = {
     ACTIVATE: (id: number) => `/proveedores/${id}/activar`,
     DEACTIVATE: (id: number) => `/proveedores/${id}/desactivar`,
   },
+
+  ADMIN: {
+    PERMISOS: '/admin/permisos',
+    USUARIOS: '/admin/usuarios',
+    USUARIO_PERMISOS: (id: number) => `/admin/usuarios/${id}/permisos`,
+  },
 };
