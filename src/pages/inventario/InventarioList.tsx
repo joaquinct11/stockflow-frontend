@@ -138,6 +138,12 @@ export function InventarioList() {
     }
   };
 
+  const proveedorById = useMemo(() => {
+    const m = new Map<number, ProveedorDTO>();
+    proveedores.forEach((p) => m.set(p.id!, p));
+    return m;
+  }, [proveedores]);
+
   const unidadById = useMemo(() => {
     const m = new Map<number, UnidadMedidaDTO>();
     unidadesMedida.forEach((u) => m.set(u.id, u));
@@ -733,25 +739,54 @@ export function InventarioList() {
                     <TableHead className="text-center">Cantidad</TableHead>
                     <TableHead>Descripción</TableHead>
                     <TableHead>Referencia</TableHead>
+                    <TableHead>Proveedor</TableHead>
+                    <TableHead>Lote</TableHead>
+                    <TableHead>Vencimiento</TableHead>
+                    <TableHead className="text-right">Costo U.</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {kardexMovimientos.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {m.createdAt ? new Date(m.createdAt).toLocaleString('es-PE') : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getMovimientoIcon(m.tipo)}
-                          {getMovimientoBadge(m.tipo)}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center font-semibold">{m.cantidad}</TableCell>
-                      <TableCell className="text-muted-foreground">{m.descripcion}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{m.referencia || '-'}</TableCell>
-                    </TableRow>
-                  ))}
+                  {kardexMovimientos.map((m) => {
+                    const prov = m.proveedorId ? proveedorById.get(m.proveedorId) : undefined;
+
+                    const isEntrada = m.tipo === 'ENTRADA';
+
+                    return (
+                      <TableRow key={m.id}>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {m.createdAt ? new Date(m.createdAt).toLocaleString('es-PE') : '-'}
+                        </TableCell>
+
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getMovimientoIcon(m.tipo)}
+                            {getMovimientoBadge(m.tipo)}
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="text-center font-semibold">{m.cantidad}</TableCell>
+                        <TableCell className="text-muted-foreground">{m.descripcion}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{m.referencia || '-'}</TableCell>
+
+                        {/* ✅ Solo ENTRADA muestra datos, si no '-' */}
+                        <TableCell className="text-muted-foreground text-sm">
+                          {isEntrada ? (prov?.nombre ?? (m.proveedorId ? `Proveedor #${m.proveedorId}` : '-')) : '-'}
+                        </TableCell>
+
+                        <TableCell className="text-muted-foreground text-sm">
+                          {isEntrada ? (m.lote || '-') : '-'}
+                        </TableCell>
+
+                        <TableCell className="text-muted-foreground text-sm">
+                          {isEntrada ? (m.fechaVencimiento ? new Date(m.fechaVencimiento).toLocaleDateString('es-PE') : '-') : '-'}
+                        </TableCell>
+
+                        <TableCell className="text-right text-muted-foreground text-sm">
+                          {isEntrada && m.costoUnitario != null ? m.costoUnitario.toFixed(2) : '-'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
