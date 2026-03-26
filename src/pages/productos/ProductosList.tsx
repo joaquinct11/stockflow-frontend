@@ -15,9 +15,11 @@ import { Pagination } from '../../components/ui/Pagination';
 import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuthStore } from '../../store/authStore';
 
 export function ProductosList() {
   const { canCreate, canEdit, canDelete } = usePermissions();
+  const { user } = useAuthStore();
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +51,7 @@ export function ProductosList() {
     costoUnitario: 0,
     precioVenta: 0,
     activo: true,
-    tenantId: 'farmacia-001',
+    tenantId: user?.tenantId ?? '',
     unidadMedidaId: 0,
   });
 
@@ -168,7 +170,7 @@ export function ProductosList() {
       costoUnitario: 0,
       precioVenta: 0,
       activo: true,
-      tenantId: 'farmacia-001',
+      tenantId: user?.tenantId ?? '',
       unidadMedidaId: unidadesMedida.length > 0 ? unidadesMedida[0].id : 0,
     });
     setEditingId(null);

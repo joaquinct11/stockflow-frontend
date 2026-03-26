@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Bell, Search, Moon, Sun, LogOut, User, Menu, ChevronDown } from 'lucide-react';
+import { Bell, Moon, Sun, LogOut, User, Menu, ChevronDown } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
 import { useThemeStore } from '../../store/themeStore';
 import { useAuthStore } from '../../store/authStore';
 import { authService } from '../../services/auth.service';

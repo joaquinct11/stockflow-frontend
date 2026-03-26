@@ -17,7 +17,6 @@ export function DeleteAccountModal({
   isOpen,
   onClose,
   validacion,
-  usuarioId,
   onConfirm,
 }: DeleteAccountModalProps) {
   const [loading, setLoading] = useState(false);

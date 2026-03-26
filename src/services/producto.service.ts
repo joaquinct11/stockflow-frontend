@@ -2,19 +2,6 @@ import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
 import type { ProductoDTO } from '../types';
 
-/**
- * Obtener tenantId del usuario logueado
- */
-const getTenantId = (): string => {
-  const user = localStorage.getItem('user');
-  if (!user) throw new Error('Usuario no autenticado');
-  
-  const userData = JSON.parse(user);
-  if (!userData.tenantId) throw new Error('TenantId no encontrado');
-  
-  return userData.tenantId;
-};
-
 export const productoService = {
   /**
    * Obtener todos los productos del tenant actual
