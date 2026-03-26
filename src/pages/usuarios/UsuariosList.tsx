@@ -13,7 +13,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAuthStore } from '../../store/authStore'; // ✅ AGREGAR
 import { usePermissions } from '../../hooks/usePermissions';
-import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck, User } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck, User, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
@@ -21,7 +21,8 @@ type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 export function UsuariosList() {
   const tenantId = useAuthStore((s) => s.user?.tenantId);
   const currentUserRole = (useAuthStore((s) => s.user?.rol) || 'VENDEDOR') as Role;
-  const { canCreate, canEdit, canDelete } = usePermissions();
+  const { canCreate, canEdit, canDelete, canView } = usePermissions();
+  const hasViewPermission = canView('USUARIOS');
 
   // ✅ HARD-CODEADO: Opciones según el rol del logueado
   const allowedRoleOptions = useMemo(() => {
@@ -74,8 +75,12 @@ export function UsuariosList() {
   });
 
   useEffect(() => {
-    fetchUsuarios();
-  }, []);
+    if (hasViewPermission) {
+      fetchUsuarios();
+    } else {
+      setLoading(false);
+    }
+  }, [hasViewPermission]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -260,6 +265,15 @@ export function UsuariosList() {
         )}
       </div>
 
+      {/* When user cannot list users, show informational empty state */}
+      {!hasViewPermission ? (
+        <EmptyState
+          icon={Lock}
+          title="Sin acceso al listado"
+          description="No tienes permisos para ver el listado de usuarios. Contacta al administrador para solicitar acceso."
+        />
+      ) : (
+        <>
       {/* Stats */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -441,6 +455,8 @@ export function UsuariosList() {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
 
       {/* Dialog/Modal para crear/editar */}
       <Dialog

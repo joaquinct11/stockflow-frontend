@@ -2,7 +2,7 @@ import { useAuthStore } from '../store/authStore';
 
 type Permission = 'crear'| 'activar' | 'editar' | 'eliminar' | 'ver' | 'ver_todas' | 'ver_propias' | 'ver_global' | 'ver_personal';
 
-type Module = 
+export type Module = 
   | 'DASHBOARD'
   | 'PRODUCTOS'
   | 'VENTAS'

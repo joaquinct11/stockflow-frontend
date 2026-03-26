@@ -69,64 +69,61 @@ function App() {
             {/* ✅ MI PERFIL - TODOS ACCEDEN */}
             <Route path="perfil" element={<UserProfile />} />
             
-            {/* Proveedores - ADMIN, GERENTE, GESTOR_INVENTARIO, or any PROVEEDORES permission */}
+            {/* Proveedores */}
             <Route
               path="proveedores"
               element={
-                <RoleProtectedRoute
-                  allowedRoles={['ADMIN', 'GERENTE', 'GESTOR_INVENTARIO']}
-                  anyPermission={['VER_PROVEEDORES', 'CREAR_PROVEEDOR', 'EDITAR_PROVEEDOR', 'ELIMINAR_PROVEEDOR', 'ACTIVAR_PROVEEDOR']}
-                >
+                <RoleProtectedRoute module="PROVEEDORES">
                   <ProveedoresList />
                 </RoleProtectedRoute>
               }
             />
             
-            {/* Productos - ADMIN, GERENTE, VENDEDOR, GESTOR_INVENTARIO */}
+            {/* Productos */}
             <Route
               path="productos"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'VENDEDOR', 'GESTOR_INVENTARIO']}>
+                <RoleProtectedRoute module="PRODUCTOS">
                   <ProductosList />
                 </RoleProtectedRoute>
               }
             />
             
-            {/* Ventas - ADMIN, GERENTE, VENDEDOR */}
+            {/* Ventas */}
             <Route
               path="ventas"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'VENDEDOR']}>
+                <RoleProtectedRoute module="VENTAS">
                   <VentasList />
                 </RoleProtectedRoute>
               }
             />
             
-            {/* Inventario - ADMIN, GERENTE, GESTOR_INVENTARIO */}
+            {/* Inventario */}
             <Route
               path="inventario"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'GESTOR_INVENTARIO']}>
+                <RoleProtectedRoute module="INVENTARIO">
                   <InventarioList />
                 </RoleProtectedRoute>
               }
             />
             
-            {/* Usuarios - ADMIN, GERENTE */}
+            {/* Usuarios */}
             <Route
               path="usuarios"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE']}>
+                <RoleProtectedRoute module="USUARIOS">
                   <UsuariosList />
                 </RoleProtectedRoute>
               }
             />
             
-            {/* Suscripciones - ADMIN o permiso VER_SUSCRIPCIONES */}
+            {/* Suscripciones */}
             <Route
               path="suscripciones"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN']} requiredPermission="VER_SUSCRIPCIONES">
+                <RoleProtectedRoute module="SUSCRIPCIONES">
                   <SuscripcionesList />
                 </RoleProtectedRoute>
               }
@@ -145,11 +142,11 @@ function App() {
               }
             />
             
-            {/* Reportes - ADMIN, GERENTE, or VER_REPORTES permission */}
+            {/* Reportes */}
             <Route
               path="reportes"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE']} anyPermission={['VER_REPORTES']}>
+                <RoleProtectedRoute module="REPORTES">
                   <div className="text-center py-12">
                     <h2 className="text-2xl font-bold">Módulo de Reportes</h2>
                     <p className="text-muted-foreground">Próximamente...</p>
