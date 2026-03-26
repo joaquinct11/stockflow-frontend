@@ -13,7 +13,7 @@ export function ResetPassword() {
   const token = searchParams.get('token');
   
   const [loading, setLoading] = useState(false);
-  const [isValidToken, setIsValidToken] = useState(!!token);
+  const [isValidToken] = useState(!!token);
   const [formData, setFormData] = useState({
     nuevaContraseña: '',
     confirmarContraseña: '',

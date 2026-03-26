@@ -40,6 +40,37 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
     editar: 'EDITAR_VENTA',
     eliminar: 'ELIMINAR_VENTA',
   },
+  PRODUCTOS: {
+    ver: 'VER_PRODUCTOS',
+    ver_todas: 'VER_PRODUCTOS',
+    crear: 'CREAR_PRODUCTO',
+    editar: 'EDITAR_PRODUCTO',
+    eliminar: 'ELIMINAR_PRODUCTO',
+    activar: 'ACTIVAR_PRODUCTO',
+  },
+  PROVEEDORES: {
+    ver: 'VER_PROVEEDORES',
+    ver_todas: 'VER_PROVEEDORES',
+    crear: 'CREAR_PROVEEDOR',
+    editar: 'EDITAR_PROVEEDOR',
+    eliminar: 'ELIMINAR_PROVEEDOR',
+    activar: 'ACTIVAR_PROVEEDOR',
+  },
+  INVENTARIO: {
+    ver: 'VER_INVENTARIO',
+    ver_todas: 'VER_INVENTARIO',
+    crear: 'CREAR_MOVIMIENTO',
+    editar: 'EDITAR_MOVIMIENTO',
+    eliminar: 'ELIMINAR_MOVIMIENTO',
+  },
+  USUARIOS: {
+    ver: 'VER_USUARIOS',
+    ver_todas: 'VER_USUARIOS',
+    crear: 'CREAR_USUARIO',
+    editar: 'EDITAR_USUARIO',
+    eliminar: 'ELIMINAR_USUARIO',
+    activar: 'ACTIVAR_USUARIO',
+  },
   SUSCRIPCIONES: {
     ver: 'VER_SUSCRIPCIONES',
     ver_todas: 'VER_SUSCRIPCIONES',
@@ -151,6 +182,13 @@ export function usePermissions() {
   const canViewGlobal = (module: Module) => hasPermission(module, 'ver_global');
   const canViewPersonal = (module: Module) => hasPermission(module, 'ver_personal');
 
+  /** Check a raw backend permission code directly (e.g. 'CREAR_PRODUCTO'). Admin always returns true. */
+  const puede = (code: string): boolean => {
+    if (isAdmin) return true;
+    const permisos = user?.permisos ?? [];
+    return permisos.includes(code);
+  };
+
   const isGerente = rol === 'GERENTE';
   const isVendedor = rol === 'VENDEDOR';
   const isGestorInventario = rol === 'GESTOR_INVENTARIO';
@@ -158,6 +196,7 @@ export function usePermissions() {
   return {
     rol,
     hasPermission,
+    puede,
     canCreate,
     canEdit,
     canDelete,

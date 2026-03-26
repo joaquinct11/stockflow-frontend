@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { DeleteAccountModal } from '../../components/ui/DeleteAccountModal';
 import { useAuthStore } from '../../store/authStore';
 import { usuarioService } from '../../services/usuario.service';
-import { Trash2, Shield, AlertTriangle } from 'lucide-react';
+import { Trash2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { DeleteAccountValidationDTO } from '../../types';
 

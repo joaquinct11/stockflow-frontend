@@ -24,7 +24,7 @@ const PLAN_PRICES: Record<string, number> = {
 
 export function SuscripcionesList() {
   const { userId } = useCurrentUser();
-  const { canView, canEdit, canDelete, canActive } = usePermissions();
+  const { canView, canEdit, canDelete, canActive, isAdmin } = usePermissions();
   const [suscripciones, setSuscripciones] = useState<SuscripcionDTO[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,6 +83,12 @@ export function SuscripcionesList() {
   };
 
   const fetchUsuarios = async () => {
+    // Only load the full user list when the current user has permission to view users.
+    // Non-admin users with only VER_SUSCRIPCIONES do not have access to /api/usuarios,
+    // which would result in a 403. In that case we leave the list empty gracefully.
+    if (!isAdmin && !canView('USUARIOS')) {
+      return;
+    }
     try {
       const data = await usuarioService.getAll();
       setUsuarios(data);
