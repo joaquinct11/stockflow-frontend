@@ -119,11 +119,11 @@ function App() {
               }
             />
             
-            {/* Suscripciones - Solo ADMIN */}
+            {/* Suscripciones - ADMIN o permiso VER_SUSCRIPCIONES */}
             <Route
               path="suscripciones"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                <RoleProtectedRoute allowedRoles={['ADMIN']} requiredPermission="VER_SUSCRIPCIONES">
                   <SuscripcionesList />
                 </RoleProtectedRoute>
               }

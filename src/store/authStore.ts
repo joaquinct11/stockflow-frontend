@@ -7,7 +7,7 @@ interface AuthState {
   isAuthenticated: boolean;
   setUser: (user: JwtResponse) => void;
   logout: () => void;
-  initialize: () => void;
+  initialize: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -59,7 +59,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  initialize: () => {
+  initialize: async () => {
     console.log('🔄 Inicializando AuthStore...');
     
     const accessToken = localStorage.getItem('accessToken');
@@ -75,6 +75,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = JSON.parse(storedUser);
       console.log('✅ Sesión restaurada para:', user.email);
       set({ user, isAuthenticated: true });
+
+      // Refresh user data from server to get up-to-date permissions and profile
+      try {
+        const profile = await authService.obtenerPerfil();
+        const updatedUser = {
+          ...user,
+          permisos: profile.permisos,
+          nombre: profile.nombre,
+          email: profile.email,
+          rol: profile.rol,
+          tenantId: profile.tenantId,
+        };
+        set({ user: updatedUser });
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        console.log('✅ Permisos actualizados desde /api/auth/me:', profile.permisos);
+      } catch (error) {
+        console.warn('⚠️ No se pudo actualizar permisos desde /api/auth/me, usando datos locales:', error);
+      }
     } else {
       console.log('❌ No hay sesión guardada o tokens incompletos');
       set({ user: null, isAuthenticated: false });
