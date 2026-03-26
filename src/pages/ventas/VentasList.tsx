@@ -17,9 +17,11 @@ import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuthStore } from '../../store/authStore';
 
 export function VentasList() {
   const { userId } = useCurrentUser();
+  const { user } = useAuthStore();
   const { canCreate, canDelete, canViewAll, canViewOwn, rol } = usePermissions();
 
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
@@ -55,19 +57,24 @@ export function VentasList() {
     total: 0,
     metodoPago: 'EFECTIVO',
     estado: 'COMPLETADA',
-    tenantId: 'farmacia-001',
+    tenantId: user?.tenantId ?? '',
     detalles: [],
   });
 
   useEffect(() => {
     if (userId) {
       console.log('🔄 Actualizando vendedorId:', userId);
+      const tenantId = user?.tenantId;
+      if (!tenantId) {
+        console.warn('⚠️ tenantId no disponible al inicializar formData de venta');
+      }
       setFormData((prev) => ({
         ...prev,
         vendedorId: userId,
+        tenantId: tenantId ?? prev.tenantId,
       }));
     }
-  }, [userId]);
+  }, [userId, user?.tenantId]);
 
   // ✅ Importante: cargar data cuando ya tengamos userId (evita llamar al endpoint incorrecto muy temprano)
   useEffect(() => {
@@ -96,6 +103,8 @@ export function VentasList() {
     try {
       setLoading(true);
 
+      const hasViewPermission = canViewAll('VENTAS') || canViewOwn('VENTAS');
+
       const ventasPromise = (() => {
         if (canViewAll('VENTAS')) {
           return ventaService.getAll();
@@ -103,13 +112,17 @@ export function VentasList() {
         if (canViewOwn('VENTAS')) {
           return ventaService.getByVendor(userId!);
         }
-        // No tiene permiso de ver ventas
+        // No tiene permiso de ver ventas — do not call the API
         return Promise.resolve([] as typeof ventas);
       })();
 
+      const productosPromise = hasViewPermission || canCreate('VENTAS')
+        ? productoService.getAll()
+        : Promise.resolve([] as ProductoDTO[]);
+
       const [ventasData, productosData] = await Promise.all([
         ventasPromise,
-        productoService.getAll(),
+        productosPromise,
       ]);
 
       console.log('📦 Ventas recibidas:', ventasData);
@@ -256,7 +269,7 @@ export function VentasList() {
       total: 0,
       metodoPago: 'EFECTIVO',
       estado: 'COMPLETADA',
-      tenantId: 'farmacia-001',
+      tenantId: user?.tenantId ?? '',
       detalles: [],
     });
     setSelectedProductos({});
@@ -319,6 +332,16 @@ export function VentasList() {
 
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  if (!canViewAll('VENTAS') && !canViewOwn('VENTAS') && !canCreate('VENTAS')) {
+    return (
+      <EmptyState
+        icon={ShoppingCart}
+        title="Sin acceso a ventas"
+        description="No tienes permisos para ver ventas. Contacta al administrador para solicitar acceso."
+      />
+    );
   }
 
   return (
