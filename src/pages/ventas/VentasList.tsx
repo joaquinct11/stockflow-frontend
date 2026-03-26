@@ -563,7 +563,7 @@ export function VentasList() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDelete(venta.id!)}
-                                title="Eliminar venta"
+                                title="Eliminar"
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
@@ -917,7 +917,7 @@ export function VentasList() {
             </div>
 
             <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm">
+              {/* <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground font-medium">Cantidad de productos:</span>
                 <span className="font-bold">{selectedVenta.detalles.length}</span>
               </div>
@@ -926,8 +926,8 @@ export function VentasList() {
                 <span className="font-bold">
                   {selectedVenta.detalles.reduce((sum, d) => sum + d.cantidad, 0)}
                 </span>
-              </div>
-              <div className="border-t border-primary/20 pt-2 flex justify-between items-center">
+              </div> */}
+              <div className="border-primary/20 pt-2 flex justify-between items-center">
                 <span className="font-semibold">Total Venta:</span>
                 <span className="text-2xl font-bold text-primary">
                   S/.{selectedVenta.total.toFixed(2)}

@@ -393,17 +393,6 @@ export function UsuariosList() {
 
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {canEdit('USUARIOS') && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(usuario)}
-                                title="Editar"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            )}
-
                             {canToggleState('USUARIOS') && (
                               usuario.activo ? (
                                 <Button
@@ -426,12 +415,23 @@ export function UsuariosList() {
                               )
                             )}
 
+                            {canEdit('USUARIOS') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(usuario)}
+                                title="Editar"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            )}
+
                             {canDelete('USUARIOS') && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDelete(usuario.id!)}
-                                title="Eliminar permanentemente"
+                                title="Eliminar"
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>

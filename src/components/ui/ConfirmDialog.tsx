@@ -61,7 +61,7 @@ export function ConfirmDialog({
       isOpen={isOpen}
       onClose={onCancel}
       title={title}
-      description={description}
+      // description={description}
       size="sm"
     >
       <div className="flex flex-col items-center gap-4">

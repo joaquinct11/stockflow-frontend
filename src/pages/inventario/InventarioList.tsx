@@ -537,7 +537,7 @@ export function InventarioList() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDelete(movimiento.id!)}
-                                title="Eliminar movimiento"
+                                title="Eliminar"
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>

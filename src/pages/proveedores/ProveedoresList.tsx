@@ -327,7 +327,7 @@ export function ProveedoresList() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleDeactivate(proveedor.id!, proveedor.nombre)}
-                                  title="Desactivar proveedor"
+                                  title="Desactivar"
                                 >
                                   <XCircle className="h-4 w-4 text-orange-600" />
                                 </Button>
@@ -348,7 +348,7 @@ export function ProveedoresList() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleEdit(proveedor)}
-                                title="Editar proveedor"
+                                title="Editar"
                               >
                                 <Edit className="h-4 w-4 text-blue-600" />
                               </Button>
@@ -359,7 +359,7 @@ export function ProveedoresList() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDelete(proveedor.id!, proveedor.nombre)}
-                                title="Eliminar proveedor"
+                                title="Eliminar"
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>

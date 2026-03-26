@@ -372,17 +372,6 @@ export function SuscripcionesList() {
                       <TableCell>{getEstadoBadge(suscripcion.estado || '')}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          {canEdit('SUSCRIPCIONES') && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(suscripcion)}
-                              title="Editar"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                          )}
-
                           {canToggleState('SUSCRIPCIONES') && (
                             suscripcion.estado === 'ACTIVA' ? (
                               <Button
@@ -403,6 +392,17 @@ export function SuscripcionesList() {
                                 <CheckCircle className="h-4 w-4 text-green-600" />
                               </Button>
                             )
+                          )}
+
+                          {canEdit('SUSCRIPCIONES') && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(suscripcion)}
+                              title="Editar"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
                           )}
 
                           {canDelete('SUSCRIPCIONES') && (
