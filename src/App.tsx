@@ -69,11 +69,14 @@ function App() {
             {/* ✅ MI PERFIL - TODOS ACCEDEN */}
             <Route path="perfil" element={<UserProfile />} />
             
-            {/* Proveedores - ADMIN, GERENTE, GESTOR_INVENTARIO */}
+            {/* Proveedores - ADMIN, GERENTE, GESTOR_INVENTARIO, or any PROVEEDORES permission */}
             <Route
               path="proveedores"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'GESTOR_INVENTARIO']}>
+                <RoleProtectedRoute
+                  allowedRoles={['ADMIN', 'GERENTE', 'GESTOR_INVENTARIO']}
+                  anyPermission={['VER_PROVEEDORES', 'CREAR_PROVEEDOR', 'EDITAR_PROVEEDOR', 'ELIMINAR_PROVEEDOR', 'ACTIVAR_PROVEEDOR']}
+                >
                   <ProveedoresList />
                 </RoleProtectedRoute>
               }
@@ -142,11 +145,11 @@ function App() {
               }
             />
             
-            {/* Reportes - Todos los roles (restricciones finas manejadas por backend con 403) */}
+            {/* Reportes - ADMIN, GERENTE, or VER_REPORTES permission */}
             <Route
               path="reportes"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'VENDEDOR', 'GESTOR_INVENTARIO']}>
+                <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE']} anyPermission={['VER_REPORTES']}>
                   <div className="text-center py-12">
                     <h2 className="text-2xl font-bold">Módulo de Reportes</h2>
                     <p className="text-muted-foreground">Próximamente...</p>

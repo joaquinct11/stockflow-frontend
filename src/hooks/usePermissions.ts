@@ -189,6 +189,25 @@ export function usePermissions() {
     return permisos.includes(code);
   };
 
+  /**
+   * Returns true if the user can access the module at all —
+   * i.e. they are admin OR have at least one relevant permission for the module.
+   * Used for sidebar visibility and route guards so that any relevant permission
+   * (VER_*, CREAR_*, EDITAR_*, ELIMINAR_*, ACTIVAR_*) grants entry to the module.
+   */
+  const canAccess = (module: Module): boolean => {
+    if (isAdmin) return true;
+    return (
+      canView(module) ||
+      canViewAll(module) ||
+      canViewOwn(module) ||
+      canCreate(module) ||
+      canEdit(module) ||
+      canDelete(module) ||
+      canActive(module)
+    );
+  };
+
   const isGerente = rol === 'GERENTE';
   const isVendedor = rol === 'VENDEDOR';
   const isGestorInventario = rol === 'GESTOR_INVENTARIO';
@@ -197,6 +216,7 @@ export function usePermissions() {
     rol,
     hasPermission,
     puede,
+    canAccess,
     canCreate,
     canEdit,
     canDelete,

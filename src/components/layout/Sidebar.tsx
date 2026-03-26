@@ -28,7 +28,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuthStore();
-  const { isAdmin, isGerente, isVendedor, isGestorInventario, canView, canCreate, canViewOwn } = usePermissions();
+  const { isAdmin, isGerente, isVendedor, isGestorInventario, canView, canCreate, canViewOwn, canAccess } = usePermissions();
 
   const menuItems = [
     {
@@ -77,7 +77,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Reportes',
       href: '/reportes',
       icon: BarChart3,
-      show: isAdmin || isGerente,
+      show: isAdmin || isGerente || canAccess('REPORTES'),
     },
     {
       title: 'Gestión de Permisos',
