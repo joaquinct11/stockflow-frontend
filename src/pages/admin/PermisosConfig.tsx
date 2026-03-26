@@ -10,22 +10,64 @@ import { Search, Shield, Users, Save, ChevronDown, ChevronUp } from 'lucide-reac
 import toast from 'react-hot-toast';
 
 /**
- * Backend permissions format:
- *   ACCION_RECURSO e.g. CREAR_PRODUCTO, VER_INVENTARIO, ELIMINAR_VENTA
- *
- * In the backend response, the permission "code" is the field `nombre`.
- * Example: { id: 1, nombre: "CREAR_PRODUCTO", descripcion: "...", rolId: 1 }
- *
- * We group by RECURSO (suffix after last underscore).
+ * Catálogo canónico y ordenado de permisos (sin "OTROS").
+ * - Solo se mostrará lo que esté aquí.
+ * - Si el backend trae permisos adicionales o con typos, no se verán.
  */
-const RESOURCE_GROUPS: { label: string; resource: string }[] = [
-  { label: 'Productos', resource: 'PRODUCTO' },
-  { label: 'Inventario', resource: 'INVENTARIO' },
-  { label: 'Ventas', resource: 'VENTA' },
-  { label: 'Proveedores', resource: 'PROVEEDOR' },
-  { label: 'Usuarios / Admin', resource: 'USUARIOS' }, // ajusta si en tu BD es USUARIO
-  { label: 'Reportes', resource: 'REPORTES' },
-  { label: 'Suscripciones', resource: 'SUSCRIPCIONES' },
+const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
+  { label: 'Dashboard', codes: ['VER_DASHBOARD'] },
+
+  {
+    label: 'Proveedores',
+    codes: [
+      'VER_PROVEEDORES',
+      'CREAR_PROVEEDOR',
+      'EDITAR_PROVEEDOR',
+      'ELIMINAR_PROVEEDOR',
+      'CAMBIAR_ESTADO_PROVEEDOR',
+    ],
+  },
+
+  {
+    label: 'Productos',
+    codes: ['VER_PRODUCTOS', 'CREAR_PRODUCTO', 'EDITAR_PRODUCTO', 'ELIMINAR_PRODUCTO'],
+  },
+
+  {
+    label: 'Ventas',
+    codes: ['VER_VENTAS', 'VER_MIS_VENTAS', 'CREAR_VENTA', 'ELIMINAR_VENTA', 'VER_DETALLE_VENTA'],
+  },
+
+  {
+    label: 'Inventario',
+    codes: ['VER_INVENTARIO', 'CREAR_INVENTARIO', 'ELIMINAR_INVENTARIO', 'VER_DETALLE_INVENTARIO'],
+  },
+
+  {
+    label: 'Usuarios',
+    codes: [
+      'VER_USUARIOS',
+      'CREAR_USUARIO',
+      'EDITAR_USUARIO',
+      'ELIMINAR_USUARIO',
+      'CAMBIAR_ESTADO_USUARIO',
+    ],
+  },
+
+  {
+    label: 'Suscripciones',
+    codes: [
+      'VER_SUSCRIPCIONES',
+      'CREAR_SUSCRIPCION',
+      'EDITAR_SUSCRIPCION',
+      'ELIMINAR_SUSCRIPCION',
+      'CAMBIAR_ESTADO_SUSCRIPCION',
+    ],
+  },
+
+  { label: 'Reportes', codes: ['VER_REPORTES'] },
+
+  { label: 'Permisos', codes: ['VER_PERMISOS'] },
 ];
 
 function getRoleBadgeClass(rol: string) {
@@ -45,12 +87,6 @@ function getRoleBadgeClass(rol: string) {
 
 function getPermCode(p: Permiso): string {
   return (p?.nombre ?? '').toString();
-}
-
-function getPermResource(code: string): string {
-  const parts = (code ?? '').split('_').filter(Boolean);
-  if (parts.length < 2) return 'OTROS';
-  return parts[parts.length - 1];
 }
 
 export function PermisosConfig() {
@@ -86,12 +122,11 @@ export function PermisosConfig() {
       setUsuarios(users);
       setPermisosCatalog(perms);
 
-      // expand all groups by default
+      // Expand all groups by default
       const expanded: Record<string, boolean> = {};
-      RESOURCE_GROUPS.forEach((g) => {
-        expanded[g.resource] = true;
+      PERMISSION_GROUPS.forEach((g) => {
+        expanded[g.label] = true;
       });
-      expanded.OTROS = true;
       setExpandedGroups(expanded);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
@@ -142,8 +177,8 @@ export function PermisosConfig() {
     }
   };
 
-  const toggleGroup = (resource: string) => {
-    setExpandedGroups((prev) => ({ ...prev, [resource]: !prev[resource] }));
+  const toggleGroup = (label: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
   const selectedUser = usuarios.find((u) => u.id === selectedUserId) ?? null;
@@ -160,7 +195,13 @@ export function PermisosConfig() {
   const groupedPermisos = useMemo(() => {
     const catalog = Array.isArray(permisosCatalog) ? permisosCatalog : [];
     const q = permSearch.trim().toLowerCase();
-    const knownResources = RESOURCE_GROUPS.map((g) => g.resource);
+
+    // Index permissions by code for fast lookup
+    const byCode = new Map<string, Permiso>();
+    for (const p of catalog) {
+      const code = getPermCode(p);
+      if (code) byCode.set(code, p);
+    }
 
     const matchesSearch = (p: Permiso) => {
       if (!q) return true;
@@ -169,25 +210,15 @@ export function PermisosConfig() {
       return code.includes(q) || desc.includes(q);
     };
 
-    const groups = [
-      ...RESOURCE_GROUPS.map((group) => {
-        const perms = catalog.filter((p) => {
-          const code = getPermCode(p);
-          const resource = getPermResource(code);
-          return resource === group.resource && matchesSearch(p);
-        });
-        return { label: group.label, resource: group.resource, perms };
-      }),
-      {
-        label: 'Otros',
-        resource: 'OTROS',
-        perms: catalog.filter((p) => {
-          const code = getPermCode(p);
-          const resource = getPermResource(code);
-          return !knownResources.includes(resource) && matchesSearch(p);
-        }),
-      },
-    ].filter((g) => g.perms.length > 0);
+    // Build groups strictly from PERMISSION_GROUPS (no "Otros")
+    const groups = PERMISSION_GROUPS.map((g) => {
+      const perms = g.codes
+        .map((code) => byCode.get(code))
+        .filter((p): p is Permiso => Boolean(p))
+        .filter(matchesSearch);
+
+      return { label: g.label, key: g.label, perms };
+    }).filter((g) => g.perms.length > 0);
 
     return groups;
   }, [permisosCatalog, permSearch]);
@@ -287,7 +318,11 @@ export function PermisosConfig() {
               </div>
 
               {selectedUser && (
-                <Button onClick={handleSave} disabled={saving || loadingPermisos} className="flex-shrink-0">
+                <Button
+                  onClick={handleSave}
+                  disabled={saving || loadingPermisos}
+                  className="flex-shrink-0"
+                >
                   <Save size={16} className="mr-2" />
                   {saving ? 'Guardando...' : 'Guardar'}
                 </Button>
@@ -349,9 +384,9 @@ export function PermisosConfig() {
                 )}
 
                 {groupedPermisos.map((group) => (
-                  <div key={group.resource} className="border rounded-lg overflow-hidden">
+                  <div key={group.key} className="border rounded-lg overflow-hidden">
                     <button
-                      onClick={() => toggleGroup(group.resource)}
+                      onClick={() => toggleGroup(group.key)}
                       className="w-full flex items-center justify-between px-4 py-3 bg-muted/50 hover:bg-muted transition-colors font-medium text-sm"
                     >
                       <span>{group.label}</span>
@@ -361,7 +396,7 @@ export function PermisosConfig() {
                           {group.perms.filter((p) => userPermisos.includes(getPermCode(p))).length}/
                           {group.perms.length}
                         </span>
-                        {expandedGroups[group.resource] ? (
+                        {expandedGroups[group.key] ? (
                           <ChevronUp size={16} />
                         ) : (
                           <ChevronDown size={16} />
@@ -369,7 +404,7 @@ export function PermisosConfig() {
                       </div>
                     </button>
 
-                    {expandedGroups[group.resource] && (
+                    {expandedGroups[group.key] && (
                       <div className="divide-y">
                         {group.perms.map((perm) => {
                           const code = getPermCode(perm);
