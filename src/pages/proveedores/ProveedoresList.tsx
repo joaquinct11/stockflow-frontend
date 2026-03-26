@@ -11,12 +11,13 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Trash2, Edit, Search, Building2, User, Phone, Mail, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Trash2, Edit, Search, Building2, User, Phone, Mail, CheckCircle, XCircle, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
 export function ProveedoresList() {
-  const { canCreate, canEdit, canDelete, canActive } = usePermissions();
+  const { canCreate, canEdit, canDelete, canActive, canView } = usePermissions();
+  const hasViewPermission = canView('PROVEEDORES');
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -48,8 +49,12 @@ export function ProveedoresList() {
   });
 
   useEffect(() => {
-    fetchProveedores();
-  }, []);
+    if (hasViewPermission) {
+      fetchProveedores();
+    } else {
+      setLoading(false);
+    }
+  }, [hasViewPermission]);
 
   // ✅ NUEVO - Resetear página al buscar
   useEffect(() => {
@@ -215,60 +220,69 @@ export function ProveedoresList() {
         )}
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Proveedores</CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalProveedores}</div>
-          </CardContent>
-        </Card>
+      {/* When user cannot list providers, show informational empty state */}
+      {!hasViewPermission ? (
+        <EmptyState
+          icon={Lock}
+          title="Sin acceso al listado"
+          description="No tienes permisos para ver el listado de proveedores. Puedes registrar nuevos proveedores con el botón de arriba."
+        />
+      ) : (
+        <>
+          {/* Stats */}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Proveedores</CardTitle>
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalProveedores}</div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Activos</CardTitle>
-            <Building2 className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{proveedoresActivos}</div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Activos</CardTitle>
+                <Building2 className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{proveedoresActivos}</div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
-            <Building2 className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{proveedoresInactivos}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nombre, RUC o contacto..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
+                <Building2 className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">{proveedoresInactivos}</div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Proveedores</CardTitle>
-          <CardDescription>{filteredProveedores.length} proveedor(es) encontrado(s)</CardDescription>
-        </CardHeader>
+          {/* Search */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nombre, RUC o contacto..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Lista de Proveedores</CardTitle>
+              <CardDescription>{filteredProveedores.length} proveedor(es) encontrado(s)</CardDescription>
+            </CardHeader>
         <CardContent>
           {filteredProveedores.length === 0 ? (
             <EmptyState title="No hay proveedores" description="Comienza registrando tu primer proveedor" />
@@ -369,7 +383,9 @@ export function ProveedoresList() {
             </>
           )}
         </CardContent>
-      </Card>
+          </Card>
+        </>
+      )}
 
       {/* Dialog para crear/editar */}
       <Dialog
