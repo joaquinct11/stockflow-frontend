@@ -1,6 +1,6 @@
 import { useAuthStore } from '../store/authStore';
 
-type Permission = 'crear'| 'activar' | 'editar' | 'eliminar' | 'ver' | 'ver_todas' | 'ver_propias' | 'ver_global' | 'ver_personal';
+type Permission = 'crear'| 'activar' | 'cambiarEstado' | 'editar' | 'eliminar' | 'ver' | 'ver_todas' | 'ver_propias' | 'ver_global' | 'ver_personal';
 
 export type Module = 
   | 'DASHBOARD'
@@ -21,6 +21,7 @@ const PERMISSION_CODE_MAP: Record<Permission, string> = {
   editar: 'EDITAR',
   eliminar: 'ELIMINAR',
   activar: 'ACTIVAR',
+  cambiarEstado: 'CAMBIAR_ESTADO',
   ver: 'VER',
   ver_todas: 'VER',
   ver_propias: 'VER',
@@ -46,7 +47,6 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
     crear: 'CREAR_PRODUCTO',
     editar: 'EDITAR_PRODUCTO',
     eliminar: 'ELIMINAR_PRODUCTO',
-    activar: 'ACTIVAR_PRODUCTO',
   },
   PROVEEDORES: {
     ver: 'VER_PROVEEDORES',
@@ -54,14 +54,13 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
     crear: 'CREAR_PROVEEDOR',
     editar: 'EDITAR_PROVEEDOR',
     eliminar: 'ELIMINAR_PROVEEDOR',
-    activar: 'ACTIVAR_PROVEEDOR',
+    cambiarEstado: 'CAMBIAR_ESTADO_PROVEEDOR',
   },
   INVENTARIO: {
     ver: 'VER_INVENTARIO',
     ver_todas: 'VER_INVENTARIO',
-    crear: 'CREAR_MOVIMIENTO',
-    editar: 'EDITAR_MOVIMIENTO',
-    eliminar: 'ELIMINAR_MOVIMIENTO',
+    crear: 'CREAR_INVENTARIO',
+    eliminar: 'ELIMINAR_INVENTARIO',
   },
   USUARIOS: {
     ver: 'VER_USUARIOS',
@@ -69,13 +68,15 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
     crear: 'CREAR_USUARIO',
     editar: 'EDITAR_USUARIO',
     eliminar: 'ELIMINAR_USUARIO',
-    activar: 'ACTIVAR_USUARIO',
+    cambiarEstado: 'CAMBIAR_ESTADO_USUARIO',
   },
   SUSCRIPCIONES: {
     ver: 'VER_SUSCRIPCIONES',
     ver_todas: 'VER_SUSCRIPCIONES',
-    activar: 'ACTIVAR_SUSCRIPCION',
+    crear: 'CREAR_SUSCRIPCION',
+    editar: 'EDITAR_SUSCRIPCION',
     eliminar: 'ELIMINAR_SUSCRIPCION',
+    cambiarEstado: 'CAMBIAR_ESTADO_SUSCRIPCION',
   },
 };
 
@@ -176,7 +177,10 @@ export function usePermissions() {
   const canEdit = (module: Module) => hasPermission(module, 'editar');
   const canDelete = (module: Module) => hasPermission(module, 'eliminar');
   const canActive = (module: Module) => hasPermission(module, 'activar');
+  const canToggleState = (module: Module) => hasPermission(module, 'cambiarEstado');
   const canView = (module: Module) => hasPermission(module, 'ver');
+  /** Alias for canView — explicitly gates listing operations behind VER_ permissions per Policy A. */
+  const canList = (module: Module) => canView(module);
   const canViewAll = (module: Module) => hasPermission(module, 'ver_todas');
   const canViewOwn = (module: Module) => hasPermission(module, 'ver_propias');
   const canViewGlobal = (module: Module) => hasPermission(module, 'ver_global');
@@ -193,7 +197,7 @@ export function usePermissions() {
    * Returns true if the user can access the module at all —
    * i.e. they are admin OR have at least one relevant permission for the module.
    * Used for sidebar visibility and route guards so that any relevant permission
-   * (VER_*, CREAR_*, EDITAR_*, ELIMINAR_*, ACTIVAR_*) grants entry to the module.
+   * (VER_*, CREAR_*, EDITAR_*, ELIMINAR_*, CAMBIAR_ESTADO_*) grants entry to the module.
    */
   const canAccess = (module: Module): boolean => {
     if (isAdmin) return true;
@@ -204,7 +208,8 @@ export function usePermissions() {
       canCreate(module) ||
       canEdit(module) ||
       canDelete(module) ||
-      canActive(module)
+      canActive(module) ||
+      canToggleState(module)
     );
   };
 
@@ -221,6 +226,8 @@ export function usePermissions() {
     canEdit,
     canDelete,
     canActive,
+    canToggleState,
+    canList,
     canView,
     canViewAll,
     canViewOwn,

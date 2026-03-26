@@ -21,7 +21,7 @@ type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 export function UsuariosList() {
   const tenantId = useAuthStore((s) => s.user?.tenantId);
   const currentUserRole = (useAuthStore((s) => s.user?.rol) || 'VENDEDOR') as Role;
-  const { canCreate, canEdit, canDelete, canView } = usePermissions();
+  const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
   const hasViewPermission = canView('USUARIOS');
 
   // ✅ HARD-CODEADO: Opciones según el rol del logueado
@@ -404,7 +404,7 @@ export function UsuariosList() {
                               </Button>
                             )}
 
-                            {canEdit('USUARIOS') && (
+                            {canToggleState('USUARIOS') && (
                               usuario.activo ? (
                                 <Button
                                   variant="ghost"
