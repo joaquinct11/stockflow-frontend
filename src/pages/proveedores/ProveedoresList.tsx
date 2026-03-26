@@ -16,7 +16,7 @@ import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
 export function ProveedoresList() {
-  const { canCreate, canEdit, canDelete, canActive, canView } = usePermissions();
+  const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
   const hasViewPermission = canView('PROVEEDORES');
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -321,7 +321,7 @@ export function ProveedoresList() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {canActive('PROVEEDORES') && (
+                            {canToggleState('PROVEEDORES') && (
                               proveedor.activo ? (
                                 <Button
                                   variant="ghost"
