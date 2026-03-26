@@ -15,14 +15,15 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
-import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye } from 'lucide-react';
+import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
 
 export function InventarioList() {
   const { userId } = useCurrentUser();
-  const { canCreate, canDelete } = usePermissions();
+  const { canCreate, canDelete, canView } = usePermissions();
+  const hasViewPermission = canView('INVENTARIO');
   const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
@@ -106,13 +107,37 @@ export function InventarioList() {
   }, [userId]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (hasViewPermission) {
+      fetchData();
+    } else if (canCreate('INVENTARIO')) {
+      fetchFormData();
+      setLoading(false);
+    } else {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasViewPermission]);
 
   // ✅ NUEVO - Resetear página al buscar
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  const fetchFormData = async () => {
+    try {
+      const [productosData, unidadesData, proveedoresData] = await Promise.all([
+        productoService.getAll(),
+        unidadMedidaService.getAll(),
+        proveedorService.getAll(),
+      ]);
+      setProductos(productosData);
+      setProveedores(proveedoresData);
+      setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
+    } catch (error) {
+      toast.error('Error al cargar datos del formulario');
+      console.error(error);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -342,6 +367,15 @@ export function InventarioList() {
         )}
       </div>
 
+      {/* When user cannot list movements, show informational empty state */}
+      {!hasViewPermission ? (
+        <EmptyState
+          icon={Lock}
+          title="Sin acceso al listado"
+          description="No tienes permisos para ver el listado de movimientos. Puedes registrar nuevos movimientos con el botón de arriba."
+        />
+      ) : (
+        <>
       {/* Stats */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
@@ -527,6 +561,8 @@ export function InventarioList() {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
 
       {/* Dialog para crear movimiento */}
       <Dialog

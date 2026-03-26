@@ -12,13 +12,14 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, DollarSign } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, DollarSign, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 
 export function ProductosList() {
-  const { canCreate, canEdit, canDelete } = usePermissions();
+  const { canCreate, canEdit, canDelete, canView } = usePermissions();
+  const hasViewPermission = canView('PRODUCTOS');
   const { user } = useAuthStore();
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
@@ -57,12 +58,37 @@ export function ProductosList() {
 
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (hasViewPermission) {
+      fetchData();
+    } else if (canCreate('PRODUCTOS')) {
+      fetchUnidades();
+      setLoading(false);
+    } else {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasViewPermission]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  const fetchUnidades = async () => {
+    try {
+      setLoadingUnidades(true);
+      const unidades = await unidadMedidaService.getAll();
+      const unidadesActivas = unidades.filter((u) => u.activo !== false);
+      setUnidadesMedida(unidadesActivas);
+      if (!formData.unidadMedidaId && unidadesActivas.length > 0) {
+        setFormData((prev) => ({ ...prev, unidadMedidaId: unidadesActivas[0].id }));
+      }
+    } catch (error) {
+      toast.error('Error al cargar unidades de medida');
+      console.error(error);
+    } finally {
+      setLoadingUnidades(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -216,6 +242,15 @@ export function ProductosList() {
         )}
       </div>
 
+      {/* When user cannot list products, show informational empty state */}
+      {!hasViewPermission ? (
+        <EmptyState
+          icon={Lock}
+          title="Sin acceso al listado"
+          description="No tienes permisos para ver el listado de productos. Puedes registrar nuevos productos con el botón de arriba."
+        />
+      ) : (
+        <>
       {/* Stats */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -391,6 +426,8 @@ export function ProductosList() {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
 
       {/* Dialog */}
       <Dialog

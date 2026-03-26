@@ -28,7 +28,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuthStore();
-  const { isAdmin, isGerente, isVendedor, isGestorInventario, canView, canCreate, canViewOwn, canAccess } = usePermissions();
+  const { canAccess, isAdmin } = usePermissions();
 
   const menuItems = [
     {
@@ -41,43 +41,43 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Proveedores',
       href: '/proveedores',
       icon: Building2,
-      show: isAdmin || isGerente || isGestorInventario || canView('PROVEEDORES') || canCreate('PROVEEDORES'),
+      show: canAccess('PROVEEDORES'),
     },
     {
       title: 'Productos',
       href: '/productos',
       icon: Package,
-      show: isAdmin || isGerente || isVendedor || isGestorInventario || canView('PRODUCTOS') || canCreate('PRODUCTOS'),
+      show: canAccess('PRODUCTOS'),
     },
     {
       title: 'Ventas',
       href: '/ventas',
       icon: ShoppingCart,
-      show: isAdmin || isGerente || isVendedor || canView('VENTAS') || canViewOwn('VENTAS') || canCreate('VENTAS'),
+      show: canAccess('VENTAS'),
     },
     {
       title: 'Inventario',
       href: '/inventario',
       icon: PackageOpen,
-      show: isAdmin || isGerente || isGestorInventario || canView('INVENTARIO') || canCreate('INVENTARIO'),
+      show: canAccess('INVENTARIO'),
     },
     {
       title: 'Usuarios',
       href: '/usuarios',
       icon: Users,
-      show: isAdmin || isGerente || canView('USUARIOS'),
+      show: canAccess('USUARIOS'),
     },
     {
       title: 'Suscripciones',
       href: '/suscripciones',
       icon: CreditCard,
-      show: isAdmin || canView('SUSCRIPCIONES'),
+      show: canAccess('SUSCRIPCIONES'),
     },
     {
       title: 'Reportes',
       href: '/reportes',
       icon: BarChart3,
-      show: isAdmin || isGerente || canAccess('REPORTES'),
+      show: canAccess('REPORTES'),
     },
     {
       title: 'Gestión de Permisos',
