@@ -15,7 +15,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
-import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye, Subtitles } from 'lucide-react';
+import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
