@@ -19,6 +19,8 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 
+const IGV_RATE = 0.18;
+
 export function VentasList() {
   const { userId } = useCurrentUser();
   const { user } = useAuthStore();
@@ -88,15 +90,30 @@ export function VentasList() {
     setCurrentPage(1);
   }, [searchTerm, fechaDesde, fechaHasta]);
 
+  const calculateSubtotal = () => {
+    return formData.detalles.reduce((total, detalle) => {
+      return total + detalle.cantidad * detalle.precioUnitario;
+    }, 0);
+  };
+
+  const calculateIGV = () => {
+    return calculateSubtotal() * IGV_RATE;
+  };
+
+  const calculateTotalWithIGV = () => {
+    return calculateSubtotal() + calculateIGV();
+  };
+
   useEffect(() => {
     if (formData.metodoPago === 'EFECTIVO') {
-      const total = calculateTotal();
+      const total = calculateTotalWithIGV();
       const cambio = montoRecibido - total;
       setVuelto(cambio >= 0 ? cambio : 0);
     } else {
       setMontoRecibido(0);
       setVuelto(0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [montoRecibido, formData.detalles, formData.metodoPago]);
 
   const fetchData = async () => {
@@ -116,14 +133,10 @@ export function VentasList() {
         return Promise.resolve([] as typeof ventas);
       })();
 
-      const productosPromise = hasViewPermission || canCreate('VENTAS')
-        ? productoService.getAll()
-        : Promise.resolve([] as ProductoDTO[]);
+      const productosPromise =
+        hasViewPermission || canCreate('VENTAS') ? productoService.getAll() : Promise.resolve([] as ProductoDTO[]);
 
-      const [ventasData, productosData] = await Promise.all([
-        ventasPromise,
-        productosPromise,
-      ]);
+      const [ventasData, productosData] = await Promise.all([ventasPromise, productosPromise]);
 
       console.log('📦 Ventas recibidas:', ventasData);
       console.log('📅 Primera venta createdAt:', ventasData[0]?.createdAt);
@@ -159,16 +172,12 @@ export function VentasList() {
     });
   };
 
-  const handleDetalleChange = (
-    index: number,
-    field: keyof DetalleVentaDTO,
-    value: any
-  ) => {
+  const handleDetalleChange = (index: number, field: keyof DetalleVentaDTO, value: any) => {
     const newDetalles = [...formData.detalles];
     newDetalles[index] = { ...newDetalles[index], [field]: value };
 
     if (field === 'productoId') {
-      const producto = productos.find(p => p.id === parseInt(value));
+      const producto = productos.find((p) => p.id === parseInt(value));
       if (producto) {
         newDetalles[index].precioUnitario = producto.precioVenta;
       }
@@ -188,12 +197,6 @@ export function VentasList() {
     });
   };
 
-  const calculateTotal = () => {
-    return formData.detalles.reduce((total, detalle) => {
-      return total + (detalle.cantidad * detalle.precioUnitario);
-    }, 0);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -202,11 +205,13 @@ export function VentasList() {
       return;
     }
 
-    // ✅ NUEVO - Validar monto recibido en efectivo
+    // ✅ Validar monto recibido en efectivo (con IGV)
     if (formData.metodoPago === 'EFECTIVO') {
-      const total = calculateTotal();
+      const total = calculateTotalWithIGV();
       if (montoRecibido < total) {
-        toast.error(`El monto recibido (S/.${montoRecibido.toFixed(2)}) es menor al total (S/.${total.toFixed(2)})`);
+        toast.error(
+          `El monto recibido (S/.${montoRecibido.toFixed(2)}) es menor al total (S/.${total.toFixed(2)})`
+        );
         return;
       }
     }
@@ -214,13 +219,14 @@ export function VentasList() {
     try {
       const ventaToSend = {
         ...formData,
-        total: calculateTotal(),
+        // total FINAL con IGV
+        total: calculateTotalWithIGV(),
       };
 
       await ventaService.create(ventaToSend);
       toast.success('Venta creada exitosamente');
 
-      // ✅ NUEVO - Mostrar vuelto si es efectivo
+      // ✅ Mostrar vuelto si es efectivo
       if (formData.metodoPago === 'EFECTIVO' && vuelto > 0) {
         toast.success(`Vuelto: S/.${vuelto.toFixed(2)}`, { duration: 5000 });
       }
@@ -283,7 +289,7 @@ export function VentasList() {
     setFechaHasta('');
   };
 
-  const filteredVentas = ventas.filter(v => {
+  const filteredVentas = ventas.filter((v) => {
     const matchesSearch =
       v.metodoPago?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.estado?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -295,23 +301,17 @@ export function VentasList() {
       const fechaVenta = v.createdAt ? new Date(v.createdAt) : null;
       if (!fechaVenta) return false;
 
-      const ventaDate = new Date(
-        fechaVenta.getFullYear(),
-        fechaVenta.getMonth(),
-        fechaVenta.getDate()
-      );
+      const ventaDate = new Date(fechaVenta.getFullYear(), fechaVenta.getMonth(), fechaVenta.getDate());
 
       if (fechaDesde) {
         const [year, month, day] = fechaDesde.split('-').map(Number);
         const desdeNormalized = new Date(year, month - 1, day);
-
         if (ventaDate < desdeNormalized) return false;
       }
 
       if (fechaHasta) {
         const [year, month, day] = fechaHasta.split('-').map(Number);
         const hastaNormalized = new Date(year, month - 1, day);
-
         if (ventaDate > hastaNormalized) return false;
       }
     }
@@ -325,10 +325,15 @@ export function VentasList() {
   const currentVentas = filteredVentas.slice(startIndex, endIndex);
 
   const totalVentas = ventas.length;
+
+  // Total ingresos: tu backend ya guarda `total` (ahora con IGV), así que sumamos directo.
   const totalIngresos = ventas.reduce((sum, v) => sum + v.total, 0);
-  const ventasCompletadas = ventas.filter(v => v.estado === 'COMPLETADA').length;
-  // const ventasPendientes = ventas.filter(v => v.estado === 'PENDIENTE').length;
-  const totalProductosVendidos = ventas.reduce((sum, v) => sum + v.detalles.reduce((sum2, d) => sum2 + d.cantidad, 0), 0);
+
+  const ventasCompletadas = ventas.filter((v) => v.estado === 'COMPLETADA').length;
+  const totalProductosVendidos = ventas.reduce(
+    (sum, v) => sum + v.detalles.reduce((sum2, d) => sum2 + d.cantidad, 0),
+    0
+  );
 
   if (loading) {
     return <LoadingSpinner />;
@@ -350,9 +355,7 @@ export function VentasList() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Ventas</h1>
-          <p className="text-muted-foreground">
-            Gestiona las ventas y transacciones
-          </p>
+          <p className="text-muted-foreground">Gestiona las ventas y transacciones</p>
         </div>
         {canCreate('VENTAS') && (
           <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
@@ -479,21 +482,13 @@ export function VentasList() {
       <Card>
         <CardHeader>
           <CardTitle>Lista de Ventas</CardTitle>
-          <CardDescription>
-            {filteredVentas.length} venta(s) encontrada(s)
-          </CardDescription>
+          <CardDescription>{filteredVentas.length} venta(s) encontrada(s)</CardDescription>
         </CardHeader>
         <CardContent>
           {!canViewAll('VENTAS') && !canViewOwn('VENTAS') ? (
-            <EmptyState
-              title="Sin permisos"
-              description="No tienes permisos para ver ventas"
-            />
+            <EmptyState title="Sin permisos" description="No tienes permisos para ver ventas" />
           ) : filteredVentas.length === 0 ? (
-            <EmptyState
-              title="No hay ventas"
-              description="Comienza registrando tu primera venta"
-            />
+            <EmptyState title="No hay ventas" description="Comienza registrando tu primera venta" />
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -517,7 +512,12 @@ export function VentasList() {
                             {venta.createdAt ? new Date(venta.createdAt).toLocaleDateString('es-PE') : '-'}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {venta.createdAt ? new Date(venta.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : ''}
+                            {venta.createdAt
+                              ? new Date(venta.createdAt).toLocaleTimeString('es-PE', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : ''}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -538,8 +538,8 @@ export function VentasList() {
                               venta.estado === 'COMPLETADA'
                                 ? 'success'
                                 : venta.estado === 'PENDIENTE'
-                                ? 'warning'
-                                : 'destructive'
+                                  ? 'warning'
+                                  : 'destructive'
                             }
                           >
                             {venta.estado}
@@ -627,7 +627,7 @@ export function VentasList() {
             </div>
           </div>
 
-          {/* ✅ NUEVO - Sección de Efectivo */}
+          {/* ✅ Sección de Efectivo */}
           {formData.metodoPago === 'EFECTIVO' && formData.detalles.length > 0 && (
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3">
               <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
@@ -637,12 +637,10 @@ export function VentasList() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Total a Pagar
-                  </label>
+                  <label className="text-sm font-medium">Total a Pagar (incl. IGV)</label>
                   <div className="h-10 rounded-md border-2 border-blue-300 dark:border-blue-700 bg-blue-100 dark:bg-blue-900 px-3 py-2 flex items-center justify-between font-bold text-blue-900 dark:text-blue-100">
                     <span>S/.</span>
-                    <span>{calculateTotal().toFixed(2)}</span>
+                    <span>{calculateTotalWithIGV().toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -665,20 +663,20 @@ export function VentasList() {
               </div>
 
               {montoRecibido > 0 && (
-                <div className={`rounded-lg p-3 border-2 ${
-                  vuelto >= 0
-                    ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800'
-                    : 'bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800'
-                }`}>
+                <div
+                  className={`rounded-lg p-3 border-2 ${
+                    vuelto >= 0
+                      ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800'
+                  }`}
+                >
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold text-sm">
-                      {vuelto >= 0 ? 'Vuelto:' : 'Falta:'}
-                    </span>
-                    <span className={`text-2xl font-bold ${
-                      vuelto >= 0
-                        ? 'text-green-700 dark:text-green-300'
-                        : 'text-red-700 dark:text-red-300'
-                    }`}>
+                    <span className="font-semibold text-sm">{vuelto >= 0 ? 'Vuelto:' : 'Falta:'}</span>
+                    <span
+                      className={`text-2xl font-bold ${
+                        vuelto >= 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                      }`}
+                    >
                       S/.{Math.abs(vuelto).toFixed(2)}
                     </span>
                   </div>
@@ -696,12 +694,7 @@ export function VentasList() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold">Productos</h3>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddDetalle}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={handleAddDetalle}>
                 <Plus className="h-4 w-4 mr-2" />
                 Agregar Producto
               </Button>
@@ -711,12 +704,12 @@ export function VentasList() {
               <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                 <ShoppingCart className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>No hay productos agregados</p>
-                <p className="text-sm">Click en "Agregar Producto" para comenzar</p>
+                <p className="text-sm">Click en &quot;Agregar Producto&quot; para comenzar</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {formData.detalles.map((detalle, index) => {
-                  const productoSeleccionado = productos.find(p => p.id === parseInt(String(detalle.productoId)));
+                  const productoSeleccionado = productos.find((p) => p.id === parseInt(String(detalle.productoId)));
                   const subtotal = detalle.cantidad * detalle.precioUnitario;
 
                   return (
@@ -756,7 +749,8 @@ export function VentasList() {
                             value={productoSeleccionado?.stockActual || 0}
                             disabled
                             className={`h-10 font-bold text-center ${
-                              productoSeleccionado && productoSeleccionado.stockActual! <= productoSeleccionado.stockMinimo!
+                              productoSeleccionado &&
+                              productoSeleccionado.stockActual! <= productoSeleccionado.stockMinimo!
                                 ? 'bg-red-50 border-red-300 text-destructive'
                                 : 'bg-green-50 border-green-300 text-green-600'
                             }`}
@@ -822,10 +816,21 @@ export function VentasList() {
             )}
           </div>
 
-          <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
-            <div className="flex justify-between items-center">
+          {/* Resumen con IGV */}
+          <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 space-y-2">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground font-medium">Subtotal:</span>
+              <span className="font-semibold">S/.{calculateSubtotal().toFixed(2)}</span>
+            </div>
+
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground font-medium">IGV (18%):</span>
+              <span className="font-semibold">S/.{calculateIGV().toFixed(2)}</span>
+            </div>
+
+            <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
               <span className="text-lg font-semibold">Total:</span>
-              <span className="text-2xl font-bold text-primary">S/.{calculateTotal().toFixed(2)}</span>
+              <span className="text-2xl font-bold text-primary">S/.{calculateTotalWithIGV().toFixed(2)}</span>
             </div>
           </div>
 
@@ -837,7 +842,7 @@ export function VentasList() {
               type="submit"
               disabled={
                 formData.detalles.length === 0 ||
-                (formData.metodoPago === 'EFECTIVO' && montoRecibido < calculateTotal())
+                (formData.metodoPago === 'EFECTIVO' && montoRecibido < calculateTotalWithIGV())
               }
             >
               Crear Venta
@@ -868,8 +873,8 @@ export function VentasList() {
                     selectedVenta.estado === 'COMPLETADA'
                       ? 'success'
                       : selectedVenta.estado === 'PENDIENTE'
-                      ? 'warning'
-                      : 'destructive'
+                        ? 'warning'
+                        : 'destructive'
                   }
                   className="w-fit"
                 >
@@ -894,9 +899,7 @@ export function VentasList() {
                 </TableHeader>
                 <TableBody>
                   {selectedVenta.detalles.map((detalle, index) => {
-                    const productoInfo = productos.find(
-                      (p) => p.id === detalle.productoId
-                    );
+                    const productoInfo = productos.find((p) => p.id === detalle.productoId);
                     const subtotal = detalle.cantidad * detalle.precioUnitario;
 
                     return (
@@ -906,9 +909,7 @@ export function VentasList() {
                         </TableCell>
                         <TableCell className="text-center">{detalle.cantidad}</TableCell>
                         <TableCell className="text-right">S/.{detalle.precioUnitario.toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-semibold text-primary">
-                          S/.{subtotal.toFixed(2)}
-                        </TableCell>
+                        <TableCell className="text-right font-semibold text-primary">S/.{subtotal.toFixed(2)}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -917,22 +918,13 @@ export function VentasList() {
             </div>
 
             <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-2">
-              {/* <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground font-medium">Cantidad de productos:</span>
-                <span className="font-bold">{selectedVenta.detalles.length}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground font-medium">Total de unidades:</span>
-                <span className="font-bold">
-                  {selectedVenta.detalles.reduce((sum, d) => sum + d.cantidad, 0)}
-                </span>
-              </div> */}
               <div className="border-primary/20 pt-2 flex justify-between items-center">
                 <span className="font-semibold">Total Venta:</span>
-                <span className="text-2xl font-bold text-primary">
-                  S/.{selectedVenta.total.toFixed(2)}
-                </span>
+                <span className="text-2xl font-bold text-primary">S/.{selectedVenta.total.toFixed(2)}</span>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Nota: el total mostrado corresponde al valor guardado en la venta (incl. IGV si así se registró).
+              </p>
             </div>
 
             <Button onClick={closeDetailDialog} className="w-full">
