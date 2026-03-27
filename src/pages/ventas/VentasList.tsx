@@ -906,90 +906,125 @@ export function VentasList() {
         description={selectedVenta ? `Venta #${selectedVenta.id} - ${selectedVenta.estado}` : ''}
         size="lg"
       >
-        {selectedVenta && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1 p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground font-medium">Método de Pago</p>
-                <p className="font-semibold text-sm">{selectedVenta.metodoPago}</p>
-              </div>
-              <div className="space-y-1 p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground font-medium">Estado</p>
-                <Badge
-                  variant={
-                    selectedVenta.estado === 'COMPLETADA'
-                      ? 'success'
-                      : selectedVenta.estado === 'PENDIENTE'
-                        ? 'warning'
-                        : 'destructive'
-                  }
-                  className="w-fit"
-                >
-                  {selectedVenta.estado}
-                </Badge>
-              </div>
-              <div className="space-y-1 p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground font-medium">Vendedor</p>
-                <p className="font-semibold text-sm">{selectedVenta.vendedorNombre || 'Sin nombre'}</p>
-              </div>
-            </div>
+        {selectedVenta &&
+          (() => {
+            const subtotalVenta = selectedVenta.detalles.reduce(
+              (acc, d) => acc + d.cantidad * d.precioUnitario,
+              0,
+            );
+            const igvVenta = subtotalVenta * IGV_RATE;
+            const totalCalculado = subtotalVenta + igvVenta;
 
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted">
-                    <TableHead>Producto</TableHead>
-                    <TableHead className="text-center">Cantidad</TableHead>
-                    <TableHead className="text-right">Precio Unit.</TableHead>
-                    <TableHead className="text-right">Subtotal</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedVenta.detalles.map((detalle, index) => {
-                    const productoInfo = productos.find((p) => p.id === detalle.productoId);
-                    const subtotal = detalle.cantidad * detalle.precioUnitario;
+            return (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1 p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground font-medium">Método de Pago</p>
+                    <p className="font-semibold text-sm">{selectedVenta.metodoPago}</p>
+                  </div>
 
-                    return (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {detalle.productoNombre || productoInfo?.nombre || `Producto #${detalle.productoId}`}
-                        </TableCell>
-                        <TableCell className="text-center">{detalle.cantidad}</TableCell>
-                        <TableCell className="text-right">S/.{detalle.precioUnitario.toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-semibold text-primary">S/.{subtotal.toFixed(2)}</TableCell>
+                  <div className="space-y-1 p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground font-medium">Estado</p>
+                    <Badge
+                      variant={
+                        selectedVenta.estado === 'COMPLETADA'
+                          ? 'success'
+                          : selectedVenta.estado === 'PENDIENTE'
+                            ? 'warning'
+                            : 'destructive'
+                      }
+                      className="w-fit"
+                    >
+                      {selectedVenta.estado}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1 p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground font-medium">Vendedor</p>
+                    <p className="font-semibold text-sm">{selectedVenta.vendedorNombre || 'Sin nombre'}</p>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted">
+                        <TableHead>Producto</TableHead>
+                        <TableHead className="text-center">Cantidad</TableHead>
+                        <TableHead className="text-right">Precio Unit.</TableHead>
+                        <TableHead className="text-right">Subtotal</TableHead>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                    </TableHeader>
 
-            <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-2">
-              <div className="border-primary/20 pt-2 flex justify-between items-center">
-                <span className="font-semibold">Total Venta:</span>
-                <span className="text-2xl font-bold text-primary">S/.{selectedVenta.total.toFixed(2)}</span>
+                    <TableBody>
+                      {selectedVenta.detalles.map((detalle, index) => {
+                        const productoInfo = productos.find((p) => p.id === detalle.productoId);
+                        const subtotalLinea = detalle.cantidad * detalle.precioUnitario;
+
+                        return (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">
+                              {detalle.productoNombre || productoInfo?.nombre || `Producto #${detalle.productoId}`}
+                            </TableCell>
+                            <TableCell className="text-center">{detalle.cantidad}</TableCell>
+                            <TableCell className="text-right">S/.{detalle.precioUnitario.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-semibold text-primary">
+                              S/.{subtotalLinea.toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* ✅ Resumen: Subtotal + IGV + Total */}
+                <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground font-medium">Subtotal:</span>
+                    <span className="font-semibold">S/.{subtotalVenta.toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground font-medium">IGV (18%):</span>
+                    <span className="font-semibold">S/.{igvVenta.toFixed(2)}</span>
+                  </div>
+
+                  <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
+                    <span className="text-lg font-semibold">Total:</span>
+
+                    {/* Usa el total guardado en la venta como fuente de verdad */}
+                    <span className="text-2xl font-bold text-primary">S/.{selectedVenta.total.toFixed(2)}</span>
+
+                    {/* Si prefieres el calculado, reemplaza por:
+                        <span className="text-2xl font-bold text-primary">S/.{totalCalculado.toFixed(2)}</span>
+                    */}
+                  </div>
+
+                  {Math.abs(selectedVenta.total - totalCalculado) > 0.01 && (
+                    <p className="text-xs text-muted-foreground">
+                      Nota: total guardado S/.{selectedVenta.total.toFixed(2)} (calculado S/.{totalCalculado.toFixed(2)}).
+                    </p>
+                  )}
+                </div>
+
+                {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (
+                  <Button
+                    variant="outline"
+                    className="w-full flex items-center gap-2"
+                    onClick={() => handleOpenEmitirComprobante(selectedVenta)}
+                  >
+                    <FileText size={16} />
+                    Emitir Comprobante
+                  </Button>
+                )}
+
+                <Button onClick={closeDetailDialog} className="w-full">
+                  Cerrar
+                </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Nota: el total mostrado corresponde al valor guardado en la venta (incl. IGV si así se registró).
-              </p>
-            </div>
-
-            {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (
-              <Button
-                variant="outline"
-                className="w-full flex items-center gap-2"
-                onClick={() => handleOpenEmitirComprobante(selectedVenta)}
-              >
-                <FileText size={16} />
-                Emitir Comprobante
-              </Button>
-            )}
-
-            <Button onClick={closeDetailDialog} className="w-full">
-              Cerrar
-            </Button>
-          </div>
-        )}
+            );
+          })()}
       </Dialog>
 
       {/* Confirm Dialog */}
