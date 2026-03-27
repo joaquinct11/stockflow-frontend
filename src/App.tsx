@@ -28,6 +28,7 @@ import { ProveedoresList } from './pages/proveedores/ProveedoresList';
 import { AccountSettings } from './pages/settings/AccountSettings';
 import { UserProfile } from './pages/settings/UserProfile';
 import { PermisosConfig } from './pages/admin/PermisosConfig';
+import { ComprobantesPage } from './pages/facturacion/ComprobantesPage';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -151,6 +152,16 @@ function App() {
                     <h2 className="text-2xl font-bold">Módulo de Reportes</h2>
                     <p className="text-muted-foreground">Próximamente...</p>
                   </div>
+                </RoleProtectedRoute>
+              }
+            />
+
+            {/* Facturación */}
+            <Route
+              path="facturacion"
+              element={
+                <RoleProtectedRoute module="FACTURACION">
+                  <ComprobantesPage />
                 </RoleProtectedRoute>
               }
             />

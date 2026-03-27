@@ -233,6 +233,41 @@ export interface UnidadMedidaDTO {
 }
 
 // ========================================
+// FACTURACIÓN
+// ========================================
+
+export type TipoComprobante = 'BOLETA' | 'FACTURA';
+export type EstadoComprobante = 'EMITIDO' | 'ANULADO' | 'PENDIENTE';
+
+export interface ReceptorDTO {
+  tipoDocumento?: 'DNI' | 'RUC';
+  numeroDocumento?: string;
+  razonSocial?: string;
+  direccion?: string;
+}
+
+export interface ComprobanteDTO {
+  id?: number;
+  numero?: string;       // e.g. B001-00000001
+  serie?: string;        // e.g. B001
+  correlativo?: string;
+  tipo: TipoComprobante;
+  estado: EstadoComprobante;
+  ventaId: number;
+  receptor?: ReceptorDTO;
+  total?: number;
+  tenantId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EmitirComprobanteRequest {
+  ventaId: number;
+  tipo: TipoComprobante;
+  receptor?: ReceptorDTO;
+}
+
+// ========================================
 // ERROR HANDLING
 // ========================================
 

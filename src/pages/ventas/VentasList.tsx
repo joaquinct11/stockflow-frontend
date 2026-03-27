@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ventaService } from '../../services/venta.service';
 import { productoService } from '../../services/producto.service';
-import type { VentaDTO, ProductoDTO, DetalleVentaDTO } from '../../types';
+import { facturacionService } from '../../services/facturacion.service';
+import type { VentaDTO, ProductoDTO, DetalleVentaDTO, EmitirComprobanteRequest } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -12,7 +13,7 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Trash2, ShoppingCart, Search, DollarSign, Eye, User, Calendar, X } from 'lucide-react';
+import { Plus, Trash2, ShoppingCart, Search, DollarSign, Eye, User, Calendar, X, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -24,7 +25,7 @@ const IGV_RATE = 0.18;
 export function VentasList() {
   const { userId } = useCurrentUser();
   const { user } = useAuthStore();
-  const { canCreate, canDelete, canViewAll, canViewOwn, rol } = usePermissions();
+  const { canCreate, canDelete, canViewAll, canViewOwn, rol, puede } = usePermissions();
 
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
@@ -53,6 +54,16 @@ export function VentasList() {
     confirmText: '',
     action: null as (() => Promise<void>) | null,
   });
+
+  // Emitir comprobante desde detalle de venta
+  const canEmitirComprobante = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
+  const [isEmitirComprobanteOpen, setIsEmitirComprobanteOpen] = useState(false);
+  const [emitirForm, setEmitirForm] = useState<EmitirComprobanteRequest>({
+    ventaId: 0,
+    tipo: 'BOLETA',
+    receptor: { tipoDocumento: undefined, numeroDocumento: '', razonSocial: '', direccion: '' },
+  });
+  const [emitirSubmitting, setEmitirSubmitting] = useState(false);
 
   const [formData, setFormData] = useState<VentaDTO>({
     vendedorId: 0,
@@ -247,6 +258,42 @@ export function VentasList() {
   const closeDetailDialog = () => {
     setSelectedVenta(null);
     setIsDetailDialogOpen(false);
+  };
+
+  const handleOpenEmitirComprobante = (venta: VentaDTO) => {
+    setEmitirForm({
+      ventaId: venta.id!,
+      tipo: 'BOLETA',
+      receptor: { tipoDocumento: undefined, numeroDocumento: '', razonSocial: '', direccion: '' },
+    });
+    setIsEmitirComprobanteOpen(true);
+  };
+
+  const handleEmitirComprobante = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (emitirForm.tipo === 'FACTURA') {
+      if (!emitirForm.receptor?.numeroDocumento || !emitirForm.receptor?.razonSocial) {
+        toast.error('Para FACTURA se requiere RUC y Razón Social');
+        return;
+      }
+    }
+    try {
+      setEmitirSubmitting(true);
+      const result = await facturacionService.emitirComprobante(emitirForm);
+      toast.success(`Comprobante emitido: ${result.numero ?? 'OK'}`);
+      setIsEmitirComprobanteOpen(false);
+    } catch (error: unknown) {
+      const err = error as { response?: { status?: number; data?: { mensaje?: string } } };
+      if (err?.response?.status === 403) {
+        toast.error('No tienes permiso para emitir comprobantes');
+      } else if (err?.response?.status === 409) {
+        toast.error(err?.response?.data?.mensaje ?? 'Esta venta ya tiene un comprobante asociado');
+      } else {
+        toast.error(err?.response?.data?.mensaje ?? 'Error al emitir comprobante');
+      }
+    } finally {
+      setEmitirSubmitting(false);
+    }
   };
 
   const handleDelete = (id: number) => {
@@ -927,6 +974,17 @@ export function VentasList() {
               </p>
             </div>
 
+            {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (
+              <Button
+                variant="outline"
+                className="w-full flex items-center gap-2"
+                onClick={() => handleOpenEmitirComprobante(selectedVenta)}
+              >
+                <FileText size={16} />
+                Emitir Comprobante
+              </Button>
+            )}
+
             <Button onClick={closeDetailDialog} className="w-full">
               Cerrar
             </Button>
@@ -948,6 +1006,153 @@ export function VentasList() {
         }}
         onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
       />
+
+      {/* Dialog - Emitir Comprobante desde Venta */}
+      <Dialog
+        isOpen={isEmitirComprobanteOpen}
+        onClose={() => setIsEmitirComprobanteOpen(false)}
+        title="Emitir Comprobante"
+        description={emitirForm.ventaId ? `Para Venta #${emitirForm.ventaId}` : ''}
+        size="md"
+      >
+        <form onSubmit={handleEmitirComprobante} className="space-y-4">
+          {/* Tipo */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Tipo de Comprobante <span className="text-destructive">*</span>
+            </label>
+            <div className="flex gap-3">
+              {(['BOLETA', 'FACTURA'] as const).map((tipo) => (
+                <label
+                  key={tipo}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-md border-2 px-4 py-3 cursor-pointer transition-colors ${
+                    emitirForm.tipo === tipo
+                      ? 'border-primary bg-primary/10 font-semibold'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    className="sr-only"
+                    checked={emitirForm.tipo === tipo}
+                    onChange={() =>
+                      setEmitirForm((prev) => ({
+                        ...prev,
+                        tipo,
+                        receptor:
+                          tipo === 'BOLETA'
+                            ? { tipoDocumento: 'DNI' as const, numeroDocumento: '', razonSocial: '', direccion: '' }
+                            : { tipoDocumento: 'RUC' as const, numeroDocumento: '', razonSocial: '', direccion: '' },
+                      }))
+                    }
+                  />
+                  {tipo}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    {tipo === 'BOLETA' ? '(B001)' : '(F001)'}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Receptor */}
+          <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+            <p className="text-sm font-medium">
+              Datos del receptor{' '}
+              {emitirForm.tipo === 'FACTURA' && <span className="text-destructive">*</span>}
+            </p>
+            {emitirForm.tipo === 'FACTURA' ? (
+              <>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground font-medium">
+                    RUC <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    placeholder="20xxxxxxxxx (11 dígitos)"
+                    maxLength={11}
+                    value={emitirForm.receptor?.numeroDocumento ?? ''}
+                    onChange={(e) =>
+                      setEmitirForm((prev) => ({
+                        ...prev,
+                        receptor: { ...prev.receptor, tipoDocumento: 'RUC' as const, numeroDocumento: e.target.value },
+                      }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground font-medium">
+                    Razón Social <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    placeholder="Nombre de la empresa"
+                    value={emitirForm.receptor?.razonSocial ?? ''}
+                    onChange={(e) =>
+                      setEmitirForm((prev) => ({
+                        ...prev,
+                        receptor: { ...prev.receptor, razonSocial: e.target.value },
+                      }))
+                    }
+                    required
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground font-medium">DNI (opcional)</label>
+                  <Input
+                    placeholder="DNI del cliente"
+                    maxLength={8}
+                    value={emitirForm.receptor?.numeroDocumento ?? ''}
+                    onChange={(e) =>
+                      setEmitirForm((prev) => ({
+                        ...prev,
+                        receptor: { ...prev.receptor, tipoDocumento: 'DNI' as const, numeroDocumento: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground font-medium">Nombre (opcional)</label>
+                  <Input
+                    placeholder="Nombre del cliente"
+                    value={emitirForm.receptor?.razonSocial ?? ''}
+                    onChange={(e) =>
+                      setEmitirForm((prev) => ({
+                        ...prev,
+                        receptor: { ...prev.receptor, razonSocial: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+              </>
+            )}
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">Dirección (opcional)</label>
+              <Input
+                placeholder="Dirección del receptor"
+                value={emitirForm.receptor?.direccion ?? ''}
+                onChange={(e) =>
+                  setEmitirForm((prev) => ({
+                    ...prev,
+                    receptor: { ...prev.receptor, direccion: e.target.value },
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2 border-t">
+            <Button type="button" variant="outline" onClick={() => setIsEmitirComprobanteOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={emitirSubmitting}>
+              {emitirSubmitting ? 'Emitiendo...' : 'Emitir Comprobante'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

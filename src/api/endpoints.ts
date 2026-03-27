@@ -103,4 +103,12 @@ export const API_ENDPOINTS = {
     USUARIOS: '/admin/usuarios',
     USUARIO_PERMISOS: (id: number) => `/admin/usuarios/${id}/permisos`,
   },
+
+  FACTURACION: {
+    LIST: '/facturacion/comprobantes',
+    GET: (id: number) => `/facturacion/comprobantes/${id}`,
+    CREATE: '/facturacion/comprobantes',
+    ANULAR: (id: number) => `/facturacion/comprobantes/${id}/anular`,
+    GET_BY_VENTA: (ventaId: number) => `/ventas/${ventaId}/comprobante`,
+  },
 };
