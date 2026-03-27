@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { facturacionService } from '../../services/facturacion.service';
-import type { ComprobanteDTO, EmitirComprobanteRequest, TipoComprobante } from '../../types';
+import type { ComprobanteDTO, EmitirComprobanteForm, EmitirComprobanteRequest, TipoComprobante } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
@@ -31,11 +31,11 @@ function estadoIcon(estado: string) {
   return <Clock size={14} className="inline mr-1" />;
 }
 
-const emptyForm = (): EmitirComprobanteRequest => ({
+const emptyForm = (): EmitirComprobanteForm => ({
   ventaId: 0,
   tipo: 'BOLETA',
   receptor: {
-    tipoDocumento: undefined,
+    tipoDocumento: 'DNI',
     numeroDocumento: '',
     razonSocial: '',
     direccion: '',
@@ -62,7 +62,7 @@ export function ComprobantesPage() {
 
   // Emit dialog
   const [isEmitirOpen, setIsEmitirOpen] = useState(false);
-  const [emitirForm, setEmitirForm] = useState<EmitirComprobanteRequest>(emptyForm());
+  const [emitirForm, setEmitirForm] = useState<EmitirComprobanteForm>(emptyForm());
   const [submitting, setSubmitting] = useState(false);
 
   // Detail dialog
@@ -145,7 +145,17 @@ export function ComprobantesPage() {
 
     try {
       setSubmitting(true);
-      const result = await facturacionService.emitirComprobante(emitirForm);
+      const payload: EmitirComprobanteRequest = {
+        ventaId: emitirForm.ventaId,
+        tipo: emitirForm.tipo,
+
+        receptorDocTipo: emitirForm.receptor?.tipoDocumento ?? null,
+        receptorDocNumero: emitirForm.receptor?.numeroDocumento?.trim() || null,
+        receptorNombre: emitirForm.receptor?.razonSocial?.trim() || null,
+        receptorDireccion: emitirForm.receptor?.direccion?.trim() || null,
+      };
+
+      const result = await facturacionService.emitirComprobante(payload);
       toast.success(`Comprobante emitido: ${result.numero ?? 'OK'}`);
       setIsEmitirOpen(false);
       setEmitirForm(emptyForm());
@@ -381,8 +391,9 @@ export function ComprobantesPage() {
                                 setSelectedComprobante(c);
                                 setIsDetailOpen(true);
                               }}
+                              title="Ver"
                             >
-                              Ver
+                              <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
                             {canAnular && c.estado === 'EMITIDO' && (
                               <Button

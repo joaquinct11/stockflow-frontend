@@ -261,10 +261,20 @@ export interface ComprobanteDTO {
   updatedAt?: string;
 }
 
+export interface EmitirComprobanteForm {
+  ventaId: number;
+  tipo: TipoComprobante;
+  receptor?: ReceptorDTO;
+}
+
 export interface EmitirComprobanteRequest {
   ventaId: number;
   tipo: TipoComprobante;
   receptor?: ReceptorDTO;
+  receptorDocTipo?: string | null;
+  receptorDocNumero?: string | null;
+  receptorNombre?: string | null;
+  receptorDireccion?: string | null;
 }
 
 // ========================================
