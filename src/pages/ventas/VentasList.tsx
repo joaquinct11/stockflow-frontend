@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ventaService } from '../../services/venta.service';
 import { productoService } from '../../services/producto.service';
 import { facturacionService } from '../../services/facturacion.service';
-import type { VentaDTO, ProductoDTO, DetalleVentaDTO, EmitirComprobanteRequest } from '../../types';
+import type { VentaDTO, ProductoDTO, DetalleVentaDTO, EmitirComprobanteRequest, EmitirComprobanteForm } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -55,14 +55,21 @@ export function VentasList() {
     action: null as (() => Promise<void>) | null,
   });
 
+  const emptyForm = (): EmitirComprobanteForm => ({
+    ventaId: 0,
+    tipo: 'BOLETA',
+    receptor: {
+      tipoDocumento: 'DNI',
+      numeroDocumento: '',
+      razonSocial: '',
+      direccion: '',
+    },
+  });
+
   // Emitir comprobante desde detalle de venta
   const canEmitirComprobante = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
   const [isEmitirComprobanteOpen, setIsEmitirComprobanteOpen] = useState(false);
-  const [emitirForm, setEmitirForm] = useState<EmitirComprobanteRequest>({
-    ventaId: 0,
-    tipo: 'BOLETA',
-    receptor: { tipoDocumento: undefined, numeroDocumento: '', razonSocial: '', direccion: '' },
-  });
+  const [emitirForm, setEmitirForm] = useState<EmitirComprobanteForm>(emptyForm());
   const [emitirSubmitting, setEmitirSubmitting] = useState(false);
 
   const [formData, setFormData] = useState<VentaDTO>({
@@ -279,8 +286,19 @@ export function VentasList() {
     }
     try {
       setEmitirSubmitting(true);
-      const result = await facturacionService.emitirComprobante(emitirForm);
+      const payload: EmitirComprobanteRequest = {
+        ventaId: emitirForm.ventaId,
+        tipo: emitirForm.tipo,
+
+        receptorDocTipo: emitirForm.receptor?.tipoDocumento ?? null,
+        receptorDocNumero: emitirForm.receptor?.numeroDocumento?.trim() || null,
+        receptorNombre: emitirForm.receptor?.razonSocial?.trim() || null,
+        receptorDireccion: emitirForm.receptor?.direccion?.trim() || null,
+      };
+      const result = await facturacionService.emitirComprobante(payload);
       toast.success(`Comprobante emitido: ${result.numero ?? 'OK'}`);
+      // const result = await facturacionService.emitirComprobante(emitirForm);
+      // toast.success(`Comprobante emitido: ${result.numero ?? 'OK'}`);
       setIsEmitirComprobanteOpen(false);
     } catch (error: unknown) {
       const err = error as { response?: { status?: number; data?: { mensaje?: string } } };
