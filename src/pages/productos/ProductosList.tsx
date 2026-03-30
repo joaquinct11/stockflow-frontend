@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
+import { movimientoService } from '../../services/movimiento.service';
 import type { ProductoDTO, UnidadMedidaDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -132,7 +133,22 @@ export function ProductosList() {
         await productoService.update(editingId, formData);
         toast.success('Producto actualizado');
       } else {
-        await productoService.create(formData);
+        const nuevoProducto = await productoService.create(formData);
+        // Crear movimiento de "Saldo inicial" al crear el producto
+        if (nuevoProducto.id && formData.stockActual > 0) {
+          try {
+            await movimientoService.create({
+              productoId: nuevoProducto.id,
+              tipo: 'SALDO_INICIAL',
+              cantidad: formData.stockActual,
+              descripcion: 'Saldo inicial',
+              usuarioId: user?.usuarioId ?? undefined,
+              costoUnitario: formData.costoUnitario > 0 ? formData.costoUnitario : undefined,
+            });
+          } catch (movErr) {
+            console.warn('⚠️ No se pudo crear el movimiento de saldo inicial:', movErr);
+          }
+        }
         toast.success('Producto creado');
       }
       resetForm();
