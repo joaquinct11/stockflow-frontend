@@ -6,6 +6,7 @@ export function Breadcrumb() {
   const pathnames = location.pathname.split('/').filter((x) => x);
 
   const breadcrumbNameMap: Record<string, string> = {
+    dashboard: 'Dashboard',
     productos: 'Productos',
     ventas: 'Ventas',
     usuarios: 'Usuarios',
@@ -13,12 +14,18 @@ export function Breadcrumb() {
     inventario: 'Inventario',
     reportes: 'Reportes',
     configuracion: 'Configuración',
+    proveedores: 'Proveedores',
+    facturacion: 'Facturación',
+    kardex: 'Kardex',
+    perfil: 'Mi Perfil',
+    admin: 'Administración',
+    permisos: 'Permisos',
   };
 
   return (
     <nav className="flex items-center space-x-1 text-sm text-muted-foreground mb-4">
       <Link
-        to="/"
+        to="/dashboard"
         className="flex items-center hover:text-foreground transition-colors"
       >
         <Home size={16} />
@@ -27,6 +34,9 @@ export function Breadcrumb() {
         const last = index === pathnames.length - 1;
         const to = `/${pathnames.slice(0, index + 1).join('/')}`;
         const name = breadcrumbNameMap[value] || value;
+
+        // Skip rendering 'dashboard' segment as a separate breadcrumb item
+        if (value === 'dashboard' && index === 0) return null;
 
         return (
           <div key={to} className="flex items-center">

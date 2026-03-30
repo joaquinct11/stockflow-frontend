@@ -36,7 +36,7 @@ export function Login() {
       }
       
       toast.success(`¡Bienvenido ${response.nombre}!`);
-      navigate('/');
+      navigate('/dashboard');
     } catch (error: any) {
       console.error('❌ Error en login:', error); // ← Log
       const message = error.response?.data?.mensaje || 'Error al iniciar sesión';

@@ -11,6 +11,9 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { RoleProtectedRoute } from './components/shared/RoleProtectedRoute';
 
+// Landing Page
+import { LandingPage } from './pages/landing/LandingPage';
+
 // Auth Pages
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
@@ -50,15 +53,18 @@ function App() {
     <>
       <BrowserRouter>
         <Routes>
+          {/* Landing Page - Pública */}
+          <Route path="/" element={<LandingPage />} />
+
           {/* Auth Routes - Públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} /> {/* ✅ NUEVO */}
-          <Route path="/reset-password" element={<ResetPassword />} />   {/* ✅ NUEVO */}
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Protected Routes */}
+          {/* Protected Routes - App bajo /dashboard */}
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <AppLayout />
@@ -67,10 +73,10 @@ function App() {
           >
             {/* Dashboard - Todos pueden acceder */}
             <Route index element={<Dashboard />} />
-            
+
             {/* ✅ MI PERFIL - TODOS ACCEDEN */}
             <Route path="perfil" element={<UserProfile />} />
-            
+
             {/* Proveedores */}
             <Route
               path="proveedores"
@@ -80,7 +86,7 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            
+
             {/* Productos */}
             <Route
               path="productos"
@@ -90,7 +96,7 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            
+
             {/* Ventas */}
             <Route
               path="ventas"
@@ -100,7 +106,7 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            
+
             {/* Inventario */}
             <Route
               path="inventario"
@@ -120,7 +126,7 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            
+
             {/* Usuarios */}
             <Route
               path="usuarios"
@@ -130,7 +136,7 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            
+
             {/* Suscripciones */}
             <Route
               path="suscripciones"
@@ -140,7 +146,7 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            
+
             {/* Configuración - Todos pueden acceder */}
             <Route path="configuracion" element={<AccountSettings />} />
 
@@ -153,7 +159,7 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            
+
             {/* Reportes */}
             <Route
               path="reportes"
@@ -178,7 +184,7 @@ function App() {
             />
           </Route>
 
-          {/* Catch all - redirect to login */}
+          {/* Catch all - redirect to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

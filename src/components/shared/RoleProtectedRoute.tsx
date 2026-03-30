@@ -41,7 +41,7 @@ export function RoleProtectedRoute({ children, allowedRoles, requiredPermission,
   }, [hasPermission, hasShownToast]);
 
   if (!hasPermission) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
