@@ -670,7 +670,13 @@ export function InventarioList() {
                     const costoUnitario = m.costoUnitario ?? 0;
                     const costoTotal = costoUnitario > 0 ? costoUnitario * m.cantidad : undefined;
                     const prov = m.proveedorId ? proveedorById.get(m.proveedorId) : undefined;
-                    const documento = m.referencia || prov?.nombre || m.descripcion || '-';
+                    const documentoLabel = m.referencia
+                      ? `Ref: ${m.referencia}`
+                      : prov
+                      ? `Prov: ${prov.nombre}`
+                      : m.descripcion
+                      ? m.descripcion
+                      : '-';
 
                     return (
                       <TableRow key={m.id}>
@@ -687,8 +693,8 @@ export function InventarioList() {
                           </div>
                         </TableCell>
 
-                        <TableCell className="text-muted-foreground text-sm max-w-[160px] truncate">
-                          {documento}
+                        <TableCell className="text-muted-foreground text-sm max-w-[160px] truncate" title={documentoLabel}>
+                          {documentoLabel}
                         </TableCell>
 
                         <TableCell className="text-center font-semibold text-green-700">
