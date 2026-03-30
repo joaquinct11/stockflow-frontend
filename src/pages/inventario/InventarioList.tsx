@@ -15,7 +15,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
-import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye, Lock } from 'lucide-react';
+import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye, Lock, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -60,11 +60,11 @@ export function InventarioList() {
       setKardexLoading(true);
       const data = await movimientoService.getByProducto(productoId);
 
-      // opcional: ordenar por fecha desc si tienes createdAt
+      // Ordenar por fecha asc para calcular stock acumulado correctamente
       const sorted = [...data].sort((a, b) => {
         const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return db - da;
+        return da - db;
       });
 
       setKardexMovimientos(sorted);
@@ -162,12 +162,6 @@ export function InventarioList() {
       setLoading(false);
     }
   };
-
-  const proveedorById = useMemo(() => {
-    const m = new Map<number, ProveedorDTO>();
-    proveedores.forEach((p) => m.set(p.id!, p));
-    return m;
-  }, [proveedores]);
 
   const unidadById = useMemo(() => {
     const m = new Map<number, UnidadMedidaDTO>();
@@ -283,7 +277,14 @@ export function InventarioList() {
 
   const [tipoFiltro, setTipoFiltro] = useState<'TODOS' | MovimientoInventarioDTO['tipo']>('TODOS');
 
-  const filteredMovimientos = movimientos.filter((m) => {
+  /** Movimientos visibles en la lista principal: excluye ENTRADA (compra) y SALIDA (venta)
+   * que se muestran únicamente en el Kardex (detalle por producto).
+   */
+  const movimientosListado = movimientos.filter(
+    (m) => m.tipo !== 'ENTRADA' && m.tipo !== 'SALIDA'
+  );
+
+  const filteredMovimientos = movimientosListado.filter((m) => {
     const producto = productos.find(p => p.id === m.productoId);
     const matchSearch =
       producto?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -312,6 +313,8 @@ export function InventarioList() {
         return <RotateCcw className="h-4 w-4 text-blue-600" />;
       case 'DEVOLUCION':
         return <ArrowLeftRight className="h-4 w-4 text-orange-600" />;
+      case 'SALDO_INICIAL':
+        return <Star className="h-4 w-4 text-purple-600" />;
       default:
         return null;
     }
@@ -327,16 +330,15 @@ export function InventarioList() {
         return <Badge variant="outline">Ajuste</Badge>;
       case 'DEVOLUCION':
         return <Badge variant="warning">Devolución</Badge>;
+      case 'SALDO_INICIAL':
+        return <Badge variant="secondary">Saldo Inicial</Badge>;
       default:
         return <Badge variant="secondary">{tipo}</Badge>;
     }
   };
 
-  const totalEntradas = movimientos
-    .filter(m => m.tipo === 'ENTRADA')
-    .reduce((sum, m) => sum + m.cantidad, 0);
-  const totalSalidas = movimientos
-    .filter(m => m.tipo === 'SALIDA')
+  const totalSaldosIniciales = movimientos
+    .filter(m => m.tipo === 'SALDO_INICIAL')
     .reduce((sum, m) => sum + m.cantidad, 0);
   const totalAjustes = movimientos
     .filter(m => m.tipo === 'AJUSTE')
@@ -377,34 +379,24 @@ export function InventarioList() {
       ) : (
         <>
       {/* Stats */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Movimientos</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{movimientos.length}</div>
+            <div className="text-2xl font-bold">{movimientosListado.length}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Entradas</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-sm font-medium">Saldo Inicial</CardTitle>
+            <Star className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{totalEntradas}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Salidas</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{totalSalidas}</div>
+            <div className="text-2xl font-bold text-purple-600">{totalSaldosIniciales}</div>
           </CardContent>
         </Card>
 
@@ -452,8 +444,7 @@ export function InventarioList() {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="TODOS">Todos</option>
-                <option value="ENTRADA">Entradas</option>
-                <option value="SALIDA">Salidas</option>
+                <option value="SALDO_INICIAL">Saldo Inicial</option>
                 <option value="AJUSTE">Ajustes</option>
                 <option value="DEVOLUCION">Devoluciones</option>
               </select>
@@ -753,7 +744,7 @@ export function InventarioList() {
           title="Kardex del producto"
           description={
             kardexProducto
-              ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock: ${kardexProducto.stockActual ?? 0}`
+              ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock actual: ${kardexProducto.stockActual ?? 0}`
               : 'Historial de movimientos'
           }
           size="xl"
@@ -771,58 +762,75 @@ export function InventarioList() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Fecha</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-center">Cantidad</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Referencia</TableHead>
-                    <TableHead>Proveedor</TableHead>
-                    <TableHead>Lote</TableHead>
-                    <TableHead>Vencimiento</TableHead>
-                    <TableHead className="text-right">Costo U.</TableHead>
+                    <TableHead>Tipo Movimiento</TableHead>
+                    <TableHead>Documento</TableHead>
+                    <TableHead className="text-center">Entradas</TableHead>
+                    <TableHead className="text-center">Salidas</TableHead>
+                    <TableHead className="text-center">Stock</TableHead>
+                    <TableHead className="text-right">Costo Unit.</TableHead>
+                    <TableHead className="text-right">Costo Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {kardexMovimientos.map((m) => {
-                    const prov = m.proveedorId ? proveedorById.get(m.proveedorId) : undefined;
+                  {(() => {
+                    let stockAcumulado = 0;
+                    return kardexMovimientos.map((m) => {
+                      const esEntrada = m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION';
+                      const esSalida = m.tipo === 'SALIDA';
+                      const esAjuste = m.tipo === 'AJUSTE';
 
-                    const isEntrada = m.tipo === 'ENTRADA';
+                      if (esEntrada) {
+                        stockAcumulado += m.cantidad;
+                      } else if (esSalida) {
+                        stockAcumulado -= m.cantidad;
+                      } else if (esAjuste) {
+                        // AJUSTE siempre suma la cantidad (cantidad es siempre positiva en el formulario)
+                        stockAcumulado += m.cantidad;
+                      }
 
-                    return (
-                      <TableRow key={m.id}>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {m.createdAt ? new Date(m.createdAt).toLocaleString('es-PE') : '-'}
-                        </TableCell>
+                      const costoUnitario = m.costoUnitario ?? 0;
+                      const costoTotal = costoUnitario > 0 ? costoUnitario * m.cantidad : undefined;
 
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getMovimientoIcon(m.tipo)}
-                            {getMovimientoBadge(m.tipo)}
-                          </div>
-                        </TableCell>
+                      return (
+                        <TableRow key={m.id}>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {m.createdAt ? new Date(m.createdAt).toLocaleDateString('es-PE') : '-'}
+                          </TableCell>
 
-                        <TableCell className="text-center font-semibold">{m.cantidad}</TableCell>
-                        <TableCell className="text-muted-foreground">{m.descripcion}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{m.referencia || '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getMovimientoIcon(m.tipo)}
+                              {getMovimientoBadge(m.tipo)}
+                            </div>
+                          </TableCell>
 
-                        {/* ✅ Solo ENTRADA muestra datos, si no '-' */}
-                        <TableCell className="text-muted-foreground text-sm">
-                          {isEntrada ? (prov?.nombre ?? (m.proveedorId ? `Proveedor #${m.proveedorId}` : '-')) : '-'}
-                        </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {m.referencia || m.descripcion || '-'}
+                          </TableCell>
 
-                        <TableCell className="text-muted-foreground text-sm">
-                          {isEntrada ? (m.lote || '-') : '-'}
-                        </TableCell>
+                          <TableCell className="text-center font-semibold text-green-700">
+                            {esEntrada ? m.cantidad : '-'}
+                          </TableCell>
 
-                        <TableCell className="text-muted-foreground text-sm">
-                          {isEntrada ? (m.fechaVencimiento ? new Date(m.fechaVencimiento).toLocaleDateString('es-PE') : '-') : '-'}
-                        </TableCell>
+                          <TableCell className="text-center font-semibold text-red-700">
+                            {esSalida ? m.cantidad : '-'}
+                          </TableCell>
 
-                        <TableCell className="text-right text-muted-foreground text-sm">
-                          {isEntrada && m.costoUnitario != null ? m.costoUnitario.toFixed(2) : '-'}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                          <TableCell className="text-center font-bold">
+                            {stockAcumulado}
+                          </TableCell>
+
+                          <TableCell className="text-right text-muted-foreground text-sm">
+                            {costoUnitario > 0 ? `S/.${costoUnitario.toFixed(2)}` : '-'}
+                          </TableCell>
+
+                          <TableCell className="text-right text-muted-foreground text-sm">
+                            {costoTotal != null && costoTotal > 0 ? `S/.${costoTotal.toFixed(2)}` : '-'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    });
+                  })()}
                 </TableBody>
               </Table>
             </div>

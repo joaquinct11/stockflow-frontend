@@ -179,19 +179,32 @@ export interface RolDTO {
 export interface MovimientoInventarioDTO {
   id?: number;
   productoId: number;
-  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'DEVOLUCION';
+  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'DEVOLUCION' | 'SALDO_INICIAL';
   cantidad: number;
   descripcion: string;
   referencia?: string;
   usuarioId?: number;
   tenantId: string;
   createdAt?: string;
-  // Campos exclusivos para tipo === 'ENTRADA'
+  // Campos exclusivos para tipo === 'ENTRADA' o 'SALDO_INICIAL'
   proveedorId?: number;
   costoUnitario?: number;
   lote?: string;
   fechaVencimiento?: string;
 }
+
+/** Tipos de movimiento que se muestran en la lista principal de Movimientos Inventario */
+export const TIPOS_MOVIMIENTO_INVENTARIO: MovimientoInventarioDTO['tipo'][] = [
+  'AJUSTE',
+  'DEVOLUCION',
+  'SALDO_INICIAL',
+];
+
+/** Tipos de movimiento que solo se muestran en el detalle (Kardex) */
+export const TIPOS_MOVIMIENTO_KARDEX_ONLY: MovimientoInventarioDTO['tipo'][] = [
+  'ENTRADA',
+  'SALIDA',
+];
 
 export interface KardexDTO {
   id?: number;

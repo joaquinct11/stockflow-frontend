@@ -29,6 +29,7 @@ import { AccountSettings } from './pages/settings/AccountSettings';
 import { UserProfile } from './pages/settings/UserProfile';
 import { PermisosConfig } from './pages/admin/PermisosConfig';
 import { ComprobantesPage } from './pages/facturacion/ComprobantesPage';
+import { KardexPage } from './pages/kardex/KardexPage';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -106,6 +107,16 @@ function App() {
               element={
                 <RoleProtectedRoute module="INVENTARIO">
                   <InventarioList />
+                </RoleProtectedRoute>
+              }
+            />
+
+            {/* Kardex */}
+            <Route
+              path="kardex"
+              element={
+                <RoleProtectedRoute module="INVENTARIO">
+                  <KardexPage />
                 </RoleProtectedRoute>
               }
             />
