@@ -9,22 +9,32 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { Dialog } from '../../components/ui/Dialog';
-import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Autocomplete } from '../../components/ui/Autocomplete';
-import { Pagination } from '../../components/ui/Pagination'; // ✅ NUEVO
-import { Plus, Trash2, Package, Search, TrendingUp, TrendingDown, RotateCcw, ArrowLeftRight, Eye, Lock, Star } from 'lucide-react';
+import { Pagination } from '../../components/ui/Pagination';
+import {
+  Plus,
+  Package,
+  Search,
+  TrendingUp,
+  TrendingDown,
+  RotateCcw,
+  ArrowLeftRight,
+  Eye,
+  Lock,
+  Star,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
 
 export function InventarioList() {
   const { userId } = useCurrentUser();
-  const { canCreate, canDelete, canView } = usePermissions();
+  const { canCreate, canView } = usePermissions();
   const hasViewPermission = canView('INVENTARIO');
-  const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
+
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
@@ -33,54 +43,16 @@ export function InventarioList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
   const [selectedProveedorMov, setSelectedProveedorMov] = useState<any>(null);
+
+  // Kardex dialog state
   const [isKardexOpen, setIsKardexOpen] = useState(false);
   const [kardexLoading, setKardexLoading] = useState(false);
   const [kardexProducto, setKardexProducto] = useState<ProductoDTO | null>(null);
   const [kardexMovimientos, setKardexMovimientos] = useState<MovimientoInventarioDTO[]>([]);
 
-  // ✅ NUEVO - Estados de paginación
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-
-  const [confirmDialog, setConfirmDialog] = useState({
-    isOpen: false,
-    type: 'info' as 'warning' | 'danger' | 'success' | 'info',
-    title: '',
-    description: '',
-    confirmText: '',
-    action: null as (() => Promise<void>) | null,
-  });
-
-  const openKardex = async (productoId: number) => {
-    try {
-      const prod = productos.find((p) => p.id === productoId) || null;
-      setKardexProducto(prod);
-      setIsKardexOpen(true);
-
-      setKardexLoading(true);
-      const data = await movimientoService.getByProducto(productoId);
-
-      // Ordenar por fecha asc para calcular stock acumulado correctamente
-      const sorted = [...data].sort((a, b) => {
-        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return da - db;
-      });
-
-      setKardexMovimientos(sorted);
-    } catch (e) {
-      console.error(e);
-      toast.error('Error al cargar kardex');
-    } finally {
-      setKardexLoading(false);
-    }
-  };
-
-  const closeKardex = () => {
-    setIsKardexOpen(false);
-    setKardexProducto(null);
-    setKardexMovimientos([]);
-  };
 
   const [formData, setFormData] = useState<MovimientoInventarioDTO>({
     productoId: 0,
@@ -98,11 +70,7 @@ export function InventarioList() {
 
   useEffect(() => {
     if (userId) {
-      console.log('🔄 Actualizando userId en formData:', userId);
-      setFormData((prev) => ({
-        ...prev,
-        usuarioId: userId,
-      }));
+      setFormData((prev) => ({ ...prev, usuarioId: userId }));
     }
   }, [userId]);
 
@@ -118,7 +86,6 @@ export function InventarioList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasViewPermission]);
 
-  // ✅ NUEVO - Resetear página al buscar
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -142,18 +109,13 @@ export function InventarioList() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [movimientosData, productosData, unidadesData, proveedoresData] = await Promise.all([
-        movimientoService.getAll(),
+      const [productosData, unidadesData, proveedoresData] = await Promise.all([
         productoService.getAll(),
         unidadMedidaService.getAll(),
         proveedorService.getAll(),
       ]);
-
-      setMovimientos(movimientosData);
       setProductos(productosData);
       setProveedores(proveedoresData);
-
-      // si tu backend maneja "activo"
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
     } catch (error) {
       toast.error('Error al cargar datos');
@@ -169,6 +131,12 @@ export function InventarioList() {
     return m;
   }, [unidadesMedida]);
 
+  const proveedorById = useMemo(() => {
+    const m = new Map<number, ProveedorDTO>();
+    proveedores.forEach((p) => m.set(p.id!, p));
+    return m;
+  }, [proveedores]);
+
   const productosOptions = productos.map((p) => ({
     id: p.id!,
     label: `${p.nombre}`,
@@ -180,6 +148,33 @@ export function InventarioList() {
     label: p.nombre,
     subtitle: `RUC: ${p.ruc || 'N/A'} | Contacto: ${p.contacto || 'N/A'}`,
   }));
+
+  const openKardex = async (producto: ProductoDTO) => {
+    setKardexProducto(producto);
+    setIsKardexOpen(true);
+    setKardexLoading(true);
+    try {
+      const data = await movimientoService.getByProducto(producto.id!);
+      // Sort ascending by date so running stock is calculated correctly
+      const sorted = [...data].sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return da - db;
+      });
+      setKardexMovimientos(sorted);
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al cargar kardex');
+    } finally {
+      setKardexLoading(false);
+    }
+  };
+
+  const closeKardex = () => {
+    setIsKardexOpen(false);
+    setKardexProducto(null);
+    setKardexMovimientos([]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,7 +204,6 @@ export function InventarioList() {
       return;
     }
 
-    // Construir payload: solo incluir campos ENTRADA cuando tipo === 'ENTRADA'
     const payload: MovimientoInventarioDTO =
       formData.tipo === 'ENTRADA'
         ? { ...formData }
@@ -224,36 +218,15 @@ export function InventarioList() {
           };
 
     try {
-      console.log('📤 Enviando movimiento:', payload);
       await movimientoService.create(payload);
       toast.success(`Movimiento de ${formData.tipo} registrado`);
       resetForm();
       await fetchData();
     } catch (error: any) {
-      console.error('❌ Error:', error.response?.data);
+      console.error('Error:', error.response?.data);
       const message = error.response?.data?.mensaje || error.message || 'Error al registrar movimiento';
       toast.error(message);
     }
-  };
-
-  const handleDelete = (id: number) => {
-    setConfirmDialog({
-      isOpen: true,
-      type: 'danger',
-      title: 'Eliminar Movimiento',
-      description: '⚠️ Estás a punto de eliminar este movimiento. Esta acción afectará el stock del producto.',
-      confirmText: 'Eliminar Permanentemente',
-      action: async () => {
-        try {
-          await movimientoService.delete(id);
-          toast.success('Movimiento eliminado');
-          await fetchData();
-          setConfirmDialog({ ...confirmDialog, isOpen: false });
-        } catch (error) {
-          toast.error('Error al eliminar movimiento');
-        }
-      },
-    });
   };
 
   const resetForm = () => {
@@ -274,34 +247,6 @@ export function InventarioList() {
     setSelectedProveedorMov(null);
     setIsDialogOpen(false);
   };
-
-  const [tipoFiltro, setTipoFiltro] = useState<'TODOS' | MovimientoInventarioDTO['tipo']>('TODOS');
-
-  /** Movimientos visibles en la lista principal: excluye ENTRADA (compra) y SALIDA (venta)
-   * que se muestran únicamente en el Kardex (detalle por producto).
-   */
-  const movimientosListado = movimientos.filter(
-    (m) => m.tipo !== 'ENTRADA' && m.tipo !== 'SALIDA'
-  );
-
-  const filteredMovimientos = movimientosListado.filter((m) => {
-    const producto = productos.find(p => p.id === m.productoId);
-    const matchSearch =
-      producto?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchTipo = tipoFiltro === 'TODOS' ? true : m.tipo === tipoFiltro;
-
-    return matchSearch && matchTipo;
-  });
-
-  // ✅ NUEVO - Calcular paginación
-  const totalPages = Math.ceil(filteredMovimientos.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentMovimientos = filteredMovimientos.slice(startIndex, endIndex);
-  // console.log('movimiento sample', currentMovimientos[0]);
 
   const getMovimientoIcon = (tipo: string) => {
     switch (tipo) {
@@ -337,15 +282,16 @@ export function InventarioList() {
     }
   };
 
-  const totalSaldosIniciales = movimientos
-    .filter(m => m.tipo === 'SALDO_INICIAL')
-    .reduce((sum, m) => sum + m.cantidad, 0);
-  const totalAjustes = movimientos
-    .filter(m => m.tipo === 'AJUSTE')
-    .reduce((sum, m) => sum + m.cantidad, 0);
-  const totalDevoluciones = movimientos
-    .filter(m => m.tipo === 'DEVOLUCION')
-    .reduce((sum, m) => sum + m.cantidad, 0);
+  const filteredProductos = productos.filter(
+    (p) =>
+      p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentProductos = filteredProductos.slice(startIndex, startIndex + itemsPerPage);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -358,7 +304,7 @@ export function InventarioList() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Inventario</h1>
           <p className="text-muted-foreground">
-            Gestiona los movimientos de inventario
+            Consulta el stock de productos y registra movimientos
           </p>
         </div>
         {canCreate('INVENTARIO') && (
@@ -369,189 +315,120 @@ export function InventarioList() {
         )}
       </div>
 
-      {/* When user cannot list movements, show informational empty state */}
       {!hasViewPermission ? (
         <EmptyState
           icon={Lock}
           title="Sin acceso al listado"
-          description="No tienes permisos para ver el listado de movimientos. Puedes registrar nuevos movimientos con el botón de arriba."
+          description="No tienes permisos para ver el listado de productos. Puedes registrar nuevos movimientos con el botón de arriba."
         />
       ) : (
         <>
-      {/* Stats */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Movimientos</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{movimientosListado.length}</div>
-          </CardContent>
-        </Card>
+          {/* Search */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar producto por nombre, código o categoría..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo Inicial</CardTitle>
-            <Star className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{totalSaldosIniciales}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ajustes</CardTitle>
-            <RotateCcw className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{totalAjustes}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Devoluciones</CardTitle>
-            <ArrowLeftRight className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{totalDevoluciones}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search + Filtro */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            {/* Search input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por producto, tipo o descripción..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-
-            {/* Tipo filtro */}
-            <div className="sm:w-[220px]">
-              <select
-                value={tipoFiltro}
-                onChange={(e) => setTipoFiltro(e.target.value as any)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="TODOS">Todos</option>
-                <option value="SALDO_INICIAL">Saldo Inicial</option>
-                <option value="AJUSTE">Ajustes</option>
-                <option value="DEVOLUCION">Devoluciones</option>
-              </select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Movimientos de Inventario</CardTitle>
-          <CardDescription>
-            {filteredMovimientos.length} movimiento(s) encontrado(s)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredMovimientos.length === 0 ? (
-            <EmptyState
-              title="No hay movimientos"
-              description="Comienza registrando tu primer movimiento de inventario"
-            />
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead>Unidad Medida</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead className="text-center">Cantidad</TableHead>
-                      <TableHead>Descripción</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Referencia</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {currentMovimientos.map((movimiento) => {
-                      const producto = productos.find(p => p.id === movimiento.productoId);
-                      return (
-                        <TableRow key={movimiento.id}>
-                          <TableCell>
-                            {/* {producto?.nombre || `Producto #${movimiento.productoId}`} */}
-                            <div>
-                              <p className="font-medium">{producto?.nombre}</p>
-                              <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
-                                <Package className="h-3 w-3" />
-                                {producto?.codigoBarras}
-                              </p>
-                              <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
-                                {producto?.stockActual != null ? `Stock Actual: ${producto.stockActual}` : 'Stock: N/A'}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{unidadById.get(producto?.unidadMedidaId || 0)?.nombre || '-'}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {getMovimientoIcon(movimiento.tipo)}
-                              {getMovimientoBadge(movimiento.tipo)}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center font-semibold">{movimiento.cantidad}</TableCell>
-                          <TableCell className="text-muted-foreground">{movimiento.descripcion}</TableCell>
-                          <TableCell>
-                            {movimiento.createdAt ? new Date(movimiento.createdAt).toLocaleDateString('es-PE') : '-'}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">{movimiento.referencia || '-'}</TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openKardex(movimiento.productoId)}
-                              title="Ver kardex"
-                            >
-                              <Eye className="h-4 w-4 text-blue-600" />
-                            </Button>
-                            {canDelete('INVENTARIO') && (
+          {/* Products table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Productos</CardTitle>
+              <CardDescription>
+                {filteredProductos.length} producto(s) — haz clic en{' '}
+                <Eye className="inline h-3 w-3" /> para ver el detalle (Kardex)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {filteredProductos.length === 0 ? (
+                <EmptyState
+                  title="Sin productos"
+                  description="No se encontraron productos con ese criterio de búsqueda"
+                />
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Producto</TableHead>
+                          <TableHead>Categoría</TableHead>
+                          <TableHead>Unidad</TableHead>
+                          <TableHead className="text-center">Stock Actual</TableHead>
+                          <TableHead className="text-right">Costo Unit.</TableHead>
+                          <TableHead className="text-right">Precio Venta</TableHead>
+                          <TableHead className="text-right">Ver detalle</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {currentProductos.map((producto) => (
+                          <TableRow key={producto.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{producto.nombre}</p>
+                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                  <Package className="h-3 w-3" />
+                                  {producto.codigoBarras || 'Sin código'}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {producto.categoria || '-'}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {unidadById.get(producto.unidadMedidaId)?.nombre || '-'}
+                            </TableCell>
+                            <TableCell className="text-center font-semibold">
+                              <span
+                                className={
+                                  producto.stockActual <= producto.stockMinimo
+                                    ? 'text-red-600'
+                                    : 'text-green-700'
+                                }
+                              >
+                                {producto.stockActual}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground text-sm">
+                              S/.{producto.costoUnitario.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground text-sm">
+                              S/.{producto.precioVenta.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleDelete(movimiento.id!)}
-                                title="Eliminar"
+                                onClick={() => openKardex(producto)}
+                                title="Ver detalle (Kardex)"
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                                <Eye className="h-4 w-4 text-blue-600" />
                               </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={filteredMovimientos.length}
-                itemsPerPage={itemsPerPage}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={filteredProductos.length}
+                    itemsPerPage={itemsPerPage}
+                  />
+                </>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
 
@@ -602,7 +479,6 @@ export function InventarioList() {
                   setFormData({
                     ...formData,
                     tipo: nuevoTipo,
-                    // Limpiar campos exclusivos de ENTRADA si cambia a otro tipo
                     ...(nuevoTipo !== 'ENTRADA' && {
                       proveedorId: undefined,
                       costoUnitario: undefined,
@@ -738,125 +614,125 @@ export function InventarioList() {
         </form>
       </Dialog>
 
+      {/* Kardex dialog */}
       <Dialog
-          isOpen={isKardexOpen}
-          onClose={closeKardex}
-          title="Kardex del producto"
-          description={
-            kardexProducto
-              ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock actual: ${kardexProducto.stockActual ?? 0}`
-              : 'Historial de movimientos'
-          }
-          size="xl"
-        >
-          {kardexLoading ? (
-            <LoadingSpinner />
-          ) : kardexMovimientos.length === 0 ? (
-            <EmptyState
-              title="Sin movimientos"
-              description="Este producto no tiene movimientos registrados"
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Tipo Movimiento</TableHead>
-                    <TableHead>Documento</TableHead>
-                    <TableHead className="text-center">Entradas</TableHead>
-                    <TableHead className="text-center">Salidas</TableHead>
-                    <TableHead className="text-center">Stock</TableHead>
-                    <TableHead className="text-right">Costo Unit.</TableHead>
-                    <TableHead className="text-right">Costo Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(() => {
-                    let stockAcumulado = 0;
-                    return kardexMovimientos.map((m) => {
-                      const esEntrada = m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION';
-                      const esSalida = m.tipo === 'SALIDA';
-                      const esAjuste = m.tipo === 'AJUSTE';
+        isOpen={isKardexOpen}
+        onClose={closeKardex}
+        title="Detalle del producto (Kardex)"
+        description={
+          kardexProducto
+            ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock actual: ${kardexProducto.stockActual ?? 0}`
+            : 'Historial de movimientos'
+        }
+        size="xl"
+      >
+        {kardexLoading ? (
+          <LoadingSpinner />
+        ) : kardexMovimientos.length === 0 ? (
+          <EmptyState
+            title="Sin movimientos"
+            description="Este producto no tiene movimientos registrados"
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Tipo Movimiento</TableHead>
+                  <TableHead>Documento</TableHead>
+                  <TableHead className="text-center">Entradas</TableHead>
+                  <TableHead className="text-center">Salidas</TableHead>
+                  <TableHead className="text-center">Stock</TableHead>
+                  <TableHead className="text-right">Costo Unit.</TableHead>
+                  <TableHead className="text-right">Costo Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(() => {
+                  let stockAcumulado = 0;
+                  return kardexMovimientos.map((m) => {
+                    const esEntrada =
+                      m.tipo === 'ENTRADA' ||
+                      m.tipo === 'SALDO_INICIAL' ||
+                      m.tipo === 'DEVOLUCION';
+                    const esSalida = m.tipo === 'SALIDA';
+                    const esAjuste = m.tipo === 'AJUSTE';
 
-                      if (esEntrada) {
-                        stockAcumulado += m.cantidad;
-                      } else if (esSalida) {
-                        stockAcumulado -= m.cantidad;
-                      } else if (esAjuste) {
-                        // AJUSTE siempre suma la cantidad (cantidad es siempre positiva en el formulario)
-                        stockAcumulado += m.cantidad;
-                      }
+                    if (esEntrada) {
+                      stockAcumulado += m.cantidad;
+                    } else if (esSalida) {
+                      stockAcumulado -= m.cantidad;
+                    } else if (esAjuste) {
+                      stockAcumulado += m.cantidad;
+                    }
 
-                      const costoUnitario = m.costoUnitario ?? 0;
-                      const costoTotal = costoUnitario > 0 ? costoUnitario * m.cantidad : undefined;
+                    const costoUnitario = m.costoUnitario ?? 0;
+                    const costoTotal = costoUnitario > 0 ? costoUnitario * m.cantidad : undefined;
+                    const prov = m.proveedorId ? proveedorById.get(m.proveedorId) : undefined;
+                    const documentoLabel = m.referencia
+                      ? `Ref: ${m.referencia}`
+                      : prov
+                      ? `Prov: ${prov.nombre}`
+                      : m.descripcion
+                      ? m.descripcion
+                      : '-';
 
-                      return (
-                        <TableRow key={m.id}>
-                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                            {m.createdAt ? new Date(m.createdAt).toLocaleDateString('es-PE') : '-'}
-                          </TableCell>
+                    return (
+                      <TableRow key={m.id}>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {m.createdAt
+                            ? new Date(m.createdAt).toLocaleDateString('es-PE')
+                            : '-'}
+                        </TableCell>
 
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {getMovimientoIcon(m.tipo)}
-                              {getMovimientoBadge(m.tipo)}
-                            </div>
-                          </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getMovimientoIcon(m.tipo)}
+                            {getMovimientoBadge(m.tipo)}
+                          </div>
+                        </TableCell>
 
-                          <TableCell className="text-muted-foreground text-sm">
-                            {m.referencia || m.descripcion || '-'}
-                          </TableCell>
+                        <TableCell className="text-muted-foreground text-sm max-w-[160px] truncate" title={documentoLabel}>
+                          {documentoLabel}
+                        </TableCell>
 
-                          <TableCell className="text-center font-semibold text-green-700">
-                            {esEntrada ? m.cantidad : '-'}
-                          </TableCell>
+                        <TableCell className="text-center font-semibold text-green-700">
+                          {esEntrada ? m.cantidad : '-'}
+                        </TableCell>
 
-                          <TableCell className="text-center font-semibold text-red-700">
-                            {esSalida ? m.cantidad : '-'}
-                          </TableCell>
+                        <TableCell className="text-center font-semibold text-red-700">
+                          {esSalida ? m.cantidad : '-'}
+                        </TableCell>
 
-                          <TableCell className="text-center font-bold">
-                            {stockAcumulado}
-                          </TableCell>
+                        <TableCell className="text-center font-bold">
+                          {stockAcumulado}
+                        </TableCell>
 
-                          <TableCell className="text-right text-muted-foreground text-sm">
-                            {costoUnitario > 0 ? `S/.${costoUnitario.toFixed(2)}` : '-'}
-                          </TableCell>
+                        <TableCell className="text-right text-muted-foreground text-sm">
+                          {costoUnitario > 0 ? `S/.${costoUnitario.toFixed(2)}` : '-'}
+                        </TableCell>
 
-                          <TableCell className="text-right text-muted-foreground text-sm">
-                            {costoTotal != null && costoTotal > 0 ? `S/.${costoTotal.toFixed(2)}` : '-'}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    });
-                  })()}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          <div className="flex justify-end pt-4 border-t">
-            <Button variant="outline" type="button" onClick={closeKardex}>
-              Cerrar
-            </Button>
+                        <TableCell className="text-right text-muted-foreground text-sm">
+                          {costoTotal != null && costoTotal > 0
+                            ? `S/.${costoTotal.toFixed(2)}`
+                            : '-'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  });
+                })()}
+              </TableBody>
+            </Table>
           </div>
-        </Dialog>
+        )}
 
-      {/* Confirm Dialog */}
-      <ConfirmDialog
-        isOpen={confirmDialog.isOpen}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        confirmText={confirmDialog.confirmText}
-        type={confirmDialog.type}
-        onConfirm={async () => {
-          if (confirmDialog.action) {
-            await confirmDialog.action();
-          }
-        }}
-        onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
-      />
+        <div className="flex justify-end pt-4 border-t">
+          <Button variant="outline" type="button" onClick={closeKardex}>
+            Cerrar
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }
