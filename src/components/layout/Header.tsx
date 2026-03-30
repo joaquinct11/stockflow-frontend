@@ -32,7 +32,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const handleProfileClick = () => {
     setIsDropdownOpen(false);
-    navigate('/perfil');
+    navigate('/dashboard/perfil');
   };
 
   return (

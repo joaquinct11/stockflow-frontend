@@ -34,67 +34,67 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const menuItems = [
     {
       title: 'Dashboard',
-      href: '/',
+      href: '/dashboard',
       icon: LayoutDashboard,
       show: true,
     },
     {
       title: 'Proveedores',
-      href: '/proveedores',
+      href: '/dashboard/proveedores',
       icon: Building2,
       show: canAccess('PROVEEDORES'),
     },
     {
       title: 'Productos',
-      href: '/productos',
+      href: '/dashboard/productos',
       icon: Package,
       show: canAccess('PRODUCTOS'),
     },
     {
       title: 'Ventas',
-      href: '/ventas',
+      href: '/dashboard/ventas',
       icon: ShoppingCart,
       show: canAccess('VENTAS'),
     },
     {
       title: 'Facturación',
-      href: '/facturacion',
+      href: '/dashboard/facturacion',
       icon: FileText,
       show: canAccess('FACTURACION'),
     },
     {
       title: 'Inventario',
-      href: '/inventario',
+      href: '/dashboard/inventario',
       icon: PackageOpen,
       show: canAccess('INVENTARIO'),
     },
     {
       title: 'Usuarios',
-      href: '/usuarios',
+      href: '/dashboard/usuarios',
       icon: Users,
       show: canAccess('USUARIOS'),
     },
     {
       title: 'Suscripciones',
-      href: '/suscripciones',
+      href: '/dashboard/suscripciones',
       icon: CreditCard,
       show: canAccess('SUSCRIPCIONES'),
     },
     {
       title: 'Reportes',
-      href: '/reportes',
+      href: '/dashboard/reportes',
       icon: BarChart3,
       show: canAccess('REPORTES'),
     },
     {
       title: 'Gestión de Permisos',
-      href: '/admin/permisos',
+      href: '/dashboard/admin/permisos',
       icon: ShieldCheck,
       show: isAdmin,
     },
     {
       title: 'Configuración',
-      href: '/configuracion',
+      href: '/dashboard/configuracion',
       icon: Settings,
       show: true,
     },
@@ -168,7 +168,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             .filter((item) => item.show)
             .map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.href;
+              const isActive = item.href === '/dashboard'
+                ? location.pathname === '/dashboard'
+                : location.pathname.startsWith(item.href);
 
               return (
                 <Link

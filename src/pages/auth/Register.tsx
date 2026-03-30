@@ -36,7 +36,7 @@ export function Register() {
       const response = await authService.register(formData);
       setUser(response);
       toast.success(`¡Bienvenido a StockFlow! Plan ${response.suscripcion?.planId} activado`);
-      navigate('/');
+      navigate('/dashboard');
     } catch (error: any) {
       const message = error.response?.data?.mensaje || error.message || 'Error en el registro';
       toast.error(message);
