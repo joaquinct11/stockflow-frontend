@@ -5,13 +5,17 @@ import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
-import { Package } from 'lucide-react';
+import { Package, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function Login() {
   const navigate = useNavigate();
   const { setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
+
+  // ✅ NUEVO: toggle para mostrar/ocultar contraseña
+  const [showPassword, setShowPassword] = useState(false);
+
   const [formData, setFormData] = useState({
     email: '',
     contraseña: '',
@@ -22,23 +26,24 @@ export function Login() {
     setLoading(true);
 
     try {
-      console.log('🔐 Intentando login...'); // ← Log
+      if (import.meta.env.DEV) {
+        console.log('🔐 Intentando login...');
+      }
       const response = await authService.login(formData);
-      
-      console.log('✅ Login exitoso:', response); // ← Log
-      
-      // Fetch permisos from /api/auth/me and merge into user object
+
       try {
         const profile = await authService.obtenerPerfil();
         setUser({ ...response, permisos: profile.permisos || [] });
       } catch {
-        setUser(response); // fallback: set user without permisos
+        setUser(response);
       }
-      
+
       toast.success(`¡Bienvenido ${response.nombre}!`);
       navigate('/dashboard');
     } catch (error: any) {
-      console.error('❌ Error en login:', error); // ← Log
+      if (import.meta.env.DEV) {
+        console.error('❌ Error en login:', error);
+      }
       const message = error.response?.data?.mensaje || 'Error al iniciar sesión';
       toast.error(message);
     } finally {
@@ -56,10 +61,9 @@ export function Login() {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">StockFlow</CardTitle>
-          <CardDescription>
-            Sistema de Gestión de Inventario
-          </CardDescription>
+          <CardDescription>Sistema de Gestión de Inventario</CardDescription>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -81,22 +85,32 @@ export function Login() {
                 <label className="text-sm font-medium" htmlFor="password">
                   Contraseña
                 </label>
-                {/* ✅ NUEVO: Link a forgot password */}
-                <Link
-                  to="/forgot-password"
-                  className="text-xs text-primary hover:underline"
-                >
+                <Link to="/forgot-password" className="text-xs text-primary hover:underline">
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={formData.contraseña}
-                onChange={(e) => setFormData({ ...formData, contraseña: e.target.value })}
-                required
-              />
+
+              {/* ✅ NUEVO: input con botón "ojito" */}
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={formData.contraseña}
+                  onChange={(e) => setFormData({ ...formData, contraseña: e.target.value })}
+                  required
+                  className="pr-10"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
