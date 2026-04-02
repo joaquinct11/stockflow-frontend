@@ -39,6 +39,16 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
   },
 
   {
+    label: 'Facturación',
+    codes: [
+      'VER_FACTURACION',
+      'EMITIR_COMPROBANTE',
+      'VER_COMPROBANTE',
+      'ANULAR_COMPROBANTE',
+    ],
+  },
+
+  {
     label: 'Inventario',
     codes: ['VER_INVENTARIO', 'CREAR_INVENTARIO', 'ELIMINAR_INVENTARIO', 'VER_DETALLE_INVENTARIO'],
   },
