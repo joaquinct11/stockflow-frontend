@@ -15,6 +15,8 @@ import {
   Building2,
   ShieldCheck,
   FileText,
+  ClipboardList,
+  Inbox,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -61,6 +63,18 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: '/dashboard/facturacion',
       icon: FileText,
       show: canAccess('FACTURACION'),
+    },
+    {
+      title: 'Órdenes de Compra',
+      href: '/dashboard/compras/ordenes',
+      icon: ClipboardList,
+      show: canAccess('COMPRAS'),
+    },
+    {
+      title: 'Recepciones',
+      href: '/dashboard/recepciones',
+      icon: Inbox,
+      show: canAccess('RECEPCIONES'),
     },
     {
       title: 'Inventario',

@@ -40,7 +40,12 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
 
   {
     label: 'Facturación',
-    codes: ['CREAR_FACTURACION', 'VER_DETALLE_FACTURACION', 'ANULAR_FACTURACION'],
+    codes: [
+      'VER_FACTURACION',
+      'EMITIR_COMPROBANTE',
+      'VER_COMPROBANTE',
+      'ANULAR_COMPROBANTE',
+    ],
   },
 
   {
@@ -71,6 +76,26 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
   },
 
   { label: 'Reportes', codes: ['VER_REPORTES'] },
+
+  {
+    label: 'Órdenes de Compra',
+    codes: [
+      'VER_COMPRAS',
+      'CREAR_ORDEN_COMPRA',
+      'EDITAR_ORDEN_COMPRA',
+      'ELIMINAR_ORDEN_COMPRA',
+    ],
+  },
+
+  {
+    label: 'Recepciones',
+    codes: [
+      'VER_RECEPCIONES',
+      'CREAR_RECEPCION',
+      'EDITAR_RECEPCION',
+      'ELIMINAR_RECEPCION',
+    ],
+  },
 
   { label: 'Permisos', codes: ['VER_PERMISOS'] },
 ];

@@ -291,6 +291,74 @@ export interface EmitirComprobanteRequest {
 }
 
 // ========================================
+// ÓRDENES DE COMPRA
+// ========================================
+
+export type EstadoOC = 'BORRADOR' | 'ENVIADA' | 'PARCIAL' | 'COMPLETADA' | 'CANCELADA';
+
+export interface OrdenCompraItemDTO {
+  id?: number;
+  productoId: number;
+  productoNombre?: string;
+  codigoBarras?: string;
+  cantidadSolicitada: number;
+  cantidadRecibida?: number;
+  precioUnitario?: number;
+}
+
+export interface OrdenCompraDTO {
+  id?: number;
+  proveedorId: number;
+  proveedorNombre?: string;
+  estado: EstadoOC;
+  observaciones?: string;
+  tenantId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  items: OrdenCompraItemDTO[];
+}
+
+// ========================================
+// RECEPCIONES DE MERCADERÍA
+// ========================================
+
+export type EstadoRecepcion = 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
+export type TipoComprobanteProveedor = 'FACTURA' | 'BOLETA';
+
+export interface ComprobanteProveedorDTO {
+  tipo: TipoComprobanteProveedor;
+  serie: string;
+  numero: string;
+  urlArchivo?: string;
+}
+
+export interface RecepcionItemDTO {
+  id?: number;
+  productoId: number;
+  productoNombre?: string;
+  codigoBarras?: string;
+  cantidadEsperada?: number;
+  cantidadRecibida: number;
+  precioUnitario?: number;
+  fechaVencimiento?: string;
+  lote?: string;
+}
+
+export interface RecepcionDTO {
+  id?: number;
+  ordenCompraId?: number;
+  proveedorId: number;
+  proveedorNombre?: string;
+  estado: EstadoRecepcion;
+  comprobante?: ComprobanteProveedorDTO;
+  observaciones?: string;
+  tenantId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  items: RecepcionItemDTO[];
+}
+
+// ========================================
 // ERROR HANDLING
 // ========================================
 
