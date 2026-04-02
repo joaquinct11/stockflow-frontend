@@ -220,7 +220,7 @@ export function PermisosConfig() {
     // are always visible and selectable in the UI.
     const groups = PERMISSION_GROUPS.map((g) => {
       const perms = g.codes
-        .map((code) => byCode.get(code) ?? ({ id: -1, codigo: code, nombre: code } as Permiso))
+        .map((code, i) => byCode.get(code) ?? ({ id: -(i + 1), codigo: code, nombre: code } as Permiso))
         .filter(matchesSearch);
 
       return { label: g.label, key: g.label, perms };
