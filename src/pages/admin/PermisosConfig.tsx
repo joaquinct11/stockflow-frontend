@@ -39,6 +39,11 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
   },
 
   {
+    label: 'Facturación',
+    codes: ['CREAR_FACTURACION', 'VER_DETALLE_FACTURACION', 'ANULAR_FACTURACION'],
+  },
+
+  {
     label: 'Inventario',
     codes: ['VER_INVENTARIO', 'CREAR_INVENTARIO', 'ELIMINAR_INVENTARIO', 'VER_DETALLE_INVENTARIO'],
   },
@@ -211,10 +216,11 @@ export function PermisosConfig() {
     };
 
     // Build groups strictly from PERMISSION_GROUPS (no "Otros")
+    // For codes not yet in the backend catalog, create a synthetic Permiso so they
+    // are always visible and selectable in the UI.
     const groups = PERMISSION_GROUPS.map((g) => {
       const perms = g.codes
-        .map((code) => byCode.get(code))
-        .filter((p): p is Permiso => Boolean(p))
+        .map((code) => byCode.get(code) ?? ({ id: -1, codigo: code, nombre: code } as Permiso))
         .filter(matchesSearch);
 
       return { label: g.label, key: g.label, perms };
@@ -410,7 +416,7 @@ export function PermisosConfig() {
                           const code = getPermCode(perm);
                           return (
                             <label
-                              key={perm.id}
+                              key={code}
                               className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors"
                             >
                               <input
