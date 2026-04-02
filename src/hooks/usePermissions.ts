@@ -12,7 +12,9 @@ export type Module =
   | 'SUSCRIPCIONES'
   | 'REPORTES'
   | 'CONFIGURACION'
-  | 'FACTURACION';
+  | 'FACTURACION'
+  | 'COMPRAS'
+  | 'RECEPCIONES';
 
 type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 
@@ -86,6 +88,20 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
     ver_propias: 'VER_COMPROBANTE',
     eliminar: 'ANULAR_COMPROBANTE',
   },
+  COMPRAS: {
+    ver: 'VER_COMPRAS',
+    ver_todas: 'VER_COMPRAS',
+    crear: 'CREAR_ORDEN_COMPRA',
+    editar: 'EDITAR_ORDEN_COMPRA',
+    eliminar: 'ELIMINAR_ORDEN_COMPRA',
+  },
+  RECEPCIONES: {
+    ver: 'VER_RECEPCIONES',
+    ver_todas: 'VER_RECEPCIONES',
+    crear: 'CREAR_RECEPCION',
+    editar: 'EDITAR_RECEPCION',
+    eliminar: 'ELIMINAR_RECEPCION',
+  },
 };
 
 // Fallback role-based permission table (used when no backend permisos are assigned)
@@ -151,6 +167,20 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     GERENTE: ['ver', 'ver_todas', 'crear', 'eliminar'],
     VENDEDOR: ['crear', 'ver_propias'],
     GESTOR_INVENTARIO: [],
+  },
+
+  COMPRAS: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: ['ver'],
+  },
+
+  RECEPCIONES: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
   },
   
   CONFIGURACION: {

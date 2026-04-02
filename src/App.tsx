@@ -33,6 +33,10 @@ import { UserProfile } from './pages/settings/UserProfile';
 import { PermisosConfig } from './pages/admin/PermisosConfig';
 import { ComprobantesPage } from './pages/facturacion/ComprobantesPage';
 import { KardexPage } from './pages/kardex/KardexPage';
+import { OrdenComprasList } from './pages/compras/OrdenComprasList';
+import { OrdenCompraDetail } from './pages/compras/OrdenCompraDetail';
+import { RecepcionList } from './pages/recepciones/RecepcionList';
+import { RecepcionDetail } from './pages/recepciones/RecepcionDetail';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -179,6 +183,42 @@ function App() {
               element={
                 <RoleProtectedRoute module="FACTURACION">
                   <ComprobantesPage />
+                </RoleProtectedRoute>
+              }
+            />
+
+            {/* Órdenes de Compra */}
+            <Route
+              path="compras/ordenes"
+              element={
+                <RoleProtectedRoute module="COMPRAS">
+                  <OrdenComprasList />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="compras/ordenes/:id"
+              element={
+                <RoleProtectedRoute module="COMPRAS">
+                  <OrdenCompraDetail />
+                </RoleProtectedRoute>
+              }
+            />
+
+            {/* Recepciones */}
+            <Route
+              path="recepciones"
+              element={
+                <RoleProtectedRoute module="RECEPCIONES">
+                  <RecepcionList />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="recepciones/:id"
+              element={
+                <RoleProtectedRoute module="RECEPCIONES">
+                  <RecepcionDetail />
                 </RoleProtectedRoute>
               }
             />
