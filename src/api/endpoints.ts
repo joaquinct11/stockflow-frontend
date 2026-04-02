@@ -111,4 +111,26 @@ export const API_ENDPOINTS = {
     ANULAR: (id: number) => `/facturacion/comprobantes/${id}/anular`,
     GET_BY_VENTA: (ventaId: number) => `/ventas/${ventaId}/comprobante`,
   },
+
+  ORDENES_COMPRA: {
+    LIST: '/ordenes-compra',
+    GET: (id: number) => `/ordenes-compra/${id}`,
+    CREATE: '/ordenes-compra',
+    UPDATE: (id: number) => `/ordenes-compra/${id}`,
+    ADD_ITEM: (id: number) => `/ordenes-compra/${id}/items`,
+    REMOVE_ITEM: (id: number, itemId: number) => `/ordenes-compra/${id}/items/${itemId}`,
+    ENVIAR: (id: number) => `/ordenes-compra/${id}/enviar`,
+    CANCELAR: (id: number) => `/ordenes-compra/${id}/cancelar`,
+  },
+
+  RECEPCIONES: {
+    LIST: '/recepciones',
+    GET: (id: number) => `/recepciones/${id}`,
+    CREATE: '/recepciones',
+    UPDATE: (id: number) => `/recepciones/${id}`,
+    UPSERT_ITEMS: (id: number) => `/recepciones/${id}/items`,
+    REMOVE_ITEM: (id: number, itemId: number) => `/recepciones/${id}/items/${itemId}`,
+    SET_COMPROBANTE: (id: number) => `/recepciones/${id}/comprobante`,
+    CONFIRMAR: (id: number) => `/recepciones/${id}/confirmar`,
+  },
 };
