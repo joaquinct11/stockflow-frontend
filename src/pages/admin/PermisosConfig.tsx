@@ -33,6 +33,26 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
     codes: ['VER_PRODUCTOS', 'CREAR_PRODUCTO', 'EDITAR_PRODUCTO', 'ELIMINAR_PRODUCTO'],
   },
 
+    {
+    label: 'Órdenes de Compra',
+    codes: [
+      'VER_COMPRAS',
+      'CREAR_ORDEN_COMPRA',
+      'EDITAR_ORDEN_COMPRA',
+      'ELIMINAR_ORDEN_COMPRA',
+    ],
+  },
+
+  {
+    label: 'Recepciones',
+    codes: [
+      'VER_RECEPCIONES',
+      'CREAR_RECEPCION',
+      'EDITAR_RECEPCION',
+      'ELIMINAR_RECEPCION',
+    ],
+  },
+
   {
     label: 'Ventas',
     codes: ['VER_VENTAS', 'VER_MIS_VENTAS', 'CREAR_VENTA', 'ELIMINAR_VENTA', 'VER_DETALLE_VENTA'],
@@ -64,6 +84,8 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
     ],
   },
 
+  { label: 'Permisos', codes: ['VER_PERMISOS'] },
+
   {
     label: 'Suscripciones',
     codes: [
@@ -75,29 +97,7 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
     ],
   },
 
-  { label: 'Reportes', codes: ['VER_REPORTES'] },
-
-  {
-    label: 'Órdenes de Compra',
-    codes: [
-      'VER_COMPRAS',
-      'CREAR_ORDEN_COMPRA',
-      'EDITAR_ORDEN_COMPRA',
-      'ELIMINAR_ORDEN_COMPRA',
-    ],
-  },
-
-  {
-    label: 'Recepciones',
-    codes: [
-      'VER_RECEPCIONES',
-      'CREAR_RECEPCION',
-      'EDITAR_RECEPCION',
-      'ELIMINAR_RECEPCION',
-    ],
-  },
-
-  { label: 'Permisos', codes: ['VER_PERMISOS'] },
+  { label: 'Reportes', codes: ['VER_REPORTES'] }
 ];
 
 function getRoleBadgeClass(rol: string) {
