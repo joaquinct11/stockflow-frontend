@@ -4,60 +4,49 @@ import type { RecepcionDTO, RecepcionItemDTO, ComprobanteProveedorDTO } from '..
 
 export const recepcionService = {
   getAll: async (): Promise<RecepcionDTO[]> => {
-    const { data } = await axiosInstance.get<RecepcionDTO[]>(
-      API_ENDPOINTS.RECEPCIONES.LIST
-    );
+    const { data } = await axiosInstance.get<RecepcionDTO[]>(API_ENDPOINTS.RECEPCIONES.LIST);
     return data;
   },
 
   getById: async (id: number): Promise<RecepcionDTO> => {
-    const { data } = await axiosInstance.get<RecepcionDTO>(
-      API_ENDPOINTS.RECEPCIONES.GET(id)
-    );
+    const { data } = await axiosInstance.get<RecepcionDTO>(API_ENDPOINTS.RECEPCIONES.GET(id));
     return data;
   },
 
   create: async (dto: Omit<RecepcionDTO, 'id' | 'tenantId'>): Promise<RecepcionDTO> => {
-    const { data } = await axiosInstance.post<RecepcionDTO>(
-      API_ENDPOINTS.RECEPCIONES.CREATE,
-      dto
-    );
+    const { data } = await axiosInstance.post<RecepcionDTO>(API_ENDPOINTS.RECEPCIONES.CREATE, dto);
     return data;
   },
 
   update: async (id: number, dto: Partial<RecepcionDTO>): Promise<RecepcionDTO> => {
-    const { data } = await axiosInstance.put<RecepcionDTO>(
-      API_ENDPOINTS.RECEPCIONES.UPDATE(id),
-      dto
+    const { data } = await axiosInstance.put<RecepcionDTO>(API_ENDPOINTS.RECEPCIONES.UPDATE(id), dto);
+    return data;
+  },
+
+  // ✅ BACKEND REAL: POST /recepciones/{id}/items (1 item)
+  upsertItem: async (id: number, item: RecepcionItemDTO): Promise<RecepcionDTO> => {
+    const { data } = await axiosInstance.post<RecepcionDTO>(
+      API_ENDPOINTS.RECEPCIONES.UPSERT_ITEMS(id), // apunta a /recepciones/{id}/items
+      item
     );
     return data;
   },
 
-  upsertItems: async (id: number, items: RecepcionItemDTO[]): Promise<RecepcionDTO> => {
-    const { data } = await axiosInstance.put<RecepcionDTO>(
-      API_ENDPOINTS.RECEPCIONES.UPSERT_ITEMS(id),
-      items
-    );
-    return data;
-  },
+  // ✅ BACKEND NO TIENE DELETE item, así que evitamos removeItem por ahora
+  // removeItem: ...
 
-  removeItem: async (id: number, itemId: number): Promise<RecepcionDTO> => {
-    const { data } = await axiosInstance.delete<RecepcionDTO>(
-      API_ENDPOINTS.RECEPCIONES.REMOVE_ITEM(id, itemId)
-    );
-    return data;
-  },
-
+  // ✅ BACKEND REAL: POST /recepciones/{id}/comprobante
   setComprobante: async (id: number, comprobante: ComprobanteProveedorDTO): Promise<RecepcionDTO> => {
-    const { data } = await axiosInstance.put<RecepcionDTO>(
+    const { data } = await axiosInstance.post<RecepcionDTO>(
       API_ENDPOINTS.RECEPCIONES.SET_COMPROBANTE(id),
       comprobante
     );
     return data;
   },
 
+  // ✅ BACKEND REAL: POST /recepciones/{id}/confirmar
   confirmar: async (id: number): Promise<RecepcionDTO> => {
-    const { data } = await axiosInstance.patch<RecepcionDTO>(
+    const { data } = await axiosInstance.post<RecepcionDTO>(
       API_ENDPOINTS.RECEPCIONES.CONFIRMAR(id)
     );
     return data;

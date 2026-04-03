@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ordenCompraService } from '../../services/ordenCompra.service';
 import { proveedorService } from '../../services/proveedor.service';
+import { recepcionService } from '../../services/recepcion.service';
 import { productoService } from '../../services/producto.service';
 import type { OrdenCompraDTO, OrdenCompraItemDTO, ProveedorDTO, ProductoDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -308,11 +309,34 @@ export function OrdenComprasList() {
     }
   };
 
-  const handleRecepcionar = () => {
+  const handleRecepcionar = async () => {
     if (!selectedOc?.id) return;
-    // aquí usamos el flujo actual que tienes para recepción nueva con ocId
-    navigate(`/dashboard/recepciones/nueva?ocId=${selectedOc.id}`);
-  };
+
+    try {
+      setDetailActionLoading(true);
+
+      // ✅ backend espera ocId (no ordenCompraId)
+      const created = await recepcionService.create({
+        ocId: selectedOc.id,
+        observaciones: `Recepción desde OC #${selectedOc.id}`,
+      } as any);
+
+      toast.success(`Recepción creada (OC #${selectedOc.id})`);
+
+      // cierra modal de OC
+      closeDetail();
+
+      // navega al módulo de recepciones
+      // (si quieres abrir directo el modal de la recepción, habría que soportar query param en RecepcionList)
+      navigate('/dashboard/recepciones');
+    } catch (e: any) {
+      // backend puede devolver BadRequest si OC cancelada, etc.
+      toast.error(e?.response?.data?.mensaje ?? 'Error al crear recepción desde la OC');
+      console.error(e);
+    } finally {
+      setDetailActionLoading(false);
+    }
+};
 
   if (loading) return <LoadingSpinner />;
 

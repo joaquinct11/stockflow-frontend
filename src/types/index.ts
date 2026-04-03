@@ -326,10 +326,10 @@ export type EstadoRecepcion = 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
 export type TipoComprobanteProveedor = 'FACTURA' | 'BOLETA';
 
 export interface ComprobanteProveedorDTO {
-  tipo: TipoComprobanteProveedor;
+  tipoComprobante: TipoComprobanteProveedor;
   serie: string;
   numero: string;
-  urlArchivo?: string;
+  urlAdjunto?: string;
 }
 
 export interface RecepcionItemDTO {
