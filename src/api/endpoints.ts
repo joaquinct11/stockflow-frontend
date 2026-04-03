@@ -113,14 +113,14 @@ export const API_ENDPOINTS = {
   },
 
   ORDENES_COMPRA: {
-    LIST: '/ordenes-compra',
-    GET: (id: number) => `/ordenes-compra/${id}`,
-    CREATE: '/ordenes-compra',
-    UPDATE: (id: number) => `/ordenes-compra/${id}`,
-    ADD_ITEM: (id: number) => `/ordenes-compra/${id}/items`,
-    REMOVE_ITEM: (id: number, itemId: number) => `/ordenes-compra/${id}/items/${itemId}`,
-    ENVIAR: (id: number) => `/ordenes-compra/${id}/enviar`,
-    CANCELAR: (id: number) => `/ordenes-compra/${id}/cancelar`,
+    LIST: '/oc',
+    GET: (id: number) => `/oc/${id}`,
+    CREATE: '/oc',
+    UPDATE: (id: number) => `/oc/${id}`,
+    ADD_ITEM: (id: number) => `/oc/${id}/items`,
+    REMOVE_ITEM: (id: number, itemId: number) => `/oc/${id}/items/${itemId}`,
+    ENVIAR: (id: number) => `/oc/${id}/enviar`,
+    CANCELAR: (id: number) => `/oc/${id}/cancelar`,
   },
 
   RECEPCIONES: {

@@ -34,9 +34,7 @@ import { PermisosConfig } from './pages/admin/PermisosConfig';
 import { ComprobantesPage } from './pages/facturacion/ComprobantesPage';
 import { KardexPage } from './pages/kardex/KardexPage';
 import { OrdenComprasList } from './pages/compras/OrdenComprasList';
-import { OrdenCompraDetail } from './pages/compras/OrdenCompraDetail';
 import { RecepcionList } from './pages/recepciones/RecepcionList';
-import { RecepcionDetail } from './pages/recepciones/RecepcionDetail';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -196,14 +194,6 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            <Route
-              path="compras/ordenes/:id"
-              element={
-                <RoleProtectedRoute module="COMPRAS">
-                  <OrdenCompraDetail />
-                </RoleProtectedRoute>
-              }
-            />
 
             {/* Recepciones */}
             <Route
@@ -211,14 +201,6 @@ function App() {
               element={
                 <RoleProtectedRoute module="RECEPCIONES">
                   <RecepcionList />
-                </RoleProtectedRoute>
-              }
-            />
-            <Route
-              path="recepciones/:id"
-              element={
-                <RoleProtectedRoute module="RECEPCIONES">
-                  <RecepcionDetail />
                 </RoleProtectedRoute>
               }
             />
