@@ -42,7 +42,8 @@ export function InventarioList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
-  const [selectedProveedorMov, setSelectedProveedorMov] = useState<any>(null);
+  // const [selectedProveedorMov, setSelectedProveedorMov] = useState<any>(null);
+  const [setSelectedProveedorMov] = useState<any>(null);
 
   // Kardex dialog state
   const [isKardexOpen, setIsKardexOpen] = useState(false);
@@ -143,11 +144,11 @@ export function InventarioList() {
     subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoria || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
   }));
 
-  const proveedoresOptions = proveedores.map((p) => ({
-    id: p.id!,
-    label: p.nombre,
-    subtitle: `RUC: ${p.ruc || 'N/A'} | Contacto: ${p.contacto || 'N/A'}`,
-  }));
+  // const proveedoresOptions = proveedores.map((p) => ({
+  //   id: p.id!,
+  //   label: p.nombre,
+  //   subtitle: `RUC: ${p.ruc || 'N/A'} | Contacto: ${p.contacto || 'N/A'}`,
+  // }));
 
   const openKardex = async (producto: ProductoDTO) => {
     setKardexProducto(producto);
