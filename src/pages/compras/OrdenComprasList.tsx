@@ -316,7 +316,7 @@ export function OrdenComprasList() {
       setDetailActionLoading(true);
 
       // ✅ backend espera ocId (no ordenCompraId)
-      const created = await recepcionService.create({
+      await recepcionService.create({
         ocId: selectedOc.id,
         observaciones: `Recepción desde OC #${selectedOc.id}`,
       } as any);
