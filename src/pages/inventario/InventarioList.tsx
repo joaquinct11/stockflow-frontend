@@ -491,8 +491,8 @@ export function InventarioList() {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 required
               >
-                <option value="ENTRADA">Entrada (Compra)</option>
-                <option value="SALIDA">Salida (Venta)</option>
+                {/* <option value="ENTRADA">Entrada (Compra)</option>
+                <option value="SALIDA">Salida (Venta)</option> */}
                 <option value="AJUSTE">Ajuste (Inventario)</option>
                 <option value="DEVOLUCION">Devolución (Cliente)</option>
               </select>
@@ -538,7 +538,7 @@ export function InventarioList() {
             </div>
 
             {/* Campos exclusivos para ENTRADA (Compra) */}
-            {formData.tipo === 'ENTRADA' && (
+            {/* {formData.tipo === 'ENTRADA' && (
               <>
                 <div className="md:col-span-2 border-t pt-3">
                   <p className="text-sm font-medium text-green-700 mb-3">Datos de la compra (Entrada)</p>
@@ -600,7 +600,7 @@ export function InventarioList() {
                   />
                 </div>
               </>
-            )}
+            )} */}
           </div>
 
           <div className="flex gap-2 justify-end pt-4 border-t">

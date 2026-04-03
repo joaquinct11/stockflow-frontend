@@ -6,11 +6,8 @@ export function LandingPage() {
   useEffect(() => {
     const header = document.querySelector('.landing-header');
     const handleScroll = () => {
-      if (window.scrollY > 20) {
-        header?.classList.add('scrolled');
-      } else {
-        header?.classList.remove('scrolled');
-      }
+      if (window.scrollY > 20) header?.classList.add('scrolled');
+      else header?.classList.remove('scrolled');
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
@@ -21,15 +18,19 @@ export function LandingPage() {
       {/* ===== HEADER ===== */}
       <header className="landing-header">
         <nav className="landing-nav">
-          <a href="#" className="landing-logo">
-            <div className="landing-logo-icon">📦</div>
-            <span className="landing-logo-text">StockFlow</span>
+          <a href="/" className="landing-logo" aria-label="Fluxus - Inicio">
+            <img
+              src="/fluxus.png"
+              alt="Fluxus logo"
+              className="landing-logo-icon"
+            />
+            <span className="landing-logo-text">Fluxus</span>
           </a>
 
           <ul className="landing-nav-links">
-            <li><a href="#features">Características</a></li>
+            <li><a href="#features">Módulos</a></li>
             <li><a href="#pricing">Precios</a></li>
-            <li><a href="#features">Demo</a></li>
+            <li><a href="#demo">Demo</a></li>
           </ul>
 
           <div className="landing-nav-actions">
@@ -47,36 +48,34 @@ export function LandingPage() {
           <div className="landing-hero-text">
             <div className="landing-hero-badge">
               <span className="landing-hero-badge-dot" />
-              Gestión de inventario para farmacias y más
+              Mini‑ERP en la nube para tu negocio
             </div>
 
             <h1 className="landing-hero-title">
-              Controla tu stock{' '}
-              <span className="landing-hero-title-highlight">
-                en tiempo real
-              </span>
-              , sin esfuerzo
+              Gestiona{' '}
+              <span className="landing-hero-title-highlight">compras, ventas e inventario</span>
+              {' '}en un solo sistema
             </h1>
 
             <p className="landing-hero-subtitle">
-              StockFlow te da visibilidad total de tu inventario: kardex, movimientos,
-              alertas de stock mínimo, ventas y más — todo en un solo lugar.
+              Fluxus centraliza tu operación: órdenes de compra, recepciones, stock en tiempo real,
+              ventas y reportes. Menos Excel, más control.
             </p>
 
             <div className="landing-hero-actions">
               <Link to="/register" className="btn-hero-primary">
-                🚀 Prueba Gratis 30 Días
+                Empezar gratis
               </Link>
-              <a href="#features" className="btn-hero-secondary">
-                ▶ Ver Demo
+              <a href="#demo" className="btn-hero-secondary">
+                ▶ Ver demo
               </a>
             </div>
 
             <div className="landing-hero-trust">
               <span className="landing-hero-trust-text">Sin tarjeta de crédito ·</span>
               <div className="landing-hero-trust-badges">
-                <span className="landing-trust-badge">SOC 2</span>
-                <span className="landing-trust-badge">99.9% UP</span>
+                <span className="landing-trust-badge">Soporte en español</span>
+                <span className="landing-trust-badge">Multi‑usuario</span>
               </div>
             </div>
           </div>
@@ -97,11 +96,11 @@ export function LandingPage() {
                   </div>
                   <div className="landing-stat-card">
                     <div className="landing-stat-value">S/98.4K</div>
-                    <div className="landing-stat-label">Valor Stock</div>
+                    <div className="landing-stat-label">Valor de stock</div>
                   </div>
                   <div className="landing-stat-card">
                     <div className="landing-stat-value" style={{ color: '#ff5050' }}>12</div>
-                    <div className="landing-stat-label">Bajo Stock</div>
+                    <div className="landing-stat-label">Alertas</div>
                   </div>
                 </div>
 
@@ -138,74 +137,89 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ===== FEATURES ===== */}
+      {/* ===== FEATURES / MODULES ===== */}
       <section className="landing-section landing-features" id="features">
         <div className="landing-container">
           <div className="landing-section-header">
-            <span className="landing-section-label">Características</span>
+            <span className="landing-section-label">Módulos</span>
             <h2 className="landing-section-title">
-              Todo lo que necesitas para gestionar tu inventario
+              Un sistema modular que crece contigo
             </h2>
             <p className="landing-section-subtitle">
-              Desde el kardex hasta las ventas, StockFlow centraliza cada movimiento
-              de tu stock con precisión y velocidad.
+              Empieza con lo esencial y agrega módulos cuando tu operación lo necesite.
             </p>
           </div>
 
           <div className="landing-features-grid">
             <div className="landing-feature-card">
-              <div className="landing-feature-icon">📋</div>
-              <h3 className="landing-feature-title">Kardex en tiempo real</h3>
+              <div className="landing-feature-icon">📦</div>
+              <h3 className="landing-feature-title">Inventario + Kardex</h3>
               <p className="landing-feature-desc">
-                Historial completo por producto: saldo inicial, compras, ventas, ajustes
-                y devoluciones. Calcula el stock acumulado con cada movimiento.
+                Movimientos en tiempo real, stock mínimo/máximo, trazabilidad y control por producto.
               </p>
             </div>
 
             <div className="landing-feature-card">
-              <div className="landing-feature-icon">📦</div>
-              <h3 className="landing-feature-title">Control de Inventario</h3>
+              <div className="landing-feature-icon">🧾</div>
+              <h3 className="landing-feature-title">Compras y recepciones</h3>
               <p className="landing-feature-desc">
-                Gestiona tu catálogo con alertas automáticas de stock mínimo y máximo.
-                Nunca más te quedas sin productos clave.
+                Órdenes de compra, recepción de mercadería, validación de pendientes y control de costos.
               </p>
             </div>
 
             <div className="landing-feature-card">
               <div className="landing-feature-icon">🛒</div>
-              <h3 className="landing-feature-title">Gestión de Ventas</h3>
+              <h3 className="landing-feature-title">Ventas</h3>
               <p className="landing-feature-desc">
-                Registra ventas y actualiza el stock automáticamente. Genera comprobantes
-                y lleva un historial detallado de cada transacción.
+                Registra ventas y actualiza el stock automáticamente. Historial y métricas por periodo.
               </p>
             </div>
 
             <div className="landing-feature-card">
-              <div className="landing-feature-icon">🏪</div>
-              <h3 className="landing-feature-title">Proveedores y Compras</h3>
+              <div className="landing-feature-icon">👥</div>
+              <h3 className="landing-feature-title">Usuarios, roles y permisos</h3>
               <p className="landing-feature-desc">
-                Administra proveedores, registra compras y controla costos unitarios.
-                El inventario se actualiza con cada entrada de mercancía.
+                Controla qué puede hacer cada usuario por módulo: admin, compras, ventas, inventario, etc.
               </p>
             </div>
 
             <div className="landing-feature-card">
               <div className="landing-feature-icon">📊</div>
-              <h3 className="landing-feature-title">Reportes y Analíticas</h3>
+              <h3 className="landing-feature-title">Reportes</h3>
               <p className="landing-feature-desc">
-                Visualiza tendencias de ventas, rotación de productos y valor de inventario.
-                Toma decisiones basadas en datos reales.
+                Indicadores clave para decidir mejor: rotación, valorización, márgenes y tendencias.
               </p>
             </div>
 
             <div className="landing-feature-card">
-              <div className="landing-feature-icon">🔐</div>
-              <h3 className="landing-feature-title">Roles y Permisos</h3>
+              <div className="landing-feature-icon">🔁</div>
+              <h3 className="landing-feature-title">Suscripciones (SaaS)</h3>
               <p className="landing-feature-desc">
-                Asigna roles específicos (Admin, Gestor de Inventario, Vendedor) y controla
-                qué puede hacer cada usuario en el sistema.
+                Planes, límites por cuenta y crecimiento por etapas (ideal para multi‑tenant).
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== DEMO ===== */}
+      <section className="landing-section" id="demo">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <span className="landing-section-label">Demo</span>
+            <h2 className="landing-section-title">Mira Fluxus en acción</h2>
+            <p className="landing-section-subtitle">
+              Crea una cuenta y prueba el flujo completo: OC → Recepción → Stock → Venta.
+            </p>
+          </div>
+
+          <div className="landing-hero-actions" style={{ justifyContent: 'center' }}>
+            <Link to="/register" className="btn-hero-primary">
+              Crear cuenta
+            </Link>
+            <Link to="/login" className="btn-hero-secondary">
+              Entrar a mi panel
+            </Link>
           </div>
         </div>
       </section>
@@ -215,30 +229,26 @@ export function LandingPage() {
         <div className="landing-container">
           <div className="landing-section-header">
             <span className="landing-section-label">Precios</span>
-            <h2 className="landing-section-title">
-              Planes simples y transparentes
-            </h2>
+            <h2 className="landing-section-title">Planes simples y transparentes</h2>
             <p className="landing-section-subtitle">
-              Empieza gratis y escala cuando lo necesites. Sin costos ocultos,
-              sin contratos de permanencia.
+              Empieza gratis y escala cuando lo necesites. Sin costos ocultos.
             </p>
           </div>
 
           <div className="landing-pricing-grid">
-            {/* Starter */}
             <div className="landing-pricing-card">
               <div className="landing-pricing-plan">Starter</div>
               <div className="landing-pricing-price">
                 <span>S/</span>0<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
-                Perfecto para emprendedores y negocios pequeños que quieren comenzar a controlar su inventario.
+                Para comenzar a operar con lo esencial.
               </p>
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
                 <li><span className="check">✓</span> Hasta 100 productos</li>
                 <li><span className="check">✓</span> 1 usuario</li>
-                <li><span className="check">✓</span> Kardex básico</li>
+                <li><span className="check">✓</span> Inventario básico</li>
                 <li><span className="check">✓</span> Alertas de stock</li>
                 <li><span className="cross">✗</span> Reportes avanzados</li>
                 <li><span className="cross">✗</span> Múltiples sucursales</li>
@@ -248,7 +258,6 @@ export function LandingPage() {
               </Link>
             </div>
 
-            {/* Pro */}
             <div className="landing-pricing-card featured">
               <div className="landing-pricing-badge">⭐ Más Popular</div>
               <div className="landing-pricing-plan">Pro</div>
@@ -256,41 +265,38 @@ export function LandingPage() {
                 <span>S/</span>99<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
-                Para negocios en crecimiento que necesitan más usuarios, reportes y herramientas avanzadas.
+                Para negocios en crecimiento que necesitan más usuarios y reportes.
               </p>
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
                 <li><span className="check">✓</span> Productos ilimitados</li>
                 <li><span className="check">✓</span> Hasta 10 usuarios</li>
-                <li><span className="check">✓</span> Kardex completo</li>
-                <li><span className="check">✓</span> Alertas de stock</li>
+                <li><span className="check">✓</span> Compras + Ventas + Inventario</li>
                 <li><span className="check">✓</span> Reportes avanzados</li>
+                <li><span className="check">✓</span> Roles y permisos</li>
                 <li><span className="cross">✗</span> Múltiples sucursales</li>
               </ul>
               <Link to="/register" className="landing-pricing-cta primary">
-                Prueba 30 Días Gratis
+                Probar Pro (30 días)
               </Link>
             </div>
 
-            {/* Enterprise */}
             <div className="landing-pricing-card">
               <div className="landing-pricing-plan">Enterprise</div>
               <div className="landing-pricing-price" style={{ fontSize: '2rem' }}>
                 A medida
               </div>
               <p className="landing-pricing-description">
-                Para cadenas de tiendas y empresas con múltiples sucursales y necesidades específicas.
+                Para empresas con múltiples sedes y necesidades específicas.
               </p>
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
-                <li><span className="check">✓</span> Productos ilimitados</li>
                 <li><span className="check">✓</span> Usuarios ilimitados</li>
-                <li><span className="check">✓</span> Kardex completo</li>
-                <li><span className="check">✓</span> Alertas de stock</li>
-                <li><span className="check">✓</span> Reportes avanzados</li>
-                <li><span className="check">✓</span> Múltiples sucursales</li>
+                <li><span className="check">✓</span> Multi‑sucursal</li>
+                <li><span className="check">✓</span> Integraciones</li>
+                <li><span className="check">✓</span> Soporte prioritario</li>
               </ul>
-              <a href="mailto:contacto@stockflow.pe" className="landing-pricing-cta outline">
+              <a href="mailto:contacto@fluxus.pe" className="landing-pricing-cta outline">
                 Contactar Ventas
               </a>
             </div>
@@ -298,20 +304,19 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ===== CTA SECTION ===== */}
+      {/* ===== CTA ===== */}
       <section className="landing-cta-section">
         <div className="landing-container">
           <h2 className="landing-cta-title">
-            ¿Listo para tomar el control de tu{' '}
-            <span className="landing-hero-title-highlight">inventario</span>?
+            ¿Listo para operar tu negocio con{' '}
+            <span className="landing-hero-title-highlight">más control</span>?
           </h2>
           <p className="landing-cta-subtitle">
-            Únete a cientos de negocios que ya confían en StockFlow para gestionar
-            su stock sin complicaciones.
+            Fluxus es tu suite de compras, ventas e inventario en la nube.
           </p>
           <div className="landing-cta-actions">
             <Link to="/register" className="btn-accent">
-              🚀 Prueba Gratis 30 Días
+              Empezar gratis
             </Link>
             <Link to="/login" className="btn-ghost">
               Ya tengo cuenta
@@ -327,22 +332,26 @@ export function LandingPage() {
       <footer className="landing-footer">
         <div className="landing-footer-grid">
           <div className="landing-footer-brand">
-            <a href="#" className="landing-logo" style={{ textDecoration: 'none' }}>
-              <div className="landing-logo-icon">📦</div>
-              <span className="landing-logo-text">StockFlow</span>
-            </a>
+            <Link to="/" className="landing-logo" style={{ textDecoration: 'none' }}>
+              <img
+                src="/fluxus.png"
+                alt="Fluxus logo"
+                className="landing-logo-icon"
+              />
+              <span className="landing-logo-text">Fluxus</span>
+            </Link>
             <p>
-              La plataforma de gestión de inventario diseñada para farmacias y negocios
-              que necesitan control total de su stock.
+              Fluxus es una plataforma modular para gestionar compras, ventas e inventario.
+              Hecha para negocios que quieren operar con orden y visibilidad.
             </p>
           </div>
 
           <div className="landing-footer-col">
             <h4>Producto</h4>
             <ul>
-              <li><a href="#features">Características</a></li>
+              <li><a href="#features">Módulos</a></li>
               <li><a href="#pricing">Precios</a></li>
-              <li><a href="#features">Demo</a></li>
+              <li><a href="#demo">Demo</a></li>
               <li><Link to="/register">Registro</Link></li>
             </ul>
           </div>
@@ -350,10 +359,8 @@ export function LandingPage() {
           <div className="landing-footer-col">
             <h4>Empresa</h4>
             <ul>
-              <li><a href="#">Sobre Nosotros</a></li>
-              <li><a href="#">Blog</a></li>
-              <li><a href="#">Contacto</a></li>
-              <li><a href="mailto:soporte@stockflow.pe">Soporte</a></li>
+              <li><a href="#demo">Contacto</a></li>
+              <li><a href="mailto:soporte@fluxus.pe">Soporte</a></li>
             </ul>
           </div>
 
@@ -369,12 +376,12 @@ export function LandingPage() {
 
         <div className="landing-footer-bottom">
           <span className="landing-footer-copy">
-            © {new Date().getFullYear()} StockFlow. Todos los derechos reservados.
+            © {new Date().getFullYear()} Fluxus. Todos los derechos reservados.
           </span>
           <div className="landing-footer-links">
             <a href="#">Términos</a>
             <a href="#">Privacidad</a>
-            <a href="mailto:contacto@stockflow.pe">Contacto</a>
+            <a href="mailto:contacto@fluxus.pe">Contacto</a>
           </div>
         </div>
       </footer>

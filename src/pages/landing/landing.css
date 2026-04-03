@@ -1107,18 +1107,40 @@
   }
 }
 
-@media (max-width: 480px) {
-  .landing-nav-actions .btn-ghost {
-    display: none;
+/* ===== Mobile header actions: "Iniciar Sesión" al lado de "Empezar Gratis" ===== */
+@media (max-width: 640px) {
+  /* Evita que el logo se coma el espacio */
+  .landing-logo-text {
+    display: none; /* opcional: deja solo el ícono en mobile */
   }
 
-  .landing-hero-actions {
-    flex-direction: column;
-    align-items: stretch;
+  .landing-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
   }
 
-  .landing-hero-actions a {
-    text-align: center;
-    justify-content: center;
+  /* Asegura separación y que no se peguen */
+  .landing-nav-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;              /* <-- esto es lo clave */
+    flex-wrap: nowrap;
+  }
+
+  /* Evita que los botones se estiren o se “monten” */
+  .landing-nav-actions a {
+    flex: 0 0 auto;
+  }
+
+  /* Tamaños para que entren */
+  .landing-nav-actions .btn-ghost,
+  .landing-nav-actions .btn-primary {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    line-height: 1;
+    white-space: nowrap;
   }
 }
