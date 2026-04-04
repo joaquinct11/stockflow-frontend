@@ -389,6 +389,43 @@ export interface DatosEliminacionDTO {
 }
 
 // ========================================
+// REPORTES
+// ========================================
+
+export interface ProductoBajoStockDTO {
+  id: number;
+  nombre: string;
+  stockActual: number;
+  stockMinimo: number;
+}
+
+export interface TopProductoVendidoDTO {
+  productoId: number;
+  nombre: string;
+  cantidadVendida: number;
+  ingresos: number;
+}
+
+export interface VentasResumenDTO {
+  ventasCount: number;
+  ingresosTotal: number;
+  ticketPromedio: number;
+  margenEstimado: number | null;
+  topProductosVendidos: TopProductoVendidoDTO[];
+}
+
+export interface ReportesResumenDTO {
+  totalProductos: number;
+  valorizacionStock: number | null;
+  productosBajoStock: ProductoBajoStockDTO[];
+  entradasCantidad: number;
+  salidasCantidad: number;
+  recepcionesConfirmadasCount: number;
+  unidadesRecibidas: number;
+  ventas: VentasResumenDTO | null;
+}
+
+// ========================================
 // ENUMS
 // ========================================
 

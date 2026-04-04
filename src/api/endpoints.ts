@@ -133,4 +133,9 @@ export const API_ENDPOINTS = {
     SET_COMPROBANTE: (id: number) => `/recepciones/${id}/comprobante`,
     CONFIRMAR: (id: number) => `/recepciones/${id}/confirmar`,
   },
+
+  REPORTES: {
+    RESUMEN: (desde: string, hasta: string) =>
+      `/reportes/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+  },
 };
