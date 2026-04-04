@@ -94,6 +94,7 @@ export function ReportesPage() {
       toast.error('Selecciona un rango de fechas');
       return;
     }
+    // ISO 8601 (YYYY-MM-DD) strings compare lexicographically, so > works correctly here
     if (desde > hasta) {
       toast.error('La fecha "Desde" no puede ser mayor a "Hasta"');
       return;

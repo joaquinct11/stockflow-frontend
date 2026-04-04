@@ -136,6 +136,6 @@ export const API_ENDPOINTS = {
 
   REPORTES: {
     RESUMEN: (desde: string, hasta: string) =>
-      `/reportes/resumen?desde=${desde}&hasta=${hasta}`,
+      `/reportes/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
   },
 };
