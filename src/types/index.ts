@@ -425,6 +425,82 @@ export interface ReportesResumenDTO {
   ventas: VentasResumenDTO | null;
 }
 
+// ── Ventas tendencia ───────────────────────────────────────────────────────────
+export interface VentasTendenciaPuntoDTO {
+  periodo: string;
+  ventasCount: number;
+  ingresos: number;
+}
+
+// ── Ventas por vendedor ────────────────────────────────────────────────────────
+export interface VentasPorVendedorDTO {
+  vendedorId: number;
+  vendedorNombre: string;
+  ventasCount: number;
+  ingresos: number;
+  ticketPromedio: number | null;
+}
+
+// ── Ventas por categoría ───────────────────────────────────────────────────────
+export interface VentasPorCategoriaDTO {
+  categoria: string;
+  ventasCount: number;
+  unidades: number;
+  ingresos: number;
+}
+
+// ── Ventas por método de pago ──────────────────────────────────────────────────
+export interface VentasPorMetodoPagoDTO {
+  metodoPago: string;
+  ventasCount: number;
+  ingresos: number;
+  porcentaje: number | null;
+}
+
+// ── Ventas productos (top / menos) ────────────────────────────────────────────
+export interface VentasProductoDTO {
+  productoId: number;
+  nombre: string;
+  cantidadVendida: number;
+  ingresos: number;
+}
+
+// ── Inventario ABC ─────────────────────────────────────────────────────────────
+export interface InventarioABCDTO {
+  productoId: number;
+  nombre: string;
+  clasificacion: 'A' | 'B' | 'C';
+  ingresos: number;
+  porcentajeAcumulado: number | null;
+}
+
+// ── Inventario slow movers ─────────────────────────────────────────────────────
+export interface InventarioSlowMoverDTO {
+  productoId: number;
+  nombre: string;
+  stockActual: number;
+  costoTotal: number | null;
+  diasSinSalida: number;
+}
+
+// ── Inventario cobertura ───────────────────────────────────────────────────────
+export interface InventarioCoberturaDTO {
+  productoId: number;
+  nombre: string;
+  stockActual: number;
+  promedioSalidasDia: number | null;
+  diasCobertura: number | null;
+}
+
+// ── Compras por proveedor ──────────────────────────────────────────────────────
+export interface ComprasPorProveedorDTO {
+  proveedorId: number;
+  proveedorNombre: string;
+  recepciones: number;
+  unidades: number;
+  montoEstimado: number | null;
+}
+
 // ========================================
 // ENUMS
 // ========================================

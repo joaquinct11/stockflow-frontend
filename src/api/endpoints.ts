@@ -137,5 +137,29 @@ export const API_ENDPOINTS = {
   REPORTES: {
     RESUMEN: (desde: string, hasta: string) =>
       `/reportes/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+
+    // Ventas
+    VENTAS_TENDENCIA: (desde: string, hasta: string, agrupacion: string) =>
+      `/reportes/ventas/tendencia?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&agrupacion=${agrupacion}`,
+    VENTAS_POR_VENDEDOR: (desde: string, hasta: string, limit = 20) =>
+      `/reportes/ventas/por-vendedor?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
+    VENTAS_POR_CATEGORIA: (desde: string, hasta: string, limit = 20) =>
+      `/reportes/ventas/por-categoria?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
+    VENTAS_POR_METODO_PAGO: (desde: string, hasta: string) =>
+      `/reportes/ventas/por-metodo-pago?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+    VENTAS_PRODUCTOS: (desde: string, hasta: string, limit = 10, orden: string, metrica: string) =>
+      `/reportes/ventas/productos?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}&orden=${orden}&metrica=${metrica}`,
+
+    // Inventario
+    INVENTARIO_ABC: (desde: string, hasta: string, limit = 50) =>
+      `/reportes/inventario/abc?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
+    INVENTARIO_SLOW_MOVERS: (diasSinSalida = 30, limit = 20) =>
+      `/reportes/inventario/slow-movers?diasSinSalida=${diasSinSalida}&limit=${limit}`,
+    INVENTARIO_COBERTURA: (desde: string, hasta: string, limit = 20) =>
+      `/reportes/inventario/cobertura?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
+
+    // Compras
+    COMPRAS_POR_PROVEEDOR: (desde: string, hasta: string, limit = 20) =>
+      `/reportes/compras/por-proveedor?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
   },
 };
