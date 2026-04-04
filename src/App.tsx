@@ -35,6 +35,7 @@ import { ComprobantesPage } from './pages/facturacion/ComprobantesPage';
 import { KardexPage } from './pages/kardex/KardexPage';
 import { OrdenComprasList } from './pages/compras/OrdenComprasList';
 import { RecepcionList } from './pages/recepciones/RecepcionList';
+import { ReportesPage } from './pages/reportes/ReportesPage';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -167,10 +168,7 @@ function App() {
               path="reportes"
               element={
                 <RoleProtectedRoute module="REPORTES">
-                  <div className="text-center py-12">
-                    <h2 className="text-2xl font-bold">Módulo de Reportes</h2>
-                    <p className="text-muted-foreground">Próximamente...</p>
-                  </div>
+                  <ReportesPage />
                 </RoleProtectedRoute>
               }
             />
