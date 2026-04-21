@@ -67,7 +67,7 @@ export function KardexPage() {
       setProveedores(proveedoresData);
     } catch (error) {
       toast.error('Error al cargar datos');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ export function KardexPage() {
       });
       setKardexMovimientos(sorted);
     } catch (e) {
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
       toast.error('Error al cargar Kardex');
     } finally {
       setKardexLoading(false);

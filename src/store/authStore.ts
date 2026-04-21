@@ -16,7 +16,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
 
   setUser: (user) => {
-    console.log('✅ Usuario establecido:', user.email);
+    if (import.meta.env.DEV) { console.log('✅ Usuario establecido:', user.email);}
     set({ user, isAuthenticated: true });
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('accessToken', user.accessToken);
@@ -24,7 +24,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
-    console.log('🚪 Cerrando sesión');
+    if (import.meta.env.DEV) { console.log('🚪 Cerrando sesión');}
     set({ user: null, isAuthenticated: false });
     localStorage.removeItem('user');
     localStorage.removeItem('accessToken');
@@ -35,7 +35,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // ✅ NUEVO: Refrescar tokens automáticamente
   refreshUser: async () => {
     try {
-      console.log('🔄 Intentando refrescar tokens...');
+      if (import.meta.env.DEV) { console.log('🔄 Intentando refrescar tokens...');}
       const refreshedData = await authService.refresh();
       
       // Actualizar el usuario con los nuevos datos
@@ -49,10 +49,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         localStorage.setItem('user', JSON.stringify(updatedUser));
         localStorage.setItem('accessToken', refreshedData.accessToken);
         localStorage.setItem('refreshToken', refreshedData.refreshToken);
-        console.log('✅ Tokens refrescados exitosamente');
+        if (import.meta.env.DEV) { console.log('✅ Tokens refrescados exitosamente');}
       }
     } catch (error) {
-      console.error('❌ Error refrescando tokens:', error);
+      if (import.meta.env.DEV) { console.error('❌ Error refrescando tokens:', error);}
       // Si falla el refresh, hacer logout
       get().logout();
       throw error;
@@ -60,20 +60,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   initialize: async () => {
-    console.log('🔄 Inicializando AuthStore...');
+    if (import.meta.env.DEV) { console.log('🔄 Inicializando AuthStore...');}
     
     const accessToken = localStorage.getItem('accessToken');
     const refreshToken = localStorage.getItem('refreshToken');
     const storedUser = localStorage.getItem('user');
     
-    console.log('📦 Datos en localStorage:');
-    console.log('  - accessToken:', accessToken ? '✅' : '❌');
-    console.log('  - refreshToken:', refreshToken ? '✅' : '❌');
-    console.log('  - user:', storedUser ? '✅' : '❌');
+    if (import.meta.env.DEV) { console.log('📦 Datos en localStorage:');}
+    if (import.meta.env.DEV) { console.log('  - accessToken:', accessToken ? '✅' : '❌');}
+    if (import.meta.env.DEV) { console.log('  - refreshToken:', refreshToken ? '✅' : '❌');}
+    if (import.meta.env.DEV) { console.log('  - user:', storedUser ? '✅' : '❌');}
     
     if (storedUser && accessToken && refreshToken) {
       const user = JSON.parse(storedUser);
-      console.log('✅ Sesión restaurada para:', user.email);
+      if (import.meta.env.DEV) { console.log('✅ Sesión restaurada para:', user.email);}
       set({ user, isAuthenticated: true });
 
       // Refresh user data from server to get up-to-date permissions and profile
@@ -89,12 +89,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         };
         set({ user: updatedUser });
         localStorage.setItem('user', JSON.stringify(updatedUser));
-        console.log('✅ Permisos actualizados desde /api/auth/me:', profile.permisos);
+        if (import.meta.env.DEV) { console.log('✅ Permisos actualizados desde /api/auth/me:', profile.permisos);}
       } catch (error) {
-        console.warn('⚠️ No se pudo actualizar permisos desde /api/auth/me, usando datos locales:', error);
+        if (import.meta.env.DEV) { console.warn('⚠️ No se pudo actualizar permisos desde /api/auth/me, usando datos locales:', error);}
       }
     } else {
-      console.log('❌ No hay sesión guardada o tokens incompletos');
+      if (import.meta.env.DEV) { console.log('❌ No hay sesión guardada o tokens incompletos');}
       set({ user: null, isAuthenticated: false });
     }
   },

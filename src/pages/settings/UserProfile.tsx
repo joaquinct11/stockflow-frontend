@@ -44,7 +44,7 @@ export function UserProfile() {
       setProfile(data);
       setEditProfileData({ nombre: data.nombre || '' });
     } catch (error) {
-      console.error('Error obteniendo perfil:', error);
+      if (import.meta.env.DEV) { console.error('Error obteniendo perfil:', error);}
       toast.error('Error al cargar el perfil');
     } finally {
       setLoading(false);
@@ -81,7 +81,7 @@ export function UserProfile() {
       setIsEditProfileOpen(false);
       await fetchProfile();
     } catch (error: any) {
-      console.error('❌ Error:', error.response?.data);
+      if (import.meta.env.DEV) { console.error('❌ Error:', error.response?.data);}
       const backend = error.response?.data;
       const message =
         backend?.mensaje ||

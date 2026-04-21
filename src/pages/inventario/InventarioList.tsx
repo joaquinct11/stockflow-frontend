@@ -103,7 +103,7 @@ export function InventarioList() {
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
     } catch (error) {
       toast.error('Error al cargar datos del formulario');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     }
   };
 
@@ -120,7 +120,7 @@ export function InventarioList() {
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
     } catch (error) {
       toast.error('Error al cargar datos');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     } finally {
       setLoading(false);
     }
@@ -164,7 +164,7 @@ export function InventarioList() {
       });
       setKardexMovimientos(sorted);
     } catch (e) {
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
       toast.error('Error al cargar kardex');
     } finally {
       setKardexLoading(false);
@@ -224,7 +224,7 @@ export function InventarioList() {
       resetForm();
       await fetchData();
     } catch (error: any) {
-      console.error('Error:', error.response?.data);
+      if (import.meta.env.DEV) { console.error('Error:', error.response?.data);}
       const message = error.response?.data?.mensaje || error.message || 'Error al registrar movimiento';
       toast.error(message);
     }

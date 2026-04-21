@@ -26,8 +26,7 @@ export function Login() {
     setLoading(true);
 
     try {
-      if (import.meta.env.DEV) {
-        console.log('🔐 Intentando login...');
+      if (import.meta.env.DEV) {console.log('🔐 Intentando login...');
       }
       const response = await authService.login(formData);
 
@@ -41,8 +40,7 @@ export function Login() {
       toast.success(`¡Bienvenido ${response.nombre}!`);
       navigate('/dashboard');
     } catch (error: any) {
-      if (import.meta.env.DEV) {
-        console.error('❌ Error en login:', error);
+      if (import.meta.env.DEV) {console.error('❌ Error en login:', error);
       }
       const message = error.response?.data?.mensaje || 'Error al iniciar sesión';
       toast.error(message);

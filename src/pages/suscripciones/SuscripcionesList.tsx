@@ -52,7 +52,7 @@ export function SuscripcionesList() {
 
   useEffect(() => {
     if (userId) {
-      console.log('🔄 Actualizando usuarioPrincipalId:', userId);
+      if (import.meta.env.DEV) { console.log('🔄 Actualizando usuarioPrincipalId:', userId);}
       setFormData((prev) => ({
         ...prev,
         usuarioPrincipalId: userId,
@@ -76,7 +76,7 @@ export function SuscripcionesList() {
       setSuscripciones(data);
     } catch (error) {
       toast.error('Error al cargar suscripciones');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ export function SuscripcionesList() {
       const data = await usuarioService.getAll();
       setUsuarios(data);
     } catch (error) {
-      console.error('Error al cargar usuarios:', error);
+      if (import.meta.env.DEV) { console.error('Error al cargar usuarios:', error);}
     }
   };
 
@@ -108,7 +108,7 @@ export function SuscripcionesList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    console.log('📤 Datos que se envían:', JSON.stringify(formData, null, 2));
+    if (import.meta.env.DEV) { console.log('📤 Datos que se envían:', JSON.stringify(formData, null, 2));}
 
     try {
       if (editingId) {
@@ -121,8 +121,8 @@ export function SuscripcionesList() {
       resetForm();
       await fetchSuscripciones();
     } catch (error: any) {
-      console.log('❌ Error completo:', error);
-      console.log('❌ Response data:', error.response?.data);
+      if (import.meta.env.DEV) { console.log('❌ Error completo:', error);}
+      if (import.meta.env.DEV) { console.log('❌ Response data:', error.response?.data);}
       const message = error.response?.data?.message || error.response?.data?.mensajes?.precioMensual || error.response?.data?.mensaje || error.message || 'Error al guardar suscripción';
       toast.error(message);
     }

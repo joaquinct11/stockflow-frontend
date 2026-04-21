@@ -179,7 +179,7 @@ export function RecepcionList() {
       setProductos(prodData);
     } catch (e) {
       toast.error('Error al cargar recepciones');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setLoading(false);
     }
@@ -291,7 +291,7 @@ export function RecepcionList() {
       await openDetail((createdRaw as any).id!);
     } catch (e) {
       toast.error('Error al crear la recepción');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setCreating(false);
     }
@@ -321,7 +321,7 @@ export function RecepcionList() {
       }
     } catch (e) {
       toast.error('Error al cargar la recepción');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
       setIsDetailOpen(false);
     } finally {
       setDetailLoading(false);
@@ -382,7 +382,7 @@ export function RecepcionList() {
       toast.success('Item guardado');
     } catch (e: any) {
       toast.error(e?.response?.data?.mensajes ? JSON.stringify(e.response.data.mensajes) : e?.response?.data?.mensaje ?? 'Error al guardar item');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setDetailActionLoading(false);
     }
@@ -428,7 +428,7 @@ export function RecepcionList() {
       toast.success('Comprobante guardado');
     } catch (e: any) {
       toast.error(e?.response?.data?.mensajes ? JSON.stringify(e.response.data.mensajes) : e?.response?.data?.mensaje ?? 'Error al guardar comprobante');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setSavingComp(false);
     }
@@ -465,7 +465,7 @@ export function RecepcionList() {
       await fetchData();
     } catch (e: any) {
       toast.error(e?.response?.data?.mensaje ?? 'Error al confirmar la recepción');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setDetailActionLoading(false);
     }
