@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { productoService } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
-import type { ProductoDTO, VentaDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, DollarSign } from 'lucide-react';
+import { movimientoService } from '../../services/movimiento.service';
+import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO } from '../../types';
+import { Package, ShoppingCart, AlertCircle, DollarSign, Clock } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -26,9 +27,8 @@ function startOfDay(d: Date) {
 }
 
 function startOfWeek(d: Date) {
-  // Lunes como inicio de semana (puedes cambiarlo si quieres domingo)
   const x = startOfDay(d);
-  const day = x.getDay(); // 0 domingo ... 6 sábado
+  const day = x.getDay();
   const diff = (day === 0 ? -6 : 1) - day;
   x.setDate(x.getDate() + diff);
   return x;
@@ -61,10 +61,6 @@ function getRangeStart(filter: TimeFilter, now = new Date()) {
   }
 }
 
-/**
- * Intenta extraer una fecha de la venta con distintos campos posibles.
- * Ajusta esta función si tu VentaDTO usa otro nombre.
- */
 function getVentaDate(v: VentaDTO): Date | null {
   const anyV = v as any;
   const raw =
@@ -82,6 +78,15 @@ function getVentaDate(v: VentaDTO): Date | null {
   return d;
 }
 
+interface ProductoConVencimiento {
+  id?: number;
+  nombre: string;
+  codigoBarras?: string;
+  stockActual: number;
+  fechaVencimiento: string;
+  lote?: string;
+}
+
 export function Dashboard() {
   const { user } = useAuthStore();
   const { userId } = useCurrentUser();
@@ -90,9 +95,8 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
+  const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [canLoadVentas, setCanLoadVentas] = useState<boolean>(false);
-
-  // Nuevo: filtro rápido de tiempo
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('HOY');
 
   const ventasScopeLabel = useMemo(() => {
@@ -113,13 +117,26 @@ export function Dashboard() {
       // ✅ Productos siempre
       const productosPromise = productoService.getAll();
 
+      // ✅ Movimientos siempre
+      let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
+      if (movimientoService.getAll) {
+        movimientosPromise = movimientoService
+          .getAll()
+          .catch((err) => {
+            console.warn('⚠️ Error cargando movimientos:', err);
+            return [];
+          });
+      } else {
+        console.warn('⚠️ movimientoService.getAll no existe');
+        movimientosPromise = Promise.resolve([]);
+      }
+
       // ✅ Ventas según rol
       let ventasPromise: Promise<VentaDTO[]>;
       if (rol === 'ADMIN' || rol === 'GERENTE') {
         setCanLoadVentas(true);
         ventasPromise = ventaService.getAll();
       } else if (rol === 'VENDEDOR') {
-        // si aún no tenemos userId, no pedimos ventas todavía
         if (!userId) {
           setCanLoadVentas(true);
           ventasPromise = Promise.resolve([]);
@@ -128,17 +145,24 @@ export function Dashboard() {
           ventasPromise = ventaService.getByVendor(userId);
         }
       } else {
-        // GESTOR_INVENTARIO: no debe ver ventas
         setCanLoadVentas(false);
         ventasPromise = Promise.resolve([]);
       }
 
-      const [productosData, ventasData] = await Promise.all([productosPromise, ventasPromise]);
+      const [productosData, ventasData, movimientosData] = await Promise.all([
+        productosPromise,
+        ventasPromise,
+        movimientosPromise,
+      ]);
+
+      console.log('✅ Productos:', productosData.length);
+      console.log('✅ Ventas:', ventasData.length);
+      console.log('✅ Movimientos:', movimientosData?.length ?? 0, movimientosData);
 
       setProductos(productosData);
       setVentas(ventasData);
+      setMovimientos(movimientosData ?? []);
     } catch (error: any) {
-      // Si backend protege ventas y por error llamamos, no reventar el dashboard
       if (error?.response?.status === 403) {
         setVentas([]);
         setCanLoadVentas(false);
@@ -146,7 +170,7 @@ export function Dashboard() {
       } else {
         toast.error('Error al cargar datos del dashboard');
       }
-      console.error(error);
+      console.error('❌ Error en fetchData:', error);
     } finally {
       setLoading(false);
     }
@@ -154,11 +178,11 @@ export function Dashboard() {
 
   const filteredVentas = useMemo(() => {
     const start = getRangeStart(timeFilter, new Date());
-    const end = new Date(); // ahora
+    const end = new Date();
 
     return ventas.filter((v) => {
       const d = getVentaDate(v);
-      if (!d) return false; // si no hay fecha consistente, no la contamos (evita números erróneos)
+      if (!d) return false;
       return d >= start && d <= end;
     });
   }, [ventas, timeFilter]);
@@ -166,10 +190,90 @@ export function Dashboard() {
   const stats = useMemo(() => {
     const bajoStock = productos.filter((p) => p.stockActual <= p.stockMinimo);
 
+    // ✅ NUEVO: productos próximos a vencer en 30 días (desde movimientos)
+    const ahora = new Date();
+    ahora.setHours(0, 0, 0, 0);
+    
+    const proximosMes = new Date(ahora);
+    proximosMes.setDate(proximosMes.getDate() + 30);
+
+    console.log('📅 Debug vencimientos:');
+    console.log('   Hoy:', ahora.toLocaleDateString('es-PE'));
+    console.log('   Próximos 30 días hasta:', proximosMes.toLocaleDateString('es-PE'));
+    console.log('   Total movimientos:', movimientos.length);
+
+    // Construir mapa de productos por ID
+    const productosById = new Map<number, ProductoDTO>();
+    productos.forEach((p) => productosById.set(p.id!, p));
+
+    // Filtrar movimientos con fechaVencimiento (ENTRADA o SALDO_INICIAL)
+    const movimientosConVencimiento = movimientos.filter(
+      (m) => m.fechaVencimiento && (m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL')
+    );
+
+    console.log('   Movimientos con vencimiento:', movimientosConVencimiento.length);
+
+    // Agrupar por producto y obtener el vencimiento más próximo
+    const productosProximosMap = new Map<number, ProductoConVencimiento>();
+
+    movimientosConVencimiento.forEach((mov) => {
+      // Parsear fechaVencimiento (formato YYYY-MM-DD)
+      const fechaParts = mov.fechaVencimiento!.split('T')[0].split('-');
+      const fv = new Date(
+        parseInt(fechaParts[0]), 
+        parseInt(fechaParts[1]) - 1, 
+        parseInt(fechaParts[2])
+      );
+      fv.setHours(0, 0, 0, 0);
+
+      console.log(
+        `   Movimiento ${mov.id}: Producto ${mov.productoId}, Vence: ${fv.toLocaleDateString('es-PE')}`
+      );
+
+      // Solo si vence entre hoy y +30 días
+      if (fv >= ahora && fv <= proximosMes) {
+        const prod = productosById.get(mov.productoId);
+
+        console.log(
+          `     ✅ En rango. Stock: ${prod?.stockActual}, Nombre: ${prod?.nombre}`
+        );
+
+        if (prod && prod.stockActual > 0) {
+          const key = mov.productoId;
+          const existing = productosProximosMap.get(key);
+
+          // Mantener el vencimiento más próximo
+          if (!existing || fv < new Date(existing.fechaVencimiento)) {
+            productosProximosMap.set(key, {
+              id: prod.id,
+              nombre: prod.nombre,
+              codigoBarras: prod.codigoBarras,
+              stockActual: prod.stockActual,
+              fechaVencimiento: mov.fechaVencimiento!,
+              lote: mov.lote,
+            });
+          }
+        }
+      } else {
+        console.log(`     ❌ Fuera de rango`);
+      }
+    });
+
+    // Convertir a array y ordenar por fecha de vencimiento
+    const productosProximosAVencer = Array.from(productosProximosMap.values())
+      .sort(
+        (a, b) =>
+          new Date(a.fechaVencimiento.split('T')[0]).getTime() -
+          new Date(b.fechaVencimiento.split('T')[0]).getTime()
+      )
+      .slice(0, 10);
+
+    console.log('🎯 Productos próximos a vencer (FINAL):', productosProximosAVencer);
+
     // ventas filtradas
     const ingresoFiltrado = filteredVentas.reduce((acc, v) => acc + (v.total || 0), 0);
 
-    // solo para el label “+X hoy”
+    // solo para el label "+X hoy"
     const hoyStart = getRangeStart('HOY', new Date());
     const ventasHoy = ventas.filter((v) => {
       const d = getVentaDate(v);
@@ -181,14 +285,12 @@ export function Dashboard() {
       totalProductos: productos.length,
       bajoStockCount: bajoStock.length,
       bajoStockItems: bajoStock.slice(0, 5),
-
-      // métricas según filtro
+      productosProximosAVencer,
       totalVentasFiltradas: filteredVentas.length,
       ingresoFiltrado,
-
       ventasHoy,
     };
-  }, [productos, ventas, filteredVentas]);
+  }, [productos, ventas, filteredVentas, movimientos]);
 
   const gridColsClass = rol === 'GESTOR_INVENTARIO' ? 'lg:grid-cols-2' : 'lg:grid-cols-4';
 
@@ -353,6 +455,69 @@ export function Dashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Productos próximos a vencer (30 días) */}
+      {stats.productosProximosAVencer.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-orange-600" />
+              Productos Próximos a Vencer
+            </CardTitle>
+            <CardDescription>
+              {stats.productosProximosAVencer.length} producto(s) vencen en los próximos 30 días
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {stats.productosProximosAVencer.map((producto) => {
+                const fechaParts = producto.fechaVencimiento.split('T')[0].split('-');
+                const fv = new Date(
+                  parseInt(fechaParts[0]),
+                  parseInt(fechaParts[1]) - 1,
+                  parseInt(fechaParts[2])
+                );
+
+                const diasRestantes = Math.ceil(
+                  (fv.getTime() - new Date(new Date().toLocaleDateString('en-US')).getTime()) /
+                    (1000 * 60 * 60 * 24)
+                );
+
+                const urgencia =
+                  diasRestantes <= 7 ? 'destructive' : diasRestantes <= 15 ? 'warning' : 'secondary';
+
+                return (
+                  <div
+                    key={`${producto.id}-${producto.fechaVencimiento}`}
+                    className="flex items-center justify-between border-b pb-3 last:border-b-0"
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium">{producto.nombre}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Código: {producto.codigoBarras}
+                        {producto.lote ? ` | Lote: ${producto.lote}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm font-medium">Vence: {fv.toLocaleDateString('es-PE')}</p>
+                        <p className="text-xs text-muted-foreground">{diasRestantes} días restantes</p>
+                      </div>
+                      <Badge variant={urgencia as any}>
+                        {diasRestantes <= 7
+                          ? 'Urgente'
+                          : diasRestantes <= 15
+                            ? 'Pronto'
+                            : 'Próximo'}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
