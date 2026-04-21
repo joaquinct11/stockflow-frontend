@@ -18,7 +18,7 @@ export function ForgotPassword() {
     setLoading(true);
 
     try {
-      console.log('📧 Solicitando recuperación de contraseña para:', email);
+      if (import.meta.env.DEV) {console.log('📧 Solicitando recuperación de contraseña para:', email);}
       await authService.solicitarRecuperacionContraseña({ email });
       
       toast.success('Email de recuperación enviado');

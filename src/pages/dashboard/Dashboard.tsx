@@ -123,11 +123,11 @@ export function Dashboard() {
         movimientosPromise = movimientoService
           .getAll()
           .catch((err) => {
-            console.warn('⚠️ Error cargando movimientos:', err);
+            if (import.meta.env.DEV) { console.warn('⚠️ Error cargando movimientos:', err);}
             return [];
           });
       } else {
-        console.warn('⚠️ movimientoService.getAll no existe');
+        if (import.meta.env.DEV) { console.warn('⚠️ movimientoService.getAll no existe');}
         movimientosPromise = Promise.resolve([]);
       }
 
@@ -155,9 +155,9 @@ export function Dashboard() {
         movimientosPromise,
       ]);
 
-      console.log('✅ Productos:', productosData.length);
-      console.log('✅ Ventas:', ventasData.length);
-      console.log('✅ Movimientos:', movimientosData?.length ?? 0, movimientosData);
+      if (import.meta.env.DEV) { console.log('✅ Productos:', productosData.length);}
+      if (import.meta.env.DEV) { console.log('✅ Ventas:', ventasData.length);}
+      if (import.meta.env.DEV) { console.log('✅ Movimientos:', movimientosData?.length ?? 0, movimientosData);}
 
       setProductos(productosData);
       setVentas(ventasData);
@@ -170,7 +170,7 @@ export function Dashboard() {
       } else {
         toast.error('Error al cargar datos del dashboard');
       }
-      console.error('❌ Error en fetchData:', error);
+      if (import.meta.env.DEV) { console.error('❌ Error en fetchData:', error);}
     } finally {
       setLoading(false);
     }
@@ -197,10 +197,10 @@ export function Dashboard() {
     const proximosMes = new Date(ahora);
     proximosMes.setDate(proximosMes.getDate() + 30);
 
-    console.log('📅 Debug vencimientos:');
-    console.log('   Hoy:', ahora.toLocaleDateString('es-PE'));
-    console.log('   Próximos 30 días hasta:', proximosMes.toLocaleDateString('es-PE'));
-    console.log('   Total movimientos:', movimientos.length);
+    if (import.meta.env.DEV) { console.log('📅 Debug vencimientos:');}
+    if (import.meta.env.DEV) { console.log('   Hoy:', ahora.toLocaleDateString('es-PE'));}
+    if (import.meta.env.DEV) { console.log('   Próximos 30 días hasta:', proximosMes.toLocaleDateString('es-PE'));}
+    if (import.meta.env.DEV) { console.log('   Total movimientos:', movimientos.length);}
 
     // Construir mapa de productos por ID
     const productosById = new Map<number, ProductoDTO>();
@@ -211,7 +211,7 @@ export function Dashboard() {
       (m) => m.fechaVencimiento && (m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL')
     );
 
-    console.log('   Movimientos con vencimiento:', movimientosConVencimiento.length);
+    if (import.meta.env.DEV) { console.log('   Movimientos con vencimiento:', movimientosConVencimiento.length);}
 
     // Agrupar por producto y obtener el vencimiento más próximo
     const productosProximosMap = new Map<number, ProductoConVencimiento>();
@@ -226,17 +226,17 @@ export function Dashboard() {
       );
       fv.setHours(0, 0, 0, 0);
 
-      console.log(
+      if (import.meta.env.DEV) { console.log(
         `   Movimiento ${mov.id}: Producto ${mov.productoId}, Vence: ${fv.toLocaleDateString('es-PE')}`
-      );
+      );}
 
       // Solo si vence entre hoy y +30 días
       if (fv >= ahora && fv <= proximosMes) {
         const prod = productosById.get(mov.productoId);
 
-        console.log(
+        if (import.meta.env.DEV) { console.log(
           `     ✅ En rango. Stock: ${prod?.stockActual}, Nombre: ${prod?.nombre}`
-        );
+        );}
 
         if (prod && prod.stockActual > 0) {
           const key = mov.productoId;
@@ -255,7 +255,7 @@ export function Dashboard() {
           }
         }
       } else {
-        console.log(`     ❌ Fuera de rango`);
+        if (import.meta.env.DEV) { console.log(`     ❌ Fuera de rango`);}
       }
     });
 
@@ -268,7 +268,7 @@ export function Dashboard() {
       )
       .slice(0, 10);
 
-    console.log('🎯 Productos próximos a vencer (FINAL):', productosProximosAVencer);
+    if (import.meta.env.DEV) { console.log('🎯 Productos próximos a vencer (FINAL):', productosProximosAVencer);}
 
     // ventas filtradas
     const ingresoFiltrado = filteredVentas.reduce((acc, v) => acc + (v.total || 0), 0);

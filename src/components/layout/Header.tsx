@@ -24,7 +24,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       toast.success('Sesión cerrada exitosamente');
       navigate('/login');
     } catch (error) {
-      console.error('Error al cerrar sesión:', error);
+      if (import.meta.env.DEV) {console.error('Error al cerrar sesión:', error);}
       logout();
       navigate('/login');
     }

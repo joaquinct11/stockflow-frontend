@@ -104,7 +104,7 @@ export function UsuariosList() {
       setUsuarios(data);
     } catch (error) {
       toast.error('Error al cargar usuarios');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     } finally {
       setLoading(false);
     }
@@ -139,7 +139,7 @@ export function UsuariosList() {
       resetForm();
       await fetchUsuarios();
     } catch (error: any) {
-      console.error('❌ Error:', error.response?.data);
+      if (import.meta.env.DEV) { console.error('❌ Error:', error.response?.data);}
       const message = error.response?.data?.mensaje || error.response?.data?.error || 'Error al guardar usuario';
       toast.error(message);
     }

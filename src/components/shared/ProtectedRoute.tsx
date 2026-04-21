@@ -28,7 +28,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!isAuthenticated) {
-    console.log('🔒 No autenticado, redirigiendo a login'); // ← Log para debug
+    if (import.meta.env.DEV) { console.log('🔒 No autenticado, redirigiendo a login');} // ← Log para debug
     return <Navigate to="/login" replace />;
   }
 

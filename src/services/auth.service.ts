@@ -51,11 +51,11 @@ export const authService = {
     localStorage.setItem('refreshToken', data.refreshToken);
     localStorage.setItem('user', JSON.stringify(data));
     
-    console.log('✅ Tokens guardados:', {
+    if (import.meta.env.DEV) { console.log('✅ Tokens guardados:', {
       accessToken: data.accessToken.substring(0, 20) + '...',
       refreshToken: data.refreshToken.substring(0, 20) + '...',
       expiresIn: data.expiresIn,
-    });
+    });}
     
     return data;
   },
@@ -149,10 +149,10 @@ export const authService = {
         localStorage.setItem('user', JSON.stringify(updatedUser));
       }
 
-      console.log('🔄 Tokens refrescados exitosamente');
+      if (import.meta.env.DEV) { console.log('🔄 Tokens refrescados exitosamente');}
       return data;
     } catch (error) {
-      console.error('❌ Error refrescando tokens:', error);
+      if (import.meta.env.DEV) { console.error('❌ Error refrescando tokens:', error);}
       // Si el refresh falla, limpiar todo
       authService.logout();
       throw error;
@@ -170,10 +170,10 @@ export const authService = {
       if (refreshToken) {
         // Enviar refreshToken al backend para revocarlo
         await axiosInstance.post(API_ENDPOINTS.AUTH.LOGOUT, { refreshToken });
-        console.log('✅ Sesión revocada en el backend');
+        if (import.meta.env.DEV) { console.log('✅ Sesión revocada en el backend');}
       }
     } catch (error) {
-      console.error('⚠️ Error revocando sesión en backend:', error);
+      if (import.meta.env.DEV) { console.error('⚠️ Error revocando sesión en backend:', error);}
       // Continuar con logout local aunque falle el backend
     } finally {
       // Limpiar localStorage
@@ -181,7 +181,7 @@ export const authService = {
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       localStorage.removeItem('token'); // ✅ Eliminar token viejo si existe
-      console.log('🗑️ Datos de sesión eliminados del localStorage');
+      if (import.meta.env.DEV) { console.log('🗑️ Datos de sesión eliminados del localStorage');}
     }
   },
 
