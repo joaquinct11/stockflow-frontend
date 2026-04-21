@@ -41,7 +41,7 @@ export function useInactivityLogout() {
 
       // Timer de cierre de sesión
       timeoutRef.current = window.setTimeout(() => {
-        console.log('⏰ Sesión cerrada por inactividad (30 min)');
+        if (import.meta.env.DEV) { console.log('⏰ Sesión cerrada por inactividad (30 min)');}
         logout();
         // ✅ CAMBIAR: En vez de navigate, usar window.location
         window.location.href = '/login';

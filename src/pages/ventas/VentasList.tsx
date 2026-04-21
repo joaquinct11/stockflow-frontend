@@ -83,10 +83,10 @@ export function VentasList() {
 
   useEffect(() => {
     if (userId) {
-      console.log('🔄 Actualizando vendedorId:', userId);
+      if (import.meta.env.DEV) { console.log('🔄 Actualizando vendedorId:', userId);}
       const tenantId = user?.tenantId;
       if (!tenantId) {
-        console.warn('⚠️ tenantId no disponible al inicializar formData de venta');
+        if (import.meta.env.DEV) { console.warn('⚠️ tenantId no disponible al inicializar formData de venta');}
       }
       setFormData((prev) => ({
         ...prev,
@@ -156,14 +156,14 @@ export function VentasList() {
 
       const [ventasData, productosData] = await Promise.all([ventasPromise, productosPromise]);
 
-      console.log('📦 Ventas recibidas:', ventasData);
-      console.log('📅 Primera venta createdAt:', ventasData[0]?.createdAt);
+      if (import.meta.env.DEV) { console.log('📦 Ventas recibidas:', ventasData);}
+      if (import.meta.env.DEV) { console.log('📅 Primera venta createdAt:', ventasData[0]?.createdAt);}
 
       setVentas(ventasData);
       setProductos(productosData);
     } catch (error) {
       toast.error('Error al cargar datos');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
       setVentas([]);
     } finally {
       setLoading(false);
@@ -253,7 +253,7 @@ export function VentasList() {
       await fetchData();
     } catch (error) {
       toast.error('Error al crear venta');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     }
   };
 

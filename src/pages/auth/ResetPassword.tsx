@@ -43,7 +43,7 @@ export function ResetPassword() {
     setLoading(true);
 
     try {
-      console.log('🔐 Reseteando contraseña...');
+      if (import.meta.env.DEV) { console.log('🔐 Reseteando contraseña...');}
       if (!token) {
         throw new Error('Token no disponible');
       }
@@ -59,7 +59,7 @@ export function ResetPassword() {
         navigate('/login');
       }, 2000);
     } catch (error: any) {
-      console.error('❌ Error:', error);
+      if (import.meta.env.DEV) { console.error('❌ Error:', error);}
       const message = error.response?.data?.message || 'Error al resetear contraseña';
       toast.error(message);
     } finally {

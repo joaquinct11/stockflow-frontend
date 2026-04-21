@@ -85,7 +85,7 @@ export function ProductosList() {
       }
     } catch (error) {
       toast.error('Error al cargar unidades de medida');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     } finally {
       setLoadingUnidades(false);
     }
@@ -110,7 +110,7 @@ export function ProductosList() {
       }
     } catch (error) {
       toast.error('Error al cargar datos');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     } finally {
       setLoading(false);
       setLoadingUnidades(false);
@@ -126,7 +126,7 @@ export function ProductosList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    console.log('📤 Datos que se envían:', JSON.stringify(formData, null, 2));
+    if (import.meta.env.DEV) { console.log('📤 Datos que se envían:', JSON.stringify(formData, null, 2));}
 
     try {
       if (editingId) {
@@ -146,7 +146,7 @@ export function ProductosList() {
               costoUnitario: formData.costoUnitario > 0 ? formData.costoUnitario : undefined,
             });
           } catch (movErr) {
-            console.warn('⚠️ No se pudo crear el movimiento de saldo inicial:', movErr);
+            if (import.meta.env.DEV) { console.warn('⚠️ No se pudo crear el movimiento de saldo inicial:', movErr);}
           }
         }
         toast.success('Producto creado');
@@ -154,8 +154,8 @@ export function ProductosList() {
       resetForm();
       await fetchData();
     } catch (error: any) {
-      console.log('❌ Error completo:', error);
-      console.log('❌ Response data:', error.response?.data);
+      if (import.meta.env.DEV) { console.log('❌ Error completo:', error);}
+      if (import.meta.env.DEV) { console.log('❌ Response data:', error.response?.data);}
       const message = error.response?.data?.mensaje || error.response?.data?.error || 'Error al guardar producto';
       toast.error(message);
     }

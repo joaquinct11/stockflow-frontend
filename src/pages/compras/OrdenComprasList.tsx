@@ -103,7 +103,7 @@ export function OrdenComprasList() {
       setProductos(productosData);
     } catch (e) {
       toast.error('Error al cargar datos');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setLoading(false);
     }
@@ -122,7 +122,7 @@ export function OrdenComprasList() {
       setProductos(productosData);
     } catch (e) {
       toast.error('Error al cargar órdenes de compra');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setLoading(false);
     }
@@ -249,7 +249,7 @@ export function OrdenComprasList() {
       await fetchData();
     } catch (e) {
       toast.error('Error al crear la orden de compra');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setSavingCreate(false);
     }
@@ -264,7 +264,7 @@ export function OrdenComprasList() {
       setSelectedOc(data);
     } catch (e) {
       toast.error('Error al cargar detalle de la OC');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
       setIsDetailOpen(false);
     } finally {
       setDetailLoading(false);
@@ -287,7 +287,7 @@ export function OrdenComprasList() {
       await fetchData();
     } catch (e) {
       toast.error('Error al enviar OC');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setDetailActionLoading(false);
     }
@@ -303,7 +303,7 @@ export function OrdenComprasList() {
       await fetchData();
     } catch (e) {
       toast.error('Error al cancelar OC');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setDetailActionLoading(false);
     }
@@ -332,7 +332,7 @@ export function OrdenComprasList() {
     } catch (e: any) {
       // backend puede devolver BadRequest si OC cancelada, etc.
       toast.error(e?.response?.data?.mensaje ?? 'Error al crear recepción desde la OC');
-      console.error(e);
+      if (import.meta.env.DEV) { console.error(e);}
     } finally {
       setDetailActionLoading(false);
     }

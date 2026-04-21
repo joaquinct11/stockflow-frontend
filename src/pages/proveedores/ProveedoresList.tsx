@@ -68,7 +68,7 @@ export function ProveedoresList() {
       setProveedores(data);
     } catch (error) {
       toast.error('Error al cargar proveedores');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,7 @@ export function ProveedoresList() {
       await fetchProveedores();
     } catch (error) {
       toast.error(editingProveedor ? 'Error al actualizar proveedor' : 'Error al crear proveedor');
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error);}
     }
   };
 

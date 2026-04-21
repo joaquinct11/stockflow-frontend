@@ -15,12 +15,14 @@ export const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     const accessToken = localStorage.getItem('accessToken');
-    
+
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
-      console.log('🔐 Access token agregado al header');
+      if (import.meta.env.DEV) {
+        console.log('🔐 Access token agregado al header');
+      }
     }
-    
+
     return config;
   },
   (error) => {
