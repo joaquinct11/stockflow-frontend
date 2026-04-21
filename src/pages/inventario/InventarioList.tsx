@@ -42,8 +42,8 @@ export function InventarioList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
- const [selectedProveedorMov, setSelectedProveedorMov] = useState<any>(null);
-  // const [setSelectedProveedorMov] = useState<any>(null);
+  const [, setSelectedProveedorMov] = useState<any>(null);
+  //const [setSelectedProveedorMov] = useState<any>(null);
 
   // Kardex dialog state
   const [isKardexOpen, setIsKardexOpen] = useState(false);
