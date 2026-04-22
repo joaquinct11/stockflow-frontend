@@ -25,6 +25,12 @@ import {
   Send,
   XCircle,
   PackagePlus,
+  Truck,
+  FileText,
+  Hash,
+  Building2,
+  Boxes,
+  BadgeCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -38,6 +44,7 @@ const ESTADO_BADGE: Record<string, string> = {
 };
 
 type Option = { id: number | string; label: string; subtitle?: string };
+type EstadoOCFilter = 'TODOS' | 'BORRADOR' | 'ENVIADA' | 'RECIBIDA' | 'COMPLETADA' | 'CANCELADA';
 
 export function OrdenComprasList() {
   const navigate = useNavigate();
@@ -55,6 +62,8 @@ export function OrdenComprasList() {
 
   // List state
   const [searchTerm, setSearchTerm] = useState('');
+  const [estadoFilter, setEstadoFilter] = useState<EstadoOCFilter>('TODOS');
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -90,7 +99,7 @@ export function OrdenComprasList() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, estadoFilter]);
 
   const fetchFormData = async () => {
     try {
@@ -103,7 +112,7 @@ export function OrdenComprasList() {
       setProductos(productosData);
     } catch (e) {
       toast.error('Error al cargar datos');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setLoading(false);
     }
@@ -122,7 +131,7 @@ export function OrdenComprasList() {
       setProductos(productosData);
     } catch (e) {
       toast.error('Error al cargar órdenes de compra');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setLoading(false);
     }
@@ -167,29 +176,36 @@ export function OrdenComprasList() {
     setIsCreateOpen(false);
   };
 
-  const filteredOrdenes = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    return ordenes.filter(
-      (o) =>
-        (o.proveedorNombre ?? '').toLowerCase().includes(term) ||
-        String(o.id ?? '').includes(term) ||
-        (o.estado ?? '').toLowerCase().includes(term)
-    );
-  }, [ordenes, searchTerm]);
-
-  const totalPages = Math.ceil(filteredOrdenes.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentOrdenes = filteredOrdenes.slice(startIndex, startIndex + itemsPerPage);
-
   const stats = useMemo(
     () => ({
       total: ordenes.length,
       borrador: ordenes.filter((o) => o.estado === 'BORRADOR').length,
       enviada: ordenes.filter((o) => o.estado === 'ENVIADA').length,
-      completada: ordenes.filter((o) => o.estado === 'COMPLETADA').length,
+      parcial: ordenes.filter((o) => o.estado === 'PARCIAL').length,
+      recibida: ordenes.filter((o) => o.estado === 'RECIBIDA').length,
+      cancelada: ordenes.filter((o) => o.estado === 'CANCELADA').length,
     }),
     [ordenes]
   );
+
+  const filteredOrdenes = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return ordenes.filter((o) => {
+      const matchesSearch =
+        (o.proveedorNombre ?? '').toLowerCase().includes(term) ||
+        String(o.id ?? '').includes(term) ||
+        (o.estado ?? '').toLowerCase().includes(term);
+
+      if (!matchesSearch) return false;
+
+      if (estadoFilter === 'TODOS') return true;
+      return o.estado === estadoFilter;
+    });
+  }, [ordenes, searchTerm, estadoFilter]);
+
+  const totalPages = Math.ceil(filteredOrdenes.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentOrdenes = filteredOrdenes.slice(startIndex, startIndex + itemsPerPage);
 
   const handleAddItem = () => {
     if (!selectedProducto) {
@@ -249,7 +265,7 @@ export function OrdenComprasList() {
       await fetchData();
     } catch (e) {
       toast.error('Error al crear la orden de compra');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setSavingCreate(false);
     }
@@ -264,7 +280,7 @@ export function OrdenComprasList() {
       setSelectedOc(data);
     } catch (e) {
       toast.error('Error al cargar detalle de la OC');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
       setIsDetailOpen(false);
     } finally {
       setDetailLoading(false);
@@ -287,7 +303,7 @@ export function OrdenComprasList() {
       await fetchData();
     } catch (e) {
       toast.error('Error al enviar OC');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setDetailActionLoading(false);
     }
@@ -303,7 +319,7 @@ export function OrdenComprasList() {
       await fetchData();
     } catch (e) {
       toast.error('Error al cancelar OC');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setDetailActionLoading(false);
     }
@@ -323,20 +339,15 @@ export function OrdenComprasList() {
 
       toast.success(`Recepción creada (OC #${selectedOc.id})`);
 
-      // cierra modal de OC
       closeDetail();
-
-      // navega al módulo de recepciones
-      // (si quieres abrir directo el modal de la recepción, habría que soportar query param en RecepcionList)
       navigate('/dashboard/recepciones');
     } catch (e: any) {
-      // backend puede devolver BadRequest si OC cancelada, etc.
       toast.error(e?.response?.data?.mensaje ?? 'Error al crear recepción desde la OC');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setDetailActionLoading(false);
     }
-};
+  };
 
   if (loading) return <LoadingSpinner />;
 
@@ -356,8 +367,239 @@ export function OrdenComprasList() {
       return acc + Math.max(0, it.cantidadSolicitada - recibido);
     }, 0);
 
+  const subtotalOC = (oc: OrdenCompraDTO) =>
+    (oc.items ?? []).reduce((acc, it) => acc + (it.precioUnitario ?? 0) * (it.cantidadSolicitada ?? 0), 0);
+
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Órdenes de Compra</h1>
+          <p className="text-muted-foreground">Crea, envía y recepciona compras a tus proveedores</p>
+        </div>
+
+        {canCreateOC && (
+          <Button onClick={() => setIsCreateOpen(true)} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva OC
+          </Button>
+        )}
+      </div>
+
+      {/* Stats (estilo proveedores/productos) */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {/* <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total OC</CardTitle>
+            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card> */}
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Borradores</CardTitle>
+            <FileText className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.borrador}</div>
+            <p className="text-xs text-muted-foreground">Aún no enviadas</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Enviadas</CardTitle>
+            <Truck className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.enviada}</div>
+            <p className="text-xs text-muted-foreground">Esperando recepción</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Recibidas</CardTitle>
+            <BadgeCheck className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-700">{stats.recibida}</div>
+            <p className="text-xs text-muted-foreground">Recibidas al 100%</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Canceladas</CardTitle>
+            <BadgeCheck className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-700">{stats.cancelada}</div>
+            <p className="text-xs text-muted-foreground">Canceladas</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filtros (mismo estilo de proveedores/productos) */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por proveedor, ID o estado..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+
+            {/* Estado filter (segmented control) */}
+            <div className="sm:w-[520px]">
+              <div
+                className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
+                role="tablist"
+                aria-label="Filtrar OC por estado"
+              >
+                {(
+                  [
+                    { key: 'TODOS', label: 'Todos' },
+                    { key: 'BORRADOR', label: 'Borrador' },
+                    { key: 'ENVIADA', label: 'Enviada' },
+                    { key: 'RECIBIDA', label: 'Recibida' },
+                    { key: 'CANCELADA', label: 'Cancelada' },
+                  ] as Array<{ key: EstadoOCFilter; label: string }>
+                ).map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setEstadoFilter(t.key)}
+                    className={`flex-1 rounded-md px-3 py-2 text-xs sm:text-sm font-medium transition
+                      ${
+                        estadoFilter === t.key
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    aria-pressed={estadoFilter === t.key}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Main list */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Listado</CardTitle>
+          <CardDescription>Haz clic en “Ver detalle” para acciones (enviar/cancelar/recepcionar)</CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          {filteredOrdenes.length === 0 ? (
+            <EmptyState
+              icon={ShoppingBag}
+              title="No hay órdenes de compra"
+              description={searchTerm ? 'No se encontraron órdenes con ese criterio' : 'Crea la primera orden de compra'}
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Proveedor</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Pendiente</TableHead>
+                      <TableHead className="text-right">Subtotal</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead className="text-right">Acción</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {currentOrdenes.map((oc) => {
+                      const pendiente = pendienteTotal(oc);
+                      const subtotal = subtotalOC(oc);
+
+                      return (
+                        <TableRow key={oc.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <Hash className="h-4 w-4 text-muted-foreground" />
+                              <span>#{oc.id}</span>
+                            </div>
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="flex items-start gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground mt-0.5" />
+                              <div>
+                                <p className="font-medium">{oc.proveedorNombre || `Proveedor #${oc.proveedorId}`}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {oc.items?.length ?? 0} item(s)
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+
+                          <TableCell>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                ESTADO_BADGE[oc.estado] || ''
+                              }`}
+                            >
+                              {oc.estado}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <span className={pendiente > 0 ? 'font-semibold text-orange-600' : 'text-green-700 font-semibold'}>
+                              {pendiente}
+                            </span>
+                            <span className="text-muted-foreground text-xs ml-1">u</span>
+                          </TableCell>
+
+                          <TableCell className="text-right font-semibold">
+                            {subtotal > 0 ? `S/. ${subtotal.toFixed(2)}` : '—'}
+                          </TableCell>
+
+                          <TableCell>
+                            {oc.createdAt ? new Date(oc.createdAt).toLocaleDateString('es-PE') : '—'}
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <Button variant="outline" size="sm" onClick={() => openDetail(oc.id!)}>
+                              Ver detalle
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={filteredOrdenes.length}
+                itemsPerPage={itemsPerPage}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Detail modal */}
       <Dialog
         isOpen={isDetailOpen}
@@ -371,20 +613,14 @@ export function OrdenComprasList() {
             <LoadingSpinner />
           </div>
         ) : !selectedOc ? (
-          <EmptyState
-            icon={ClipboardList}
-            title="No se pudo cargar la OC"
-            description="Intenta nuevamente."
-          />
+          <EmptyState icon={ClipboardList} title="No se pudo cargar la OC" description="Intenta nuevamente." />
         ) : (
-          <div className="space-y-4">
-            {/* Info */}
+          <div className="space-y-6">
+            {/* Header info */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm text-muted-foreground">Proveedor</p>
-                <p className="font-medium">
-                  {selectedOc.proveedorNombre || `#${selectedOc.proveedorId}`}
-                </p>
+                <p className="font-medium">{selectedOc.proveedorNombre || `#${selectedOc.proveedorId}`}</p>
               </div>
 
               <div>
@@ -399,20 +635,19 @@ export function OrdenComprasList() {
 
               <div>
                 <p className="text-sm text-muted-foreground">Pendiente total</p>
-                <p
-                  className={`font-bold ${
-                    pendienteTotal(selectedOc) > 0 ? 'text-orange-600' : 'text-green-600'
-                  }`}
-                >
+                <p className={`font-bold ${pendienteTotal(selectedOc) > 0 ? 'text-orange-600' : 'text-green-600'}`}>
                   {pendienteTotal(selectedOc)} unidades
                 </p>
               </div>
             </div>
 
             {selectedOc.observaciones && (
-              <div className="rounded-md border p-3">
-                <p className="text-sm text-muted-foreground">Observaciones</p>
-                <p className="text-sm mt-1">{selectedOc.observaciones}</p>
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  Observaciones
+                </p>
+                <p className="text-sm mt-2">{selectedOc.observaciones}</p>
               </div>
             )}
 
@@ -435,20 +670,12 @@ export function OrdenComprasList() {
                     const pendiente = Math.max(0, it.cantidadSolicitada - recibido);
                     return (
                       <TableRow key={it.id ?? idx}>
-                        <TableCell className="font-medium">
-                          {it.productoNombre || `#${it.productoId}`}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-xs">
-                          {it.codigoBarras || '—'}
-                        </TableCell>
+                        <TableCell className="font-medium">{it.productoNombre || `#${it.productoId}`}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{it.codigoBarras || '—'}</TableCell>
                         <TableCell className="text-right">{it.cantidadSolicitada}</TableCell>
                         <TableCell className="text-right text-green-600">{recibido}</TableCell>
                         <TableCell className="text-right">
-                          <span
-                            className={
-                              pendiente > 0 ? 'text-orange-600 font-medium' : 'text-green-600'
-                            }
-                          >
+                          <span className={pendiente > 0 ? 'text-orange-600 font-medium' : 'text-green-600'}>
                             {pendiente}
                           </span>
                         </TableCell>
@@ -463,14 +690,7 @@ export function OrdenComprasList() {
             </div>
 
             {/* Actions */}
-            <div className="flex flex-wrap gap-2 justify-end pt-2 border-t">
-              {selectedOc.estado === 'BORRADOR' && canEditOC && (
-                <Button onClick={handleEnviar} disabled={detailActionLoading || (selectedOc.items ?? []).length === 0}>
-                  <Send size={16} className="mr-2" />
-                  Enviar
-                </Button>
-              )}
-
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">
               {(selectedOc.estado === 'BORRADOR' || selectedOc.estado === 'ENVIADA') && canEditOC && (
                 <Button variant="outline" onClick={handleCancelar} disabled={detailActionLoading}>
                   <XCircle size={16} className="mr-2" />
@@ -478,8 +698,15 @@ export function OrdenComprasList() {
                 </Button>
               )}
 
+              {selectedOc.estado === 'BORRADOR' && canEditOC && (
+                <Button onClick={handleEnviar} disabled={detailActionLoading || (selectedOc.items ?? []).length === 0}>
+                  <Send size={16} className="mr-2" />
+                  Enviar
+                </Button>
+              )}
+
               {(selectedOc.estado === 'ENVIADA' || selectedOc.estado === 'PARCIAL') && (
-                <Button onClick={handleRecepcionar}>
+                <Button onClick={handleRecepcionar} disabled={detailActionLoading}>
                   <PackagePlus size={16} className="mr-2" />
                   Recepcionar
                 </Button>
@@ -489,7 +716,7 @@ export function OrdenComprasList() {
         )}
       </Dialog>
 
-      {/* Create modal */}
+      {/* Create modal (estilo coherente) */}
       <Dialog
         isOpen={isCreateOpen}
         onClose={resetCreateForm}
@@ -497,40 +724,79 @@ export function OrdenComprasList() {
         description="Crea una orden de compra (borrador) para tu proveedor"
         size="xl"
       >
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Proveedor <span className="text-red-500">*</span>
-            </label>
-            <Autocomplete
-              options={proveedorOptions}
-              value={
-                selectedProveedor
-                  ? {
-                      id: selectedProveedor.id!,
-                      label: selectedProveedor.nombre,
-                      subtitle: selectedProveedor.ruc ? `RUC: ${selectedProveedor.ruc}` : undefined,
-                    }
-                  : null
-              }
-              onChange={(opt) => setSelectedProveedorId(opt ? Number(opt.id) : null)}
-              placeholder="Buscar proveedor..."
-            />
+        <div className="space-y-6">
+          {/* Sub-header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Registrar orden de compra</p>
+              <p className="text-xs text-muted-foreground">Agrega proveedor, observaciones e items.</p>
+            </div>
+            <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100">
+              BORRADOR
+            </span>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Observaciones</label>
-            <Input
-              value={observaciones}
-              onChange={(e) => setObservaciones(e.target.value)}
-              placeholder="Observaciones opcionales..."
-            />
+          {/* Proveedor + observaciones */}
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+            <div>
+              <p className="text-sm font-semibold">Datos generales</p>
+              <p className="text-xs text-muted-foreground">Proveedor y nota interna.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Proveedor <span className="text-red-500">*</span>
+                </label>
+                <Autocomplete
+                  options={proveedorOptions}
+                  value={
+                    selectedProveedor
+                      ? {
+                          id: selectedProveedor.id!,
+                          label: selectedProveedor.nombre,
+                          subtitle: selectedProveedor.ruc ? `RUC: ${selectedProveedor.ruc}` : undefined,
+                        }
+                      : null
+                  }
+                  onChange={(opt) => setSelectedProveedorId(opt ? Number(opt.id) : null)}
+                  placeholder="Buscar proveedor..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Observaciones</label>
+                <div className="relative">
+                  <FileText className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={observaciones}
+                    onChange={(e) => setObservaciones(e.target.value)}
+                    placeholder="Observaciones opcionales..."
+                    className="pl-10 h-11"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="rounded-md border p-3 space-y-3">
-            <p className="text-sm font-medium">Agregar producto</p>
+          {/* Items */}
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Productos</p>
+                <p className="text-xs text-muted-foreground">Agrega items a la orden.</p>
+              </div>
+
+              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                <Boxes className="h-4 w-4" />
+                <span>{items.length} item(s)</span>
+              </div>
+            </div>
+
+            {/* Add item row */}
             <div className="flex gap-2 flex-wrap items-end">
-              <div className="flex-1 min-w-[220px]">
+              <div className="flex-1 min-w-[240px]">
+                <label className="text-xs text-muted-foreground mb-1 block">Producto</label>
                 <Autocomplete
                   options={productoOptions}
                   value={
@@ -551,7 +817,7 @@ export function OrdenComprasList() {
                 <Input
                   type="number"
                   min={1}
-                  className="w-24"
+                  className="w-24 h-11"
                   value={itemQty}
                   onChange={(e) => setItemQty(Number(e.target.value))}
                 />
@@ -563,195 +829,92 @@ export function OrdenComprasList() {
                   type="number"
                   min={0}
                   step="0.01"
-                  className="w-28"
+                  className="w-32 h-11"
                   value={itemPrice}
                   onChange={(e) => setItemPrice(e.target.value === '' ? '' : Number(e.target.value))}
                 />
               </div>
 
-              <Button type="button" variant="outline" onClick={handleAddItem}>
-                <Plus size={16} />
+              <Button type="button" variant="outline" onClick={handleAddItem} className="h-11">
+                <Plus size={16} className="mr-2" />
+                Agregar
               </Button>
+            </div>
+
+            {/* Items table */}
+            {items.length > 0 ? (
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Producto</TableHead>
+                      <TableHead className="text-right">Cantidad</TableHead>
+                      <TableHead className="text-right">Precio unit.</TableHead>
+                      <TableHead className="text-right">Subtotal</TableHead>
+                      <TableHead className="text-right"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((it) => {
+                      const sub = (it.precioUnitario ?? 0) * (it.cantidadSolicitada ?? 0);
+                      return (
+                        <TableRow key={it.productoId}>
+                          <TableCell className="text-sm font-medium">{it.productoNombre}</TableCell>
+                          <TableCell className="text-right">{it.cantidadSolicitada}</TableCell>
+                          <TableCell className="text-right">
+                            {it.precioUnitario != null ? `S/. ${it.precioUnitario.toFixed(2)}` : '—'}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {it.precioUnitario != null ? `S/. ${sub.toFixed(2)}` : '—'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(it.productoId)}
+                              className="text-red-500 hover:text-red-700 text-xs"
+                            >
+                              Quitar
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed p-4">
+                <p className="text-sm text-muted-foreground">
+                  Aún no agregas productos. Usa el buscador para añadir items.
+                </p>
+              </div>
+            )}
+
+            {/* Total */}
+            <div className="flex justify-end">
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Total estimado</p>
+                <p className="text-lg font-bold">
+                  S/.{' '}
+                  {items
+                    .reduce((acc, it) => acc + (it.precioUnitario ?? 0) * (it.cantidadSolicitada ?? 0), 0)
+                    .toFixed(2)}
+                </p>
+              </div>
             </div>
           </div>
 
-          {items.length > 0 && (
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Producto</TableHead>
-                    <TableHead className="text-right">Cantidad</TableHead>
-                    <TableHead className="text-right">Precio unit.</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((it) => (
-                    <TableRow key={it.productoId}>
-                      <TableCell className="text-sm">{it.productoNombre}</TableCell>
-                      <TableCell className="text-right">{it.cantidadSolicitada}</TableCell>
-                      <TableCell className="text-right">
-                        {it.precioUnitario != null ? `S/. ${it.precioUnitario.toFixed(2)}` : '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <button
-                          onClick={() => handleRemoveItem(it.productoId)}
-                          className="text-red-500 hover:text-red-700 text-xs"
-                        >
-                          Quitar
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          <div className="flex gap-2 justify-end pt-2 border-t">
-            <Button type="button" variant="outline" onClick={resetCreateForm}>
+          {/* Footer */}
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">
+            <Button type="button" variant="outline" onClick={resetCreateForm} className="h-11">
               Cancelar
             </Button>
-            <Button onClick={handleCreateOC} disabled={savingCreate}>
+            <Button onClick={handleCreateOC} disabled={savingCreate} className="h-11">
               {savingCreate ? 'Guardando...' : 'Guardar borrador'}
             </Button>
           </div>
         </div>
       </Dialog>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <ClipboardList className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-2xl font-bold">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total OC</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Clock className="h-8 w-8 text-gray-500" />
-              <div>
-                <p className="text-2xl font-bold">{stats.borrador}</p>
-                <p className="text-xs text-muted-foreground">Borradores</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <ShoppingBag className="h-8 w-8 text-blue-500" />
-              <div>
-                <p className="text-2xl font-bold">{stats.enviada}</p>
-                <p className="text-xs text-muted-foreground">Enviadas</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-8 w-8 text-green-500" />
-              <div>
-                <p className="text-2xl font-bold">{stats.completada}</p>
-                <p className="text-xs text-muted-foreground">Completadas</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main list */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Órdenes de Compra</CardTitle>
-              <CardDescription>Gestiona las órdenes de compra a proveedores</CardDescription>
-            </div>
-            {canCreateOC && (
-              <Button onClick={() => setIsCreateOpen(true)} className="w-full sm:w-auto">
-                <Plus size={16} className="mr-2" />
-                Nueva OC
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          <div className="relative mb-4">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por proveedor, ID o estado..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-
-          {filteredOrdenes.length === 0 ? (
-            <EmptyState
-              icon={ShoppingBag}
-              title="No hay órdenes de compra"
-              description={searchTerm ? 'No se encontraron órdenes con ese criterio' : 'Crea la primera orden de compra'}
-            />
-          ) : (
-            <>
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Proveedor</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead className="text-right">Acción</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {currentOrdenes.map((oc) => (
-                      <TableRow key={oc.id}>
-                        <TableCell className="font-medium">#{oc.id}</TableCell>
-                        <TableCell>{oc.proveedorNombre || `Proveedor #${oc.proveedorId}`}</TableCell>
-                        <TableCell>
-                          <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${ESTADO_BADGE[oc.estado] || ''}`}>
-                            {oc.estado}
-                          </span>
-                        </TableCell>
-                        <TableCell>{oc.items?.length ?? 0} productos</TableCell>
-                        <TableCell>
-                          {oc.createdAt ? new Date(oc.createdAt).toLocaleDateString('es-PE') : '—'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => openDetail(oc.id!)}>
-                            Ver detalle
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={filteredOrdenes.length}
-                itemsPerPage={itemsPerPage}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

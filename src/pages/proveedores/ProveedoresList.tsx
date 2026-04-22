@@ -15,16 +15,22 @@ import { Plus, Trash2, Edit, Search, Building2, User, Phone, Mail, CheckCircle, 
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
+type EstadoProveedorFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
+
 export function ProveedoresList() {
   const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
   const hasViewPermission = canView('PROVEEDORES');
+
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProveedor, setEditingProveedor] = useState<ProveedorDTO | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // ✅ NUEVO - Estados de paginación
+  // ✅ NUEVO - filtro por estado
+  const [estadoFilter, setEstadoFilter] = useState<EstadoProveedorFilter>('TODOS');
+
+  // ✅ Estados de paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -56,10 +62,10 @@ export function ProveedoresList() {
     }
   }, [hasViewPermission]);
 
-  // ✅ NUEVO - Resetear página al buscar
+  // ✅ Resetear página al buscar / cambiar filtro
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, estadoFilter]);
 
   const fetchProveedores = async () => {
     try {
@@ -68,7 +74,7 @@ export function ProveedoresList() {
       setProveedores(data);
     } catch (error) {
       toast.error('Error al cargar proveedores');
-      if (import.meta.env.DEV) { console.error(error);}
+      if (import.meta.env.DEV) console.error(error);
     } finally {
       setLoading(false);
     }
@@ -89,7 +95,7 @@ export function ProveedoresList() {
       await fetchProveedores();
     } catch (error) {
       toast.error(editingProveedor ? 'Error al actualizar proveedor' : 'Error al crear proveedor');
-      if (import.meta.env.DEV) { console.error(error);}
+      if (import.meta.env.DEV) console.error(error);
     }
   };
 
@@ -183,14 +189,23 @@ export function ProveedoresList() {
     setIsDialogOpen(false);
   };
 
-  // ✅ ACTUALIZADO - Filtrar proveedores
-  const filteredProveedores = proveedores.filter((p) =>
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.ruc?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.contacto?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // ✅ Filtrar proveedores: búsqueda + estado
+  const filteredProveedores = proveedores
+    .filter((p) => {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        p.nombre.toLowerCase().includes(q) ||
+        p.ruc?.toLowerCase().includes(q) ||
+        p.contacto?.toLowerCase().includes(q);
 
-  // ✅ NUEVO - Calcular paginación
+      if (!matchesSearch) return false;
+
+      if (estadoFilter === 'ACTIVOS') return p.activo;
+      if (estadoFilter === 'INACTIVOS') return !p.activo;
+      return true; // TODOS
+    });
+
+  // ✅ Paginación
   const totalPages = Math.ceil(filteredProveedores.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -220,7 +235,6 @@ export function ProveedoresList() {
         )}
       </div>
 
-      {/* When user cannot list providers, show informational empty state */}
       {!hasViewPermission ? (
         <EmptyState
           icon={Lock}
@@ -262,17 +276,72 @@ export function ProveedoresList() {
             </Card>
           </div>
 
-          {/* Search */}
+          {/* Search + Filtro estado */}
           <Card>
             <CardContent className="pt-6">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nombre, RUC o contacto..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                {/* Search input */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nombre, RUC o contacto..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+
+                {/* Estado filter */}
+                <div className="sm:w-[320px]">
+                  <div
+                    className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
+                    role="tablist"
+                    aria-label="Filtrar proveedores por estado"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setEstadoFilter('TODOS')}
+                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition
+                        ${estadoFilter === 'TODOS'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      aria-pressed={estadoFilter === 'TODOS'}
+                    >
+                      Todos
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEstadoFilter('ACTIVOS')}
+                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition flex items-center justify-center gap-2
+                        ${estadoFilter === 'ACTIVOS'
+                          ? 'bg-green-600 text-white shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      aria-pressed={estadoFilter === 'ACTIVOS'}
+                      title="Mostrar solo proveedores activos"
+                    >
+                      <span className="h-2 w-2 rounded-full bg-green-500" />
+                      Activos
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEstadoFilter('INACTIVOS')}
+                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition flex items-center justify-center gap-2
+                        ${estadoFilter === 'INACTIVOS'
+                          ? 'bg-red-600 text-white shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      aria-pressed={estadoFilter === 'INACTIVOS'}
+                      title="Mostrar solo proveedores inactivos"
+                    >
+                      <span className="h-2 w-2 rounded-full bg-red-500" />
+                      Inactivos
+                    </button>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -283,106 +352,102 @@ export function ProveedoresList() {
               <CardTitle>Lista de Proveedores</CardTitle>
               <CardDescription>{filteredProveedores.length} proveedor(es) encontrado(s)</CardDescription>
             </CardHeader>
-        <CardContent>
-          {filteredProveedores.length === 0 ? (
-            <EmptyState title="No hay proveedores" description="Comienza registrando tu primer proveedor" />
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {/* <TableHead>ID</TableHead> */}
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>RUC</TableHead>
-                      <TableHead>Contacto</TableHead>
-                      <TableHead>Teléfono</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {/* ✅ CAMBIAR - Usar currentProveedores en lugar de filteredProveedores */}
-                    {currentProveedores.map((proveedor) => (
-                      <TableRow key={proveedor.id}>
-                        {/* <TableCell className="font-medium">#{proveedor.id}</TableCell> */}
-                        <TableCell className="font-semibold">{proveedor.nombre}</TableCell>
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">{proveedor.ruc || '-'}</span>
-                        </TableCell>
-                        <TableCell>{proveedor.contacto || '-'}</TableCell>
-                        <TableCell>{proveedor.telefono || '-'}</TableCell>
-                        <TableCell>{proveedor.email || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant={proveedor.activo ? 'success' : 'destructive'}>
-                            {proveedor.activo ? 'Activo' : 'Inactivo'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {canToggleState('PROVEEDORES') && (
-                              proveedor.activo ? (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeactivate(proveedor.id!, proveedor.nombre)}
-                                  title="Desactivar"
-                                >
-                                  <XCircle className="h-4 w-4 text-orange-600" />
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleActivate(proveedor.id!, proveedor.nombre)}
-                                  title="Activar proveedor"
-                                >
-                                  <CheckCircle className="h-4 w-4 text-green-600" />
-                                </Button>
-                              )
-                            )}
 
-                            {canEdit('PROVEEDORES') && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(proveedor)}
-                                title="Editar"
-                              >
-                                <Edit className="h-4 w-4 text-blue-600" />
-                              </Button>
-                            )}
+            <CardContent>
+              {filteredProveedores.length === 0 ? (
+                <EmptyState title="No hay proveedores" description="Comienza registrando tu primer proveedor" />
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nombre</TableHead>
+                          <TableHead>RUC</TableHead>
+                          <TableHead>Contacto</TableHead>
+                          <TableHead>Teléfono</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {currentProveedores.map((proveedor) => (
+                          <TableRow key={proveedor.id}>
+                            <TableCell className="font-semibold">{proveedor.nombre}</TableCell>
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">{proveedor.ruc || '-'}</span>
+                            </TableCell>
+                            <TableCell>{proveedor.contacto || '-'}</TableCell>
+                            <TableCell>{proveedor.telefono || '-'}</TableCell>
+                            <TableCell>{proveedor.email || '-'}</TableCell>
+                            <TableCell>
+                              <Badge variant={proveedor.activo ? 'success' : 'destructive'}>
+                                {proveedor.activo ? 'Activo' : 'Inactivo'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                {canToggleState('PROVEEDORES') &&
+                                  (proveedor.activo ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleDeactivate(proveedor.id!, proveedor.nombre)}
+                                      title="Desactivar"
+                                    >
+                                      <XCircle className="h-4 w-4 text-orange-600" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleActivate(proveedor.id!, proveedor.nombre)}
+                                      title="Activar proveedor"
+                                    >
+                                      <CheckCircle className="h-4 w-4 text-green-600" />
+                                    </Button>
+                                  ))}
 
-                            {canDelete('PROVEEDORES') && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(proveedor.id!, proveedor.nombre)}
-                                title="Eliminar"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                                {canEdit('PROVEEDORES') && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEdit(proveedor)}
+                                    title="Editar"
+                                  >
+                                    <Edit className="h-4 w-4 text-blue-600" />
+                                  </Button>
+                                )}
 
-              {/* ✅ NUEVO - Paginación */}
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={filteredProveedores.length}
-                itemsPerPage={itemsPerPage}
-              />
-            </>
-          )}
-        </CardContent>
+                                {canDelete('PROVEEDORES') && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDelete(proveedor.id!, proveedor.nombre)}
+                                    title="Eliminar"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={filteredProveedores.length}
+                    itemsPerPage={itemsPerPage}
+                  />
+                </>
+              )}
+            </CardContent>
           </Card>
         </>
       )}
@@ -395,107 +460,136 @@ export function ProveedoresList() {
         description={editingProveedor ? 'Actualiza la información del proveedor' : 'Registra un nuevo proveedor'}
         size="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">
-                Nombre del Proveedor
-                <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Building2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Ej: Droguería Lima SAC"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  className="pl-8"
-                  required
-                />
-              </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Sub-header dentro del modal */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">
+                {editingProveedor ? 'Editar proveedor' : 'Registrar proveedor'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Completa la información. Los campos con * son obligatorios.
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">RUC</label>
-              <Input
-                placeholder="20123456789"
-                value={formData.ruc}
-                onChange={(e) => setFormData({ ...formData, ruc: e.target.value })}
-                maxLength={20}
-              />
+            <Badge variant={editingProveedor ? 'secondary' : 'success'} className="w-fit">
+              {editingProveedor ? 'Edición' : 'Nuevo'}
+            </Badge>
+          </div>
+
+          {/* Sección: Datos principales */}
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Datos principales</p>
+              <p className="text-xs text-muted-foreground">Información básica del proveedor.</p>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Persona de Contacto</label>
-              <div className="relative">
-                <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Ej: Juan Pérez"
-                  value={formData.contacto}
-                  onChange={(e) => setFormData({ ...formData, contacto: e.target.value })}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Teléfono</label>
-              <div className="relative">
-                <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="999 999 999"
-                  value={formData.telefono}
-                  onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="email"
-                  placeholder="proveedor@ejemplo.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">Dirección</label>
-              <textarea
-                placeholder="Av. Ejemplo 123, Lima, Perú"
-                value={formData.direccion}
-                onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">Estado</label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="activo"
-                  checked={formData.activo}
-                  onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-                <label htmlFor="activo" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Proveedor Activo
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">
+                  Nombre del Proveedor <span className="text-red-500">*</span>
                 </label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Ej: Droguería Lima SAC"
+                    value={formData.nombre}
+                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    className="pl-10 h-11"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">RUC</label>
+                <Input
+                  placeholder="20123456789"
+                  value={formData.ruc}
+                  onChange={(e) => setFormData({ ...formData, ruc: e.target.value })}
+                  maxLength={20}
+                  className="h-11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Persona de Contacto</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Ej: Juan Pérez"
+                    value={formData.contacto}
+                    onChange={(e) => setFormData({ ...formData, contacto: e.target.value })}
+                    className="pl-10 h-11"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex gap-2 justify-end pt-4 border-t">
-            <Button type="button" variant="outline" onClick={resetForm}>
+          {/* Sección: Contacto */}
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Contacto</p>
+              <p className="text-xs text-muted-foreground">Datos para comunicación.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Teléfono</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="999 999 999"
+                    value={formData.telefono}
+                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                    className="pl-10 h-11"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    placeholder="proveedor@ejemplo.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="pl-10 h-11"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sección: Dirección */}
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Dirección</p>
+              <p className="text-xs text-muted-foreground">Opcional, útil para compras y logística.</p>
+            </div>
+
+            <div className="space-y-2">
+              <textarea
+                placeholder="Av. Ejemplo 123, Lima, Perú"
+                value={formData.direccion}
+                onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                className="flex min-h-[96px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background
+                          placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">
+            <Button type="button" variant="outline" onClick={resetForm} className="h-11">
               Cancelar
             </Button>
-            <Button type="submit">{editingProveedor ? 'Actualizar' : 'Crear'} Proveedor</Button>
+            <Button type="submit" className="h-11">
+              {editingProveedor ? 'Actualizar' : 'Crear'} Proveedor
+            </Button>
           </div>
         </form>
       </Dialog>
