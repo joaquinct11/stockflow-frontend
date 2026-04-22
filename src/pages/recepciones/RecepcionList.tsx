@@ -21,11 +21,28 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Inbox, Search, CheckCircle, Clock, Lock, PackagePlus, Save, Trash2 } from 'lucide-react';
+import {
+  Plus,
+  Inbox,
+  Search,
+  CheckCircle,
+  Clock,
+  Lock,
+  PackagePlus,
+  Save,
+  Trash2,
+  FileText,
+  Building2,
+  Hash,
+  BadgeCheck,
+  Truck,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
 type Option = { id: number | string; label: string; subtitle?: string };
+
+type EstadoRecepFilter = 'TODOS' | 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
 
 const ESTADO_BADGE: Record<string, string> = {
   BORRADOR: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
@@ -53,12 +70,12 @@ function normalizeRecepcion(raw: any): RecepcionDTO {
     id: d.id,
     productoId: d.productoId,
     productoNombre: d.productoNombre,
-    codigoBarras: d.codigoBarras, // puede venir undefined
-    cantidadEsperada: d.cantidadEsperada, // puede venir undefined
+    codigoBarras: d.codigoBarras,
+    cantidadEsperada: d.cantidadEsperada,
     cantidadRecibida: d.cantidadRecibida,
-    precioUnitario: d.precioUnitario, // puede venir undefined
+    precioUnitario: d.precioUnitario,
     fechaVencimiento: d.fechaVencimiento,
-    lote: d.lote, // puede venir undefined
+    lote: d.lote,
   }));
 
   const hasComp = !!raw?.tipoComprobante && !!raw?.serie && !!raw?.numero;
@@ -103,6 +120,7 @@ export function RecepcionList() {
 
   // List state
   const [searchTerm, setSearchTerm] = useState('');
+  const [estadoFilter, setEstadoFilter] = useState<EstadoRecepFilter>('TODOS');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -121,11 +139,11 @@ export function RecepcionList() {
   const [selectedRecepId, setSelectedRecepId] = useState<number | null>(null);
   const [selectedRecep, setSelectedRecep] = useState<RecepcionDTO | null>(null);
 
-  // Add/Update item fields (como pediste)
+  // Add/Update item fields
   const [selectedProductoId, setSelectedProductoId] = useState<number | null>(null);
   const [itemQty, setItemQty] = useState<number>(1);
-  const [itemExpiry, setItemExpiry] = useState(''); // date string YYYY-MM-DD
-  const [itemLote, setItemLote] = useState(''); // opcional
+  const [itemExpiry, setItemExpiry] = useState(''); // YYYY-MM-DD
+  const [itemLote, setItemLote] = useState('');
 
   // Comprobante form
   const [compTipo, setCompTipo] = useState<TipoComprobanteProveedor>('FACTURA');
@@ -143,7 +161,7 @@ export function RecepcionList() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, estadoFilter]);
 
   const fetchFormData = async () => {
     try {
@@ -179,7 +197,7 @@ export function RecepcionList() {
       setProductos(prodData);
     } catch (e) {
       toast.error('Error al cargar recepciones');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setLoading(false);
     }
@@ -224,29 +242,35 @@ export function RecepcionList() {
     [selectedProductoId, productos]
   );
 
-  const filtered = useMemo(() => {
-    const term = searchTerm.toLowerCase();
-    return recepciones.filter(
-      (r) =>
-        r.proveedorNombre?.toLowerCase().includes(term) ||
-        String(r.id).includes(term) ||
-        r.estado.toLowerCase().includes(term) ||
-        (r.ordenCompraId && String(r.ordenCompraId).includes(term))
-    );
-  }, [recepciones, searchTerm]);
-
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentRecepciones = filtered.slice(startIndex, startIndex + itemsPerPage);
-
   const stats = useMemo(
     () => ({
       total: recepciones.length,
       borrador: recepciones.filter((r) => r.estado === 'BORRADOR').length,
       confirmada: recepciones.filter((r) => r.estado === 'CONFIRMADA').length,
+      anulada: recepciones.filter((r) => r.estado === 'ANULADA').length,
     }),
     [recepciones]
   );
+
+  const filtered = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return recepciones.filter((r) => {
+      const matchesSearch =
+        r.proveedorNombre?.toLowerCase().includes(term) ||
+        String(r.id).includes(term) ||
+        r.estado.toLowerCase().includes(term) ||
+        (r.ordenCompraId && String(r.ordenCompraId).includes(term));
+
+      if (!matchesSearch) return false;
+
+      if (estadoFilter === 'TODOS') return true;
+      return r.estado === estadoFilter;
+    });
+  }, [recepciones, searchTerm, estadoFilter]);
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentRecepciones = filtered.slice(startIndex, startIndex + itemsPerPage);
 
   // Create
   const openCreate = async () => {
@@ -291,7 +315,7 @@ export function RecepcionList() {
       await openDetail((createdRaw as any).id!);
     } catch (e) {
       toast.error('Error al crear la recepción');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setCreating(false);
     }
@@ -321,7 +345,7 @@ export function RecepcionList() {
       }
     } catch (e) {
       toast.error('Error al cargar la recepción');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
       setIsDetailOpen(false);
     } finally {
       setDetailLoading(false);
@@ -368,12 +392,10 @@ export function RecepcionList() {
     try {
       await recepcionService.upsertItem(selectedRecep.id, payload);
 
-      // refresh
       const refreshedRaw = await recepcionService.getById(selectedRecep.id);
       const refreshed = normalizeRecepcion(refreshedRaw);
       setSelectedRecep(refreshed);
 
-      // reset form
       setSelectedProductoId(null);
       setItemQty(1);
       setItemExpiry('');
@@ -381,8 +403,12 @@ export function RecepcionList() {
 
       toast.success('Item guardado');
     } catch (e: any) {
-      toast.error(e?.response?.data?.mensajes ? JSON.stringify(e.response.data.mensajes) : e?.response?.data?.mensaje ?? 'Error al guardar item');
-      if (import.meta.env.DEV) { console.error(e);}
+      toast.error(
+        e?.response?.data?.mensajes
+          ? JSON.stringify(e.response.data.mensajes)
+          : e?.response?.data?.mensaje ?? 'Error al guardar item'
+      );
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setDetailActionLoading(false);
     }
@@ -399,9 +425,8 @@ export function RecepcionList() {
       return;
     }
 
-    // si ya existe comprobante, bloquear (doble guard)
     if (selectedRecep.comprobante) {
-      toast.error('Esta recepci��n ya tiene comprobante registrado');
+      toast.error('Esta recepción ya tiene comprobante registrado');
       return;
     }
 
@@ -427,8 +452,12 @@ export function RecepcionList() {
 
       toast.success('Comprobante guardado');
     } catch (e: any) {
-      toast.error(e?.response?.data?.mensajes ? JSON.stringify(e.response.data.mensajes) : e?.response?.data?.mensaje ?? 'Error al guardar comprobante');
-      if (import.meta.env.DEV) { console.error(e);}
+      toast.error(
+        e?.response?.data?.mensajes
+          ? JSON.stringify(e.response.data.mensajes)
+          : e?.response?.data?.mensaje ?? 'Error al guardar comprobante'
+      );
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setSavingComp(false);
     }
@@ -465,7 +494,7 @@ export function RecepcionList() {
       await fetchData();
     } catch (e: any) {
       toast.error(e?.response?.data?.mensaje ?? 'Error al confirmar la recepción');
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
     } finally {
       setDetailActionLoading(false);
     }
@@ -481,60 +510,312 @@ export function RecepcionList() {
 
   return (
     <div className="space-y-6">
-      {/* Create modal */}
-      <Dialog isOpen={isCreateOpen} onClose={closeCreate} title="Nueva recepción" description="Crea una recepción desde OC o seleccionando proveedor" size="lg">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Recepciones</h1>
+          <p className="text-muted-foreground">Registra y confirma recepciones de mercadería</p>
+        </div>
+
+        {canCreateRecep && (
+          <Button onClick={openCreate} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva recepción
+          </Button>
+        )}
+      </div>
+
+      {/* Stats (coherente con proveedores/productos/OC) */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total</CardTitle>
+            <Inbox className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Borrador</CardTitle>
+            <Clock className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.borrador}</div>
+            <p className="text-xs text-muted-foreground">Pendientes de confirmar</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Confirmadas</CardTitle>
+            <BadgeCheck className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-700">{stats.confirmada}</div>
+            <p className="text-xs text-muted-foreground">Stock actualizado</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Anuladas</CardTitle>
+            <Trash2 className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.anulada}</div>
+            <p className="text-xs text-muted-foreground">No impactan inventario</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filtros (mismo estilo) */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por proveedor, ID, estado u OC..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+
+            <div className="sm:w-[420px]">
+              <div
+                className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
+                role="tablist"
+                aria-label="Filtrar recepciones por estado"
+              >
+                {(
+                  [
+                    { key: 'TODOS', label: 'Todos' },
+                    { key: 'BORRADOR', label: 'Borrador' },
+                    { key: 'CONFIRMADA', label: 'Confirmada' },
+                    { key: 'ANULADA', label: 'Anulada' },
+                  ] as Array<{ key: EstadoRecepFilter; label: string }>
+                ).map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setEstadoFilter(t.key)}
+                    className={`flex-1 rounded-md px-3 py-2 text-xs sm:text-sm font-medium transition
+                      ${
+                        estadoFilter === t.key
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    aria-pressed={estadoFilter === t.key}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Main list */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recepciones de mercadería</CardTitle>
+          <CardDescription>Historial y gestión de recepciones</CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title="No hay recepciones"
+              description={searchTerm ? 'No se encontraron recepciones con ese criterio' : 'Crea la primera recepción'}
+            />
+          ) : (
+            <>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Proveedor</TableHead>
+                      <TableHead>OC Ref.</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Comprobante</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead className="text-right">Acción</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {currentRecepciones.map((rec) => (
+                      <TableRow key={rec.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <Hash className="h-4 w-4 text-muted-foreground" />
+                            <span>#{rec.id}</span>
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          <div className="flex items-start gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground mt-0.5" />
+                            <div>
+                              <p className="font-medium">{rec.proveedorNombre || `#${rec.proveedorId}`}</p>
+                              {rec.ordenCompraId ? (
+                                <p className="text-xs text-muted-foreground">OC #{rec.ordenCompraId}</p>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">Sin OC</p>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        <TableCell>{rec.ordenCompraId ? `OC #${rec.ordenCompraId}` : '—'}</TableCell>
+
+                        <TableCell>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                              ESTADO_BADGE[rec.estado] || ''
+                            }`}
+                          >
+                            {rec.estado}
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="text-sm">
+                          {rec.comprobante ? (
+                            `${(rec.comprobante as any).tipoComprobante} ${(rec.comprobante as any).serie}-${(rec.comprobante as any).numero}`
+                          ) : (
+                            <span className="text-muted-foreground">Sin comprobante</span>
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {rec.createdAt ? new Date(rec.createdAt).toLocaleDateString('es-PE') : '—'}
+                        </TableCell>
+
+                        <TableCell className="text-right">
+                          <Button variant="outline" size="sm" onClick={() => openDetail(rec.id!)}>
+                            Ver / Editar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={filtered.length}
+                itemsPerPage={itemsPerPage}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Create modal (estilo coherente) */}
+      <Dialog
+        isOpen={isCreateOpen}
+        onClose={closeCreate}
+        title="Nueva recepción"
+        description="Crea una recepción desde OC o seleccionando proveedor"
+        size="xl"
+      >
         {createLoading ? (
           <div className="py-10 flex justify-center">
             <LoadingSpinner />
           </div>
         ) : (
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-1 block">Orden de compra (opcional)</label>
-              <Autocomplete
-                options={ocOptions}
-                value={
-                  selectedOc
-                    ? { id: selectedOc.id!, label: `OC #${selectedOc.id} — ${selectedOc.proveedorNombre ?? `Proveedor #${selectedOc.proveedorId}`}` }
-                    : null
-                }
-                onChange={(opt) => {
-                  const id = opt ? Number(opt.id) : null;
-                  setCreateOcId(id);
-                  if (id) setCreateProveedorId(null);
-                }}
-                placeholder="Selecciona una OC..."
-              />
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Registrar recepción</p>
+                <p className="text-xs text-muted-foreground">Puedes vincular una OC o elegir proveedor directo.</p>
+              </div>
+              <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100">
+                BORRADOR
+              </span>
             </div>
 
-            <div>
-              <label className="text-sm font-medium mb-1 block">Proveedor {!selectedOc ? '*' : '(desde OC)'}</label>
-              <Autocomplete
-                options={proveedorOptions}
-                value={
-                  !selectedOc && createProveedorId
-                    ? (() => {
-                        const p = proveedores.find((x) => x.id === createProveedorId);
-                        return p ? { id: p.id!, label: p.nombre, subtitle: p.ruc ? `RUC: ${p.ruc}` : undefined } : null;
-                      })()
-                    : null
-                }
-                onChange={(opt) => setCreateProveedorId(opt ? Number(opt.id) : null)}
-                placeholder={selectedOc ? 'Proveedor se toma de la OC' : 'Selecciona proveedor...'}
-                disabled={!!selectedOc}
-              />
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+              <div>
+                <p className="text-sm font-semibold">Origen</p>
+                <p className="text-xs text-muted-foreground">OC opcional. Si eliges OC, proveedor se bloquea.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium mb-1 block">Orden de compra (opcional)</label>
+                  <Autocomplete
+                    options={ocOptions}
+                    value={
+                      selectedOc
+                        ? {
+                            id: selectedOc.id!,
+                            label: `OC #${selectedOc.id} — ${
+                              selectedOc.proveedorNombre ?? `Proveedor #${selectedOc.proveedorId}`
+                            }`,
+                          }
+                        : null
+                    }
+                    onChange={(opt) => {
+                      const id = opt ? Number(opt.id) : null;
+                      setCreateOcId(id);
+                      if (id) setCreateProveedorId(null);
+                    }}
+                    placeholder="Selecciona una OC..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium mb-1 block">
+                    Proveedor {!selectedOc ? <span className="text-red-500">*</span> : <span className="text-muted-foreground">(desde OC)</span>}
+                  </label>
+                  <Autocomplete
+                    options={proveedorOptions}
+                    value={
+                      !selectedOc && createProveedorId
+                        ? (() => {
+                            const p = proveedores.find((x) => x.id === createProveedorId);
+                            return p
+                              ? { id: p.id!, label: p.nombre, subtitle: p.ruc ? `RUC: ${p.ruc}` : undefined }
+                              : null;
+                          })()
+                        : null
+                    }
+                    onChange={(opt) => setCreateProveedorId(opt ? Number(opt.id) : null)}
+                    placeholder={selectedOc ? 'Proveedor se toma de la OC' : 'Selecciona proveedor...'}
+                    disabled={!!selectedOc}
+                  />
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium mb-1 block">Observaciones (opcional)</label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={createObs}
+                      onChange={(e) => setCreateObs(e.target.value)}
+                      placeholder="Ej: Llegó incompleto..."
+                      className="pl-10 h-11"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium mb-1 block">Observaciones (opcional)</label>
-              <Input value={createObs} onChange={(e) => setCreateObs(e.target.value)} placeholder="Ej: Llegó incompleto..." />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={closeCreate}>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">
+              <Button variant="outline" onClick={closeCreate} className="h-11">
                 Cancelar
               </Button>
-              <Button onClick={handleCreate} disabled={creating}>
+              <Button onClick={handleCreate} disabled={creating} className="h-11">
                 <Plus size={16} className="mr-2" />
                 {creating ? 'Creando...' : 'Crear'}
               </Button>
@@ -543,8 +824,14 @@ export function RecepcionList() {
         )}
       </Dialog>
 
-      {/* Detail modal */}
-      <Dialog isOpen={isDetailOpen} onClose={closeDetail} title={selectedRecepId ? `Recepción #${selectedRecepId}` : 'Recepción'} description="Gestiona items, comprobante y confirmación" size="xl">
+      {/* Detail modal (estilo coherente) */}
+      <Dialog
+        isOpen={isDetailOpen}
+        onClose={closeDetail}
+        title={selectedRecepId ? `Recepción #${selectedRecepId}` : 'Recepción'}
+        description="Gestiona items, comprobante y confirmación"
+        size="xl"
+      >
         {detailLoading ? (
           <div className="py-10 flex justify-center">
             <LoadingSpinner />
@@ -552,19 +839,29 @@ export function RecepcionList() {
         ) : !selectedRecep ? (
           <EmptyState icon={Inbox} title="No se pudo cargar" description="Intenta nuevamente." />
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm text-muted-foreground">Proveedor</p>
                 <p className="font-medium">{selectedRecep.proveedorNombre || `#${selectedRecep.proveedorId}`}</p>
                 {selectedRecep.ordenCompraId && (
-                  <button className="text-sm text-primary hover:underline mt-1" onClick={() => navigate(`/dashboard/compras/ordenes`)} type="button">
+                  <button
+                    className="text-sm text-primary hover:underline mt-1"
+                    onClick={() => navigate(`/dashboard/compras/ordenes`)}
+                    type="button"
+                  >
+                    <Truck className="inline h-4 w-4 mr-1" />
                     OC #{selectedRecep.ordenCompraId}
                   </button>
                 )}
               </div>
-              <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${ESTADO_BADGE[selectedRecep.estado] || ''}`}>
+
+              <span
+                className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
+                  ESTADO_BADGE[selectedRecep.estado] || ''
+                }`}
+              >
                 {selectedRecep.estado}
               </span>
             </div>
@@ -616,10 +913,15 @@ export function RecepcionList() {
               </Table>
             </div>
 
-            {/* Agregar/Actualizar producto (con producto + cantidad + vencimiento + botón) */}
+            {/* Agregar/Actualizar producto */}
             {isEditable && canEditRecep && (
-              <div className="rounded-md border p-3 space-y-3 bg-muted/30">
-                <p className="text-sm font-medium">Agregar/Actualizar producto</p>
+              <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">Agregar / Actualizar producto</p>
+                    <p className="text-xs text-muted-foreground">Registra cantidad, lote y vencimiento.</p>
+                  </div>
+                </div>
 
                 <div className="flex flex-wrap gap-2 items-end">
                   <div className="flex-1 min-w-[240px]">
@@ -628,7 +930,12 @@ export function RecepcionList() {
                       options={productoOptions}
                       value={
                         selectedProducto
-                          ? { id: selectedProducto.id!, label: `${selectedProducto.nombre}${selectedProducto.codigoBarras ? ` (${selectedProducto.codigoBarras})` : ''}` }
+                          ? {
+                              id: selectedProducto.id!,
+                              label: `${selectedProducto.nombre}${
+                                selectedProducto.codigoBarras ? ` (${selectedProducto.codigoBarras})` : ''
+                              }`,
+                            }
                           : null
                       }
                       onChange={(opt) => setSelectedProductoId(opt ? Number(opt.id) : null)}
@@ -638,20 +945,36 @@ export function RecepcionList() {
 
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">Cantidad</label>
-                    <Input type="number" min={1} className="w-28" value={itemQty} onChange={(e) => setItemQty(Number(e.target.value))} />
+                    <Input
+                      type="number"
+                      min={1}
+                      className="w-28 h-11"
+                      value={itemQty}
+                      onChange={(e) => setItemQty(Number(e.target.value))}
+                    />
                   </div>
 
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">Vencimiento</label>
-                    <Input type="date" className="w-44" value={itemExpiry} onChange={(e) => setItemExpiry(e.target.value)} />
+                    <Input
+                      type="date"
+                      className="w-44 h-11"
+                      value={itemExpiry}
+                      onChange={(e) => setItemExpiry(e.target.value)}
+                    />
                   </div>
 
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">Lote (opcional)</label>
-                    <Input className="w-36" value={itemLote} onChange={(e) => setItemLote(e.target.value)} placeholder="Opc." />
+                    <Input
+                      className="w-36 h-11"
+                      value={itemLote}
+                      onChange={(e) => setItemLote(e.target.value)}
+                      placeholder="Opc."
+                    />
                   </div>
 
-                  <Button onClick={handleAddItem} disabled={detailActionLoading}>
+                  <Button onClick={handleAddItem} disabled={detailActionLoading} className="h-11">
                     <PackagePlus size={16} className="mr-2" />
                     Guardar item
                   </Button>
@@ -659,13 +982,14 @@ export function RecepcionList() {
               </div>
             )}
 
-            {/* Comprobante: si existe, NO permitir ingresar otro */}
-            <div className="rounded-md border p-3 space-y-3">
+            {/* Comprobante */}
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Comprobante del proveedor</p>
+                <p className="text-sm font-semibold">Comprobante del proveedor</p>
                 {selectedRecep.comprobante ? (
                   <span className="text-xs text-green-600 font-medium">
-                    ✓ Registrado: {(selectedRecep.comprobante as any).tipoComprobante} {(selectedRecep.comprobante as any).serie}-{(selectedRecep.comprobante as any).numero}
+                    ✓ Registrado: {(selectedRecep.comprobante as any).tipoComprobante}{' '}
+                    {(selectedRecep.comprobante as any).serie}-{(selectedRecep.comprobante as any).numero}
                   </span>
                 ) : (
                   <span className="text-xs text-muted-foreground">Sin comprobante</span>
@@ -673,16 +997,14 @@ export function RecepcionList() {
               </div>
 
               {selectedRecep.comprobante ? (
-                <div className="text-sm text-muted-foreground">
-                  El comprobante ya fue registrado. No se puede ingresar otro.
-                </div>
+                <div className="text-sm text-muted-foreground">El comprobante ya fue registrado. No se puede ingresar otro.</div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Tipo</label>
                       <select
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm h-11"
                         value={compTipo}
                         onChange={(e) => setCompTipo(e.target.value as TipoComprobanteProveedor)}
                         disabled={!isEditable}
@@ -691,23 +1013,44 @@ export function RecepcionList() {
                         <option value="BOLETA">BOLETA</option>
                       </select>
                     </div>
+
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Serie</label>
-                      <Input value={compSerie} onChange={(e) => setCompSerie(e.target.value)} disabled={!isEditable} placeholder="F001" />
+                      <Input
+                        value={compSerie}
+                        onChange={(e) => setCompSerie(e.target.value)}
+                        disabled={!isEditable}
+                        placeholder="F001"
+                        className="h-11"
+                      />
                     </div>
+
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Número</label>
-                      <Input value={compNumero} onChange={(e) => setCompNumero(e.target.value)} disabled={!isEditable} placeholder="00000001" />
+                      <Input
+                        value={compNumero}
+                        onChange={(e) => setCompNumero(e.target.value)}
+                        disabled={!isEditable}
+                        placeholder="00000001"
+                        className="h-11"
+                      />
                     </div>
+
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">URL (opcional)</label>
-                      <Input value={compUrl} onChange={(e) => setCompUrl(e.target.value)} disabled={!isEditable} placeholder="https://..." />
+                      <Input
+                        value={compUrl}
+                        onChange={(e) => setCompUrl(e.target.value)}
+                        disabled={!isEditable}
+                        placeholder="https://..."
+                        className="h-11"
+                      />
                     </div>
                   </div>
 
                   {isEditable && (
                     <div className="flex justify-end">
-                      <Button variant="outline" onClick={handleSaveComprobante} disabled={savingComp}>
+                      <Button variant="outline" onClick={handleSaveComprobante} disabled={savingComp} className="h-11">
                         <Save size={16} className="mr-2" />
                         {savingComp ? 'Guardando...' : 'Guardar comprobante'}
                       </Button>
@@ -719,8 +1062,12 @@ export function RecepcionList() {
 
             {/* Confirm */}
             {isEditable && (
-              <div className="flex justify-end pt-2 border-t">
-                <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleConfirmar} disabled={detailActionLoading || !canConfirmRecep}>
+              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">
+                <Button
+                  className="h-11 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={handleConfirmar}
+                  disabled={detailActionLoading || !canConfirmRecep}
+                >
                   <CheckCircle size={16} className="mr-2" />
                   {detailActionLoading ? 'Procesando...' : 'Confirmar recepción'}
                 </Button>
@@ -729,119 +1076,6 @@ export function RecepcionList() {
           </div>
         )}
       </Dialog>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Inbox className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-2xl font-bold">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Clock className="h-8 w-8 text-gray-500" />
-              <div>
-                <p className="text-2xl font-bold">{stats.borrador}</p>
-                <p className="text-xs text-muted-foreground">Pendientes</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-8 w-8 text-green-500" />
-              <div>
-                <p className="text-2xl font-bold">{stats.confirmada}</p>
-                <p className="text-xs text-muted-foreground">Confirmadas</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main card */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Recepciones de mercadería</CardTitle>
-              <CardDescription>Historial y gestión de recepciones</CardDescription>
-            </div>
-            {canCreateRecep && (
-              <Button onClick={openCreate} className="w-full sm:w-auto">
-                <Plus size={16} className="mr-2" />
-                Nueva recepción
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          <div className="relative mb-4">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar por proveedor, ID, estado u OC..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
-          </div>
-
-          {filtered.length === 0 ? (
-            <EmptyState icon={Inbox} title="No hay recepciones" description={searchTerm ? 'No se encontraron recepciones con ese criterio' : 'Crea la primera recepción'} />
-          ) : (
-            <>
-              <div className="rounded-md border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Proveedor</TableHead>
-                      <TableHead>OC Ref.</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Comprobante</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead className="text-right">Acción</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {currentRecepciones.map((rec) => (
-                      <TableRow key={rec.id}>
-                        <TableCell className="font-medium">#{rec.id}</TableCell>
-                        <TableCell>{rec.proveedorNombre || `#${rec.proveedorId}`}</TableCell>
-                        <TableCell>{rec.ordenCompraId ? `OC #${rec.ordenCompraId}` : '—'}</TableCell>
-                        <TableCell>
-                          <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${ESTADO_BADGE[rec.estado] || ''}`}>
-                            {rec.estado}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {rec.comprobante ? (
-                            `${(rec.comprobante as any).tipoComprobante} ${(rec.comprobante as any).serie}-${(rec.comprobante as any).numero}`
-                          ) : (
-                            <span className="text-muted-foreground">Sin comprobante</span>
-                          )}
-                        </TableCell>
-                        <TableCell>{rec.createdAt ? new Date(rec.createdAt).toLocaleDateString('es-PE') : '—'}</TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => openDetail(rec.id!)}>
-                            Ver / Editar
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filtered.length} itemsPerPage={itemsPerPage} />
-            </>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
