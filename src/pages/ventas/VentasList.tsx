@@ -1,8 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ventaService } from '../../services/venta.service';
 import { productoService } from '../../services/producto.service';
 import { facturacionService } from '../../services/facturacion.service';
-import type { VentaDTO, ProductoDTO, DetalleVentaDTO, EmitirComprobanteRequest, EmitirComprobanteForm } from '../../types';
+import type {
+  VentaDTO,
+  ProductoDTO,
+  DetalleVentaDTO,
+  EmitirComprobanteRequest,
+  EmitirComprobanteForm,
+} from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -13,7 +19,19 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Trash2, ShoppingCart, Search, DollarSign, Eye, User, Calendar, X, FileText } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  ShoppingCart,
+  Search,
+  DollarSign,
+  Eye,
+  User,
+  Calendar,
+  X,
+  FileText,
+  TrendingUp,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -21,6 +39,24 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 
 const IGV_RATE = 0.18;
+
+type MetodoPagoFilter = 'TODOS' | 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA';
+type RangoFecha = 'HOY' | 'AYER' | '7_DIAS' | '30_DIAS' | 'PERSONALIZADO';
+
+function toYyyyMmDdLocal(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function endOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
 
 export function VentasList() {
   const { userId } = useCurrentUser();
@@ -38,6 +74,10 @@ export function VentasList() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ filtros
+  const [metodoPagoFilter, setMetodoPagoFilter] = useState<MetodoPagoFilter>('TODOS');
+
+  const [rangoFecha, setRangoFecha] = useState<RangoFecha>('30_DIAS');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
 
@@ -83,11 +123,7 @@ export function VentasList() {
 
   useEffect(() => {
     if (userId) {
-      if (import.meta.env.DEV) { console.log('🔄 Actualizando vendedorId:', userId);}
       const tenantId = user?.tenantId;
-      if (!tenantId) {
-        if (import.meta.env.DEV) { console.warn('⚠️ tenantId no disponible al inicializar formData de venta');}
-      }
       setFormData((prev) => ({
         ...prev,
         vendedorId: userId,
@@ -96,7 +132,6 @@ export function VentasList() {
     }
   }, [userId, user?.tenantId]);
 
-  // ✅ Importante: cargar data cuando ya tengamos userId (evita llamar al endpoint incorrecto muy temprano)
   useEffect(() => {
     if (userId) {
       fetchData();
@@ -104,23 +139,55 @@ export function VentasList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, rol]);
 
+  // ✅ aplicar rango rápido a fechas
+  useEffect(() => {
+    const now = new Date();
+    const todayStart = startOfDay(now);
+
+    if (rangoFecha === 'HOY') {
+      setFechaDesde(toYyyyMmDdLocal(todayStart));
+      setFechaHasta(toYyyyMmDdLocal(todayStart));
+      return;
+    }
+
+    if (rangoFecha === 'AYER') {
+      const y = new Date(todayStart);
+      y.setDate(y.getDate() - 1);
+      setFechaDesde(toYyyyMmDdLocal(y));
+      setFechaHasta(toYyyyMmDdLocal(y));
+      return;
+    }
+
+    if (rangoFecha === '7_DIAS') {
+      const from = new Date(todayStart);
+      from.setDate(from.getDate() - 6);
+      setFechaDesde(toYyyyMmDdLocal(from));
+      setFechaHasta(toYyyyMmDdLocal(todayStart));
+      return;
+    }
+
+    if (rangoFecha === '30_DIAS') {
+      const from = new Date(todayStart);
+      from.setDate(from.getDate() - 29);
+      setFechaDesde(toYyyyMmDdLocal(from));
+      setFechaHasta(toYyyyMmDdLocal(todayStart));
+      return;
+    }
+
+    // PERSONALIZADO: no tocar
+  }, [rangoFecha]);
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, fechaDesde, fechaHasta]);
+  }, [searchTerm, fechaDesde, fechaHasta, metodoPagoFilter]);
 
   const calculateSubtotal = () => {
-    return formData.detalles.reduce((total, detalle) => {
-      return total + detalle.cantidad * detalle.precioUnitario;
-    }, 0);
+    return formData.detalles.reduce((total, detalle) => total + detalle.cantidad * detalle.precioUnitario, 0);
   };
 
-  const calculateIGV = () => {
-    return calculateSubtotal() * IGV_RATE;
-  };
+  const calculateIGV = () => calculateSubtotal() * IGV_RATE;
 
-  const calculateTotalWithIGV = () => {
-    return calculateSubtotal() + calculateIGV();
-  };
+  const calculateTotalWithIGV = () => calculateSubtotal() + calculateIGV();
 
   useEffect(() => {
     if (formData.metodoPago === 'EFECTIVO') {
@@ -141,14 +208,9 @@ export function VentasList() {
       const hasViewPermission = canViewAll('VENTAS') || canViewOwn('VENTAS');
 
       const ventasPromise = (() => {
-        if (canViewAll('VENTAS')) {
-          return ventaService.getAll();
-        }
-        if (canViewOwn('VENTAS')) {
-          return ventaService.getByVendor(userId!);
-        }
-        // No tiene permiso de ver ventas — do not call the API
-        return Promise.resolve([] as typeof ventas);
+        if (canViewAll('VENTAS')) return ventaService.getAll();
+        if (canViewOwn('VENTAS')) return ventaService.getByVendor(userId!);
+        return Promise.resolve([] as VentaDTO[]);
       })();
 
       const productosPromise =
@@ -156,14 +218,11 @@ export function VentasList() {
 
       const [ventasData, productosData] = await Promise.all([ventasPromise, productosPromise]);
 
-      if (import.meta.env.DEV) { console.log('📦 Ventas recibidas:', ventasData);}
-      if (import.meta.env.DEV) { console.log('📅 Primera venta createdAt:', ventasData[0]?.createdAt);}
-
       setVentas(ventasData);
       setProductos(productosData);
     } catch (error) {
       toast.error('Error al cargar datos');
-      if (import.meta.env.DEV) { console.error(error);}
+      if (import.meta.env.DEV) console.error(error);
       setVentas([]);
     } finally {
       setLoading(false);
@@ -179,14 +238,7 @@ export function VentasList() {
   const handleAddDetalle = () => {
     setFormData({
       ...formData,
-      detalles: [
-        ...formData.detalles,
-        {
-          productoId: 0,
-          cantidad: 1,
-          precioUnitario: 0,
-        },
-      ],
+      detalles: [...formData.detalles, { productoId: 0, cantidad: 1, precioUnitario: 0 }],
     });
   };
 
@@ -196,9 +248,7 @@ export function VentasList() {
 
     if (field === 'productoId') {
       const producto = productos.find((p) => p.id === parseInt(value));
-      if (producto) {
-        newDetalles[index].precioUnitario = producto.precioVenta;
-      }
+      if (producto) newDetalles[index].precioUnitario = producto.precioVenta;
     }
 
     setFormData({ ...formData, detalles: newDetalles });
@@ -209,10 +259,7 @@ export function VentasList() {
     delete newSelectedProductos[index];
     setSelectedProductos(newSelectedProductos);
 
-    setFormData({
-      ...formData,
-      detalles: formData.detalles.filter((_, i) => i !== index),
-    });
+    setFormData({ ...formData, detalles: formData.detalles.filter((_, i) => i !== index) });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -223,28 +270,19 @@ export function VentasList() {
       return;
     }
 
-    // ✅ Validar monto recibido en efectivo (con IGV)
     if (formData.metodoPago === 'EFECTIVO') {
       const total = calculateTotalWithIGV();
       if (montoRecibido < total) {
-        toast.error(
-          `El monto recibido (S/.${montoRecibido.toFixed(2)}) es menor al total (S/.${total.toFixed(2)})`
-        );
+        toast.error(`El monto recibido (S/.${montoRecibido.toFixed(2)}) es menor al total (S/.${total.toFixed(2)})`);
         return;
       }
     }
 
     try {
-      const ventaToSend = {
-        ...formData,
-        // total FINAL con IGV
-        total: calculateTotalWithIGV(),
-      };
-
+      const ventaToSend = { ...formData, total: calculateTotalWithIGV() };
       await ventaService.create(ventaToSend);
       toast.success('Venta creada exitosamente');
 
-      // ✅ Mostrar vuelto si es efectivo
       if (formData.metodoPago === 'EFECTIVO' && vuelto > 0) {
         toast.success(`Vuelto: S/.${vuelto.toFixed(2)}`, { duration: 5000 });
       }
@@ -253,7 +291,7 @@ export function VentasList() {
       await fetchData();
     } catch (error) {
       toast.error('Error al crear venta');
-      if (import.meta.env.DEV) { console.error(error);}
+      if (import.meta.env.DEV) console.error(error);
     }
   };
 
@@ -289,7 +327,6 @@ export function VentasList() {
       const payload: EmitirComprobanteRequest = {
         ventaId: emitirForm.ventaId,
         tipo: emitirForm.tipo,
-
         receptorDocTipo: emitirForm.receptor?.tipoDocumento ?? null,
         receptorDocNumero: emitirForm.receptor?.numeroDocumento?.trim() || null,
         receptorNombre: emitirForm.receptor?.razonSocial?.trim() || null,
@@ -297,18 +334,12 @@ export function VentasList() {
       };
       const result = await facturacionService.emitirComprobante(payload);
       toast.success(`Comprobante emitido: ${result.numero ?? 'OK'}`);
-      // const result = await facturacionService.emitirComprobante(emitirForm);
-      // toast.success(`Comprobante emitido: ${result.numero ?? 'OK'}`);
       setIsEmitirComprobanteOpen(false);
     } catch (error: unknown) {
       const err = error as { response?: { status?: number; data?: { mensaje?: string } } };
-      if (err?.response?.status === 403) {
-        toast.error('No tienes permiso para emitir comprobantes');
-      } else if (err?.response?.status === 409) {
-        toast.error(err?.response?.data?.mensaje ?? 'Esta venta ya tiene un comprobante asociado');
-      } else {
-        toast.error(err?.response?.data?.mensaje ?? 'Error al emitir comprobante');
-      }
+      if (err?.response?.status === 403) toast.error('No tienes permiso para emitir comprobantes');
+      else if (err?.response?.status === 409) toast.error(err?.response?.data?.mensaje ?? 'Esta venta ya tiene un comprobante asociado');
+      else toast.error(err?.response?.data?.mensaje ?? 'Error al emitir comprobante');
     } finally {
       setEmitirSubmitting(false);
     }
@@ -327,7 +358,7 @@ export function VentasList() {
           toast.success('Venta eliminada');
           await fetchData();
           setConfirmDialog({ ...confirmDialog, isOpen: false });
-        } catch (error) {
+        } catch {
           toast.error('Error al eliminar venta');
         }
       },
@@ -350,6 +381,7 @@ export function VentasList() {
   };
 
   const clearDateFilters = () => {
+    setRangoFecha('PERSONALIZADO');
     setFechaDesde('');
     setFechaHasta('');
   };
@@ -362,22 +394,24 @@ export function VentasList() {
 
     if (!matchesSearch) return false;
 
-    if (fechaDesde || fechaHasta) {
-      const fechaVenta = v.createdAt ? new Date(v.createdAt) : null;
-      if (!fechaVenta) return false;
+    if (metodoPagoFilter !== 'TODOS' && v.metodoPago !== metodoPagoFilter) return false;
 
-      const ventaDate = new Date(fechaVenta.getFullYear(), fechaVenta.getMonth(), fechaVenta.getDate());
+    if (fechaDesde || fechaHasta) {
+      const created = v.createdAt ? new Date(v.createdAt) : null;
+      if (!created || Number.isNaN(created.getTime())) return false;
+
+      const createdTime = created.getTime();
 
       if (fechaDesde) {
-        const [year, month, day] = fechaDesde.split('-').map(Number);
-        const desdeNormalized = new Date(year, month - 1, day);
-        if (ventaDate < desdeNormalized) return false;
+        const [y, m, d] = fechaDesde.split('-').map(Number);
+        const from = startOfDay(new Date(y, m - 1, d)).getTime();
+        if (createdTime < from) return false;
       }
 
       if (fechaHasta) {
-        const [year, month, day] = fechaHasta.split('-').map(Number);
-        const hastaNormalized = new Date(year, month - 1, day);
-        if (ventaDate > hastaNormalized) return false;
+        const [y, m, d] = fechaHasta.split('-').map(Number);
+        const to = endOfDay(new Date(y, m - 1, d)).getTime();
+        if (createdTime > to) return false;
       }
     }
 
@@ -389,20 +423,60 @@ export function VentasList() {
   const endIndex = startIndex + itemsPerPage;
   const currentVentas = filteredVentas.slice(startIndex, endIndex);
 
+  // ✅ Cards solicitados
   const totalVentas = ventas.length;
-
-  // Total ingresos: tu backend ya guarda `total` (ahora con IGV), así que sumamos directo.
   const totalIngresos = ventas.reduce((sum, v) => sum + v.total, 0);
 
-  const ventasCompletadas = ventas.filter((v) => v.estado === 'COMPLETADA').length;
-  const totalProductosVendidos = ventas.reduce(
-    (sum, v) => sum + v.detalles.reduce((sum2, d) => sum2 + d.cantidad, 0),
-    0
-  );
+  const hoy = new Date();
+  const ventasHoy = ventas.filter((v) => {
+    if (!v.createdAt) return false;
+    const d = new Date(v.createdAt);
+    if (Number.isNaN(d.getTime())) return false;
+    return d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate();
+  });
+  const totalVentasHoy = ventasHoy.length;
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  // ✅ FIX: Map tipado explícito + lectura con variable tipada (evita "never")
+  const productoById = useMemo<Map<number, ProductoDTO>>(() => {
+    const m = new Map<number, ProductoDTO>();
+    for (const p of productos) {
+      if (p.id != null) m.set(Number(p.id), p);
+    }
+    return m;
+  }, [productos]);
+
+  const topProducto = useMemo<{
+      productoId: number;
+      nombre: string;
+      cantidad: number;
+    } | null>(() => {
+      const counts = new Map<number, { productoId: number; nombre: string; cantidad: number }>();
+
+      for (const v of ventas) {
+        for (const d of v.detalles ?? []) {
+          const id = Number(d.productoId);
+          if (!id) continue;
+
+          const prod: ProductoDTO | undefined = productoById.get(id);
+
+          const nombre = d.productoNombre || prod?.nombre || `Producto #${id}`;
+
+          const prev = counts.get(id);
+          if (prev) prev.cantidad += d.cantidad ?? 0;
+          else counts.set(id, { productoId: id, nombre, cantidad: d.cantidad ?? 0 });
+        }
+      }
+
+      let best: { productoId: number; nombre: string; cantidad: number } | null = null;
+
+      counts.forEach((v) => {
+        if (!best || v.cantidad > best.cantidad) best = v;
+      });
+
+      return best;
+  }, [ventas, productoById]);
+
+  if (loading) return <LoadingSpinner />;
 
   if (!canViewAll('VENTAS') && !canViewOwn('VENTAS') && !canCreate('VENTAS')) {
     return (
@@ -439,26 +513,38 @@ export function VentasList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalVentas}</div>
+            <p className="text-xs text-muted-foreground">Transacciones registradas</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completadas</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-sm font-medium">Ventas de hoy</CardTitle>
+            <Calendar className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{ventasCompletadas}</div>
+            <div className="text-2xl font-bold">{totalVentasHoy}</div>
+            <p className="text-xs text-muted-foreground">Transacciones del día</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Productos Vendidos</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium">Producto más vendido</CardTitle>
+            <TrendingUp className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalProductosVendidos}</div>
+            {topProducto ? (
+              <>
+                <div className="text-lg font-bold leading-tight">{topProducto.nombre}</div>
+                <p className="text-xs text-muted-foreground">{topProducto.cantidad} unidad(es)</p>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">—</div>
+                <p className="text-xs text-muted-foreground">Sin datos</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -469,16 +555,17 @@ export function VentasList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">S/.{totalIngresos.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Suma de todas las ventas</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros (metodo + rango fechas) */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            <div className="md:col-span-5">
-              <div className="relative">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+              <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por vendedor, método de pago o estado..."
@@ -487,59 +574,112 @@ export function VentasList() {
                   className="pl-8"
                 />
               </div>
-            </div>
 
-            <div className="md:col-span-3">
-              <div className="relative">
-                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="date"
-                  placeholder="Desde"
-                  value={fechaDesde}
-                  onChange={(e) => setFechaDesde(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-
-            <div className="md:col-span-3">
-              <div className="relative">
-                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="date"
-                  placeholder="Hasta"
-                  value={fechaHasta}
-                  onChange={(e) => setFechaHasta(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-
-            {(fechaDesde || fechaHasta) && (
-              <div className="md:col-span-1 flex items-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={clearDateFilters}
-                  title="Limpiar filtros de fecha"
-                  className="w-full"
+              <div className="lg:w-[620px]">
+                <div
+                  className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
+                  role="tablist"
+                  aria-label="Filtrar ventas por método de pago"
                 >
-                  <X className="h-4 w-4" />
-                </Button>
+                  {(
+                    [
+                      { key: 'TODOS', label: 'Todos' },
+                      { key: 'EFECTIVO', label: '💵 Efectivo' },
+                      { key: 'TARJETA', label: '💳 Tarjeta' },
+                      { key: 'TRANSFERENCIA', label: '🏦 Transferencia' },
+                    ] as Array<{ key: MetodoPagoFilter; label: string }>
+                  ).map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setMetodoPagoFilter(t.key)}
+                      className={`flex-1 rounded-md px-3 py-2 text-xs sm:text-sm font-medium transition ${
+                        metodoPagoFilter === t.key
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      aria-pressed={metodoPagoFilter === t.key}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
-
-          {(fechaDesde || fechaHasta) && (
-            <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-4 w-4" />
-              <span>
-                Filtrando ventas
-                {fechaDesde && ` desde ${fechaDesde.split('-').reverse().join('/')}`}
-                {fechaHasta && ` hasta ${fechaHasta.split('-').reverse().join('/')}`}
-              </span>
             </div>
-          )}
+
+            <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+              <div className="lg:w-[650px]">
+                <div
+                  className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
+                  role="tablist"
+                  aria-label="Filtrar ventas por rango de fecha"
+                >
+                  {(
+                    [
+                      { key: 'HOY', label: 'Hoy' },
+                      { key: 'AYER', label: 'Ayer' },
+                      { key: '7_DIAS', label: '7 días' },
+                      { key: '30_DIAS', label: '30 días' },
+                      { key: 'PERSONALIZADO', label: 'Personalizado' },
+                    ] as Array<{ key: RangoFecha; label: string }>
+                  ).map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setRangoFecha(t.key)}
+                      className={`flex-1 rounded-md px-3 py-2 text-xs sm:text-sm font-medium transition ${
+                        rangoFecha === t.key
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      aria-pressed={rangoFecha === t.key}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {rangoFecha === 'PERSONALIZADO' && (
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1">
+                  <div className="md:col-span-4">
+                    <div className="relative">
+                      <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="date"
+                        placeholder="Desde"
+                        value={fechaDesde}
+                        onChange={(e) => setFechaDesde(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-4">
+                    <div className="relative">
+                      <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="date"
+                        placeholder="Hasta"
+                        value={fechaHasta}
+                        onChange={(e) => setFechaHasta(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                  </div>
+
+                  {(fechaDesde || fechaHasta) && (
+                    <div className="md:col-span-4 flex items-end">
+                      <Button variant="outline" onClick={clearDateFilters} className="w-full">
+                        <X className="h-4 w-4 mr-2" />
+                        Limpiar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -788,10 +928,7 @@ export function VentasList() {
                             if (option) {
                               const producto = productos.find((p) => p.id === option.id);
                               if (producto) {
-                                setSelectedProductos({
-                                  ...selectedProductos,
-                                  [index]: option,
-                                });
+                                setSelectedProductos({ ...selectedProductos, [index]: option });
                                 handleDetalleChange(index, 'productoId', producto.id);
                               }
                             } else {
@@ -881,7 +1018,6 @@ export function VentasList() {
             )}
           </div>
 
-          {/* Resumen con IGV */}
           <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 space-y-2">
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground font-medium">Subtotal:</span>
@@ -926,10 +1062,7 @@ export function VentasList() {
       >
         {selectedVenta &&
           (() => {
-            const subtotalVenta = selectedVenta.detalles.reduce(
-              (acc, d) => acc + d.cantidad * d.precioUnitario,
-              0,
-            );
+            const subtotalVenta = selectedVenta.detalles.reduce((acc, d) => acc + d.cantidad * d.precioUnitario, 0);
             const igvVenta = subtotalVenta * IGV_RATE;
             const totalCalculado = subtotalVenta + igvVenta;
 
@@ -996,7 +1129,6 @@ export function VentasList() {
                   </Table>
                 </div>
 
-                {/* ✅ Resumen: Subtotal + IGV + Total */}
                 <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-3">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground font-medium">Subtotal:</span>
@@ -1010,13 +1142,7 @@ export function VentasList() {
 
                   <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
                     <span className="text-lg font-semibold">Total:</span>
-
-                    {/* Usa el total guardado en la venta como fuente de verdad */}
                     <span className="text-2xl font-bold text-primary">S/.{selectedVenta.total.toFixed(2)}</span>
-
-                    {/* Si prefieres el calculado, reemplaza por:
-                        <span className="text-2xl font-bold text-primary">S/.{totalCalculado.toFixed(2)}</span>
-                    */}
                   </div>
 
                   {Math.abs(selectedVenta.total - totalCalculado) > 0.01 && (
@@ -1053,9 +1179,7 @@ export function VentasList() {
         confirmText={confirmDialog.confirmText}
         type={confirmDialog.type}
         onConfirm={async () => {
-          if (confirmDialog.action) {
-            await confirmDialog.action();
-          }
+          if (confirmDialog.action) await confirmDialog.action();
         }}
         onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
       />
@@ -1069,7 +1193,6 @@ export function VentasList() {
         size="md"
       >
         <form onSubmit={handleEmitirComprobante} className="space-y-4">
-          {/* Tipo */}
           <div className="space-y-1">
             <label className="text-sm font-medium">
               Tipo de Comprobante <span className="text-destructive">*</span>
@@ -1108,11 +1231,9 @@ export function VentasList() {
             </div>
           </div>
 
-          {/* Receptor */}
           <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
             <p className="text-sm font-medium">
-              Datos del receptor{' '}
-              {emitirForm.tipo === 'FACTURA' && <span className="text-destructive">*</span>}
+              Datos del receptor {emitirForm.tipo === 'FACTURA' && <span className="text-destructive">*</span>}
             </p>
             {emitirForm.tipo === 'FACTURA' ? (
               <>
