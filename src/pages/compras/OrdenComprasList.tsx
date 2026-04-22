@@ -19,8 +19,6 @@ import {
   ShoppingBag,
   Search,
   ClipboardList,
-  CheckCircle,
-  Clock,
   Lock,
   Send,
   XCircle,
