@@ -7,7 +7,16 @@ import { Input } from '../../components/ui/Input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Package, Building2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { RegistrationRequestDTO } from '../../types';
+import type { PlanId, RegistrationRequestDTO } from '../../types';
+
+interface ApiErrorShape {
+  response?: {
+    data?: {
+      mensaje?: string;
+    };
+  };
+  message?: string;
+}
 
 export function Register() {
   const navigate = useNavigate();
@@ -36,9 +45,14 @@ export function Register() {
       const response = await authService.register(formData);
       setUser(response);
       toast.success(`¡Bienvenido a StockFlow! Plan ${response.suscripcion?.planId} activado`);
-      navigate('/dashboard');
-    } catch (error: any) {
-      const message = error.response?.data?.mensaje || error.message || 'Error en el registro';
+      if (formData.planId === 'FREE') {
+        navigate('/dashboard');
+      } else {
+        navigate(`/checkout?plan=${formData.planId}`);
+      }
+    } catch (error: unknown) {
+      const typedError = error as ApiErrorShape;
+      const message = typedError.response?.data?.mensaje || typedError.message || 'Error en el registro';
       toast.error(message);
     } finally {
       setLoading(false);
@@ -139,7 +153,7 @@ export function Register() {
               <select
                 id="plan"
                 value={formData.planId}
-                onChange={(e) => setFormData({ ...formData, planId: e.target.value as 'FREE' | 'BASICO' | 'PRO' })}
+                onChange={(e) => setFormData({ ...formData, planId: e.target.value as PlanId })}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="FREE">Gratis - S/ 0.00/mes</option>
@@ -160,7 +174,7 @@ export function Register() {
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creando tu cuenta...' : 'Comenzar Gratis'}
+              {loading ? 'Creando tu cuenta...' : formData.planId === 'FREE' ? 'Comenzar gratis' : 'Crear cuenta y pagar'}
             </Button>
           </form>
 
