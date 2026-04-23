@@ -43,7 +43,6 @@ export function InventarioList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
   const [, setSelectedProveedorMov] = useState<any>(null);
-  //const [setSelectedProveedorMov] = useState<any>(null);
 
   // Kardex dialog state
   const [isKardexOpen, setIsKardexOpen] = useState(false);
@@ -70,9 +69,7 @@ export function InventarioList() {
   });
 
   useEffect(() => {
-    if (userId) {
-      setFormData((prev) => ({ ...prev, usuarioId: userId }));
-    }
+    if (userId) setFormData((prev) => ({ ...prev, usuarioId: userId }));
   }, [userId]);
 
   useEffect(() => {
@@ -103,7 +100,7 @@ export function InventarioList() {
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
     } catch (error) {
       toast.error('Error al cargar datos del formulario');
-      if (import.meta.env.DEV) { console.error(error);}
+      if (import.meta.env.DEV) console.error(error);
     }
   };
 
@@ -120,7 +117,7 @@ export function InventarioList() {
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
     } catch (error) {
       toast.error('Error al cargar datos');
-      if (import.meta.env.DEV) { console.error(error);}
+      if (import.meta.env.DEV) console.error(error);
     } finally {
       setLoading(false);
     }
@@ -144,19 +141,12 @@ export function InventarioList() {
     subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoria || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
   }));
 
-  // const proveedoresOptions = proveedores.map((p) => ({
-  //   id: p.id!,
-  //   label: p.nombre,
-  //   subtitle: `RUC: ${p.ruc || 'N/A'} | Contacto: ${p.contacto || 'N/A'}`,
-  // }));
-
   const openKardex = async (producto: ProductoDTO) => {
     setKardexProducto(producto);
     setIsKardexOpen(true);
     setKardexLoading(true);
     try {
       const data = await movimientoService.getByProducto(producto.id!);
-      // Sort ascending by date so running stock is calculated correctly
       const sorted = [...data].sort((a, b) => {
         const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -164,7 +154,7 @@ export function InventarioList() {
       });
       setKardexMovimientos(sorted);
     } catch (e) {
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) console.error(e);
       toast.error('Error al cargar kardex');
     } finally {
       setKardexLoading(false);
@@ -224,7 +214,7 @@ export function InventarioList() {
       resetForm();
       await fetchData();
     } catch (error: any) {
-      if (import.meta.env.DEV) { console.error('Error:', error.response?.data);}
+      if (import.meta.env.DEV) console.error('Error:', error.response?.data);
       const message = error.response?.data?.mensaje || error.message || 'Error al registrar movimiento';
       toast.error(message);
     }
@@ -287,16 +277,14 @@ export function InventarioList() {
     (p) =>
       p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
+      p.categoria?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentProductos = filteredProductos.slice(startIndex, startIndex + itemsPerPage);
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  if (loading) return <LoadingSpinner />;
 
   return (
     <div className="space-y-6">
@@ -304,9 +292,7 @@ export function InventarioList() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Inventario</h1>
-          <p className="text-muted-foreground">
-            Consulta el stock de productos y registra movimientos
-          </p>
+          <p className="text-muted-foreground">Consulta el stock de productos y registra movimientos</p>
         </div>
         {canCreate('INVENTARIO') && (
           <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
@@ -324,7 +310,7 @@ export function InventarioList() {
         />
       ) : (
         <>
-          {/* Search */}
+          {/* Search (mismo estilo que Proveedores/Productos: CardContent pt-6 + icono) */}
           <Card>
             <CardContent className="pt-6">
               <div className="relative">
@@ -344,16 +330,13 @@ export function InventarioList() {
             <CardHeader>
               <CardTitle>Productos</CardTitle>
               <CardDescription>
-                {filteredProductos.length} producto(s) — haz clic en{' '}
-                <Eye className="inline h-3 w-3" /> para ver el detalle (Kardex)
+                {filteredProductos.length} producto(s) — haz clic en <Eye className="inline h-3 w-3" /> para ver el detalle
+                (Kardex)
               </CardDescription>
             </CardHeader>
             <CardContent>
               {filteredProductos.length === 0 ? (
-                <EmptyState
-                  title="Sin productos"
-                  description="No se encontraron productos con ese criterio de búsqueda"
-                />
+                <EmptyState title="Sin productos" description="No se encontraron productos con ese criterio de búsqueda" />
               ) : (
                 <>
                   <div className="overflow-x-auto">
@@ -381,18 +364,14 @@ export function InventarioList() {
                                 </p>
                               </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
-                              {producto.categoria || '-'}
-                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">{producto.categoria || '-'}</TableCell>
                             <TableCell className="text-muted-foreground text-sm">
                               {unidadById.get(producto.unidadMedidaId)?.nombre || '-'}
                             </TableCell>
                             <TableCell className="text-center font-semibold">
                               <span
                                 className={
-                                  producto.stockActual <= producto.stockMinimo
-                                    ? 'text-red-600'
-                                    : 'text-green-700'
+                                  producto.stockActual <= producto.stockMinimo ? 'text-red-600' : 'text-green-700'
                                 }
                               >
                                 {producto.stockActual}
@@ -433,182 +412,197 @@ export function InventarioList() {
         </>
       )}
 
-      {/* Dialog para crear movimiento */}
+      {/* Dialog para crear movimiento (corregido: Producto / Tipo / Cantidad+Referencia / Descripción) */}
       <Dialog
         isOpen={isDialogOpen}
         onClose={resetForm}
         title="Nuevo Movimiento de Inventario"
-        description="Registra un movimiento de entrada, salida, ajuste o devolución"
+        description="Registra un movimiento de ajuste o devolución"
         size="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Producto
-                <span className="text-red-500">*</span>
-              </label>
-              <Autocomplete
-                options={productosOptions}
-                value={selectedProducto}
-                onChange={(option) => {
-                  if (option) {
-                    const producto = productos.find((p) => p.id === option.id);
-                    if (producto) {
-                      setSelectedProducto(option);
-                      setFormData({ ...formData, productoId: producto.id! });
-                    }
-                  } else {
-                    setSelectedProducto(null);
-                    setFormData({ ...formData, productoId: 0 });
-                  }
-                }}
-                placeholder="Buscar producto por nombre..."
-                emptyMessage="No se encontró el producto"
-              />
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="rounded-lg border bg-card">
+            <div className="border-b px-4 py-3">
+              <h3 className="text-sm font-semibold">Datos del movimiento</h3>
+              <p className="text-xs text-muted-foreground">
+                Completa la información requerida para registrar el movimiento
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Tipo de Movimiento
-                <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.tipo}
-                onChange={(e) => {
-                  const nuevoTipo = e.target.value as MovimientoInventarioDTO['tipo'];
-                  setFormData({
-                    ...formData,
-                    tipo: nuevoTipo,
-                    ...(nuevoTipo !== 'ENTRADA' && {
-                      proveedorId: undefined,
-                      costoUnitario: undefined,
-                      lote: '',
-                      fechaVencimiento: undefined,
-                    }),
-                  });
-                  if (nuevoTipo !== 'ENTRADA') setSelectedProveedorMov(null);
-                }}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                required
-              >
-                {/* <option value="ENTRADA">Entrada (Compra)</option>
-                <option value="SALIDA">Salida (Venta)</option> */}
-                <option value="AJUSTE">Ajuste (Inventario)</option>
-                <option value="DEVOLUCION">Devolución (Cliente)</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Cantidad
-                <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="number"
-                min="1"
-                value={formData.cantidad}
-                onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) })}
-                placeholder="0"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Referencia</label>
-              <Input
-                type="text"
-                placeholder="Número de compra, venta, etc."
-                value={formData.referencia}
-                onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">
-                Descripción
-                <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="text"
-                placeholder="Motivo o detalles del movimiento"
-                value={formData.descripcion}
-                onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                required
-              />
-            </div>
-
-            {/* Campos exclusivos para ENTRADA (Compra) */}
-            {/* {formData.tipo === 'ENTRADA' && (
-              <>
-                <div className="md:col-span-2 border-t pt-3">
-                  <p className="text-sm font-medium text-green-700 mb-3">Datos de la compra (Entrada)</p>
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium">Proveedor</label>
-                  <Autocomplete
-                    options={proveedoresOptions}
-                    value={selectedProveedorMov}
-                    onChange={(option) => {
-                      if (option) {
-                        setSelectedProveedorMov(option);
-                        setFormData({ ...formData, proveedorId: option.id as number });
-                      } else {
-                        setSelectedProveedorMov(null);
-                        setFormData({ ...formData, proveedorId: undefined });
+            <div className="p-4 space-y-5">
+              {/* 1) Producto */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Producto <span className="text-red-500">*</span>
+                </label>
+                <Autocomplete
+                  options={productosOptions}
+                  value={selectedProducto}
+                  onChange={(option) => {
+                    if (option) {
+                      const producto = productos.find((p) => p.id === option.id);
+                      if (producto) {
+                        setSelectedProducto(option);
+                        setFormData({ ...formData, productoId: producto.id! });
                       }
-                    }}
-                    placeholder="Buscar proveedor..."
-                    emptyMessage="No se encontró el proveedor"
-                  />
+                    } else {
+                      setSelectedProducto(null);
+                      setFormData({ ...formData, productoId: 0 });
+                    }
+                  }}
+                  placeholder="Buscar producto por nombre..."
+                  emptyMessage="No se encontró el producto"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Selecciona el producto al que se le aplicará el movimiento.
+                </p>
+              </div>
+
+              {/* 2) Tipo Movimiento (solo Ajuste y Devolución) */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Tipo de Movimiento <span className="text-red-500">*</span>
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(
+                    [
+                      {
+                        key: 'AJUSTE',
+                        title: 'Ajuste',
+                        subtitle: 'Inventario',
+                        icon: <RotateCcw className="h-4 w-4 text-blue-600" />,
+                      },
+                      {
+                        key: 'DEVOLUCION',
+                        title: 'Devolución',
+                        subtitle: 'Cliente',
+                        icon: <ArrowLeftRight className="h-4 w-4 text-orange-600" />,
+                      },
+                    ] as const
+                  ).map((t) => {
+                    const active = formData.tipo === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => {
+                          const nuevoTipo = t.key as MovimientoInventarioDTO['tipo'];
+                          setFormData({
+                            ...formData,
+                            tipo: nuevoTipo,
+                            // por si en algún momento se habilita ENTRADA, limpiamos campos extra
+                            ...(nuevoTipo !== 'ENTRADA' && {
+                              proveedorId: undefined,
+                              costoUnitario: undefined,
+                              lote: '',
+                              fechaVencimiento: undefined,
+                            }),
+                          });
+                          setSelectedProveedorMov(null);
+                        }}
+                        className={[
+                          'w-full rounded-lg border p-3 text-left transition',
+                          active
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border hover:border-primary/40 hover:bg-muted/40',
+                        ].join(' ')}
+                        aria-pressed={active}
+                      >
+                        <div className="flex items-center gap-2">
+                          {t.icon}
+                          <div className="flex-1">
+                            <div className="text-sm font-semibold">{t.title}</div>
+                            <div className="text-xs text-muted-foreground">{t.subtitle}</div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
+                {/* input hidden para mantener "required" de forma estándar */}
+                <select
+                  value={formData.tipo}
+                  onChange={(e) => {
+                    const nuevoTipo = e.target.value as MovimientoInventarioDTO['tipo'];
+                    setFormData({
+                      ...formData,
+                      tipo: nuevoTipo,
+                      ...(nuevoTipo !== 'ENTRADA' && {
+                        proveedorId: undefined,
+                        costoUnitario: undefined,
+                        lote: '',
+                        fechaVencimiento: undefined,
+                      }),
+                    });
+                    setSelectedProveedorMov(null);
+                  }}
+                  className="hidden"
+                  required
+                >
+                  <option value="AJUSTE">AJUSTE</option>
+                  <option value="DEVOLUCION">DEVOLUCION</option>
+                </select>
+              </div>
+
+              {/* 3) Cantidad y Referencia */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Costo Unitario</label>
+                  <label className="text-sm font-medium">
+                    Cantidad <span className="text-red-500">*</span>
+                  </label>
                   <Input
                     type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={formData.costoUnitario ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        costoUnitario: e.target.value !== '' ? parseFloat(e.target.value) : undefined,
-                      })
-                    }
+                    min="1"
+                    value={formData.cantidad}
+                    onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
+                    placeholder="0"
+                    className="font-semibold"
+                    required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Lote</label>
+                  <label className="text-sm font-medium">Referencia</label>
                   <Input
-                    placeholder="Ej: L123456"
-                    value={formData.lote ?? ''}
-                    onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
+                    type="text"
+                    placeholder="Documento / nota / código interno"
+                    value={formData.referencia}
+                    onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
                   />
                 </div>
+              </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Fecha de Vencimiento</label>
-                  <Input
-                    type="date"
-                    value={formData.fechaVencimiento ?? ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })
-                    }
-                  />
-                </div>
-              </>
-            )} */}
+              {/* 4) Descripción */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Descripción <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Motivo o detalles del movimiento"
+                  value={formData.descripcion}
+                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Ej: Ajuste por conteo físico / Devolución por producto dañado.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="flex gap-2 justify-end pt-4 border-t">
-            <Button type="button" variant="outline" onClick={resetForm}>
+          {/* Acciones */}
+          <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end pt-2 border-t">
+            <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">
               Cancelar
             </Button>
-            <Button type="submit" disabled={formData.cantidad <= 0 || formData.productoId === 0}>
+            <Button
+              type="submit"
+              className="w-full sm:w-auto"
+              disabled={formData.productoId === 0 || formData.cantidad <= 0 || !formData.descripcion}
+            >
               Registrar Movimiento
             </Button>
           </div>
@@ -630,10 +624,7 @@ export function InventarioList() {
         {kardexLoading ? (
           <LoadingSpinner />
         ) : kardexMovimientos.length === 0 ? (
-          <EmptyState
-            title="Sin movimientos"
-            description="Este producto no tiene movimientos registrados"
-          />
+          <EmptyState title="Sin movimientos" description="Este producto no tiene movimientos registrados" />
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -653,20 +644,13 @@ export function InventarioList() {
                 {(() => {
                   let stockAcumulado = 0;
                   return kardexMovimientos.map((m) => {
-                    const esEntrada =
-                      m.tipo === 'ENTRADA' ||
-                      m.tipo === 'SALDO_INICIAL' ||
-                      m.tipo === 'DEVOLUCION';
+                    const esEntrada = m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION';
                     const esSalida = m.tipo === 'SALIDA';
                     const esAjuste = m.tipo === 'AJUSTE';
 
-                    if (esEntrada) {
-                      stockAcumulado += m.cantidad;
-                    } else if (esSalida) {
-                      stockAcumulado -= m.cantidad;
-                    } else if (esAjuste) {
-                      stockAcumulado += m.cantidad;
-                    }
+                    if (esEntrada) stockAcumulado += m.cantidad;
+                    else if (esSalida) stockAcumulado -= m.cantidad;
+                    else if (esAjuste) stockAcumulado += m.cantidad;
 
                     const costoUnitario = m.costoUnitario ?? 0;
                     const costoTotal = costoUnitario > 0 ? costoUnitario * m.cantidad : undefined;
@@ -674,17 +658,15 @@ export function InventarioList() {
                     const documentoLabel = m.referencia
                       ? `Ref: ${m.referencia}`
                       : prov
-                      ? `Prov: ${prov.nombre}`
-                      : m.descripcion
-                      ? m.descripcion
-                      : '-';
+                        ? `Prov: ${prov.nombre}`
+                        : m.descripcion
+                          ? m.descripcion
+                          : '-';
 
                     return (
                       <TableRow key={m.id}>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {m.createdAt
-                            ? new Date(m.createdAt).toLocaleDateString('es-PE')
-                            : '-'}
+                          {m.createdAt ? new Date(m.createdAt).toLocaleDateString('es-PE') : '-'}
                         </TableCell>
 
                         <TableCell>
@@ -694,30 +676,24 @@ export function InventarioList() {
                           </div>
                         </TableCell>
 
-                        <TableCell className="text-muted-foreground text-sm max-w-[160px] truncate" title={documentoLabel}>
+                        <TableCell
+                          className="text-muted-foreground text-sm max-w-[160px] truncate"
+                          title={documentoLabel}
+                        >
                           {documentoLabel}
                         </TableCell>
 
-                        <TableCell className="text-center font-semibold text-green-700">
-                          {esEntrada ? m.cantidad : '-'}
-                        </TableCell>
+                        <TableCell className="text-center font-semibold text-green-700">{esEntrada ? m.cantidad : '-'}</TableCell>
+                        <TableCell className="text-center font-semibold text-red-700">{esSalida ? m.cantidad : '-'}</TableCell>
 
-                        <TableCell className="text-center font-semibold text-red-700">
-                          {esSalida ? m.cantidad : '-'}
-                        </TableCell>
-
-                        <TableCell className="text-center font-bold">
-                          {stockAcumulado}
-                        </TableCell>
+                        <TableCell className="text-center font-bold">{stockAcumulado}</TableCell>
 
                         <TableCell className="text-right text-muted-foreground text-sm">
                           {costoUnitario > 0 ? `S/.${costoUnitario.toFixed(2)}` : '-'}
                         </TableCell>
 
                         <TableCell className="text-right text-muted-foreground text-sm">
-                          {costoTotal != null && costoTotal > 0
-                            ? `S/.${costoTotal.toFixed(2)}`
-                            : '-'}
+                          {costoTotal != null && costoTotal > 0 ? `S/.${costoTotal.toFixed(2)}` : '-'}
                         </TableCell>
                       </TableRow>
                     );

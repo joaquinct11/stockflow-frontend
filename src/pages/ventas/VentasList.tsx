@@ -8,6 +8,7 @@ import type {
   DetalleVentaDTO,
   EmitirComprobanteRequest,
   EmitirComprobanteForm,
+  // MetodoPago,
 } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -28,7 +29,6 @@ import {
   Eye,
   User,
   Calendar,
-  X,
   FileText,
   TrendingUp,
 } from 'lucide-react';
@@ -39,7 +39,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 
 const IGV_RATE = 0.18;
-
+// const TIPO_OPTIONS: MetodoPago[] = ['TODOS', 'EFECTIVO', 'TARJETA', 'TRANSFERENCIA'];
 type MetodoPagoFilter = 'TODOS' | 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA';
 type RangoFecha = 'HOY' | 'AYER' | '7_DIAS' | '30_DIAS' | 'PERSONALIZADO';
 
@@ -77,7 +77,7 @@ export function VentasList() {
   // ✅ filtros
   const [metodoPagoFilter, setMetodoPagoFilter] = useState<MetodoPagoFilter>('TODOS');
 
-  const [rangoFecha, setRangoFecha] = useState<RangoFecha>('30_DIAS');
+  const [rangoFecha] = useState<RangoFecha>('PERSONALIZADO');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
 
@@ -380,12 +380,6 @@ export function VentasList() {
     setIsDialogOpen(false);
   };
 
-  const clearDateFilters = () => {
-    setRangoFecha('PERSONALIZADO');
-    setFechaDesde('');
-    setFechaHasta('');
-  };
-
   const filteredVentas = ventas.filter((v) => {
     const matchesSearch =
       v.metodoPago?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -560,124 +554,119 @@ export function VentasList() {
         </Card>
       </div>
 
-      {/* Filtros (metodo + rango fechas) */}
+      {/* Filtros (nuevo layout: Buscar + fechas arriba, método abajo) */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por vendedor, método de pago o estado..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
+          <div className="space-y-4">
+            {/* Row 1: Buscar + Desde/Hasta + Limpiar */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+              {/* Search */}
+              <div className="lg:col-span-7">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por vendedor, método de pago o estado..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
               </div>
 
-              <div className="lg:w-[620px]">
-                <div
-                  className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
-                  role="tablist"
-                  aria-label="Filtrar ventas por método de pago"
-                >
-                  {(
-                    [
-                      { key: 'TODOS', label: 'Todos' },
-                      { key: 'EFECTIVO', label: '💵 Efectivo' },
-                      { key: 'TARJETA', label: '💳 Tarjeta' },
-                      { key: 'TRANSFERENCIA', label: '🏦 Transferencia' },
-                    ] as Array<{ key: MetodoPagoFilter; label: string }>
-                  ).map((t) => (
+              {/* <select
+                value={filterTipo}
+                onChange={(e) => setFilterTipo(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">Todos los tipos</option>
+                {TIPO_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select> */}
+
+              {/* Desde */}
+              <div className="lg:col-span-2">
+                <label className="text-xs text-muted-foreground font-medium">Desde</label>
+                <div className="relative mt-1">
+                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="date"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+
+              {/* Hasta */}
+              <div className="lg:col-span-2">
+                <label className="text-xs text-muted-foreground font-medium">Hasta</label>
+                <div className="relative mt-1">
+                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="date"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+
+              {/* Limpiar */}
+              <div className="lg:col-span-1">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setFechaDesde('');
+                      setFechaHasta('');
+                      setMetodoPagoFilter('TODOS');
+                    }}
+                    className="w-full"
+                  >
+                    Limpiar
+                  </Button>
+                
+              </div>
+            </div>
+
+            {/* Row 2: Método de pago (debajo) */}
+            <div className="w-full rounded-lg border border-input bg-muted p-1">
+              <div
+                className="flex gap-1 overflow-x-auto scrollbar-hide"
+                role="tablist"
+                aria-label="Filtrar ventas por método de pago"
+              >
+                {(
+                  [
+                    { key: 'TODOS', label: 'Todos' },
+                    { key: 'EFECTIVO', label: '💵 Efectivo' },
+                    { key: 'TARJETA', label: '💳 Tarjeta' },
+                    { key: 'TRANSFERENCIA', label: '🏦 Transferencia' },
+                  ] as Array<{ key: MetodoPagoFilter; label: string }>
+                ).map((t) => {
+                  const active = metodoPagoFilter === t.key;
+                  return (
                     <button
                       key={t.key}
                       type="button"
                       onClick={() => setMetodoPagoFilter(t.key)}
-                      className={`flex-1 rounded-md px-3 py-2 text-xs sm:text-sm font-medium transition ${
-                        metodoPagoFilter === t.key
+                      className={[
+                        'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
+                        'min-w-[140px] sm:min-w-0 flex-1',
+                        active
                           ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                      aria-pressed={metodoPagoFilter === t.key}
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
+                      ].join(' ')}
+                      aria-pressed={active}
                     >
                       {t.label}
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            </div>
-
-            <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
-              <div className="lg:w-[650px]">
-                <div
-                  className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
-                  role="tablist"
-                  aria-label="Filtrar ventas por rango de fecha"
-                >
-                  {(
-                    [
-                      { key: 'HOY', label: 'Hoy' },
-                      { key: 'AYER', label: 'Ayer' },
-                      { key: '7_DIAS', label: '7 días' },
-                      { key: '30_DIAS', label: '30 días' },
-                      { key: 'PERSONALIZADO', label: 'Personalizado' },
-                    ] as Array<{ key: RangoFecha; label: string }>
-                  ).map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setRangoFecha(t.key)}
-                      className={`flex-1 rounded-md px-3 py-2 text-xs sm:text-sm font-medium transition ${
-                        rangoFecha === t.key
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                      aria-pressed={rangoFecha === t.key}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {rangoFecha === 'PERSONALIZADO' && (
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1">
-                  <div className="md:col-span-4">
-                    <div className="relative">
-                      <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                      <Input
-                        type="date"
-                        placeholder="Desde"
-                        value={fechaDesde}
-                        onChange={(e) => setFechaDesde(e.target.value)}
-                        className="pl-8"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-4">
-                    <div className="relative">
-                      <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                      <Input
-                        type="date"
-                        placeholder="Hasta"
-                        value={fechaHasta}
-                        onChange={(e) => setFechaHasta(e.target.value)}
-                        className="pl-8"
-                      />
-                    </div>
-                  </div>
-
-                  {(fechaDesde || fechaHasta) && (
-                    <div className="md:col-span-4 flex items-end">
-                      <Button variant="outline" onClick={clearDateFilters} className="w-full">
-                        <X className="h-4 w-4 mr-2" />
-                        Limpiar
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </CardContent>
