@@ -121,7 +121,7 @@ export function CheckoutPage() {
           <div className="rounded-lg border p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-semibold">Resumen del plan</h3>
-              <Badge variant="secondary">{PLAN_DETAILS[plan].name.toUpperCase()}</Badge>
+              <Badge variant="secondary">{PLAN_DETAILS[plan].name}</Badge>
             </div>
             <p className="text-sm text-muted-foreground">{PLAN_DETAILS[plan].description}</p>
             <p className="mt-3 text-lg font-semibold">S/ {PLAN_DETAILS[plan].price.toFixed(2)} / mes</p>
