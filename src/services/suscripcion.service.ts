@@ -1,6 +1,10 @@
 import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
-import type { SuscripcionDTO } from '../types';
+import type {
+  SuscripcionCheckoutRequestDTO,
+  SuscripcionCheckoutResponseDTO,
+  SuscripcionDTO,
+} from '../types';
 
 export const suscripcionService = {
   /**
@@ -90,5 +94,17 @@ export const suscripcionService = {
    */
   delete: async (id: number): Promise<void> => {
     await axiosInstance.delete(API_ENDPOINTS.SUSCRIPCIONES.DELETE(id));
+  },
+
+  /**
+   * Iniciar checkout de Mercado Pago para un plan pagado
+   */
+  checkout: async (planId: SuscripcionCheckoutRequestDTO['planId']): Promise<SuscripcionCheckoutResponseDTO> => {
+    const payload: SuscripcionCheckoutRequestDTO = { planId };
+    const { data } = await axiosInstance.post<SuscripcionCheckoutResponseDTO>(
+      API_ENDPOINTS.SUSCRIPCIONES.CHECKOUT,
+      payload
+    );
+    return data;
   },
 };

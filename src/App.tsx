@@ -19,6 +19,7 @@ import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword } from './pages/auth/ResetPassword'
+import { CheckoutPage } from './pages/checkout/CheckoutPage';
 
 // Main Pages
 import { Dashboard } from './pages/dashboard/Dashboard';
@@ -64,6 +65,14 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route
+            path="/checkout"
+            element={
+              <ProtectedRoute>
+                <CheckoutPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Protected Routes - App bajo /dashboard */}
           <Route
