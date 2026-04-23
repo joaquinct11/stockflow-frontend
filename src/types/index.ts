@@ -54,13 +54,15 @@ export interface LoginDTO {
   contraseña: string;
 }
 
+export type PlanId = 'FREE' | 'BASICO' | 'PRO';
+
 // ✅ NUEVO: Para registro de nueva farmacia
 export interface RegistrationRequestDTO {
   email: string;
   contraseña: string;
   nombre: string;
   nombreFarmacia: string;
-  planId: 'FREE' | 'BASICO' | 'PRO';
+  planId: PlanId;
 }
 
 // ========================================
@@ -145,6 +147,15 @@ export interface SuscripcionDTO {
   fechaProximoCobro?: string;  // ✅ AGREGADO
   fechaCancelacion?: string;  // ✅ AGREGADO
   deletedAt?: string;  // ✅ AGREGADO
+}
+
+export interface SuscripcionCheckoutRequestDTO {
+  planId: Exclude<PlanId, 'FREE'>;
+}
+
+export interface SuscripcionCheckoutResponseDTO {
+  initPoint: string;
+  preferenceId: string;
 }
 
 // ========================================
