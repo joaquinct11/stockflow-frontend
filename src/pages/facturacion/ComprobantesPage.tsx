@@ -11,17 +11,16 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
 const TIPO_OPTIONS: TipoComprobante[] = ['BOLETA', 'FACTURA'];
-const ESTADO_OPTIONS = ['EMITIDO', 'ANULADO', 'PENDIENTE'];
+// const ESTADO_OPTIONS = ['EMITIDO', 'ANULADO'];
 
 function estadoBadgeVariant(estado: string): 'success' | 'destructive' | 'warning' | 'default' {
   if (estado === 'EMITIDO') return 'success';
   if (estado === 'ANULADO') return 'destructive';
-  if (estado === 'PENDIENTE') return 'warning';
   return 'default';
 }
 
@@ -112,6 +111,27 @@ export function ComprobantesPage() {
   };
 
   const filteredComprobantes = comprobantes.filter((c) => {
+    // ✅ 1) filtro fechas (createdAt)
+    if (fechaDesde || fechaHasta) {
+      const created = c.createdAt ? new Date(c.createdAt) : null;
+      if (!created || Number.isNaN(created.getTime())) return false;
+
+      const createdTime = created.getTime();
+
+      if (fechaDesde) {
+        const [y, m, d] = fechaDesde.split('-').map(Number);
+        const from = startOfDay(new Date(y, m - 1, d)).getTime();
+        if (createdTime < from) return false;
+      }
+
+      if (fechaHasta) {
+        const [y, m, d] = fechaHasta.split('-').map(Number);
+        const to = endOfDay(new Date(y, m - 1, d)).getTime();
+        if (createdTime > to) return false;
+      }
+    }
+
+    // ✅ 2) filtro search
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -127,6 +147,13 @@ export function ComprobantesPage() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
+
+  function startOfDay(d: Date) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  function endOfDay(d: Date) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  }
 
   const handleEmitir = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,13 +219,13 @@ export function ComprobantesPage() {
     }
   };
 
-  const resetFilters = () => {
-    setSearchTerm('');
-    setFilterTipo('');
-    setFilterEstado('');
-    setFechaDesde('');
-    setFechaHasta('');
-  };
+  // const resetFilters = () => {
+  //   setSearchTerm('');
+  //   setFilterTipo('');
+  //   setFilterEstado('');
+  //   setFechaDesde('');
+  //   setFechaHasta('');
+  // };
 
   if (!canView) {
     return (
@@ -267,59 +294,137 @@ export function ComprobantesPage() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Filtros (layout igual a Ventas: Buscar + fechas arriba, tabs abajo) */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Filtros</CardTitle>
-          <CardDescription>Filtra y busca comprobantes</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar número, venta, receptor..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            {/* Row 1: Buscar + Desde/Hasta + Limpiar */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+              {/* Search */}
+              <div className="lg:col-span-7">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar número, venta, receptor..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+
+              {/* Desde */}
+              <div className="lg:col-span-2">
+                <label className="text-xs text-muted-foreground font-medium">Desde</label>
+                <div className="relative mt-1">
+                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="date"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+
+              {/* Hasta */}
+              <div className="lg:col-span-2">
+                <label className="text-xs text-muted-foreground font-medium">Hasta</label>
+                <div className="relative mt-1">
+                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="date"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+
+              {/* Limpiar */}
+              <div className="lg:col-span-1">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setFechaDesde('');
+                    setFechaHasta('');
+                    setFilterTipo('');   // Todos
+                    setFilterEstado(''); // Todos
+                  }}
+                  className="w-full"
+                >
+                  Limpiar
+                </Button>
+              </div>
             </div>
-            <select
-              value={filterTipo}
-              onChange={(e) => setFilterTipo(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <option value="">Todos los tipos</option>
-              {TIPO_OPTIONS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filterEstado}
-              onChange={(e) => setFilterEstado(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <option value="">Todos los estados</option>
-              {ESTADO_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <Button variant="outline" onClick={resetFilters} className="w-full">
-              Limpiar filtros
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">Desde</label>
-              <Input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
+
+            {/* Row 2: Tipo (debajo) */}
+            <div className="w-full rounded-lg border border-input bg-muted p-1">
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide" role="tablist" aria-label="Filtrar por tipo">
+                {(
+                  [
+                    { key: '', label: 'Todos' },
+                    { key: 'BOLETA', label: '🧾 Boleta' },
+                    { key: 'FACTURA', label: '🏢 Factura' },
+                  ] as Array<{ key: '' | TipoComprobante; label: string }>
+                ).map((t) => {
+                  const active = filterTipo === t.key;
+                  return (
+                    <button
+                      key={t.key || 'ALL'}
+                      type="button"
+                      onClick={() => setFilterTipo(t.key)}
+                      className={[
+                        'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
+                        'min-w-[140px] sm:min-w-0 flex-1',
+                        active
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
+                      ].join(' ')}
+                      aria-pressed={active}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">Hasta</label>
-              <Input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
+
+            {/* Row 3: Estado (debajo) */}
+            <div className="w-full rounded-lg border border-input bg-muted p-1">
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide" role="tablist" aria-label="Filtrar por estado">
+                {(
+                  [
+                    { key: '', label: 'Todos' },
+                    { key: 'EMITIDO', label: '✅ Emitido' },
+                    { key: 'ANULADO', label: '⛔ Anulado' },
+                  ] as Array<{ key: '' | 'EMITIDO' | 'ANULADO'; label: string }>
+                ).map((t) => {
+                  const active = filterEstado === t.key;
+                  return (
+                    <button
+                      key={t.key || 'ALL'}
+                      type="button"
+                      onClick={() => setFilterEstado(t.key)}
+                      className={[
+                        'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
+                        'min-w-[140px] sm:min-w-0 flex-1',
+                        active
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
+                      ].join(' ')}
+                      aria-pressed={active}
+                    >
+                      {/* Icono con color (igual idea que en Ventas) */}
+                      {t.key === 'EMITIDO' && <span className="mr-2 text-green-600"></span>}
+                      {t.key === 'ANULADO' && <span className="mr-2 text-red-600"></span>}
+                      {t.key === '' && <span className="mr-2 text-muted-foreground"></span>}
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </CardContent>
