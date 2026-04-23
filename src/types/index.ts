@@ -249,6 +249,7 @@ export interface UnidadMedidaDTO {
 // FACTURACIÓN
 // ========================================
 
+export type MetodoPago = 'TODOS' | 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA';
 export type TipoComprobante = 'BOLETA' | 'FACTURA';
 export type EstadoComprobante = 'EMITIDO' | 'ANULADO' | 'PENDIENTE';
 

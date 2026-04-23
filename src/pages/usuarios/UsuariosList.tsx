@@ -11,20 +11,64 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Pagination } from '../../components/ui/Pagination';
-import { useAuthStore } from '../../store/authStore'; // ✅ AGREGAR
+import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
-import { Users, Plus, Edit2, Trash2, UserX, Search, UserCheck, User, Lock } from 'lucide-react';
+import {
+  Users,
+  Plus,
+  Edit2,
+  Trash2,
+  UserX,
+  Search,
+  UserCheck,
+  User as UserIcon,
+  Lock,
+  Shield,
+  Briefcase,
+  ShoppingBag,
+  Boxes,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 
+function roleBadgeVariant(role: Role): 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'destructive' {
+  switch (role) {
+    case 'ADMIN':
+      return 'default';
+    case 'GERENTE':
+      return 'secondary';
+    case 'GESTOR_INVENTARIO':
+      return 'warning';
+    case 'VENDEDOR':
+    default:
+      return 'outline';
+  }
+}
+
+function roleIcon(role: Role) {
+  switch (role) {
+    case 'ADMIN':
+      return <Shield className="h-4 w-4 text-white" />;
+    case 'GERENTE':
+      return <Briefcase className="h-4 w-4 text-blue-600" />;
+    case 'GESTOR_INVENTARIO':
+      return <Boxes className="h-4 w-4 text-orange-600" />;
+    case 'VENDEDOR':
+    default:
+      return <ShoppingBag className="h-4 w-4 text-muted-foreground" />;
+  }
+}
+
+type EstadoFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
+
 export function UsuariosList() {
   const tenantId = useAuthStore((s) => s.user?.tenantId);
   const currentUserRole = (useAuthStore((s) => s.user?.rol) || 'VENDEDOR') as Role;
+
   const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
   const hasViewPermission = canView('USUARIOS');
 
-  // ✅ HARD-CODEADO: Opciones según el rol del logueado
   const allowedRoleOptions = useMemo(() => {
     const map: Record<Role, Array<{ value: Role; label: string }>> = {
       ADMIN: [
@@ -43,16 +87,18 @@ export function UsuariosList() {
     return map[currentUserRole] ?? [];
   }, [currentUserRole]);
 
-  // ✅ Por defecto: primera opción permitida (si no hay, VENDEDOR)
   const defaultRolNombre = useMemo(() => {
-    return (allowedRoleOptions[0]?.value ?? 'VENDEDOR') as any;
+    return (allowedRoleOptions[0]?.value ?? 'VENDEDOR') as Role;
   }, [allowedRoleOptions]);
 
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+
   const [searchTerm, setSearchTerm] = useState('');
+  const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('TODOS');
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -75,23 +121,20 @@ export function UsuariosList() {
   });
 
   useEffect(() => {
-    if (hasViewPermission) {
-      fetchUsuarios();
-    } else {
-      setLoading(false);
-    }
+    if (hasViewPermission) fetchUsuarios();
+    else setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasViewPermission]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, estadoFilter]);
 
-  // ✅ Si cambia el rol del logueado, asegura que el form tenga un rol válido cuando NO se edita
   useEffect(() => {
     if (!editingId) {
       setFormData((prev) => ({
         ...prev,
-        rolNombre: (prev.rolNombre as any) ?? defaultRolNombre,
+        rolNombre: (prev.rolNombre as Role) ?? defaultRolNombre,
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,17 +147,28 @@ export function UsuariosList() {
       setUsuarios(data);
     } catch (error) {
       toast.error('Error al cargar usuarios');
-      if (import.meta.env.DEV) { console.error(error);}
+      if (import.meta.env.DEV) console.error(error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      nombre: '',
+      email: '',
+      contraseña: '',
+      rolNombre: defaultRolNombre,
+      activo: true,
+    });
+    setEditingId(null);
+    setIsDialogOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (editingId) {
-        // EDITAR usuario existente
         const usuarioToUpdate = {
           nombre: formData.nombre,
           rolNombre: formData.rolNombre,
@@ -125,13 +179,10 @@ export function UsuariosList() {
         await usuarioService.update(editingId, usuarioToUpdate as Usuario);
         toast.success('Usuario actualizado exitosamente');
       } else {
-        // ✅ Validación simple en front: si no tiene permisos, no permite crear
         if (!canCreate('USUARIOS')) {
           toast.error('No tienes permisos para crear usuarios');
           return;
         }
-
-        // CREAR nuevo usuario (sin tenantId, se asigna automáticamente en backend)
         await usuarioService.create(formData as Usuario);
         toast.success('Usuario creado exitosamente');
       }
@@ -139,7 +190,7 @@ export function UsuariosList() {
       resetForm();
       await fetchUsuarios();
     } catch (error: any) {
-      if (import.meta.env.DEV) { console.error('❌ Error:', error.response?.data);}
+      if (import.meta.env.DEV) console.error('❌ Error:', error.response?.data);
       const message = error.response?.data?.mensaje || error.response?.data?.error || 'Error al guardar usuario';
       toast.error(message);
     }
@@ -149,8 +200,8 @@ export function UsuariosList() {
     setFormData({
       nombre: usuario.nombre,
       email: usuario.email,
-      contraseña: '', // No mostrar la contraseña
-      rolNombre: usuario.rolNombre,
+      contraseña: '',
+      rolNombre: usuario.rolNombre as Role,
       activo: usuario.activo ?? true,
     });
     setEditingId(usuario.id!);
@@ -169,8 +220,8 @@ export function UsuariosList() {
           await usuarioService.deactivate(id);
           toast.success('Usuario desactivado');
           await fetchUsuarios();
-          setConfirmDialog({ ...confirmDialog, isOpen: false });
-        } catch (error) {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        } catch {
           toast.error('Error al desactivar usuario');
         }
       },
@@ -189,8 +240,8 @@ export function UsuariosList() {
           await usuarioService.activate(id);
           toast.success('Usuario activado');
           await fetchUsuarios();
-          setConfirmDialog({ ...confirmDialog, isOpen: false });
-        } catch (error) {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        } catch {
           toast.error('Error al activar usuario');
         }
       },
@@ -202,46 +253,45 @@ export function UsuariosList() {
       isOpen: true,
       type: 'danger',
       title: 'Eliminar Usuario',
-      description: '⚠️ Estás a punto de eliminar este usuario de forma permanente. Esta acción no se puede deshacer. ¿Continuar?',
+      description:
+        '⚠️ Estás a punto de eliminar este usuario de forma permanente. Esta acción no se puede deshacer. ¿Continuar?',
       confirmText: 'Eliminar Permanentemente',
       action: async () => {
         try {
           await usuarioService.delete(id);
           toast.success('Usuario eliminado');
           await fetchUsuarios();
-          setConfirmDialog({ ...confirmDialog, isOpen: false });
-        } catch (error) {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        } catch {
           toast.error('Error al eliminar usuario');
         }
       },
     });
   };
 
-  const resetForm = () => {
-    setFormData({
-      nombre: '',
-      email: '',
-      contraseña: '',
-      rolNombre: defaultRolNombre,
-      activo: true,
-    });
-    setEditingId(null);
-    setIsDialogOpen(false);
-  };
+  const filteredUsuarios = usuarios.filter((u) => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch = u.nombre.toLowerCase().includes(term) || u.email.toLowerCase().includes(term);
 
-  const filteredUsuarios = usuarios.filter((u) =>
-    u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    if (!matchesSearch) return false;
+
+    if (estadoFilter === 'ACTIVOS' && !u.activo) return false;
+    if (estadoFilter === 'INACTIVOS' && u.activo) return false;
+
+    return true;
+  });
 
   const totalPages = Math.ceil(filteredUsuarios.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentUsuarios = filteredUsuarios.slice(startIndex, endIndex);
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  const totalUsuarios = usuarios.length;
+  const totalActivos = usuarios.filter((u) => u.activo).length;
+  const totalInactivos = usuarios.filter((u) => !u.activo).length;
+  const totalAdmins = usuarios.filter((u) => u.rolNombre === 'ADMIN').length;
+
+  if (loading) return <LoadingSpinner />;
 
   return (
     <div className="space-y-6">
@@ -249,12 +299,7 @@ export function UsuariosList() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Usuarios</h1>
-          <p className="text-muted-foreground">
-            Gestiona los usuarios del sistema
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Rol actual: <span className="font-medium">{currentUserRole}</span>
-          </p>
+          <p className="text-muted-foreground">Gestiona los usuarios del sistema</p>
         </div>
 
         {canCreate('USUARIOS') && (
@@ -265,7 +310,6 @@ export function UsuariosList() {
         )}
       </div>
 
-      {/* When user cannot list users, show informational empty state */}
       {!hasViewPermission ? (
         <EmptyState
           icon={Lock}
@@ -274,315 +318,329 @@ export function UsuariosList() {
         />
       ) : (
         <>
-      {/* Stats */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Usuarios</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{usuarios.length}</div>
-          </CardContent>
-        </Card>
+          {/* Stats */}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Usuarios</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalUsuarios}</div>
+                <p className="text-xs text-muted-foreground">Registrados en el sistema</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Usuarios Activos</CardTitle>
-            <Users className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {usuarios.filter((u) => u.activo).length}
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Activos</CardTitle>
+                <UserCheck className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-700">{totalActivos}</div>
+                <p className="text-xs text-muted-foreground">Pueden iniciar sesión</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Usuarios Inactivos</CardTitle>
-            <UserX className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {usuarios.filter((u) => !u.activo).length}
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
+                <UserX className="h-4 w-4 text-orange-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-700">{totalInactivos}</div>
+                <p className="text-xs text-muted-foreground">Sin acceso temporal</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Administradores</CardTitle>
-            <Users className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {usuarios.filter((u) => u.rolNombre === 'ADMIN').length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nombre o email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Administradores</CardTitle>
+                <Shield className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalAdmins}</div>
+                <p className="text-xs text-muted-foreground">Control total</p>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Usuarios</CardTitle>
-          <CardDescription>
-            {filteredUsuarios.length} usuario(s) encontrado(s)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredUsuarios.length === 0 ? (
-            <EmptyState
-              title="No hay usuarios"
-              description="No se encontraron usuarios en el sistema"
-            />
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {/* <TableHead>ID</TableHead> */}
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Rol</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {currentUsuarios.map((usuario) => (
-                      <TableRow key={usuario.id}>
-                        {/* <TableCell className="font-medium">#{usuario.id}</TableCell> */}
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <div>
-                              <p className="font-medium text-sm">{usuario.nombre || 'Sin nombre'}</p>
-                            </div>
-                          </div>
-                        </TableCell>
+          {/* Search + Estado filter */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
+                <div className="lg:col-span-7">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por nombre o email..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                </div>
 
-                        <TableCell>{usuario.email}</TableCell>
-
-                        <TableCell>
-                          <Badge variant="outline">{usuario.rolNombre}</Badge>
-                        </TableCell>
-
-                        <TableCell>
-                          <Badge variant={usuario.activo ? 'success' : 'secondary'}>
-                            {usuario.activo ? 'Activo' : 'Inactivo'}
-                          </Badge>
-                        </TableCell>
-
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {canToggleState('USUARIOS') && (
-                              usuario.activo ? (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeactivate(usuario.id!)}
-                                  title="Desactivar"
-                                >
-                                  <UserX className="h-4 w-4 text-orange-600" />
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleActivate(usuario.id!)}
-                                  title="Activar"
-                                >
-                                  <UserCheck className="h-4 w-4 text-green-600" />
-                                </Button>
-                              )
-                            )}
-
-                            {canEdit('USUARIOS') && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(usuario)}
-                                title="Editar"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            )}
-
-                            {canDelete('USUARIOS') && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(usuario.id!)}
-                                title="Eliminar"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="lg:col-span-5">
+                  <div className="w-full rounded-lg border border-input bg-muted p-1">
+                    <div
+                      className="flex gap-1 overflow-x-auto scrollbar-hide"
+                      role="tablist"
+                      aria-label="Filtrar usuarios por estado"
+                    >
+                      {(
+                        [
+                          { key: 'TODOS', label: 'Todos' },
+                          { key: 'ACTIVOS', label: '✅ Activos' },
+                          { key: 'INACTIVOS', label: '⛔ Inactivos' },
+                        ] as Array<{ key: EstadoFilter; label: string }>
+                      ).map((t) => {
+                        const active = estadoFilter === t.key;
+                        return (
+                          <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => setEstadoFilter(t.key)}
+                            className={[
+                              'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
+                              'min-w-[140px] sm:min-w-0 flex-1',
+                              active
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
+                            ].join(' ')}
+                            aria-pressed={active}
+                          >
+                            {t.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={filteredUsuarios.length}
-                itemsPerPage={itemsPerPage}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
+          {/* Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Lista de Usuarios</CardTitle>
+              <CardDescription>{filteredUsuarios.length} usuario(s) encontrado(s)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {filteredUsuarios.length === 0 ? (
+                <EmptyState title="No hay usuarios" description="No se encontraron usuarios con ese criterio" />
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nombre</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Rol</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {currentUsuarios.map((usuario) => (
+                          <TableRow key={usuario.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <UserIcon className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                  <p className="font-medium text-sm">{usuario.nombre || 'Sin nombre'}</p>
+                                </div>
+                              </div>
+                            </TableCell>
+
+                            <TableCell>{usuario.email}</TableCell>
+
+                            <TableCell>
+                              <Badge variant={roleBadgeVariant(usuario.rolNombre as Role)}>
+                                <span className="inline-flex items-center gap-2">
+                                  {roleIcon(usuario.rolNombre as Role)}
+                                  {usuario.rolNombre}
+                                </span>
+                              </Badge>
+                            </TableCell>
+
+                            <TableCell>
+                              <Badge variant={usuario.activo ? 'success' : 'secondary'}>
+                                {usuario.activo ? 'Activo' : 'Inactivo'}
+                              </Badge>
+                            </TableCell>
+
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                {canToggleState('USUARIOS') &&
+                                  (usuario.activo ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleDeactivate(usuario.id!)}
+                                      title="Desactivar"
+                                    >
+                                      <UserX className="h-4 w-4 text-orange-600" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleActivate(usuario.id!)}
+                                      title="Activar"
+                                    >
+                                      <UserCheck className="h-4 w-4 text-green-600" />
+                                    </Button>
+                                  ))}
+
+                                {canEdit('USUARIOS') && (
+                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(usuario)} title="Editar">
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+
+                                {canDelete('USUARIOS') && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDelete(usuario.id!)}
+                                    title="Eliminar"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={filteredUsuarios.length}
+                    itemsPerPage={itemsPerPage}
+                  />
+                </>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
 
-      {/* Dialog/Modal para crear/editar */}
+      {/* Dialog Crear/Editar */}
       <Dialog
         isOpen={isDialogOpen}
         onClose={resetForm}
         title={editingId ? 'Editar Usuario' : 'Nuevo Usuario'}
-        description={
-          editingId
-            ? 'Actualiza la información del usuario'
-            : 'Completa los datos para crear un nuevo usuario'
-        }
+        description={editingId ? 'Actualiza la información del usuario' : 'Completa los datos para crear un nuevo usuario'}
         size="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Nombre Completo
-                <span className="text-red-500">*</span>
-              </label>
-              <Input
-                placeholder="Juan Pérez"
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                required
-                minLength={3}
-                maxLength={150}
-              />
-              <p className="text-xs text-muted-foreground">
-                Mínimo 3, máximo 150 caracteres
-              </p>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="rounded-lg border bg-card">
+            <div className="border-b px-4 py-3">
+              <h3 className="text-sm font-semibold">Datos del usuario</h3>
+              <p className="text-xs text-muted-foreground">Campos obligatorios marcados con *</p>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Email
-                <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="email"
-                placeholder="usuario@email.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                disabled={!!editingId}
-                required
-              />
-              {editingId && (
-                <p className="text-xs text-muted-foreground">
-                  No se puede cambiar al editar
-                </p>
-              )}
-            </div>
-
-            {!editingId && (
-              <div className="space-y-2 md:col-span-2">
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
-                  Contraseña
-                  <span className="text-red-500">*</span>
+                  Nombre Completo <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  type="password"
-                  placeholder="Mínimo 6 caracteres"
-                  value={formData.contraseña}
-                  onChange={(e) => setFormData({ ...formData, contraseña: e.target.value })}
+                  placeholder="Juan Pérez"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                   required
-                  minLength={6}
+                  minLength={3}
+                  maxLength={150}
                 />
+                <p className="text-xs text-muted-foreground">Mínimo 3, máximo 150 caracteres</p>
               </div>
-            )}
 
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">
-                Rol
-                <span className="text-red-500">*</span>
-              </label>
-
-              <select
-                value={formData.rolNombre}
-                onChange={(e) => setFormData({ ...formData, rolNombre: e.target.value })}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                required
-                disabled={!canCreate('USUARIOS') || allowedRoleOptions.length === 0}
-              >
-                {allowedRoleOptions.length === 0 ? (
-                  <option value="">No tienes permisos para crear usuarios</option>
-                ) : (
-                  allowedRoleOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))
-                )}
-              </select>
-
-              {!canCreate('USUARIOS') && (
-                <p className="text-xs text-muted-foreground">
-                  Tu rol (<span className="font-medium">{currentUserRole}</span>) no puede crear usuarios.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2 flex items-center md:col-span-2">
-              <label className="text-sm font-medium flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.activo}
-                  onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
-                  className="rounded border-gray-300"
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="email"
+                  placeholder="usuario@email.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  disabled={!!editingId}
+                  required
                 />
-                Usuario Activo
-              </label>
+                {editingId && <p className="text-xs text-muted-foreground">No se puede cambiar al editar</p>}
+              </div>
+
+              {!editingId && (
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium">
+                    Contraseña <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="Mínimo 6 caracteres"
+                    value={formData.contraseña}
+                    onChange={(e) => setFormData({ ...formData, contraseña: e.target.value })}
+                    required
+                    minLength={6}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">
+                  Rol <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.rolNombre}
+                  onChange={(e) => setFormData({ ...formData, rolNombre: e.target.value as any })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  required
+                  disabled={!canCreate('USUARIOS') || allowedRoleOptions.length === 0}
+                >
+                  {allowedRoleOptions.length === 0 ? (
+                    <option value="">No tienes permisos para crear usuarios</option>
+                  ) : (
+                    allowedRoleOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+
+                {!canCreate('USUARIOS') && (
+                  <p className="text-xs text-muted-foreground">
+                    Tu rol (<span className="font-medium">{currentUserRole}</span>) no puede crear usuarios.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-2 justify-end pt-4 border-t">
-            <Button type="button" variant="outline" onClick={resetForm}>
+          <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end pt-2 border-t">
+            <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">
               Cancelar
             </Button>
-            <Button type="submit" disabled={formData.nombre.length < 3 || (!editingId && !canCreate('USUARIOS'))}>
+            <Button
+              type="submit"
+              className="w-full sm:w-auto"
+              disabled={formData.nombre.length < 3 || (!editingId && !canCreate('USUARIOS'))}
+            >
               {editingId ? 'Actualizar' : 'Crear'} Usuario
             </Button>
           </div>
         </form>
       </Dialog>
 
-      {/* Confirm Dialog */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}
@@ -590,11 +648,9 @@ export function UsuariosList() {
         confirmText={confirmDialog.confirmText}
         type={confirmDialog.type}
         onConfirm={async () => {
-          if (confirmDialog.action) {
-            await confirmDialog.action();
-          }
+          if (confirmDialog.action) await confirmDialog.action();
         }}
-        onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>
   );
