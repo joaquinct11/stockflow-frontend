@@ -22,7 +22,6 @@ import {
   DollarSign,
   User as UserIcon,
   Lock,
-  X,
   CircleDot,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
