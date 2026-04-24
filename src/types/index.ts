@@ -160,6 +160,7 @@ export interface SuscripcionCheckoutRequestDTO {
 export interface SuscripcionCheckoutResponseDTO {
   initPoint: string;
   preferenceId: string;
+  preapprovalId?: string;
 }
 
 // ========================================

@@ -110,7 +110,16 @@ export function CheckoutPage() {
       const response = await suscripcionService.checkout(plan, tipoDocumento, numeroDocumento.trim());
       // Limpiar datos de documento del sessionStorage tras iniciar checkout
       sessionStorage.removeItem('mp_checkout_doc');
-      window.location.href = response.initPoint;
+      // Navigate to intermediate redirect page instead of going directly to MP.
+      // This page saves initPoint/preapprovalId to localStorage and gives the user
+      // a manual button if the browser blocks the auto-redirect.
+      navigate('/checkout/redirect', {
+        state: {
+          initPoint: response.initPoint,
+          preapprovalId: response.preapprovalId,
+          planId: plan,
+        },
+      });
     } catch {
       setError('No se pudo iniciar el checkout. Inténtalo nuevamente en unos segundos.');
       setLoading(false);
