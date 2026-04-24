@@ -47,6 +47,7 @@ export function CheckoutReturnPage() {
 
     verificarSuscripcion();
 
+    // Guard against state updates after component unmounts (e.g. double-render in StrictMode)
     return () => {
       cancelled = true;
     };

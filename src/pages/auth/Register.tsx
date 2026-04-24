@@ -55,6 +55,11 @@ export function Register() {
       return;
     }
 
+    if (requiresDocumento && numeroDocumento.trim().length < 6) {
+      toast.error('El número de documento debe tener al menos 6 caracteres');
+      return;
+    }
+
     setLoading(true);
 
     try {

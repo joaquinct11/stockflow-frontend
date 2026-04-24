@@ -127,15 +127,16 @@ export function Dashboard() {
     }, { replace: true });
 
     // Cargar estado fresco desde el backend si el usuario es ADMIN
-    if (rol === 'ADMIN' && user?.usuarioId) {
+    const usuarioId = user?.usuarioId;
+    if (rol === 'ADMIN' && usuarioId) {
       setSuscripcionLoading(true);
       suscripcionService
-        .getMiSuscripcion(user.usuarioId)
+        .getMiSuscripcion(usuarioId)
         .then((s) => setSuscripcion(s))
         .catch(() => {
           // Si falla, usar estado inferido del param
           setSuscripcion((prev) => ({
-            ...(prev ?? { usuarioPrincipalId: user.usuarioId!, planId: '', precioMensual: 0, estado: '' }),
+            ...(prev ?? { usuarioPrincipalId: usuarioId, planId: '', precioMensual: 0, estado: '' }),
             estado: billingParam,
           }));
         })
