@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { productoService } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
 import { movimientoService } from '../../services/movimiento.service';
-import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, DollarSign, Clock } from 'lucide-react';
+import { suscripcionService } from '../../services/suscripcion.service';
+import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
+import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -90,6 +92,8 @@ interface ProductoConVencimiento {
 export function Dashboard() {
   const { user } = useAuthStore();
   const { userId } = useCurrentUser();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const rol = safeRol(user?.rol);
 
   const [loading, setLoading] = useState(true);
@@ -99,11 +103,58 @@ export function Dashboard() {
   const [canLoadVentas, setCanLoadVentas] = useState<boolean>(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('HOY');
 
+  // Estado de suscripción
+  const [suscripcion, setSuscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
+  const [suscripcionLoading, setSuscripcionLoading] = useState(false);
+
+  // Parámetro billing que viene de la página de retorno de Mercado Pago
+  const billingParam = searchParams.get('billing');
+
   const ventasScopeLabel = useMemo(() => {
     if (rol === 'ADMIN' || rol === 'GERENTE') return 'globales';
     if (rol === 'VENDEDOR') return 'tuyas';
     return '—';
   }, [rol]);
+
+  // Mostrar toast según billing param y cargar suscripción fresca desde backend
+  useEffect(() => {
+    if (!billingParam) return;
+
+    // Limpiar el param de la URL sin recargar
+    setSearchParams((prev) => {
+      prev.delete('billing');
+      return prev;
+    }, { replace: true });
+
+    // Cargar estado fresco desde el backend si el usuario es ADMIN
+    const usuarioId = user?.usuarioId;
+    if (rol === 'ADMIN' && usuarioId) {
+      setSuscripcionLoading(true);
+      suscripcionService
+        .getMiSuscripcion(usuarioId)
+        .then((s) => setSuscripcion(s))
+        .catch(() => {
+          // Si falla, usar estado inferido del param
+          setSuscripcion((prev) => ({
+            ...(prev ?? { usuarioPrincipalId: usuarioId, planId: '', precioMensual: 0, estado: '' }),
+            estado: billingParam,
+          }));
+        })
+        .finally(() => setSuscripcionLoading(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingParam]);
+
+  const estadoSuscripcion = suscripcion?.estado ?? user?.suscripcion?.estado ?? '';
+  const suscripcionActiva = estadoSuscripcion === 'ACTIVA' || estadoSuscripcion === '' || !estadoSuscripcion;
+  const mostrarBloqueo = rol === 'ADMIN' && !suscripcionActiva && !!estadoSuscripcion;
+
+  const planParaReintentar = (suscripcion?.planId ?? user?.suscripcion?.planId ?? '') as string;
+  const puedeReintentar = planParaReintentar === 'BASICO' || planParaReintentar === 'PRO';
+
+  const handleReintentar = () => {
+    navigate(`/checkout?plan=${planParaReintentar}`);
+  };
 
   useEffect(() => {
     fetchData();
@@ -294,12 +345,64 @@ export function Dashboard() {
 
   const gridColsClass = rol === 'GESTOR_INVENTARIO' ? 'lg:grid-cols-2' : 'lg:grid-cols-4';
 
-  if (loading) return <LoadingSpinner />;
+  if (loading || suscripcionLoading) return <LoadingSpinner />;
 
   const showVentasCards = canLoadVentas && (rol === 'ADMIN' || rol === 'GERENTE' || rol === 'VENDEDOR');
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
+      {/* Alerta de suscripción y overlay de bloqueo */}
+      {mostrarBloqueo && (
+        <>
+          {/* Overlay semitransparente sobre el contenido */}
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-lg bg-background/60 backdrop-blur-[2px]" />
+
+          {/* Banner de alerta (fuera del overlay para que sea clicable) */}
+          <div className="relative z-20">
+            {estadoSuscripcion === 'PENDIENTE' ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <Clock className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Tu suscripción está pendiente</p>
+                      <p className="text-sm">
+                        Tu pago está siendo procesado. Intenta nuevamente o espera la confirmación de Mercado Pago.
+                      </p>
+                    </div>
+                  </div>
+                  {puedeReintentar && (
+                    <Button size="sm" className="shrink-0" onClick={handleReintentar}>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Reintentar pago
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Tu pago fue rechazado o cancelado</p>
+                      <p className="text-sm">
+                        Tu suscripción no está activa. Vuelve a intentarlo para continuar usando StockFlow.
+                      </p>
+                    </div>
+                  </div>
+                  {puedeReintentar && (
+                    <Button size="sm" variant="destructive" className="shrink-0" onClick={handleReintentar}>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Reintentar pago
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
       {/* Header */}
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
