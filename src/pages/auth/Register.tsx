@@ -7,7 +7,14 @@ import { Input } from '../../components/ui/Input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Package, Building2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { PlanId, RegistrationRequestDTO } from '../../types';
+import type { PlanId, RegistrationRequestDTO, TipoDocumento } from '../../types';
+
+const TIPO_DOCUMENTO_OPTIONS: { value: TipoDocumento; label: string }[] = [
+  { value: 'DNI', label: 'DNI' },
+  { value: 'CE', label: 'Carné de Extranjería' },
+  { value: 'RUC', label: 'RUC' },
+  { value: 'PASAPORTE', label: 'Pasaporte' },
+];
 
 interface ApiErrorShape {
   response?: {
@@ -29,6 +36,10 @@ export function Register() {
     nombreFarmacia: '',
     planId: 'FREE',
   });
+  const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento>('DNI');
+  const [numeroDocumento, setNumeroDocumento] = useState('');
+
+  const requiresDocumento = formData.planId !== 'FREE';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +47,11 @@ export function Register() {
     // Validaciones
     if (formData.contraseña.length < 8) {
       toast.error('La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+
+    if (requiresDocumento && !numeroDocumento.trim()) {
+      toast.error('El número de documento es obligatorio para planes de pago');
       return;
     }
 
@@ -48,6 +64,11 @@ export function Register() {
       if (formData.planId === 'FREE') {
         navigate('/dashboard');
       } else {
+        // Guardar datos de documento en sessionStorage para el checkout
+        sessionStorage.setItem(
+          'mp_checkout_doc',
+          JSON.stringify({ tipoDocumento, numeroDocumento: numeroDocumento.trim() })
+        );
         navigate(`/checkout?plan=${formData.planId}`);
       }
     } catch (error: unknown) {
@@ -172,6 +193,47 @@ export function Register() {
                 )}
               </div>
             </div>
+
+            {/* Datos de identificación (solo para planes de pago) */}
+            {requiresDocumento && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="tipoDocumento">
+                    Tipo de Documento
+                  </label>
+                  <select
+                    id="tipoDocumento"
+                    value={tipoDocumento}
+                    onChange={(e) => setTipoDocumento(e.target.value as TipoDocumento)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {TIPO_DOCUMENTO_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="numeroDocumento">
+                    Número de Documento
+                  </label>
+                  <Input
+                    id="numeroDocumento"
+                    type="text"
+                    placeholder="Ej: 12345678"
+                    value={numeroDocumento}
+                    onChange={(e) => setNumeroDocumento(e.target.value)}
+                    required
+                    minLength={6}
+                    maxLength={20}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Requerido por Mercado Pago para procesar suscripciones
+                  </p>
+                </div>
+              </>
+            )}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Creando tu cuenta...' : formData.planId === 'FREE' ? 'Comenzar gratis' : 'Crear cuenta y pagar'}

@@ -4,6 +4,7 @@ import type {
   SuscripcionCheckoutRequestDTO,
   SuscripcionCheckoutResponseDTO,
   SuscripcionDTO,
+  TipoDocumento,
 } from '../types';
 
 export const suscripcionService = {
@@ -99,11 +100,25 @@ export const suscripcionService = {
   /**
    * Iniciar checkout de Mercado Pago para un plan pagado
    */
-  checkout: async (planId: SuscripcionCheckoutRequestDTO['planId']): Promise<SuscripcionCheckoutResponseDTO> => {
-    const payload: SuscripcionCheckoutRequestDTO = { planId };
+  checkout: async (
+    planId: SuscripcionCheckoutRequestDTO['planId'],
+    tipoDocumento?: TipoDocumento,
+    numeroDocumento?: string,
+  ): Promise<SuscripcionCheckoutResponseDTO> => {
+    const payload: SuscripcionCheckoutRequestDTO = { planId, tipoDocumento, numeroDocumento };
     const { data } = await axiosInstance.post<SuscripcionCheckoutResponseDTO>(
       API_ENDPOINTS.SUSCRIPCIONES.CHECKOUT,
       payload
+    );
+    return data;
+  },
+
+  /**
+   * Obtener la suscripción del usuario actual (por usuarioId)
+   */
+  getMiSuscripcion: async (usuarioId: number): Promise<SuscripcionDTO> => {
+    const { data } = await axiosInstance.get<SuscripcionDTO>(
+      API_ENDPOINTS.SUSCRIPCIONES.GET_BY_USER(usuarioId)
     );
     return data;
   },

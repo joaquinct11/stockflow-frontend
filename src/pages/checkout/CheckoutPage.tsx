@@ -4,10 +4,11 @@ import { AlertCircle, CheckCircle2, Clock3, CreditCard, XCircle } from 'lucide-r
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
+import { Input } from '../../components/ui/Input';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { useAuthStore } from '../../store/authStore';
 import { suscripcionService } from '../../services/suscripcion.service';
-import type { PlanId } from '../../types';
+import type { PlanId, TipoDocumento } from '../../types';
 
 type PaidPlanId = Exclude<PlanId, 'FREE'>;
 
@@ -24,6 +25,13 @@ const PLAN_DETAILS: Record<PaidPlanId, { name: string; price: number; descriptio
   },
 };
 
+const TIPO_DOCUMENTO_OPTIONS: { value: TipoDocumento; label: string }[] = [
+  { value: 'DNI', label: 'DNI' },
+  { value: 'CE', label: 'Carné de Extranjería' },
+  { value: 'RUC', label: 'RUC' },
+  { value: 'PASAPORTE', label: 'Pasaporte' },
+];
+
 type ReturnStatus = 'success' | 'failure' | 'pending';
 
 export function CheckoutPage() {
@@ -32,6 +40,30 @@ export function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento>(() => {
+    try {
+      const stored = sessionStorage.getItem('mp_checkout_doc');
+      if (stored) {
+        const parsed = JSON.parse(stored) as { tipoDocumento: TipoDocumento; numeroDocumento: string };
+        if (parsed.tipoDocumento) return parsed.tipoDocumento;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return 'DNI';
+  });
+  const [numeroDocumento, setNumeroDocumento] = useState<string>(() => {
+    try {
+      const stored = sessionStorage.getItem('mp_checkout_doc');
+      if (stored) {
+        const parsed = JSON.parse(stored) as { tipoDocumento: TipoDocumento; numeroDocumento: string };
+        if (parsed.numeroDocumento) return parsed.numeroDocumento;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return '';
+  });
 
   const planParam = searchParams.get('plan');
   const plan = (planParam === 'BASICO' || planParam === 'PRO' ? planParam : null) as PaidPlanId | null;
@@ -68,10 +100,16 @@ export function CheckoutPage() {
   }
 
   const handleCheckout = async () => {
+    if (!numeroDocumento.trim()) {
+      setError('El número de documento es obligatorio para procesar la suscripción.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const response = await suscripcionService.checkout(plan);
+      const response = await suscripcionService.checkout(plan, tipoDocumento, numeroDocumento.trim());
+      // Limpiar datos de documento del sessionStorage tras iniciar checkout
+      sessionStorage.removeItem('mp_checkout_doc');
       window.location.href = response.initPoint;
     } catch {
       setError('No se pudo iniciar el checkout. Inténtalo nuevamente en unos segundos.');
@@ -125,6 +163,46 @@ export function CheckoutPage() {
             </div>
             <p className="text-sm text-muted-foreground">{PLAN_DETAILS[plan].description}</p>
             <p className="mt-3 text-lg font-semibold">S/ {PLAN_DETAILS[plan].price.toFixed(2)} / mes</p>
+          </div>
+
+          {/* Datos de identificación requeridos por Mercado Pago */}
+          <div className="space-y-4 rounded-lg border p-4">
+            <h3 className="font-semibold text-sm">Datos de identificación</h3>
+            <p className="text-xs text-muted-foreground">
+              Mercado Pago requiere tu documento de identidad para procesar suscripciones recurrentes.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-sm font-medium" htmlFor="tipoDoc">
+                  Tipo de documento
+                </label>
+                <select
+                  id="tipoDoc"
+                  value={tipoDocumento}
+                  onChange={(e) => setTipoDocumento(e.target.value as TipoDocumento)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {TIPO_DOCUMENTO_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium" htmlFor="numDoc">
+                  Número de documento
+                </label>
+                <Input
+                  id="numDoc"
+                  type="text"
+                  placeholder="Ej: 12345678"
+                  value={numeroDocumento}
+                  onChange={(e) => setNumeroDocumento(e.target.value)}
+                  maxLength={20}
+                />
+              </div>
+            </div>
           </div>
 
           {error && (
