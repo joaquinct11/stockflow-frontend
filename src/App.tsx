@@ -20,6 +20,7 @@ import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword } from './pages/auth/ResetPassword'
 import { CheckoutPage } from './pages/checkout/CheckoutPage';
+import { CheckoutReturnPage } from './pages/checkout/CheckoutReturnPage';
 
 // Main Pages
 import { Dashboard } from './pages/dashboard/Dashboard';
@@ -70,6 +71,30 @@ function App() {
             element={
               <ProtectedRoute>
                 <CheckoutPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/checkout/success"
+            element={
+              <ProtectedRoute>
+                <CheckoutReturnPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/checkout/failure"
+            element={
+              <ProtectedRoute>
+                <CheckoutReturnPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/checkout/pending"
+            element={
+              <ProtectedRoute>
+                <CheckoutReturnPage />
               </ProtectedRoute>
             }
           />

@@ -149,8 +149,12 @@ export interface SuscripcionDTO {
   deletedAt?: string;  // ✅ AGREGADO
 }
 
+export type TipoDocumento = 'DNI' | 'CE' | 'RUC' | 'PASAPORTE';
+
 export interface SuscripcionCheckoutRequestDTO {
   planId: Exclude<PlanId, 'FREE'>;
+  tipoDocumento?: TipoDocumento;
+  numeroDocumento?: string;
 }
 
 export interface SuscripcionCheckoutResponseDTO {
