@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { suscripcionService } from '../../services/suscripcion.service';
 import { usuarioService } from '../../services/usuario.service';
+import { useAuthStore } from '../../store/authStore';
 import type { SuscripcionDTO, Usuario } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -67,6 +68,7 @@ function estadoBadge(estado: string) {
 export function SuscripcionesList() {
   const { userId } = useCurrentUser();
   const { canView, canCreate, canEdit, canDelete, canToggleState, isAdmin } = usePermissions();
+  const { user, setSuscripcionEstado } = useAuthStore();
 
   const [suscripciones, setSuscripciones] = useState<SuscripcionDTO[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -232,6 +234,11 @@ export function SuscripcionesList() {
         try {
           await suscripcionService.cancel(id);
           toast.success('Suscripción cancelada');
+          // Si el admin canceló su propia suscripción, actualizar el guard
+          const suscripcionCancelada = suscripciones.find((s) => s.id === id);
+          if (suscripcionCancelada?.usuarioPrincipalId === user?.usuarioId) {
+            setSuscripcionEstado('CANCELADA');
+          }
           await fetchSuscripciones();
           setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         } catch {
