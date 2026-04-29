@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useInactivityLogout } from './hooks/useInactivityLogout';
@@ -10,6 +10,7 @@ import { setupAxiosInterceptors } from './api/axios.interceptor';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { RoleProtectedRoute } from './components/shared/RoleProtectedRoute';
+import { SubscripcionGuard } from './components/shared/SubscripcionGuard';
 
 // Landing Page
 import { LandingPage } from './pages/landing/LandingPage';
@@ -41,8 +42,9 @@ import { RecepcionList } from './pages/recepciones/RecepcionList';
 import { ReportesPage } from './pages/reportes/ReportesPage';
 
 function App() {
-  const { initialize } = useAuthStore();
+  const { initialize, isAuthenticated, setSuscripcionEstado } = useAuthStore();
   const { isDark, setTheme } = useThemeStore();
+  const suscripcionCargada = useRef(false);
 
   useInactivityLogout();
 
@@ -54,6 +56,17 @@ function App() {
       setTheme(true);
     }
   }, [initialize, setTheme]);
+
+  // Cargar estado de suscripción al autenticarse (una sola vez por sesión)
+  useEffect(() => {
+    if (!isAuthenticated || suscripcionCargada.current) return;
+    suscripcionCargada.current = true;
+    import('./services/suscripcion.service').then(({ suscripcionService }) => {
+      suscripcionService.getEstado()
+        .then((s) => setSuscripcionEstado(s.estado))
+        .catch(() => { /* silencioso — usamos JWT como fallback */ });
+    });
+  }, [isAuthenticated, setSuscripcionEstado]);
 
   return (
     <>
@@ -127,9 +140,11 @@ function App() {
             <Route
               path="proveedores"
               element={
-                <RoleProtectedRoute module="PROVEEDORES">
-                  <ProveedoresList />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="PROVEEDORES">
+                    <ProveedoresList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 
@@ -137,9 +152,11 @@ function App() {
             <Route
               path="productos"
               element={
-                <RoleProtectedRoute module="PRODUCTOS">
-                  <ProductosList />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="PRODUCTOS">
+                    <ProductosList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 
@@ -147,9 +164,11 @@ function App() {
             <Route
               path="ventas"
               element={
-                <RoleProtectedRoute module="VENTAS">
-                  <VentasList />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="VENTAS">
+                    <VentasList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 
@@ -157,9 +176,11 @@ function App() {
             <Route
               path="inventario"
               element={
-                <RoleProtectedRoute module="INVENTARIO">
-                  <InventarioList />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="INVENTARIO">
+                    <InventarioList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 
@@ -167,9 +188,11 @@ function App() {
             <Route
               path="kardex"
               element={
-                <RoleProtectedRoute module="INVENTARIO">
-                  <KardexPage />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="INVENTARIO">
+                    <KardexPage />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 
@@ -177,9 +200,11 @@ function App() {
             <Route
               path="usuarios"
               element={
-                <RoleProtectedRoute module="USUARIOS">
-                  <UsuariosList />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="USUARIOS">
+                    <UsuariosList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 
@@ -210,9 +235,11 @@ function App() {
             <Route
               path="reportes"
               element={
-                <RoleProtectedRoute module="REPORTES">
-                  <ReportesPage />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="REPORTES">
+                    <ReportesPage />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 
@@ -220,9 +247,11 @@ function App() {
             <Route
               path="facturacion"
               element={
-                <RoleProtectedRoute module="FACTURACION">
-                  <ComprobantesPage />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="FACTURACION">
+                    <ComprobantesPage />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 
@@ -230,9 +259,11 @@ function App() {
             <Route
               path="compras/ordenes"
               element={
-                <RoleProtectedRoute module="COMPRAS">
-                  <OrdenComprasList />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="COMPRAS">
+                    <OrdenComprasList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 
@@ -240,9 +271,11 @@ function App() {
             <Route
               path="recepciones"
               element={
-                <RoleProtectedRoute module="RECEPCIONES">
-                  <RecepcionList />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="RECEPCIONES">
+                    <RecepcionList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
           </Route>

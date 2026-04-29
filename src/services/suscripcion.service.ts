@@ -4,6 +4,7 @@ import type {
   SuscripcionCheckoutRequestDTO,
   SuscripcionCheckoutResponseDTO,
   SuscripcionDTO,
+  SuscripcionEstadoResponseDTO,
   TipoDocumento,
 } from '../types';
 
@@ -119,6 +120,26 @@ export const suscripcionService = {
   getMiSuscripcion: async (usuarioId: number): Promise<SuscripcionDTO> => {
     const { data } = await axiosInstance.get<SuscripcionDTO>(
       API_ENDPOINTS.SUSCRIPCIONES.GET_BY_USER(usuarioId)
+    );
+    return data;
+  },
+
+  /**
+   * Obtener el estado de la suscripción del usuario autenticado (sin llamar a MP)
+   */
+  getEstado: async (): Promise<SuscripcionEstadoResponseDTO> => {
+    const { data } = await axiosInstance.get<SuscripcionEstadoResponseDTO>(
+      API_ENDPOINTS.SUSCRIPCIONES.ESTADO
+    );
+    return data;
+  },
+
+  /**
+   * Sincronizar el estado de la suscripción consultando Mercado Pago en tiempo real
+   */
+  sincronizar: async (): Promise<SuscripcionEstadoResponseDTO> => {
+    const { data } = await axiosInstance.post<SuscripcionEstadoResponseDTO>(
+      API_ENDPOINTS.SUSCRIPCIONES.SINCRONIZAR
     );
     return data;
   },
