@@ -59,6 +59,8 @@ export const API_ENDPOINTS = {
     GET: (id: number) => `/suscripciones/${id}`,
     GET_BY_USER: (usuarioId: number) => `/suscripciones/usuario/${usuarioId}`,
     GET_BY_STATE: (estado: string) => `/suscripciones/estado/${estado}`,
+    ESTADO: '/suscripciones/estado',
+    SINCRONIZAR: '/suscripciones/sincronizar',
     CHECKOUT: '/suscripciones/checkout',
     CREATE: '/suscripciones',
     UPDATE: (id: number) => `/suscripciones/${id}`,
