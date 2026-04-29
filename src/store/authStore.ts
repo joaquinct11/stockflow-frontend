@@ -5,15 +5,19 @@ import { authService } from '../services/auth.service';
 interface AuthState {
   user: JwtResponse | null;
   isAuthenticated: boolean;
+  /** Estado de suscripción del tenant, actualizado independientemente del JWT */
+  suscripcionEstado: string | null;
   setUser: (user: JwtResponse) => void;
   logout: () => void;
   initialize: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  setSuscripcionEstado: (estado: string) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
+  suscripcionEstado: null,
 
   setUser: (user) => {
     if (import.meta.env.DEV) { console.log('✅ Usuario establecido:', user.email);}
@@ -25,11 +29,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     if (import.meta.env.DEV) { console.log('🚪 Cerrando sesión');}
-    set({ user: null, isAuthenticated: false });
+    set({ user: null, isAuthenticated: false, suscripcionEstado: null });
     localStorage.removeItem('user');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('token'); // ✅ Eliminar token viejo si existe
+  },
+
+  setSuscripcionEstado: (estado: string) => {
+    set({ suscripcionEstado: estado });
   },
 
   // ✅ NUEVO: Refrescar tokens automáticamente

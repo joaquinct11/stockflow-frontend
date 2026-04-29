@@ -163,6 +163,14 @@ export interface SuscripcionCheckoutResponseDTO {
   preapprovalId?: string;
 }
 
+export interface SuscripcionEstadoResponseDTO {
+  estado: string;
+  planId: string;
+  preapprovalId?: string;
+  mpPaymentId?: string;
+  fechaProximoCobro?: string;
+}
+
 // ========================================
 // TENANTS
 // ========================================

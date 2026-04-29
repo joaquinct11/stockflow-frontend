@@ -90,7 +90,7 @@ interface ProductoConVencimiento {
 }
 
 export function Dashboard() {
-  const { user } = useAuthStore();
+  const { user, setSuscripcionEstado } = useAuthStore();
   const { userId } = useCurrentUser();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -116,27 +116,32 @@ export function Dashboard() {
     return '—';
   }, [rol]);
 
-  // Mostrar toast según billing param y cargar suscripción fresca desde backend
+  // Al regresar de Mercado Pago: sincronizar estado real desde MP
   useEffect(() => {
     if (!billingParam) return;
 
-    // Limpiar el param de la URL sin recargar
     setSearchParams((prev) => {
       prev.delete('billing');
       return prev;
     }, { replace: true });
 
-    // Cargar estado fresco desde el backend si el usuario es ADMIN
-    const usuarioId = user?.usuarioId;
-    if (rol === 'ADMIN' && usuarioId) {
+    if (rol === 'ADMIN') {
       setSuscripcionLoading(true);
       suscripcionService
-        .getMiSuscripcion(usuarioId)
-        .then((s) => setSuscripcion(s))
-        .catch(() => {
-          // Si falla, usar estado inferido del param
+        .sincronizar()
+        .then((s) => {
+          setSuscripcionEstado(s.estado);
           setSuscripcion((prev) => ({
-            ...(prev ?? { usuarioPrincipalId: usuarioId, planId: '', precioMensual: 0, estado: '' }),
+            ...(prev ?? { usuarioPrincipalId: 0, planId: s.planId ?? '', precioMensual: 0, estado: '' }),
+            estado: s.estado,
+            planId: s.planId,
+            preapprovalId: s.preapprovalId,
+            fechaProximoCobro: s.fechaProximoCobro,
+          }));
+        })
+        .catch(() => {
+          setSuscripcion((prev) => ({
+            ...(prev ?? { usuarioPrincipalId: 0, planId: '', precioMensual: 0, estado: '' }),
             estado: billingParam,
           }));
         })
