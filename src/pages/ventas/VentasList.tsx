@@ -77,7 +77,7 @@ export function VentasList() {
   // ✅ filtros
   const [metodoPagoFilter, setMetodoPagoFilter] = useState<MetodoPagoFilter>('TODOS');
 
-  const [rangoFecha] = useState<RangoFecha>('PERSONALIZADO');
+  const [rangoFecha, setRangoFecha] = useState<RangoFecha>('30_DIAS');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
 
@@ -382,6 +382,7 @@ export function VentasList() {
 
   const filteredVentas = ventas.filter((v) => {
     const matchesSearch =
+      String(v.id).includes(searchTerm) ||
       v.metodoPago?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.estado?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.vendedorNombre?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -419,7 +420,8 @@ export function VentasList() {
 
   // ✅ Cards solicitados
   const totalVentas = ventas.length;
-  const totalIngresos = ventas.reduce((sum, v) => sum + v.total, 0);
+  const ingresosFiltrads = filteredVentas.reduce((s, v) => s + v.total, 0);
+  const ticketPromedio = filteredVentas.length > 0 ? ingresosFiltrads / filteredVentas.length : 0;
 
   const hoy = new Date();
   const ventasHoy = ventas.filter((v) => {
@@ -544,12 +546,12 @@ export function VentasList() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ingresos Totales</CardTitle>
+            <CardTitle className="text-sm font-medium">Ingresos del Período</CardTitle>
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">S/.{totalIngresos.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Suma de todas las ventas</p>
+            <div className="text-2xl font-bold">S/.{ingresosFiltrads.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Ticket prom. S/.{ticketPromedio.toFixed(2)}</p>
           </CardContent>
         </Card>
       </div>
@@ -558,6 +560,28 @@ export function VentasList() {
       <Card>
         <CardContent className="pt-6">
           <div className="space-y-4">
+            {/* Rangos rápidos */}
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { key: 'HOY', label: 'Hoy' },
+                  { key: '7_DIAS', label: 'Últ. 7 días' },
+                  { key: '30_DIAS', label: 'Últ. 30 días' },
+                  { key: 'PERSONALIZADO', label: 'Personalizado' },
+                ] as Array<{ key: RangoFecha; label: string }>
+              ).map((r) => (
+                <Button
+                  key={r.key}
+                  type="button"
+                  size="sm"
+                  variant={rangoFecha === r.key ? 'default' : 'outline'}
+                  onClick={() => setRangoFecha(r.key)}
+                >
+                  {r.label}
+                </Button>
+              ))}
+            </div>
+
             {/* Row 1: Buscar + Desde/Hasta + Limpiar */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
               {/* Search */}
@@ -565,7 +589,7 @@ export function VentasList() {
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar por vendedor, método de pago o estado..."
+                    placeholder="Buscar por #ID, vendedor, método de pago..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-8"
@@ -594,7 +618,7 @@ export function VentasList() {
                   <Input
                     type="date"
                     value={fechaDesde}
-                    onChange={(e) => setFechaDesde(e.target.value)}
+                    onChange={(e) => { setFechaDesde(e.target.value); setRangoFecha('PERSONALIZADO'); }}
                     className="pl-8"
                   />
                 </div>
@@ -608,7 +632,7 @@ export function VentasList() {
                   <Input
                     type="date"
                     value={fechaHasta}
-                    onChange={(e) => setFechaHasta(e.target.value)}
+                    onChange={(e) => { setFechaHasta(e.target.value); setRangoFecha('PERSONALIZADO'); }}
                     className="pl-8"
                   />
                 </div>
@@ -623,6 +647,7 @@ export function VentasList() {
                       setFechaDesde('');
                       setFechaHasta('');
                       setMetodoPagoFilter('TODOS');
+                      setRangoFecha('PERSONALIZADO');
                     }}
                     className="w-full"
                   >

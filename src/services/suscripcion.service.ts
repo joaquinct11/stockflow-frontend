@@ -135,6 +135,13 @@ export const suscripcionService = {
   },
 
   /**
+   * Cancela la suscripción activa del usuario autenticado (sin necesidad de id)
+   */
+  cancelarMiSuscripcion: async (): Promise<void> => {
+    await axiosInstance.patch(API_ENDPOINTS.SUSCRIPCIONES.CANCEL_MI_SUSCRIPCION);
+  },
+
+  /**
    * Sincronizar el estado de la suscripción consultando Mercado Pago en tiempo real
    */
   sincronizar: async (): Promise<SuscripcionEstadoResponseDTO> => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { facturacionService } from '../../services/facturacion.service';
-import type { ComprobanteDTO, EmitirComprobanteForm, EmitirComprobanteRequest, TipoComprobante } from '../../types';
+import { ventaService } from '../../services/venta.service';
+import type { ComprobanteDTO, EmitirComprobanteForm, EmitirComprobanteRequest, TipoComprobante, VentaDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -10,8 +11,9 @@ import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
+import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, Calendar } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, Calendar, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
@@ -49,6 +51,7 @@ export function ComprobantesPage() {
   const canAnular = puede('ANULAR_COMPROBANTE') || canDelete('FACTURACION');
 
   const [comprobantes, setComprobantes] = useState<ComprobanteDTO[]>([]);
+  const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTipo, setFilterTipo] = useState('');
@@ -77,6 +80,7 @@ export function ComprobantesPage() {
   useEffect(() => {
     if (canView) {
       fetchComprobantes();
+      fetchVentas();
     } else {
       setLoading(false);
     }
@@ -86,6 +90,13 @@ export function ComprobantesPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterTipo, filterEstado, fechaDesde, fechaHasta]);
+
+  const fetchVentas = async () => {
+    try {
+      const data = await ventaService.getAll();
+      setVentas(data);
+    } catch { /* no bloquear si falla */ }
+  };
 
   const fetchComprobantes = async () => {
     try {
@@ -227,6 +238,12 @@ export function ComprobantesPage() {
   //   setFechaHasta('');
   // };
 
+  const ventasOptions = ventas.map((v) => ({
+    id: v.id!,
+    label: `Venta #${v.id} · S/.${v.total.toFixed(2)}`,
+    subtitle: `${v.vendedorNombre ?? ''} · ${v.metodoPago}${v.createdAt ? ' · ' + new Date(v.createdAt).toLocaleDateString('es-PE') : ''}`,
+  }));
+
   if (!canView) {
     return (
       <EmptyState
@@ -260,7 +277,7 @@ export function ComprobantesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Comprobantes</CardTitle>
@@ -290,6 +307,21 @@ export function ComprobantesPage() {
             <div className="text-2xl font-bold text-destructive">
               {comprobantes.filter((c) => c.estado === 'ANULADO').length}
             </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Facturado</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              S/.{comprobantes
+                .filter((c) => c.estado === 'EMITIDO')
+                .reduce((s, c) => s + (c.total ?? 0), 0)
+                .toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground">De comprobantes emitidos</p>
           </CardContent>
         </Card>
       </div>
@@ -349,8 +381,8 @@ export function ComprobantesPage() {
                     setSearchTerm('');
                     setFechaDesde('');
                     setFechaHasta('');
-                    setFilterTipo('');   // Todos
-                    setFilterEstado(''); // Todos
+                    setFilterTipo('');
+                    setFilterEstado('');
                   }}
                   className="w-full"
                 >
@@ -545,20 +577,17 @@ export function ComprobantesPage() {
         size="md"
       >
         <form onSubmit={handleEmitir} className="space-y-4">
-          {/* Venta ID */}
+          {/* Venta */}
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              ID de Venta <span className="text-destructive">*</span>
+              Venta <span className="text-destructive">*</span>
             </label>
-            <Input
-              type="number"
-              min={1}
-              placeholder="Ej: 42"
-              value={emitirForm.ventaId || ''}
-              onChange={(e) =>
-                setEmitirForm((prev) => ({ ...prev, ventaId: parseInt(e.target.value) || 0 }))
-              }
-              required
+            <Autocomplete
+              options={ventasOptions}
+              value={ventasOptions.find((o) => o.id === emitirForm.ventaId) ?? null}
+              onChange={(opt) => setEmitirForm((prev) => ({ ...prev, ventaId: opt?.id ?? 0 }))}
+              placeholder="Buscar venta por ID, vendedor..."
+              emptyMessage="No se encontraron ventas"
             />
           </div>
 

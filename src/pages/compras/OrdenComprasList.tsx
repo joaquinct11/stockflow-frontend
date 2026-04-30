@@ -29,6 +29,8 @@ import {
   Building2,
   Boxes,
   BadgeCheck,
+  AlertTriangle,
+  Clock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -174,6 +176,11 @@ export function OrdenComprasList() {
     setIsCreateOpen(false);
   };
 
+  function diasDesde(fecha?: string | null): number {
+    if (!fecha) return 0;
+    return Math.floor((Date.now() - new Date(fecha).getTime()) / 86_400_000);
+  }
+
   const stats = useMemo(
     () => ({
       total: ordenes.length,
@@ -182,6 +189,7 @@ export function OrdenComprasList() {
       parcial: ordenes.filter((o) => o.estado === 'PARCIAL').length,
       recibida: ordenes.filter((o) => o.estado === 'RECIBIDA').length,
       cancelada: ordenes.filter((o) => o.estado === 'CANCELADA').length,
+      retrasadas: ordenes.filter((o) => o.estado === 'ENVIADA' && diasDesde(o.createdAt) > 30).length,
     }),
     [ordenes]
   );
@@ -385,6 +393,18 @@ export function OrdenComprasList() {
         )}
       </div>
 
+      {/* Alerta OCs retrasadas */}
+      {stats.retrasadas > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <p className="text-sm font-medium">
+              {stats.retrasadas} orden{stats.retrasadas > 1 ? 'es' : ''} enviada{stats.retrasadas > 1 ? 's' : ''} lleva{stats.retrasadas === 1 ? '' : 'n'} más de 30 días sin recepción. Considera contactar al proveedor.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Stats (estilo proveedores/productos) */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {/* <Card>
@@ -517,6 +537,7 @@ export function OrdenComprasList() {
                       <TableHead>ID</TableHead>
                       <TableHead>Proveedor</TableHead>
                       <TableHead>Estado</TableHead>
+                      <TableHead className="text-center">Días</TableHead>
                       <TableHead className="text-right">Pendiente</TableHead>
                       <TableHead className="text-right">Subtotal</TableHead>
                       <TableHead>Fecha</TableHead>
@@ -527,9 +548,11 @@ export function OrdenComprasList() {
                     {currentOrdenes.map((oc) => {
                       const pendiente = pendienteTotal(oc);
                       const subtotal = subtotalOC(oc);
+                      const dias = diasDesde(oc.createdAt);
+                      const retrasada = oc.estado === 'ENVIADA' && dias > 30;
 
                       return (
-                        <TableRow key={oc.id}>
+                        <TableRow key={oc.id} className={retrasada ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
                               <Hash className="h-4 w-4 text-muted-foreground" />
@@ -557,6 +580,15 @@ export function OrdenComprasList() {
                             >
                               {oc.estado}
                             </span>
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            {oc.createdAt ? (
+                              <span className={`text-xs flex items-center justify-center gap-1 ${retrasada ? 'text-amber-600 font-semibold' : 'text-muted-foreground'}`}>
+                                {retrasada && <Clock className="h-3 w-3" />}
+                                {dias}d
+                              </span>
+                            ) : '—'}
                           </TableCell>
 
                           <TableCell className="text-right">
