@@ -65,6 +65,7 @@ export const API_ENDPOINTS = {
     CREATE: '/suscripciones',
     UPDATE: (id: number) => `/suscripciones/${id}`,
     CANCEL: (id: number) => `/suscripciones/${id}/cancelar`,
+    CANCEL_MI_SUSCRIPCION: '/suscripciones/cancelar',
     ACTIVATE: (id: number) => `/suscripciones/${id}/activar`,
     DELETE: (id: number) => `/suscripciones/${id}`,
   },

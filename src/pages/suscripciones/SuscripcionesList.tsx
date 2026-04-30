@@ -1,41 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { suscripcionService } from '../../services/suscripcion.service';
-import { usuarioService } from '../../services/usuario.service';
 import { useAuthStore } from '../../store/authStore';
-import type { SuscripcionDTO, Usuario } from '../../types';
+import type { SuscripcionDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
-import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import {
   CreditCard,
-  Plus,
-  Edit2,
-  Trash2,
   XCircle,
   CheckCircle,
-  Search,
-  DollarSign,
-  User as UserIcon,
+  Clock,
+  RefreshCw,
   Lock,
-  CircleDot,
+  Calendar,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
-
-const PLAN_PRICES: Record<string, number> = {
-  FREE: 0,
-  BASICO: 50,
-  PRO: 100,
-};
-
-type EstadoFilter = 'TODOS' | 'ACTIVA' | 'CANCELADA' | 'SUSPENDIDA';
 
 function estadoBadge(estado: string) {
   switch (estado) {
@@ -56,8 +41,15 @@ function estadoBadge(estado: string) {
     case 'SUSPENDIDA':
       return (
         <Badge variant="destructive">
-          <XCircle className="h-3.5 w-3.5 mr-1" />
+          <AlertTriangle className="h-3.5 w-3.5 mr-1" />
           Suspendida
+        </Badge>
+      );
+    case 'PENDIENTE':
+      return (
+        <Badge variant="outline">
+          <Clock className="h-3.5 w-3.5 mr-1" />
+          Pendiente
         </Badge>
       );
     default:
@@ -65,256 +57,92 @@ function estadoBadge(estado: string) {
   }
 }
 
+function formatFecha(fecha?: string | null) {
+  if (!fecha) return '—';
+  try {
+    return new Date(fecha).toLocaleDateString('es-PE', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    });
+  } catch {
+    return fecha;
+  }
+}
+
 export function SuscripcionesList() {
-  const { userId } = useCurrentUser();
-  const { canView, canCreate, canEdit, canDelete, canToggleState, isAdmin } = usePermissions();
+  const { canView, canToggleState } = usePermissions();
   const { user, setSuscripcionEstado } = useAuthStore();
+  const navigate = useNavigate();
 
-  const [suscripciones, setSuscripciones] = useState<SuscripcionDTO[]>([]);
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [suscripcion, setSuscripcion] = useState<SuscripcionDTO | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-
-  const [searchTerm, setSearchTerm] = useState('');
-  const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('TODOS');
+  const [syncing, setSyncing] = useState(false);
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
-    type: 'info' as 'warning' | 'danger' | 'success' | 'info',
-    title: '',
-    description: '',
-    confirmText: '',
     action: null as (() => Promise<void>) | null,
   });
 
-  // UI/Producto decision:
-  // - En general “Suscripción” es un recurso financiero: normalmente NO se edita libremente el estado/precio,
-  //   sino que se “CANCELA/ACTIVA” (acciones) y el plan/metodo se ajusta por “Actualizar”.
-  // - Por eso el formulario:
-  //   * En “Nueva”: usuario + plan + método + últimos 4.
-  //   * En “Editar”: permitir cambiar plan y método/últimos4 (pero NO editar precio manualmente y NO cambiar estado aquí).
-  //   * El estado se cambia SOLO con botones (cancelar/activar).
-  const [formData, setFormData] = useState<SuscripcionDTO>({
-    usuarioPrincipalId: 0,
-    planId: '',
-    precioMensual: 0,
-    estado: 'ACTIVA',
-    metodoPago: '',
-    ultimos4Digitos: '',
-  });
-
   useEffect(() => {
-    if (userId) {
-      setFormData((prev) => ({ ...prev, usuarioPrincipalId: userId }));
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    fetchSuscripciones();
-    fetchUsuarios();
+    fetchSuscripcion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchSuscripciones = async () => {
+  const fetchSuscripcion = async () => {
     try {
       setLoading(true);
-      if (!canView('SUSCRIPCIONES')) {
-        setSuscripciones([]);
+      const estado = await suscripcionService.getEstado();
+      if (estado.estado === 'SIN_SUSCRIPCION') {
+        setSuscripcion(null);
         return;
       }
-      const data = await suscripcionService.getAll();
-      setSuscripciones(data);
-    } catch (error) {
-      toast.error('Error al cargar suscripciones');
-      if (import.meta.env.DEV) console.error(error);
+      // Construir un SuscripcionDTO parcial con los datos disponibles
+      setSuscripcion({
+        planId: estado.planId,
+        precioMensual: estado.planId === 'PRO' ? 99.99 : 49.99,
+        estado: estado.estado,
+        preapprovalId: estado.preapprovalId,
+        fechaProximoCobro: estado.fechaProximoCobro,
+        usuarioPrincipalId: user?.usuarioId ?? 0,
+        tenantId: user?.tenantId,
+      });
+    } catch {
+      toast.error('Error al cargar la suscripción');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchUsuarios = async () => {
-    if (!isAdmin && !canView('USUARIOS')) return;
+  const handleSincronizar = async () => {
+    setSyncing(true);
     try {
-      const data = await usuarioService.getAll();
-      setUsuarios(data);
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Error al cargar usuarios:', error);
+      const resultado = await suscripcionService.sincronizar();
+      setSuscripcion((prev) => prev ? { ...prev, estado: resultado.estado, fechaProximoCobro: resultado.fechaProximoCobro } : prev);
+      setSuscripcionEstado(resultado.estado);
+      toast.success('Estado sincronizado con Mercado Pago');
+    } catch {
+      toast.error('Error al sincronizar con Mercado Pago');
+    } finally {
+      setSyncing(false);
     }
   };
 
-  const usuarioNombreById = useMemo(() => {
-    const m = new Map<number, Usuario>();
-    usuarios.forEach((u) => {
-      if (u.id != null) m.set(Number(u.id), u);
-    });
-    return m;
-  }, [usuarios]);
-
-  const handlePlanChange = (newPlanId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      planId: newPlanId,
-      precioMensual: PLAN_PRICES[newPlanId] || 0,
-    }));
-  };
-
-  const openCreate = () => {
-    setEditingId(null);
-    setFormData({
-      usuarioPrincipalId: userId || 0,
-      planId: '',
-      precioMensual: 0,
-      estado: 'ACTIVA',
-      metodoPago: '',
-      ultimos4Digitos: '',
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleEdit = (suscripcion: SuscripcionDTO) => {
-    setEditingId(suscripcion.id!);
-    setFormData({
-      ...suscripcion,
-      // precio fijo por plan (si vino distinto por backend igual se muestra como readonly)
-      precioMensual: suscripcion.precioMensual ?? (PLAN_PRICES[suscripcion.planId] || 0),
-    });
-    setIsDialogOpen(true);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      usuarioPrincipalId: userId || 0,
-      planId: '',
-      precioMensual: 0,
-      estado: 'ACTIVA',
-      metodoPago: '',
-      ultimos4Digitos: '',
-    });
-    setEditingId(null);
-    setIsDialogOpen(false);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    try {
-      // Normalmente no se edita estado acá: se hace por acciones (cancelar/activar)
-      // pero por compatibilidad con tu DTO, lo mandamos como venga.
-      if (editingId) {
-        await suscripcionService.update(editingId, formData);
-        toast.success('Suscripción actualizada');
-      } else {
-        await suscripcionService.create(formData);
-        toast.success('Suscripción creada');
-      }
-      resetForm();
-      await fetchSuscripciones();
-    } catch (error: any) {
-      if (import.meta.env.DEV) console.log('❌ Error completo:', error);
-      const message =
-        error.response?.data?.message ||
-        error.response?.data?.mensajes?.precioMensual ||
-        error.response?.data?.mensaje ||
-        error.message ||
-        'Error al guardar suscripción';
-      toast.error(message);
-    }
-  };
-
-  const handleCancel = (id: number) => {
+  const handleCancelar = () => {
     setConfirmDialog({
       isOpen: true,
-      type: 'warning',
-      title: 'Cancelar Suscripción',
-      description: '¿Estás seguro de que deseas cancelar esta suscripción? El usuario perderá acceso a los servicios.',
-      confirmText: 'Cancelar Suscripción',
       action: async () => {
         try {
-          await suscripcionService.cancel(id);
+          await suscripcionService.cancelarMiSuscripcion();
+          setSuscripcionEstado('CANCELADA');
           toast.success('Suscripción cancelada');
-          // Si el admin canceló su propia suscripción, actualizar el guard
-          const suscripcionCancelada = suscripciones.find((s) => s.id === id);
-          if (suscripcionCancelada?.usuarioPrincipalId === user?.usuarioId) {
-            setSuscripcionEstado('CANCELADA');
-          }
-          await fetchSuscripciones();
-          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+          await fetchSuscripcion();
         } catch {
-          toast.error('Error al cancelar suscripción');
+          toast.error('Error al cancelar la suscripción');
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         }
       },
     });
   };
-
-  const handleActivate = (id: number) => {
-    setConfirmDialog({
-      isOpen: true,
-      type: 'success',
-      title: 'Activar Suscripción',
-      description: '¿Estás seguro de que deseas activar esta suscripción?',
-      confirmText: 'Activar',
-      action: async () => {
-        try {
-          await suscripcionService.activate(id);
-          toast.success('Suscripción activada');
-          await fetchSuscripciones();
-          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-        } catch {
-          toast.error('Error al activar suscripción');
-        }
-      },
-    });
-  };
-
-  const handleDelete = (id: number) => {
-    setConfirmDialog({
-      isOpen: true,
-      type: 'danger',
-      title: 'Eliminar Suscripción',
-      description: '⚠️ Estás a punto de eliminar esta suscripción de forma permanente. Esta acción no se puede deshacer.',
-      confirmText: 'Eliminar Permanentemente',
-      action: async () => {
-        try {
-          await suscripcionService.delete(id);
-          toast.success('Suscripción eliminada');
-          await fetchSuscripciones();
-          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-        } catch {
-          toast.error('Error al eliminar suscripción');
-        }
-      },
-    });
-  };
-
-  const filteredSuscripciones = suscripciones.filter((s) => {
-    const q = searchTerm.toLowerCase();
-
-    const usuario = s.usuarioPrincipalId ? usuarioNombreById.get(Number(s.usuarioPrincipalId)) : undefined;
-    const nombre = usuario?.nombre?.toLowerCase() ?? '';
-    const email = usuario?.email?.toLowerCase() ?? '';
-
-    const matchesSearch =
-      !q ||
-      s.planId?.toLowerCase().includes(q) ||
-      s.estado?.toLowerCase().includes(q) ||
-      s.metodoPago?.toLowerCase().includes(q) ||
-      nombre.includes(q) ||
-      email.includes(q);
-
-    if (!matchesSearch) return false;
-
-    if (estadoFilter !== 'TODOS' && s.estado !== estadoFilter) return false;
-
-    return true;
-  });
-
-  const totalActivas = suscripciones.filter((s) => s.estado === 'ACTIVA').length;
-  const totalCanceladas = suscripciones.filter((s) => s.estado === 'CANCELADA').length;
-  const ingresosMensuales = suscripciones
-    .filter((s) => s.estado === 'ACTIVA')
-    .reduce((sum, s) => sum + (s.precioMensual || 0), 0);
 
   if (loading) return <LoadingSpinner />;
 
@@ -328,382 +156,136 @@ export function SuscripcionesList() {
     );
   }
 
+  if (!suscripcion) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Mi Suscripción</h1>
+          <p className="text-muted-foreground">Gestiona tu plan y facturación</p>
+        </div>
+        <EmptyState
+          icon={CreditCard}
+          title="Sin suscripción activa"
+          description="No tienes ninguna suscripción registrada. Elige un plan para empezar."
+          action={{
+            label: 'Ver planes',
+            onClick: () => navigate('/checkout?plan=BASICO'),
+          }}
+        />
+      </div>
+    );
+  }
+
+  const esActiva = suscripcion.estado === 'ACTIVA';
+  const esCancelableOReactivable = ['CANCELADA', 'SUSPENDIDA', 'PENDIENTE'].includes(suscripcion.estado ?? '');
+  const planLabel = suscripcion.planId === 'PRO' ? 'Pro' : suscripcion.planId === 'BASICO' ? 'Básico' : suscripcion.planId;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Suscripciones</h1>
-          <p className="text-muted-foreground">Gestiona las suscripciones y planes</p>
+          <h1 className="text-3xl font-bold tracking-tight">Mi Suscripción</h1>
+          <p className="text-muted-foreground">Gestiona tu plan y facturación</p>
         </div>
-
-        {canCreate('SUSCRIPCIONES') && (
-          <Button onClick={openCreate} className="w-full sm:w-auto">
-            <Plus className="mr-2 h-4 w-4" />
-            Nueva Suscripción
-          </Button>
-        )}
+        <Button variant="outline" size="sm" onClick={handleSincronizar} disabled={syncing}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? 'Sincronizando...' : 'Sincronizar con MP'}
+        </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Suscripciones</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{suscripciones.length}</div>
-            <p className="text-xs text-muted-foreground">Registradas</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Activas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-700">{totalActivas}</div>
-            <p className="text-xs text-muted-foreground">Con acceso vigente</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Canceladas</CardTitle>
-            <XCircle className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-700">{totalCanceladas}</div>
-            <p className="text-xs text-muted-foreground">Sin acceso</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ingresos Mensuales</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">S/.{ingresosMensuales.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Solo activas</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search + Estado filter (estilo módulos) */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
-            <div className="lg:col-span-6">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por usuario, plan, estado o método de pago..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-
-            <div className="lg:col-span-6">
-              <div className="w-full rounded-lg border border-input bg-muted p-1">
-                <div className="flex gap-1 overflow-x-auto scrollbar-hide" role="tablist" aria-label="Filtrar por estado">
-                  {(
-                    [
-                      { key: 'TODOS', label: 'Todos' },
-                      { key: 'ACTIVA', label: '✅ Activas' },
-                      { key: 'CANCELADA', label: '⛔ Canceladas' },
-                      { key: 'SUSPENDIDA', label: '⚠️ Suspendidas' },
-                    ] as Array<{ key: EstadoFilter; label: string }>
-                  ).map((t) => {
-                    const active = estadoFilter === t.key;
-                    return (
-                      <button
-                        key={t.key}
-                        type="button"
-                        onClick={() => setEstadoFilter(t.key)}
-                        className={[
-                          'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
-                          'min-w-[140px] sm:min-w-0 flex-1',
-                          active
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                        ].join(' ')}
-                        aria-pressed={active}
-                      >
-                        {t.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Table */}
+      {/* Tarjeta principal */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Suscripciones</CardTitle>
-          <CardDescription>{filteredSuscripciones.length} suscripción(es) encontrada(s)</CardDescription>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-primary/10 p-3">
+                <CreditCard className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <CardTitle>Plan {planLabel}</CardTitle>
+                <CardDescription>S/. {(suscripcion.precioMensual ?? 0).toFixed(2)} / mes</CardDescription>
+              </div>
+            </div>
+            {estadoBadge(suscripcion.estado ?? '')}
+          </div>
         </CardHeader>
-        <CardContent>
-          {filteredSuscripciones.length === 0 ? (
-            <EmptyState title="No hay suscripciones" description="No se encontraron suscripciones con ese criterio" />
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Usuario</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Precio</TableHead>
-                    <TableHead>Método de Pago</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
 
-                <TableBody>
-                  {filteredSuscripciones.map((suscripcion) => {
-                    const u = suscripcion.usuarioPrincipalId
-                      ? usuarioNombreById.get(Number(suscripcion.usuarioPrincipalId))
-                      : undefined;
+        <CardContent className="space-y-4">
+          {/* Detalles */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border p-4 bg-muted/30">
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground">Próximo cobro:</span>
+              <span className="font-medium">{formatFecha(suscripcion.fechaProximoCobro)}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground">Método:</span>
+              <span className="font-medium">
+                {suscripcion.metodoPago || 'Mercado Pago'}
+                {suscripcion.ultimos4Digitos && ` •••• ${suscripcion.ultimos4Digitos}`}
+              </span>
+            </div>
+            {suscripcion.preapprovalId && (
+              <div className="flex items-center gap-2 text-sm sm:col-span-2">
+                <span className="text-muted-foreground">Referencia MP:</span>
+                <span className="font-mono text-xs truncate">{suscripcion.preapprovalId}</span>
+              </div>
+            )}
+          </div>
 
-                    const canCancel = canToggleState('SUSCRIPCIONES') && suscripcion.estado === 'ACTIVA';
-                    const canActivate = canToggleState('SUSCRIPCIONES') && suscripcion.estado !== 'ACTIVA';
-
-                    return (
-                      <TableRow key={suscripcion.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <UserIcon className="h-4 w-4 text-muted-foreground" />
-                            <div className="min-w-0">
-                              <p className="font-medium text-sm truncate">
-                                {u?.nombre || `Usuario #${suscripcion.usuarioPrincipalId}`}
-                              </p>
-                              {u?.email && <p className="text-xs text-muted-foreground truncate">{u.email}</p>}
-                            </div>
-                          </div>
-                        </TableCell>
-
-                        <TableCell>
-                          <Badge variant="outline">{suscripcion.planId || '—'}</Badge>
-                        </TableCell>
-
-                        <TableCell className="font-semibold">S/.{(suscripcion.precioMensual ?? 0).toFixed(2)}</TableCell>
-
-                        <TableCell className="text-muted-foreground text-sm">
-                          {suscripcion.metodoPago || 'N/A'}
-                          {suscripcion.ultimos4Digitos && ` •••• ${suscripcion.ultimos4Digitos}`}
-                        </TableCell>
-
-                        <TableCell>{estadoBadge(suscripcion.estado || '')}</TableCell>
-
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {canCancel && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleCancel(suscripcion.id!)}
-                                title="Cancelar"
-                              >
-                                <XCircle className="h-4 w-4 text-orange-600" />
-                              </Button>
-                            )}
-
-                            {canActivate && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleActivate(suscripcion.id!)}
-                                title="Activar"
-                              >
-                                <CheckCircle className="h-4 w-4 text-green-600" />
-                              </Button>
-                            )}
-
-                            {/* Edit: recomendado solo para cambiar plan/metodo; estado no aquí */}
-                            {canEdit('SUSCRIPCIONES') && (
-                              <Button variant="ghost" size="icon" onClick={() => handleEdit(suscripcion)} title="Editar">
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            )}
-
-                            {canDelete('SUSCRIPCIONES') && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(suscripcion.id!)}
-                                title="Eliminar"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+          {/* Alertas por estado */}
+          {suscripcion.estado === 'SUSPENDIDA' && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <p>Tu suscripción fue suspendida por un pago fallido. Reactívala para recuperar el acceso completo.</p>
+              </div>
             </div>
           )}
+          {suscripcion.estado === 'PENDIENTE' && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+              <div className="flex items-start gap-2">
+                <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+                <p>Tu pago está siendo procesado. Una vez confirmado, el acceso se habilitará automáticamente.</p>
+              </div>
+            </div>
+          )}
+          {suscripcion.estado === 'CANCELADA' && (
+            <div className="rounded-lg border border-muted p-3 text-sm text-muted-foreground">
+              <div className="flex items-start gap-2">
+                <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <p>Tu suscripción está cancelada. Puedes volver a suscribirte cuando lo desees.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Acciones */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            {esCancelableOReactivable && (
+              <Button className="sm:flex-1" onClick={() => navigate(`/checkout?plan=${suscripcion.planId}`)}>
+                <CreditCard className="mr-2 h-4 w-4" />
+                Reactivar suscripción
+              </Button>
+            )}
+            {esActiva && canToggleState('SUSCRIPCIONES') && (
+              <Button variant="destructive" className="sm:flex-1" onClick={handleCancelar}>
+                <XCircle className="mr-2 h-4 w-4" />
+                Cancelar suscripción
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Dialog - Crear/Editar (estilo Proveedores/Productos) */}
-      <Dialog
-        isOpen={isDialogOpen}
-        onClose={resetForm}
-        title={editingId ? 'Editar Suscripción' : 'Nueva Suscripción'}
-        description={
-          editingId
-            ? 'Actualiza plan y datos de pago. El estado se gestiona desde las acciones (activar/cancelar).'
-            : 'Completa los datos para crear una nueva suscripción.'
-        }
-        size="lg"
-      >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="rounded-lg border bg-card">
-            <div className="border-b px-4 py-3">
-              <h3 className="text-sm font-semibold">Datos de la suscripción</h3>
-              <p className="text-xs text-muted-foreground">Campos obligatorios marcados con *</p>
-            </div>
-
-            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Usuario (en editar lo congelamos para evitar “mover” una suscripción a otro usuario) */}
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium">
-                  Usuario <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.usuarioPrincipalId}
-                  onChange={(e) => setFormData({ ...formData, usuarioPrincipalId: parseInt(e.target.value) })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  required
-                  disabled={!!editingId || (!isAdmin && !canView('USUARIOS'))}
-                >
-                  <option value={0}>Seleccionar usuario</option>
-                  {usuarios.map((usuario) => (
-                    <option key={usuario.id} value={usuario.id}>
-                      {usuario.id} - {usuario.nombre} ({usuario.email})
-                    </option>
-                  ))}
-                </select>
-                {editingId && (
-                  <p className="text-xs text-muted-foreground">
-                    Para seguridad, no se puede cambiar el usuario en una suscripción existente.
-                  </p>
-                )}
-                {!editingId && !isAdmin && !canView('USUARIOS') && (
-                  <p className="text-xs text-muted-foreground">
-                    No tienes permisos para listar usuarios; se asignará el usuario actual.
-                  </p>
-                )}
-              </div>
-
-              {/* Plan */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Plan <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.planId}
-                  onChange={(e) => handlePlanChange(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  required
-                >
-                  <option value="">Seleccionar plan</option>
-                  <option value="FREE">Free - S/.0/mes</option>
-                  <option value="BASICO">Básico - S/.50/mes</option>
-                  <option value="PRO">Pro - S/.100/mes</option>
-                </select>
-              </div>
-
-              {/* Precio (readonly) */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Precio Mensual (S/.)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.precioMensual}
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">Se calcula automáticamente según el plan seleccionado</p>
-              </div>
-
-              {/* Método pago */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Método de Pago <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.metodoPago}
-                  onChange={(e) => setFormData({ ...formData, metodoPago: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  required
-                >
-                  <option value="">Seleccionar método</option>
-                  <option value="TARJETA">Tarjeta</option>
-                  <option value="DEBITO">Débito</option>
-                  <option value="PAYPAL">PayPal</option>
-                  <option value="TRANSFERENCIA">Transferencia</option>
-                </select>
-              </div>
-
-              {/* Ult 4 */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Últimos 4 dígitos (opcional)</label>
-                <Input
-                  type="text"
-                  placeholder="1234"
-                  maxLength={4}
-                  value={formData.ultimos4Digitos}
-                  onChange={(e) => setFormData({ ...formData, ultimos4Digitos: e.target.value })}
-                />
-              </div>
-
-              {/* Estado (solo informativo en el form) */}
-              {editingId && (
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium">Estado actual</label>
-                  <div className="h-10 rounded-md border border-input bg-muted px-3 flex items-center gap-2 text-sm">
-                    <CircleDot className="h-4 w-4 text-muted-foreground" />
-                    {estadoBadge(formData.estado || '')}
-                    <span className="text-xs text-muted-foreground ml-auto">
-                      Cambia con “Activar/Cancelar”
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end pt-2 border-t">
-            <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">
-              Cancelar
-            </Button>
-            <Button type="submit" className="w-full sm:w-auto">
-              {editingId ? 'Guardar cambios' : 'Crear Suscripción'}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
-
-      {/* Confirm Dialog */}
+      {/* Confirm cancelar */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        confirmText={confirmDialog.confirmText}
-        type={confirmDialog.type}
+        title="Cancelar suscripción"
+        description="¿Estás seguro? Tu suscripción se cancelará en Mercado Pago y perderás acceso a los módulos del sistema al finalizar el período."
+        confirmText="Sí, cancelar"
+        type="danger"
         onConfirm={async () => {
           if (confirmDialog.action) await confirmDialog.action();
         }}

@@ -5,7 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
-import { Package, Building2 } from 'lucide-react';
+import { Package, Building2, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { PlanId, RegistrationRequestDTO, TipoDocumento } from '../../types';
 
@@ -29,6 +29,7 @@ export function Register() {
   const navigate = useNavigate();
   const { setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState<RegistrationRequestDTO>({
     email: '',
     contraseña: '',
@@ -50,14 +51,24 @@ export function Register() {
       return;
     }
 
-    if (requiresDocumento && !numeroDocumento.trim()) {
-      toast.error('El número de documento es obligatorio para planes de pago');
-      return;
-    }
-
-    if (requiresDocumento && numeroDocumento.trim().length < 6) {
-      toast.error('El número de documento debe tener al menos 6 caracteres');
-      return;
+    if (requiresDocumento) {
+      const doc = numeroDocumento.trim();
+      if (!doc) {
+        toast.error('El número de documento es obligatorio para planes de pago');
+        return;
+      }
+      if (tipoDocumento === 'DNI' && !/^\d{8}$/.test(doc)) {
+        toast.error('El DNI debe tener exactamente 8 dígitos');
+        return;
+      }
+      if (tipoDocumento === 'RUC' && !/^\d{11}$/.test(doc)) {
+        toast.error('El RUC debe tener exactamente 11 dígitos');
+        return;
+      }
+      if (tipoDocumento === 'CE' && !/^\d{9}$/.test(doc)) {
+        toast.error('El Carné de Extranjería debe tener 9 dígitos');
+        return;
+      }
     }
 
     setLoading(true);
@@ -157,15 +168,26 @@ export function Register() {
               <label className="text-sm font-medium" htmlFor="password">
                 Contraseña
               </label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={formData.contraseña}
-                onChange={(e) => setFormData({ ...formData, contraseña: e.target.value })}
-                required
-                minLength={8}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={formData.contraseña}
+                  onChange={(e) => setFormData({ ...formData, contraseña: e.target.value })}
+                  required
+                  minLength={8}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               <p className="text-xs text-muted-foreground">
                 Mínimo 8 caracteres
               </p>

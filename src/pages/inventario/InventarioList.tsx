@@ -49,6 +49,9 @@ export function InventarioList() {
   const [kardexLoading, setKardexLoading] = useState(false);
   const [kardexProducto, setKardexProducto] = useState<ProductoDTO | null>(null);
   const [kardexMovimientos, setKardexMovimientos] = useState<MovimientoInventarioDTO[]>([]);
+  const [kardexTipoFilter, setKardexTipoFilter] = useState<string>('TODOS');
+  const [kardexDesde, setKardexDesde] = useState('');
+  const [kardexHasta, setKardexHasta] = useState('');
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -165,7 +168,19 @@ export function InventarioList() {
     setIsKardexOpen(false);
     setKardexProducto(null);
     setKardexMovimientos([]);
+    setKardexTipoFilter('TODOS');
+    setKardexDesde('');
+    setKardexHasta('');
   };
+
+  const kardexFiltrados = useMemo(() => {
+    return kardexMovimientos.filter((m) => {
+      if (kardexTipoFilter !== 'TODOS' && m.tipo !== kardexTipoFilter) return false;
+      if (kardexDesde && m.createdAt && m.createdAt < kardexDesde) return false;
+      if (kardexHasta && m.createdAt && m.createdAt.split('T')[0] > kardexHasta) return false;
+      return true;
+    });
+  }, [kardexMovimientos, kardexTipoFilter, kardexDesde, kardexHasta]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -626,6 +641,38 @@ export function InventarioList() {
         ) : kardexMovimientos.length === 0 ? (
           <EmptyState title="Sin movimientos" description="Este producto no tiene movimientos registrados" />
         ) : (
+          <div className="space-y-4">
+            {/* Filtros kardex */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex gap-1 flex-wrap">
+                {['TODOS','ENTRADA','SALIDA','AJUSTE','DEVOLUCION','SALDO_INICIAL'].map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setKardexTipoFilter(t)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${
+                      kardexTipoFilter === t
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-input bg-background text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {t === 'TODOS' ? 'Todos' : t === 'SALDO_INICIAL' ? 'Saldo Ini.' : t.charAt(0) + t.slice(1).toLowerCase()}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <Input type="date" value={kardexDesde} onChange={(e) => setKardexDesde(e.target.value)} className="h-8 w-36 text-xs" />
+                <span className="text-xs text-muted-foreground">—</span>
+                <Input type="date" value={kardexHasta} onChange={(e) => setKardexHasta(e.target.value)} className="h-8 w-36 text-xs" />
+                {(kardexDesde || kardexHasta || kardexTipoFilter !== 'TODOS') && (
+                  <button type="button" onClick={() => { setKardexDesde(''); setKardexHasta(''); setKardexTipoFilter('TODOS'); }}
+                    className="text-xs text-muted-foreground hover:text-foreground underline">
+                    Limpiar
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">{kardexFiltrados.length} de {kardexMovimientos.length} movimientos</p>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -643,7 +690,7 @@ export function InventarioList() {
               <TableBody>
                 {(() => {
                   let stockAcumulado = 0;
-                  return kardexMovimientos.map((m) => {
+                  return kardexFiltrados.map((m) => {
                     const esEntrada = m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION';
                     const esSalida = m.tipo === 'SALIDA';
                     const esAjuste = m.tipo === 'AJUSTE';
@@ -701,6 +748,7 @@ export function InventarioList() {
                 })()}
               </TableBody>
             </Table>
+          </div>
           </div>
         )}
 
