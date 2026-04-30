@@ -585,7 +585,7 @@ export function ComprobantesPage() {
             <Autocomplete
               options={ventasOptions}
               value={ventasOptions.find((o) => o.id === emitirForm.ventaId) ?? null}
-              onChange={(opt) => setEmitirForm((prev) => ({ ...prev, ventaId: opt?.id ?? 0 }))}
+              onChange={(opt) => setEmitirForm((prev) => ({ ...prev, ventaId: opt?.id ? Number(opt.id) : 0 }))}
               placeholder="Buscar venta por ID, vendedor..."
               emptyMessage="No se encontraron ventas"
             />

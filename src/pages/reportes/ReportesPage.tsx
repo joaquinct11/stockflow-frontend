@@ -59,7 +59,7 @@ const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'
 const COLOR_PRIMARY = '#6366f1';
 const COLOR_SUCCESS = '#10b981';
 const COLOR_WARNING = '#f59e0b';
-const COLOR_DANGER  = '#ef4444';
+// const COLOR_DANGER  = '#ef4444';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -501,7 +501,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatSoles(v)} />
+                  <Tooltip formatter={(value) => formatSoles(value as number)} />
                   <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs">{v}</span>} />
                 </PieChart>
               </ResponsiveContainer>
