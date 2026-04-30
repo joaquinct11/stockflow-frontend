@@ -10,8 +10,37 @@ import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { Dialog } from '../../components/ui/Dialog';
-import { User, Mail, Building2, Calendar, Lock, Edit2 } from 'lucide-react';
+import { User, Mail, Building2, Calendar, Lock, Edit2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+const AVATAR_COLORS = [
+  'bg-violet-500','bg-blue-500','bg-emerald-500','bg-amber-500',
+  'bg-rose-500','bg-cyan-500','bg-fuchsia-500','bg-teal-500',
+];
+
+function getAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function getInitials(name: string) {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+}
+
+function passwordStrength(pwd: string): { score: number; label: string; color: string } {
+  let score = 0;
+  if (pwd.length >= 8) score++;
+  if (pwd.length >= 12) score++;
+  if (/[A-Z]/.test(pwd)) score++;
+  if (/[0-9]/.test(pwd)) score++;
+  if (/[^A-Za-z0-9]/.test(pwd)) score++;
+  if (score <= 1) return { score, label: 'Muy débil', color: 'bg-red-500' };
+  if (score === 2) return { score, label: 'Débil', color: 'bg-orange-500' };
+  if (score === 3) return { score, label: 'Regular', color: 'bg-yellow-500' };
+  if (score === 4) return { score, label: 'Fuerte', color: 'bg-green-500' };
+  return { score, label: 'Muy fuerte', color: 'bg-emerald-600' };
+}
 
 export function UserProfile() {
   const navigate = useNavigate();
@@ -32,6 +61,9 @@ export function UserProfile() {
   const [editProfileData, setEditProfileData] = useState({ nombre: '' });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -169,11 +201,12 @@ export function UserProfile() {
         <CardContent className="space-y-6">
           {/* Avatar y Nombre */}
           <div className="flex items-start gap-6">
-            <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <User className="h-10 w-10 text-primary" />
+            <div className={`h-20 w-20 rounded-full flex items-center justify-center flex-shrink-0 text-white text-2xl font-bold ${getAvatarColor(profile.nombre || 'U')}`}>
+              {getInitials(profile.nombre || 'U')}
             </div>
             <div className="flex-1">
               <h3 className="text-lg font-semibold">{profile.nombre}</h3>
+              <p className="text-sm text-muted-foreground">{profile.email}</p>
               <Badge variant="outline" className="mt-2">
                 {profile.rol}
               </Badge>
@@ -296,62 +329,79 @@ export function UserProfile() {
       >
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="current-password">
-              Contraseña Actual
-            </label>
-            <Input
-              id="current-password"
-              type="password"
-              placeholder="••••••••"
-              value={changePasswordData.contraseñaActual}
-              onChange={(e) =>
-                setChangePasswordData({
-                  ...changePasswordData,
-                  contraseñaActual: e.target.value,
-                })
-              }
-              required
-            />
+            <label className="text-sm font-medium" htmlFor="current-password">Contraseña Actual</label>
+            <div className="relative">
+              <Input
+                id="current-password"
+                type={showCurrentPwd ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={changePasswordData.contraseñaActual}
+                onChange={(e) => setChangePasswordData({ ...changePasswordData, contraseñaActual: e.target.value })}
+                required
+                className="pr-10"
+              />
+              <button type="button" onClick={() => setShowCurrentPwd((v) => !v)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground">
+                {showCurrentPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="new-password">
-              Nueva Contraseña
-            </label>
-            <Input
-              id="new-password"
-              type="password"
-              placeholder="••••••••"
-              value={changePasswordData.nuevaContraseña}
-              onChange={(e) =>
-                setChangePasswordData({
-                  ...changePasswordData,
-                  nuevaContraseña: e.target.value,
-                })
-              }
-              required
-              minLength={8}
-            />
-            <p className="text-xs text-muted-foreground">Mínimo 8 caracteres</p>
+            <label className="text-sm font-medium" htmlFor="new-password">Nueva Contraseña</label>
+            <div className="relative">
+              <Input
+                id="new-password"
+                type={showNewPwd ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={changePasswordData.nuevaContraseña}
+                onChange={(e) => setChangePasswordData({ ...changePasswordData, nuevaContraseña: e.target.value })}
+                required
+                minLength={8}
+                className="pr-10"
+              />
+              <button type="button" onClick={() => setShowNewPwd((v) => !v)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground">
+                {showNewPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {changePasswordData.nuevaContraseña && (() => {
+              const { score, label, color } = passwordStrength(changePasswordData.nuevaContraseña);
+              return (
+                <div className="space-y-1">
+                  <div className="flex gap-1">
+                    {[1,2,3,4,5].map((i) => (
+                      <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= score ? color : 'bg-muted'}`} />
+                    ))}
+                  </div>
+                  <p className={`text-xs flex items-center gap-1 ${score >= 4 ? 'text-green-600' : score >= 3 ? 'text-yellow-600' : 'text-red-500'}`}>
+                    <ShieldCheck className="h-3 w-3" />{label}
+                  </p>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="confirm-password">
-              Confirmar Nueva Contraseña
-            </label>
-            <Input
-              id="confirm-password"
-              type="password"
-              placeholder="••••••••"
-              value={changePasswordData.confirmarContraseña}
-              onChange={(e) =>
-                setChangePasswordData({
-                  ...changePasswordData,
-                  confirmarContraseña: e.target.value,
-                })
-              }
-              required
-            />
+            <label className="text-sm font-medium" htmlFor="confirm-password">Confirmar Nueva Contraseña</label>
+            <div className="relative">
+              <Input
+                id="confirm-password"
+                type={showConfirmPwd ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={changePasswordData.confirmarContraseña}
+                onChange={(e) => setChangePasswordData({ ...changePasswordData, confirmarContraseña: e.target.value })}
+                required
+                className="pr-10"
+              />
+              <button type="button" onClick={() => setShowConfirmPwd((v) => !v)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground">
+                {showConfirmPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {changePasswordData.confirmarContraseña && changePasswordData.nuevaContraseña !== changePasswordData.confirmarContraseña && (
+              <p className="text-xs text-red-500">Las contraseñas no coinciden</p>
+            )}
           </div>
 
           <div className="flex gap-2 justify-end pt-4 border-t">

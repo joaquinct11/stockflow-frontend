@@ -90,7 +90,7 @@ interface ProductoConVencimiento {
 }
 
 export function Dashboard() {
-  const { user, setSuscripcionEstado } = useAuthStore();
+  const { user, suscripcionEstado, setSuscripcionEstado } = useAuthStore();
   const { userId } = useCurrentUser();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -150,7 +150,7 @@ export function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billingParam]);
 
-  const estadoSuscripcion = suscripcion?.estado ?? user?.suscripcion?.estado ?? '';
+  const estadoSuscripcion = suscripcionEstado ?? suscripcion?.estado ?? user?.suscripcion?.estado ?? '';
   const suscripcionActiva = estadoSuscripcion === 'ACTIVA' || estadoSuscripcion === '' || !estadoSuscripcion;
   const mostrarBloqueo = rol === 'ADMIN' && !suscripcionActiva && !!estadoSuscripcion;
 

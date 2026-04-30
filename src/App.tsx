@@ -225,9 +225,11 @@ function App() {
             <Route
               path="admin/permisos"
               element={
-                <RoleProtectedRoute allowedRoles={['ADMIN']}>
-                  <PermisosConfig />
-                </RoleProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                    <PermisosConfig />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
               }
             />
 

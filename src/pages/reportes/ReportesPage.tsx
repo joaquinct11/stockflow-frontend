@@ -11,7 +11,24 @@ import {
   Boxes,
   ClipboardCheck,
   Truck,
+  DollarSign,
+  Target,
 } from 'lucide-react';
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import { reportesService } from '../../services/reportes.service';
 import type { AgrupacionTendencia, MetricaProductos } from '../../services/reportes.service';
 import type {
@@ -36,20 +53,30 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { usePermissions } from '../../hooks/usePermissions';
 import toast from 'react-hot-toast';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Palette ──────────────────────────────────────────────────────────────────
+
+const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+const COLOR_PRIMARY = '#6366f1';
+const COLOR_SUCCESS = '#10b981';
+const COLOR_WARNING = '#f59e0b';
+// const COLOR_DANGER  = '#ef4444';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function toDateString(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-function defaultDesde(): string {
+function daysAgo(n: number): string {
   const d = new Date();
-  d.setDate(d.getDate() - 30);
+  d.setDate(d.getDate() - n);
   return toDateString(d);
 }
 
-function defaultHasta(): string {
-  return toDateString(new Date());
+function startOfYear(): string {
+  const d = new Date();
+  d.setMonth(0, 1);
+  return toDateString(d);
 }
 
 function formatSoles(value: number | null | undefined): string {
@@ -67,7 +94,11 @@ function formatPct(value: number | null | undefined): string {
   return `${value.toFixed(1)} %`;
 }
 
-// ─── Stat card ───────────────────────────────────────────────────────────────
+function shortLabel(label: string, max = 12): string {
+  return label.length > max ? label.slice(0, max) + '…' : label;
+}
+
+// ─── Stat card ────────────────────────────────────────────────────────────────
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -75,136 +106,224 @@ interface StatCardProps {
   value: string;
   description?: string;
   colorClass?: string;
+  trend?: { value: number; label: string };
 }
 
-function StatCard({ icon, title, value, description, colorClass = 'text-foreground' }: StatCardProps) {
+function StatCard({ icon, title, value, description, colorClass = 'text-foreground', trend }: StatCardProps) {
   return (
     <Card>
       <CardContent className="pt-5">
         <div className="flex items-start justify-between gap-2">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">{title}</p>
+          <div className="space-y-1 min-w-0">
+            <p className="text-sm text-muted-foreground truncate">{title}</p>
             <p className={`text-2xl font-bold ${colorClass}`}>{value}</p>
-            {description && (
+            {trend && (
+              <p className={`text-xs flex items-center gap-1 ${trend.value >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {trend.value >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {trend.value >= 0 ? '+' : ''}{trend.value.toFixed(1)}% {trend.label}
+              </p>
+            )}
+            {description && !trend && (
               <p className="text-xs text-muted-foreground">{description}</p>
             )}
           </div>
-          <div className="rounded-md bg-muted p-2 text-muted-foreground">{icon}</div>
+          <div className="rounded-md bg-muted p-2 text-muted-foreground shrink-0">{icon}</div>
         </div>
       </CardContent>
     </Card>
   );
 }
 
+// ─── Chart tooltip ────────────────────────────────────────────────────────────
+
+interface TooltipPayloadItem {
+  color?: string;
+  name?: string;
+  value?: number;
+}
+
+function ChartTooltip({ active, payload, label, isSoles = true }: {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: string;
+  isSoles?: boolean;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-sm space-y-1">
+      <p className="font-medium text-foreground">{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} style={{ color: p.color }} className="text-xs">
+          {p.name}: {isSoles ? formatSoles(p.value) : formatNum(p.value)}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
 type TabId = 'resumen' | 'ventas' | 'inventario' | 'compras';
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'resumen', label: 'Resumen' },
-  { id: 'ventas', label: 'Ventas' },
-  { id: 'inventario', label: 'Inventario' },
-  { id: 'compras', label: 'Compras' },
+const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  { id: 'resumen',    label: 'Resumen',    icon: <BarChart3 className="h-4 w-4" /> },
+  { id: 'ventas',     label: 'Ventas',     icon: <ShoppingCart className="h-4 w-4" /> },
+  { id: 'inventario', label: 'Inventario', icon: <Boxes className="h-4 w-4" /> },
+  { id: 'compras',    label: 'Compras',    icon: <Truck className="h-4 w-4" /> },
 ];
 
-interface TabBarProps {
-  active: TabId;
-  onChange: (id: TabId) => void;
-}
-
-function TabBar({ active, onChange }: TabBarProps) {
+function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => void }) {
   return (
-    <div className="flex gap-1 border-b">
+    <div className="flex gap-1 border-b overflow-x-auto">
       {TABS.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
             active === t.id
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
-          {t.label}
+          {t.icon}{t.label}
         </button>
       ))}
     </div>
   );
 }
 
-// ─── Tab loading/error helpers ────────────────────────────────────────────────
+// ─── Tab states ───────────────────────────────────────────────────────────────
 
 function TabLoading() {
-  return (
-    <div className="flex justify-center py-12">
-      <LoadingSpinner />
-    </div>
-  );
+  return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
 }
 
 function TabError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <EmptyState
-      icon={AlertTriangle}
-      title="Error al cargar datos"
-      description={message}
-      action={{ label: 'Reintentar', onClick: onRetry }}
-    />
-  );
+  return <EmptyState icon={AlertTriangle} title="Error al cargar datos" description={message} action={{ label: 'Reintentar', onClick: onRetry }} />;
 }
 
 function TabEmpty() {
-  return (
-    <EmptyState
-      icon={BarChart3}
-      title="Sin datos"
-      description="Presiona Actualizar para cargar los datos."
-    />
-  );
+  return <EmptyState icon={BarChart3} title="Sin datos" description='Presiona "Actualizar" para cargar los reportes.' />;
 }
 
 // ─── Resumen tab ──────────────────────────────────────────────────────────────
 
-interface ResumenTabProps {
-  loading: boolean;
-  error: string | null;
-  data: ReportesResumenDTO | null;
-  onRetry: () => void;
-}
-
-function ResumenTab({ loading, error, data, onRetry }: ResumenTabProps) {
+function ResumenTab({ loading, error, data, onRetry }: {
+  loading: boolean; error: string | null; data: ReportesResumenDTO | null; onRetry: () => void;
+}) {
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
   if (!data) return <TabEmpty />;
 
+  const margenPct = data.ventas?.ingresosTotal && data.ventas.margenEstimado != null
+    ? (data.ventas.margenEstimado / data.ventas.ingresosTotal) * 100
+    : null;
+
+  const margenColor = margenPct == null ? 'text-foreground'
+    : margenPct >= 30 ? 'text-green-600'
+    : margenPct >= 15 ? 'text-yellow-600'
+    : 'text-red-600';
+
   return (
     <div className="space-y-6">
-      {/* Inventario */}
+      {/* KPIs de ventas */}
+      {data.ventas != null && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Ventas del período</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              icon={<DollarSign className="h-5 w-5" />}
+              title="Ingresos totales"
+              value={formatSoles(data.ventas.ingresosTotal)}
+              colorClass="text-green-600"
+            />
+            <StatCard
+              icon={<ShoppingCart className="h-5 w-5" />}
+              title="Nº de ventas"
+              value={formatNum(data.ventas.ventasCount)}
+            />
+            <StatCard
+              icon={<Target className="h-5 w-5" />}
+              title="Ticket promedio"
+              value={formatSoles(data.ventas.ticketPromedio)}
+            />
+            <StatCard
+              icon={<TrendingUp className="h-5 w-5" />}
+              title="Margen estimado"
+              value={margenPct != null ? formatPct(margenPct) : formatSoles(data.ventas.margenEstimado)}
+              colorClass={margenColor}
+              description={margenPct != null ? formatSoles(data.ventas.margenEstimado) : undefined}
+            />
+          </div>
+        </section>
+      )}
+
+      {/* KPIs de inventario */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Boxes className="h-5 w-5 text-muted-foreground" />
-          Inventario
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inventario</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={<Package className="h-5 w-5" />} title="Total productos" value={formatNum(data.totalProductos)} />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización de stock" value={formatSoles(data.valorizacionStock)} colorClass="text-green-600" />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización" value={formatSoles(data.valorizacionStock)} colorClass="text-green-600" />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas" value={formatNum(data.entradasCantidad)} colorClass="text-blue-600" description="unidades" />
           <StatCard
             icon={<AlertTriangle className="h-5 w-5" />}
-            title="Productos bajo stock"
+            title="Bajo stock"
             value={formatNum(data.productosBajoStock?.length)}
-            colorClass={(data.productosBajoStock?.length ?? 0) > 0 ? 'text-red-600' : 'text-foreground'}
+            colorClass={(data.productosBajoStock?.length ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}
+            description={(data.productosBajoStock?.length ?? 0) > 0 ? 'requieren reposición' : 'todo en orden'}
           />
         </div>
       </section>
 
-      {/* Productos bajo stock */}
+      {/* Recepciones */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recepciones</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(data.recepcionesConfirmadasCount)} />
+          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(data.unidadesRecibidas)} />
+        </div>
+      </section>
+
+      {/* Top productos */}
+      {(data.ventas?.topProductosVendidos?.length ?? 0) > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Top productos del período</CardTitle>
+            <CardDescription>Por ingresos generados</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {data.ventas!.topProductosVendidos.slice(0, 5).map((p, i) => {
+                const maxIngresos = data.ventas!.topProductosVendidos[0].ingresos ?? 1;
+                const pct = ((p.ingresos ?? 0) / maxIngresos) * 100;
+                return (
+                  <div key={p.productoId} className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium truncate">{p.nombre}</span>
+                        <span className="text-sm text-muted-foreground ml-2 shrink-0">{formatSoles(p.ingresos)}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Bajo stock */}
       {(data.productosBajoStock?.length ?? 0) > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Productos bajo stock mínimo</CardTitle>
-            <CardDescription>
-              Top {Math.min(data.productosBajoStock.length, 10)} productos que requieren reposición
-            </CardDescription>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              Productos que requieren reposición
+            </CardTitle>
+            <CardDescription>{data.productosBajoStock.length} producto(s) por debajo del stock mínimo</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -212,8 +331,8 @@ function ResumenTab({ loading, error, data, onRetry }: ResumenTabProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Producto</TableHead>
-                    <TableHead className="text-center">Stock actual</TableHead>
-                    <TableHead className="text-center">Stock mínimo</TableHead>
+                    <TableHead className="text-center">Actual</TableHead>
+                    <TableHead className="text-center">Mínimo</TableHead>
                     <TableHead className="text-center">Déficit</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -223,7 +342,9 @@ function ResumenTab({ loading, error, data, onRetry }: ResumenTabProps) {
                       <TableCell className="font-medium">{p.nombre}</TableCell>
                       <TableCell className="text-center text-red-600 font-semibold">{p.stockActual}</TableCell>
                       <TableCell className="text-center text-muted-foreground">{p.stockMinimo}</TableCell>
-                      <TableCell className="text-center text-red-600 font-semibold">{p.stockMinimo - p.stockActual}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="destructive">-{p.stockMinimo - p.stockActual}</Badge>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -231,84 +352,6 @@ function ResumenTab({ loading, error, data, onRetry }: ResumenTabProps) {
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Movimientos */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-muted-foreground" />
-          Movimientos de inventario
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas (unidades)" value={formatNum(data.entradasCantidad)} colorClass="text-green-600" />
-          <StatCard icon={<TrendingDown className="h-5 w-5" />} title="Salidas (unidades)" value={formatNum(data.salidasCantidad)} colorClass="text-red-600" />
-        </div>
-      </section>
-
-      {/* Recepciones */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
-          Recepciones
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(data.recepcionesConfirmadasCount)} />
-          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(data.unidadesRecibidas)} />
-        </div>
-      </section>
-
-      {/* Ventas (opcional) */}
-      {data.ventas != null && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5 text-muted-foreground" />
-            Ventas
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard icon={<ShoppingCart className="h-5 w-5" />} title="Número de ventas" value={formatNum(data.ventas.ventasCount)} />
-            <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Ingresos totales" value={formatSoles(data.ventas.ingresosTotal)} colorClass="text-green-600" />
-            <StatCard icon={<BarChart3 className="h-5 w-5" />} title="Ticket promedio" value={formatSoles(data.ventas.ticketPromedio)} />
-            <StatCard
-              icon={<TrendingUp className="h-5 w-5" />}
-              title="Margen estimado"
-              value={formatSoles(data.ventas.margenEstimado)}
-              colorClass={data.ventas.margenEstimado != null && data.ventas.margenEstimado > 0 ? 'text-green-600' : 'text-foreground'}
-            />
-          </div>
-
-          {(data.ventas.topProductosVendidos?.length ?? 0) > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Top productos vendidos</CardTitle>
-                <CardDescription>Período seleccionado</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>#</TableHead>
-                        <TableHead>Producto</TableHead>
-                        <TableHead className="text-center">Unidades</TableHead>
-                        <TableHead className="text-right">Ingresos</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.ventas.topProductosVendidos.map((p, idx) => (
-                        <TableRow key={p.productoId}>
-                          <TableCell className="text-muted-foreground text-sm">{idx + 1}</TableCell>
-                          <TableCell className="font-medium">{p.nombre}</TableCell>
-                          <TableCell className="text-center">{p.cantidadVendida}</TableCell>
-                          <TableCell className="text-right">{formatSoles(p.ingresos)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </section>
       )}
     </div>
   );
@@ -325,33 +368,53 @@ interface VentasData {
   menosProductos: VentasProductoDTO[];
 }
 
-interface VentasTabProps {
-  loading: boolean;
-  error: string | null;
-  data: VentasData | null;
-  agrupacion: AgrupacionTendencia;
-  setAgrupacion: (v: AgrupacionTendencia) => void;
-  metrica: MetricaProductos;
-  setMetrica: (v: MetricaProductos) => void;
+function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, setMetrica, onRetry }: {
+  loading: boolean; error: string | null; data: VentasData | null;
+  agrupacion: AgrupacionTendencia; setAgrupacion: (v: AgrupacionTendencia) => void;
+  metrica: MetricaProductos; setMetrica: (v: MetricaProductos) => void;
   onRetry: () => void;
-}
-
-function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, setMetrica, onRetry }: VentasTabProps) {
+}) {
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
   if (!data) return <TabEmpty />;
 
   const totalIngresos = data.porMetodoPago.reduce((s, r) => s + (r.ingresos ?? 0), 0);
 
+  // Tendencia para gráfico
+  const tendenciaChart = data.tendencia.map((p) => ({
+    periodo: shortLabel(p.periodo, 8),
+    ingresos: p.ingresos ?? 0,
+    ventas: p.ventasCount ?? 0,
+  }));
+
+  // Top 5 productos para gráfico
+  const topChart = data.topProductos.slice(0, 6).map((p) => ({
+    nombre: shortLabel(p.nombre, 14),
+    valor: metrica === 'UNIDADES' ? (p.cantidadVendida ?? 0) : (p.ingresos ?? 0),
+  }));
+
+  // Categorías para gráfico pie
+  const catChart = data.porCategoria.slice(0, 7).map((c) => ({
+    name: shortLabel(c.categoria, 14),
+    value: c.ingresos ?? 0,
+  }));
+
+  // Vendedores para gráfico horizontal
+  const vendedorChart = data.porVendedor.slice(0, 6).map((v) => ({
+    nombre: shortLabel(v.vendedorNombre, 16),
+    ingresos: v.ingresos ?? 0,
+    ventas: v.ventasCount ?? 0,
+  }));
+
   return (
     <div className="space-y-6">
-      {/* Tendencia */}
+      {/* Tendencia — gráfico de área */}
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <CardTitle className="text-base">Tendencia de ventas</CardTitle>
-              <CardDescription>Ingresos y número de ventas por período</CardDescription>
+              <CardTitle className="text-base">Tendencia de ingresos</CardTitle>
+              <CardDescription>Evolución de ventas en el período</CardDescription>
             </div>
             <div className="flex gap-1">
               {(['DIA', 'SEMANA', 'MES'] as AgrupacionTendencia[]).map((a) => (
@@ -363,43 +426,109 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
           </div>
         </CardHeader>
         <CardContent>
-          {data.tendencia.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Sin datos para el período seleccionado.</p>
+          {tendenciaChart.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Sin datos para el período.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Período</TableHead>
-                    <TableHead className="text-center">Ventas</TableHead>
-                    <TableHead className="text-right">Ingresos</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.tendencia.map((p) => (
-                    <TableRow key={p.periodo}>
-                      <TableCell>{p.periodo}</TableCell>
-                      <TableCell className="text-center">{formatNum(p.ventasCount)}</TableCell>
-                      <TableCell className="text-right">{formatSoles(p.ingresos)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={tendenciaChart} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="gradIngresos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={COLOR_PRIMARY} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={COLOR_PRIMARY} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.1} />
+                <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `S/${(v / 1000).toFixed(0)}k`} width={55} />
+                <Tooltip content={<ChartTooltip isSoles />} />
+                <Area type="monotone" dataKey="ingresos" name="Ingresos" stroke={COLOR_PRIMARY} strokeWidth={2} fill="url(#gradIngresos)" />
+              </AreaChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>
 
-      {/* Por vendedor */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Ventas por vendedor</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.porVendedor.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Sin datos.</p>
-          ) : (
-            <div className="overflow-x-auto">
+      {/* Top productos + Categorías — grid 2 col */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top productos — barras horizontales */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">Top productos</CardTitle>
+                <CardDescription>Los más vendidos del período</CardDescription>
+              </div>
+              <div className="flex gap-1">
+                {(['UNIDADES', 'INGRESOS'] as MetricaProductos[]).map((m) => (
+                  <Button key={m} size="sm" variant={metrica === m ? 'default' : 'outline'} onClick={() => setMetrica(m)}>
+                    {m === 'UNIDADES' ? 'Und.' : 'S/'}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {topChart.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Sin datos.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={topChart} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="currentColor" strokeOpacity={0.1} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => metrica === 'INGRESOS' ? `S/${(v/1000).toFixed(0)}k` : String(v)} />
+                  <YAxis type="category" dataKey="nombre" tick={{ fontSize: 11 }} width={90} />
+                  <Tooltip content={<ChartTooltip isSoles={metrica === 'INGRESOS'} />} />
+                  <Bar dataKey="valor" name={metrica === 'UNIDADES' ? 'Unidades' : 'Ingresos'} fill={COLOR_SUCCESS} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Categorías — donut */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Ingresos por categoría</CardTitle>
+            <CardDescription>Distribución porcentual del período</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {catChart.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Sin datos.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={catChart} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" nameKey="name" paddingAngle={2}>
+                    {catChart.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => formatSoles(value as number)} />
+                  <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs">{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Vendedores — gráfico de barras */}
+      {vendedorChart.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Performance por vendedor</CardTitle>
+            <CardDescription>Ingresos generados en el período</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={vendedorChart} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.1} />
+                <XAxis dataKey="nombre" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `S/${(v/1000).toFixed(0)}k`} width={55} />
+                <Tooltip content={<ChartTooltip isSoles />} />
+                <Bar dataKey="ingresos" name="Ingresos" fill={COLOR_PRIMARY} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+            {/* Tabla detalle debajo */}
+            <div className="mt-4 overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -421,166 +550,71 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
                 </TableBody>
               </Table>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Por categoría */}
+      {/* Método de pago */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Ventas por categoría</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.porCategoria.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Sin datos.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Categoría</TableHead>
-                    <TableHead className="text-center">Ventas</TableHead>
-                    <TableHead className="text-center">Unidades</TableHead>
-                    <TableHead className="text-right">Ingresos</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.porCategoria.map((c) => (
-                    <TableRow key={c.categoria}>
-                      <TableCell className="font-medium">{c.categoria}</TableCell>
-                      <TableCell className="text-center">{formatNum(c.ventasCount)}</TableCell>
-                      <TableCell className="text-center">{formatNum(c.unidades)}</TableCell>
-                      <TableCell className="text-right">{formatSoles(c.ingresos)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Por método de pago */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Ventas por método de pago</CardTitle>
+          <CardTitle className="text-base">Métodos de pago</CardTitle>
+          <CardDescription>Distribución de ventas por forma de cobro</CardDescription>
         </CardHeader>
         <CardContent>
           {data.porMetodoPago.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Sin datos.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Método de pago</TableHead>
-                    <TableHead className="text-center">Ventas</TableHead>
-                    <TableHead className="text-right">Ingresos</TableHead>
-                    <TableHead className="text-right">%</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.porMetodoPago.map((m) => {
-                    const pct = m.porcentaje != null ? m.porcentaje : totalIngresos > 0 ? (m.ingresos / totalIngresos) * 100 : null;
-                    return (
-                      <TableRow key={m.metodoPago}>
-                        <TableCell className="font-medium">{m.metodoPago}</TableCell>
-                        <TableCell className="text-center">{formatNum(m.ventasCount)}</TableCell>
-                        <TableCell className="text-right">{formatSoles(m.ingresos)}</TableCell>
-                        <TableCell className="text-right">{formatPct(pct)}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+            <div className="space-y-3">
+              {data.porMetodoPago.map((m) => {
+                const pct = m.porcentaje ?? (totalIngresos > 0 ? (m.ingresos / totalIngresos) * 100 : 0);
+                return (
+                  <div key={m.metodoPago} className="flex items-center gap-3">
+                    <span className="text-sm font-medium w-28 shrink-0">{m.metodoPago}</span>
+                    <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-sm text-muted-foreground w-12 text-right shrink-0">{pct.toFixed(0)}%</span>
+                    <span className="text-sm font-medium w-28 text-right shrink-0">{formatSoles(m.ingresos)}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Top / Menos productos */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <CardTitle className="text-base">Productos por desempeño</CardTitle>
-              <CardDescription>Top 10 más y menos vendidos</CardDescription>
-            </div>
-            <div className="flex gap-1">
-              {(['UNIDADES', 'INGRESOS'] as MetricaProductos[]).map((m) => (
-                <Button key={m} size="sm" variant={metrica === m ? 'default' : 'outline'} onClick={() => setMetrica(m)}>
-                  {m === 'UNIDADES' ? 'Unidades' : 'Ingresos'}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top MAS */}
-            <div>
-              <p className="text-sm font-medium mb-2 flex items-center gap-1">
-                <TrendingUp className="h-4 w-4 text-green-600" /> Más vendidos
-              </p>
-              {data.topProductos.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin datos.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>#</TableHead>
-                      <TableHead>Producto</TableHead>
-                      <TableHead className="text-right">{metrica === 'UNIDADES' ? 'Unidades' : 'Ingresos'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.topProductos.map((p, i) => (
-                      <TableRow key={p.productoId}>
-                        <TableCell className="text-muted-foreground text-sm">{i + 1}</TableCell>
-                        <TableCell className="font-medium">{p.nombre}</TableCell>
-                        <TableCell className="text-right">
-                          {metrica === 'UNIDADES' ? formatNum(p.cantidadVendida) : formatSoles(p.ingresos)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-
-            {/* Top MENOS */}
-            <div>
-              <p className="text-sm font-medium mb-2 flex items-center gap-1">
-                <TrendingDown className="h-4 w-4 text-red-600" /> Menos vendidos
-              </p>
-              {data.menosProductos.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin datos.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>#</TableHead>
-                      <TableHead>Producto</TableHead>
-                      <TableHead className="text-right">{metrica === 'UNIDADES' ? 'Unidades' : 'Ingresos'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.menosProductos.map((p, i) => (
-                      <TableRow key={p.productoId}>
-                        <TableCell className="text-muted-foreground text-sm">{i + 1}</TableCell>
-                        <TableCell className="font-medium">{p.nombre}</TableCell>
-                        <TableCell className="text-right">
-                          {metrica === 'UNIDADES' ? formatNum(p.cantidadVendida) : formatSoles(p.ingresos)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Menos vendidos */}
+      {data.menosProductos.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-red-500" />
+              Productos con menor desempeño
+            </CardTitle>
+            <CardDescription>Considera revisar su rotación o precio</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Producto</TableHead>
+                  <TableHead className="text-right">{metrica === 'UNIDADES' ? 'Unidades' : 'Ingresos'}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.menosProductos.slice(0, 8).map((p) => (
+                  <TableRow key={p.productoId}>
+                    <TableCell className="font-medium">{p.nombre}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {metrica === 'UNIDADES' ? formatNum(p.cantidadVendida) : formatSoles(p.ingresos)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -593,34 +627,68 @@ interface InventarioData {
   cobertura: InventarioCoberturaDTO[];
 }
 
-interface InventarioTabProps {
-  loading: boolean;
-  error: string | null;
-  data: InventarioData | null;
-  onRetry: () => void;
+function abcVariant(c: string): 'success' | 'warning' | 'destructive' | 'default' {
+  if (c === 'A') return 'success';
+  if (c === 'B') return 'warning';
+  return 'destructive';
 }
 
-function abcVariant(clasificacion: string): 'success' | 'warning' | 'destructive' | 'default' {
-  if (clasificacion === 'A') return 'success';
-  if (clasificacion === 'B') return 'warning';
-  if (clasificacion === 'C') return 'destructive';
-  return 'default';
+function coberturaColor(dias: number | null | undefined): string {
+  if (dias == null) return 'bg-muted';
+  if (dias <= 7)  return 'bg-red-500';
+  if (dias <= 15) return 'bg-yellow-500';
+  return 'bg-green-500';
 }
 
-function InventarioTab({ loading, error, data, onRetry }: InventarioTabProps) {
+function coberturaTextColor(dias: number | null | undefined): string {
+  if (dias == null) return 'text-muted-foreground';
+  if (dias <= 7)  return 'text-red-600 font-semibold';
+  if (dias <= 15) return 'text-yellow-600 font-semibold';
+  return 'text-green-600';
+}
+
+function InventarioTab({ loading, error, data, onRetry }: {
+  loading: boolean; error: string | null; data: InventarioData | null; onRetry: () => void;
+}) {
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
   if (!data) return <TabEmpty />;
 
+  // Datos para gráfico ABC (barras apiladas por clase)
+  const abcGroups = data.abc.reduce<Record<string, { clase: string; totalIngresos: number; count: number }>>(
+    (acc, p) => {
+      const k = p.clasificacion;
+      if (!acc[k]) acc[k] = { clase: k, totalIngresos: 0, count: 0 };
+      acc[k].totalIngresos += p.ingresos ?? 0;
+      acc[k].count++;
+      return acc;
+    }, {}
+  );
+  const abcChart = Object.values(abcGroups).sort((a, b) => a.clase.localeCompare(b.clase));
+
+  const maxCobertura = Math.max(...data.cobertura.map((c) => c.diasCobertura ?? 0), 1);
+
   return (
     <div className="space-y-6">
-      {/* ABC */}
+      {/* ABC — gráfico de barras + tabla */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Análisis ABC</CardTitle>
-          <CardDescription>Clasificación de productos por participación en ingresos</CardDescription>
+          <CardDescription>Clase A = 80% de ingresos · B = 15% · C = 5%</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {abcChart.length > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              {abcChart.map((g) => (
+                <div key={g.clase} className="rounded-lg border p-3 text-center space-y-1">
+                  <Badge variant={abcVariant(g.clase)} className="text-base px-3 py-0.5">Clase {g.clase}</Badge>
+                  <p className="text-2xl font-bold">{g.count}</p>
+                  <p className="text-xs text-muted-foreground">productos</p>
+                  <p className="text-sm font-medium text-green-600">{formatSoles(g.totalIngresos)}</p>
+                </div>
+              ))}
+            </div>
+          )}
           {data.abc.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Sin datos.</p>
           ) : (
@@ -638,9 +706,7 @@ function InventarioTab({ loading, error, data, onRetry }: InventarioTabProps) {
                   {data.abc.map((p) => (
                     <TableRow key={p.productoId}>
                       <TableCell className="font-medium">{p.nombre}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={abcVariant(p.clasificacion)}>{p.clasificacion}</Badge>
-                      </TableCell>
+                      <TableCell className="text-center"><Badge variant={abcVariant(p.clasificacion)}>{p.clasificacion}</Badge></TableCell>
                       <TableCell className="text-right">{formatSoles(p.ingresos)}</TableCell>
                       <TableCell className="text-right">{formatPct(p.porcentajeAcumulado)}</TableCell>
                     </TableRow>
@@ -652,15 +718,53 @@ function InventarioTab({ loading, error, data, onRetry }: InventarioTabProps) {
         </CardContent>
       </Card>
 
+      {/* Cobertura de stock */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Cobertura de stock</CardTitle>
+          <CardDescription>Días estimados hasta agotamiento · Rojo &lt;7d · Amarillo &lt;15d</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {data.cobertura.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Sin datos.</p>
+          ) : (
+            <div className="space-y-3">
+              {data.cobertura.slice(0, 15).map((p) => (
+                <div key={p.productoId} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm truncate">{p.nombre}</span>
+                      <span className={`text-sm ml-2 shrink-0 ${coberturaTextColor(p.diasCobertura)}`}>
+                        {p.diasCobertura != null ? `${formatNum(p.diasCobertura)} días` : '—'}
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${coberturaColor(p.diasCobertura)}`}
+                        style={{ width: `${Math.min(((p.diasCobertura ?? 0) / maxCobertura) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground w-12 text-right shrink-0">Stock: {p.stockActual}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Slow movers */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Productos sin movimiento</CardTitle>
-          <CardDescription>Productos con pocas o nulas salidas recientes</CardDescription>
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+            Productos sin movimiento
+          </CardTitle>
+          <CardDescription>Capital inmovilizado — considera promociones o descuentos</CardDescription>
         </CardHeader>
         <CardContent>
           {data.slowMovers.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Sin datos.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">Sin productos estancados.</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -668,7 +772,7 @@ function InventarioTab({ loading, error, data, onRetry }: InventarioTabProps) {
                   <TableRow>
                     <TableHead>Producto</TableHead>
                     <TableHead className="text-center">Stock</TableHead>
-                    <TableHead className="text-right">Costo total</TableHead>
+                    <TableHead className="text-right">Capital inmovilizado</TableHead>
                     <TableHead className="text-right">Días sin salida</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -677,47 +781,11 @@ function InventarioTab({ loading, error, data, onRetry }: InventarioTabProps) {
                     <TableRow key={p.productoId}>
                       <TableCell className="font-medium">{p.nombre}</TableCell>
                       <TableCell className="text-center">{formatNum(p.stockActual)}</TableCell>
-                      <TableCell className="text-right">{formatSoles(p.costoTotal)}</TableCell>
-                      <TableCell className="text-right">{formatNum(p.diasSinSalida)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Cobertura */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Cobertura de stock</CardTitle>
-          <CardDescription>Días estimados de stock disponible según demanda reciente</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {data.cobertura.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Sin datos.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Producto</TableHead>
-                    <TableHead className="text-center">Stock</TableHead>
-                    <TableHead className="text-right">Salidas/día (prom.)</TableHead>
-                    <TableHead className="text-right">Días cobertura</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.cobertura.map((p) => (
-                    <TableRow key={p.productoId}>
-                      <TableCell className="font-medium">{p.nombre}</TableCell>
-                      <TableCell className="text-center">{formatNum(p.stockActual)}</TableCell>
+                      <TableCell className="text-right text-yellow-600 font-medium">{formatSoles(p.costoTotal)}</TableCell>
                       <TableCell className="text-right">
-                        {p.promedioSalidasDia != null ? p.promedioSalidasDia.toFixed(2) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {p.diasCobertura != null ? formatNum(p.diasCobertura) : '—'}
+                        <Badge variant={p.diasSinSalida != null && p.diasSinSalida > 60 ? 'destructive' : 'warning'}>
+                          {formatNum(p.diasSinSalida)}d
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -733,27 +801,56 @@ function InventarioTab({ loading, error, data, onRetry }: InventarioTabProps) {
 
 // ─── Compras tab ──────────────────────────────────────────────────────────────
 
-interface ComprasTabProps {
-  loading: boolean;
-  error: string | null;
-  data: ComprasPorProveedorDTO[] | null;
-  onRetry: () => void;
-}
-
-function ComprasTab({ loading, error, data, onRetry }: ComprasTabProps) {
+function ComprasTab({ loading, error, data, onRetry }: {
+  loading: boolean; error: string | null; data: ComprasPorProveedorDTO[] | null; onRetry: () => void;
+}) {
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
   if (!data) return <TabEmpty />;
 
+  const chartData = data.slice(0, 8).map((p) => ({
+    nombre: shortLabel(p.proveedorNombre, 16),
+    monto: p.montoEstimado ?? 0,
+    unidades: p.unidades ?? 0,
+  }));
+
+  const totalMonto = data.reduce((s, p) => s + (p.montoEstimado ?? 0), 0);
+  const totalUnidades = data.reduce((s, p) => s + (p.unidades ?? 0), 0);
+
   return (
     <div className="space-y-6">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <StatCard icon={<Truck className="h-5 w-5" />} title="Proveedores activos" value={formatNum(data.length)} />
+        <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto total compras" value={formatSoles(totalMonto)} colorClass="text-blue-600" />
+        <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(totalUnidades)} />
+      </div>
+
+      {/* Gráfico */}
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Compras por proveedor</CardTitle>
+            <CardDescription>Monto estimado en recepciones confirmadas</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="currentColor" strokeOpacity={0.1} />
+                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `S/${(v / 1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="nombre" tick={{ fontSize: 11 }} width={100} />
+                <Tooltip content={<ChartTooltip isSoles />} />
+                <Bar dataKey="monto" name="Monto" fill={COLOR_WARNING} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tabla detalle */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Truck className="h-5 w-5 text-muted-foreground" />
-            Compras por proveedor
-          </CardTitle>
-          <CardDescription>Recepciones confirmadas en el período</CardDescription>
+          <CardTitle className="text-base">Detalle por proveedor</CardTitle>
         </CardHeader>
         <CardContent>
           {data.length === 0 ? (
@@ -766,18 +863,30 @@ function ComprasTab({ loading, error, data, onRetry }: ComprasTabProps) {
                     <TableHead>Proveedor</TableHead>
                     <TableHead className="text-center">Recepciones</TableHead>
                     <TableHead className="text-center">Unidades</TableHead>
-                    <TableHead className="text-right">Monto estimado</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right">% del total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.map((p) => (
-                    <TableRow key={p.proveedorId}>
-                      <TableCell className="font-medium">{p.proveedorNombre}</TableCell>
-                      <TableCell className="text-center">{formatNum(p.recepciones)}</TableCell>
-                      <TableCell className="text-center">{formatNum(p.unidades)}</TableCell>
-                      <TableCell className="text-right">{formatSoles(p.montoEstimado)}</TableCell>
-                    </TableRow>
-                  ))}
+                  {data.map((p) => {
+                    const pct = totalMonto > 0 ? ((p.montoEstimado ?? 0) / totalMonto) * 100 : 0;
+                    return (
+                      <TableRow key={p.proveedorId}>
+                        <TableCell className="font-medium">{p.proveedorNombre}</TableCell>
+                        <TableCell className="text-center">{formatNum(p.recepciones)}</TableCell>
+                        <TableCell className="text-center">{formatNum(p.unidades)}</TableCell>
+                        <TableCell className="text-right">{formatSoles(p.montoEstimado)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground w-8">{pct.toFixed(0)}%</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -788,17 +897,25 @@ function ComprasTab({ loading, error, data, onRetry }: ComprasTabProps) {
   );
 }
 
+// ─── Quick range buttons ──────────────────────────────────────────────────────
+
+const QUICK_RANGES = [
+  { label: '7d',    desde: () => daysAgo(7),   hasta: () => toDateString(new Date()) },
+  { label: '30d',   desde: () => daysAgo(30),  hasta: () => toDateString(new Date()) },
+  { label: '90d',   desde: () => daysAgo(90),  hasta: () => toDateString(new Date()) },
+  { label: 'Este año', desde: startOfYear,     hasta: () => toDateString(new Date()) },
+];
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function ReportesPage() {
   const { canView } = usePermissions();
   const hasAccess = canView('REPORTES');
 
-  const [desde, setDesde] = useState<string>(defaultDesde());
-  const [hasta, setHasta] = useState<string>(defaultHasta());
+  const [desde, setDesde] = useState<string>(daysAgo(30));
+  const [hasta, setHasta] = useState<string>(toDateString(new Date()));
   const [activeTab, setActiveTab] = useState<TabId>('resumen');
 
-  // ── Per-tab state ──────────────────────────────────────────────────────────
   const [resumenLoading, setResumenLoading] = useState(false);
   const [resumenError, setResumenError] = useState<string | null>(null);
   const [resumenData, setResumenData] = useState<ReportesResumenDTO | null>(null);
@@ -817,132 +934,99 @@ export function ReportesPage() {
   const [comprasError, setComprasError] = useState<string | null>(null);
   const [comprasData, setComprasData] = useState<ComprasPorProveedorDTO[] | null>(null);
 
-  // ── Fetch helpers ──────────────────────────────────────────────────────────
-
-  const fetchResumen = async () => {
-    try {
-      setResumenLoading(true);
-      setResumenError(null);
-      const data = await reportesService.getResumen(desde, hasta);
-      setResumenData(data);
-    } catch {
-      const msg = 'Error al cargar el resumen.';
-      setResumenError(msg);
-      toast.error(msg);
-    } finally {
-      setResumenLoading(false);
-    }
+  const fetchResumen = async (d = desde, h = hasta) => {
+    try { setResumenLoading(true); setResumenError(null);
+      setResumenData(await reportesService.getResumen(d, h));
+    } catch { setResumenError('Error al cargar el resumen.'); toast.error('Error al cargar el resumen.');
+    } finally { setResumenLoading(false); }
   };
 
-  const fetchVentas = async (ag: AgrupacionTendencia = agrupacion, met: MetricaProductos = metrica) => {
-    try {
-      setVentasLoading(true);
-      setVentasError(null);
+  const fetchVentas = async (d = desde, h = hasta, ag = agrupacion, met = metrica) => {
+    try { setVentasLoading(true); setVentasError(null);
       const [tendencia, porVendedor, porCategoria, porMetodoPago, topProductos, menosProductos] = await Promise.all([
-        reportesService.getVentasTendencia(desde, hasta, ag),
-        reportesService.getVentasPorVendedor(desde, hasta),
-        reportesService.getVentasPorCategoria(desde, hasta),
-        reportesService.getVentasPorMetodoPago(desde, hasta),
-        reportesService.getVentasProductos(desde, hasta, 10, 'MAS', met),
-        reportesService.getVentasProductos(desde, hasta, 10, 'MENOS', met),
+        reportesService.getVentasTendencia(d, h, ag),
+        reportesService.getVentasPorVendedor(d, h),
+        reportesService.getVentasPorCategoria(d, h),
+        reportesService.getVentasPorMetodoPago(d, h),
+        reportesService.getVentasProductos(d, h, 10, 'MAS', met),
+        reportesService.getVentasProductos(d, h, 10, 'MENOS', met),
       ]);
       setVentasData({ tendencia, porVendedor, porCategoria, porMetodoPago, topProductos, menosProductos });
-    } catch {
-      const msg = 'Error al cargar datos de ventas.';
-      setVentasError(msg);
-      toast.error(msg);
-    } finally {
-      setVentasLoading(false);
-    }
+    } catch { setVentasError('Error al cargar datos de ventas.'); toast.error('Error al cargar datos de ventas.');
+    } finally { setVentasLoading(false); }
   };
 
   const fetchInventario = async () => {
-    try {
-      setInventarioLoading(true);
-      setInventarioError(null);
+    try { setInventarioLoading(true); setInventarioError(null);
       const [abc, slowMovers, cobertura] = await Promise.all([
         reportesService.getInventarioABC(desde, hasta),
         reportesService.getInventarioSlowMovers(30),
         reportesService.getInventarioCobertura(desde, hasta),
       ]);
       setInventarioData({ abc, slowMovers, cobertura });
-    } catch {
-      const msg = 'Error al cargar datos de inventario.';
-      setInventarioError(msg);
-      toast.error(msg);
-    } finally {
-      setInventarioLoading(false);
-    }
+    } catch { setInventarioError('Error al cargar datos de inventario.'); toast.error('Error al cargar datos de inventario.');
+    } finally { setInventarioLoading(false); }
   };
 
   const fetchCompras = async () => {
-    try {
-      setComprasLoading(true);
-      setComprasError(null);
-      const data = await reportesService.getComprasPorProveedor(desde, hasta);
-      setComprasData(data);
-    } catch {
-      const msg = 'Error al cargar datos de compras.';
-      setComprasError(msg);
-      toast.error(msg);
-    } finally {
-      setComprasLoading(false);
-    }
+    try { setComprasLoading(true); setComprasError(null);
+      setComprasData(await reportesService.getComprasPorProveedor(desde, hasta));
+    } catch { setComprasError('Error al cargar datos de compras.'); toast.error('Error al cargar datos de compras.');
+    } finally { setComprasLoading(false); }
   };
 
-  // ── Actualizar: fetch all tabs in parallel ─────────────────────────────────
-
-  const handleActualizar = () => {
-    if (!desde || !hasta) {
-      toast.error('Selecciona un rango de fechas');
-      return;
-    }
-    if (desde > hasta) {
-      toast.error('La fecha "Desde" no puede ser mayor a "Hasta"');
-      return;
-    }
-    fetchResumen();
-    fetchVentas(agrupacion, metrica);
+  const handleActualizar = (d = desde, h = hasta) => {
+    if (!d || !h) { toast.error('Selecciona un rango de fechas'); return; }
+    if (d > h) { toast.error('La fecha "Desde" no puede ser mayor a "Hasta"'); return; }
+    fetchResumen(d, h);
+    fetchVentas(d, h, agrupacion, metrica);
     fetchInventario();
     fetchCompras();
   };
 
-  const isAnyLoading = resumenLoading || ventasLoading || inventarioLoading || comprasLoading;
-
-  // ── Agrupacion/metrica changes re-fetch ventas ─────────────────────────────
+  const handleQuickRange = (rango: typeof QUICK_RANGES[0]) => {
+    const d = rango.desde();
+    const h = rango.hasta();
+    setDesde(d);
+    setHasta(h);
+    handleActualizar(d, h);
+  };
 
   const handleAgrupacion = (ag: AgrupacionTendencia) => {
     setAgrupacion(ag);
-    if (ventasData) fetchVentas(ag, metrica);
+    if (ventasData) fetchVentas(desde, hasta, ag, metrica);
   };
 
   const handleMetrica = (met: MetricaProductos) => {
     setMetrica(met);
-    if (ventasData) fetchVentas(agrupacion, met);
+    if (ventasData) fetchVentas(desde, hasta, agrupacion, met);
   };
 
-  // ── No access ──────────────────────────────────────────────────────────────
+  const isAnyLoading = resumenLoading || ventasLoading || inventarioLoading || comprasLoading;
+
   if (!hasAccess) {
-    return (
-      <EmptyState
-        icon={Lock}
-        title="Sin acceso"
-        description="No tienes permisos para ver el módulo de Reportes."
-      />
-    );
+    return <EmptyState icon={Lock} title="Sin acceso" description="No tienes permisos para ver el módulo de Reportes." />;
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Reportes</h1>
-        <p className="text-muted-foreground">Dashboard operativo del negocio por período</p>
+        <p className="text-muted-foreground">Indicadores clave para la toma de decisiones</p>
       </div>
 
-      {/* Filters */}
+      {/* Filtros */}
       <Card>
-        <CardContent className="pt-5">
+        <CardContent className="pt-5 space-y-3">
+          {/* Atajos rápidos */}
+          <div className="flex flex-wrap gap-2">
+            {QUICK_RANGES.map((r) => (
+              <Button key={r.label} size="sm" variant="outline" onClick={() => handleQuickRange(r)}>
+                {r.label}
+              </Button>
+            ))}
+          </div>
+          {/* Rango personalizado */}
           <div className="flex flex-col sm:flex-row items-end gap-3">
             <div className="flex flex-col gap-1 w-full sm:w-auto">
               <label className="text-sm font-medium" htmlFor="rpt-desde">Desde</label>
@@ -952,7 +1036,7 @@ export function ReportesPage() {
               <label className="text-sm font-medium" htmlFor="rpt-hasta">Hasta</label>
               <Input id="rpt-hasta" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-full sm:w-40" />
             </div>
-            <Button onClick={handleActualizar} disabled={isAnyLoading} className="w-full sm:w-auto">
+            <Button onClick={() => handleActualizar()} disabled={isAnyLoading} className="w-full sm:w-auto">
               <RefreshCw className={`h-4 w-4 mr-2 ${isAnyLoading ? 'animate-spin' : ''}`} />
               Actualizar
             </Button>
@@ -960,23 +1044,17 @@ export function ReportesPage() {
         </CardContent>
       </Card>
 
-      {/* Tabs */}
       <TabBar active={activeTab} onChange={setActiveTab} />
 
-      {/* Tab content */}
       <div>
         {activeTab === 'resumen' && (
           <ResumenTab loading={resumenLoading} error={resumenError} data={resumenData} onRetry={fetchResumen} />
         )}
         {activeTab === 'ventas' && (
           <VentasTab
-            loading={ventasLoading}
-            error={ventasError}
-            data={ventasData}
-            agrupacion={agrupacion}
-            setAgrupacion={handleAgrupacion}
-            metrica={metrica}
-            setMetrica={handleMetrica}
+            loading={ventasLoading} error={ventasError} data={ventasData}
+            agrupacion={agrupacion} setAgrupacion={handleAgrupacion}
+            metrica={metrica} setMetrica={handleMetrica}
             onRetry={() => fetchVentas()}
           />
         )}
@@ -990,4 +1068,3 @@ export function ReportesPage() {
     </div>
   );
 }
-
