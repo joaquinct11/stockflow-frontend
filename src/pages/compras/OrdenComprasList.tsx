@@ -186,7 +186,7 @@ export function OrdenComprasList() {
       total: ordenes.length,
       borrador: ordenes.filter((o) => o.estado === 'BORRADOR').length,
       enviada: ordenes.filter((o) => o.estado === 'ENVIADA').length,
-      parcial: ordenes.filter((o) => o.estado === 'PARCIAL').length,
+      parcial: ordenes.filter((o) => o.estado === 'RECIBIDA_PARCIAL').length,
       recibida: ordenes.filter((o) => o.estado === 'RECIBIDA').length,
       cancelada: ordenes.filter((o) => o.estado === 'CANCELADA').length,
       retrasadas: ordenes.filter((o) => o.estado === 'ENVIADA' && diasDesde(o.createdAt) > 30).length,
@@ -736,7 +736,7 @@ export function OrdenComprasList() {
                 </Button>
               )}
 
-              {(selectedOc.estado === 'ENVIADA' || selectedOc.estado === 'PARCIAL') && (
+              {(selectedOc.estado === 'ENVIADA' || selectedOc.estado === 'RECIBIDA_PARCIAL') && (
                 <Button onClick={handleRecepcionar} disabled={detailActionLoading}>
                   <PackagePlus size={16} className="mr-2" />
                   Recepcionar
