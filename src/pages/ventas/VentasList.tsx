@@ -8,6 +8,7 @@ import type {
   DetalleVentaDTO,
   EmitirComprobanteRequest,
   EmitirComprobanteForm,
+  ComprobanteDTO,
   // MetodoPago,
 } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -31,6 +32,7 @@ import {
   Calendar,
   FileText,
   TrendingUp,
+  Hash,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
@@ -65,6 +67,7 @@ export function VentasList() {
 
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
+  const [comprobantes, setComprobantes] = useState<ComprobanteDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
@@ -216,10 +219,17 @@ export function VentasList() {
       const productosPromise =
         hasViewPermission || canCreate('VENTAS') ? productoService.getAll() : Promise.resolve([] as ProductoDTO[]);
 
-      const [ventasData, productosData] = await Promise.all([ventasPromise, productosPromise]);
+      const comprobantesPromise = facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[]);
+
+      const [ventasData, productosData, comprobantesData] = await Promise.all([
+        ventasPromise,
+        productosPromise,
+        comprobantesPromise,
+      ]);
 
       setVentas(ventasData);
       setProductos(productosData);
+      setComprobantes(comprobantesData);
     } catch (error) {
       toast.error('Error al cargar datos');
       if (import.meta.env.DEV) console.error(error);
@@ -714,6 +724,7 @@ export function VentasList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>ID</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Vendedor</TableHead>
                       <TableHead>Método de Pago</TableHead>
@@ -726,6 +737,12 @@ export function VentasList() {
                   <TableBody>
                     {currentVentas.map((venta) => (
                       <TableRow key={venta.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Hash className="h-3 w-3" />
+                            <span className="font-semibold text-foreground">{venta.id}</span>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="text-sm">
                             {venta.createdAt ? new Date(venta.createdAt).toLocaleDateString('es-PE') : '-'}
@@ -845,70 +862,6 @@ export function VentasList() {
               <input type="hidden" value="COMPLETADA" />
             </div>
           </div>
-
-          {/* ✅ Sección de Efectivo */}
-          {formData.metodoPago === 'EFECTIVO' && formData.detalles.length > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3">
-              <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Pago en Efectivo
-              </h3>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Total a Pagar (incl. IGV)</label>
-                  <div className="h-10 rounded-md border-2 border-blue-300 dark:border-blue-700 bg-blue-100 dark:bg-blue-900 px-3 py-2 flex items-center justify-between font-bold text-blue-900 dark:text-blue-100">
-                    <span>S/.</span>
-                    <span>{calculateTotalWithIGV().toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Monto Recibido
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={montoRecibido || ''}
-                    onChange={(e) => setMontoRecibido(parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className="h-10 font-bold text-right"
-                    required={formData.metodoPago === 'EFECTIVO'}
-                  />
-                </div>
-              </div>
-
-              {montoRecibido > 0 && (
-                <div
-                  className={`rounded-lg p-3 border-2 ${
-                    vuelto >= 0
-                      ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800'
-                      : 'bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-sm">{vuelto >= 0 ? 'Vuelto:' : 'Falta:'}</span>
-                    <span
-                      className={`text-2xl font-bold ${
-                        vuelto >= 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
-                      }`}
-                    >
-                      S/.{Math.abs(vuelto).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {montoRecibido > 0 && vuelto < 0 && (
-                <div className="bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-lg p-2 text-sm text-red-800 dark:text-red-200">
-                  ⚠️ El monto recibido es insuficiente
-                </div>
-              )}
-            </div>
-          )}
 
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -1049,6 +1002,70 @@ export function VentasList() {
             </div>
           </div>
 
+          {/* Sección de Efectivo — debajo del resumen de totales */}
+          {formData.metodoPago === 'EFECTIVO' && formData.detalles.length > 0 && (
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3">
+              <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Pago en Efectivo
+              </h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Total a Pagar (incl. IGV)</label>
+                  <div className="h-10 rounded-md border-2 border-blue-300 dark:border-blue-700 bg-blue-100 dark:bg-blue-900 px-3 py-2 flex items-center justify-between font-bold text-blue-900 dark:text-blue-100">
+                    <span>S/.</span>
+                    <span>{calculateTotalWithIGV().toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Monto Recibido
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={montoRecibido || ''}
+                    onChange={(e) => setMontoRecibido(parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="h-10 font-bold text-right"
+                    required={formData.metodoPago === 'EFECTIVO'}
+                  />
+                </div>
+              </div>
+
+              {montoRecibido > 0 && (
+                <div
+                  className={`rounded-lg p-3 border-2 ${
+                    vuelto >= 0
+                      ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-sm">{vuelto >= 0 ? 'Vuelto:' : 'Falta:'}</span>
+                    <span
+                      className={`text-2xl font-bold ${
+                        vuelto >= 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                      }`}
+                    >
+                      S/.{Math.abs(vuelto).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {montoRecibido > 0 && vuelto < 0 && (
+                <div className="bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-lg p-2 text-sm text-red-800 dark:text-red-200">
+                  ⚠️ El monto recibido es insuficiente
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-2 justify-end pt-4 border-t">
             <Button type="button" variant="outline" onClick={resetForm}>
               Cancelar
@@ -1166,16 +1183,26 @@ export function VentasList() {
                   )}
                 </div>
 
-                {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (
-                  <Button
-                    variant="outline"
-                    className="w-full flex items-center gap-2"
-                    onClick={() => handleOpenEmitirComprobante(selectedVenta)}
-                  >
-                    <FileText size={16} />
-                    Emitir Comprobante
-                  </Button>
-                )}
+                {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (() => {
+                  const yaFacturada = comprobantes.some(
+                    (c) => c.ventaId === selectedVenta.id && c.estado === 'EMITIDO'
+                  );
+                  return yaFacturada ? (
+                    <div className="w-full flex items-center justify-center gap-2 rounded-md border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800 px-4 py-2 text-sm text-green-700 dark:text-green-300 font-medium">
+                      <FileText size={16} />
+                      Comprobante ya emitido
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center gap-2"
+                      onClick={() => handleOpenEmitirComprobante(selectedVenta)}
+                    >
+                      <FileText size={16} />
+                      Emitir Comprobante
+                    </Button>
+                  );
+                })()}
 
                 <Button onClick={closeDetailDialog} className="w-full">
                   Cerrar

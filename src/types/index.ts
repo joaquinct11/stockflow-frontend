@@ -54,7 +54,7 @@ export interface LoginDTO {
   contraseña: string;
 }
 
-export type PlanId = 'FREE' | 'BASICO' | 'PRO';
+export type PlanId = 'BASICO' | 'PRO';
 
 // ✅ NUEVO: Para registro de nueva farmacia
 export interface RegistrationRequestDTO {
@@ -138,21 +138,23 @@ export interface SuscripcionDTO {
   planId: string;
   precioMensual: number;
   preapprovalId?: string;
-  intentosFallidos?: number;  // ✅ AGREGADO
+  intentosFallidos?: number;
   estado: string;
   metodoPago?: string;
   ultimos4Digitos?: string;
-  tenantId?: string;  // ✅ AGREGADO
-  fechaInicio?: string;  // ✅ AGREGADO
-  fechaProximoCobro?: string;  // ✅ AGREGADO
-  fechaCancelacion?: string;  // ✅ AGREGADO
-  deletedAt?: string;  // ✅ AGREGADO
+  tenantId?: string;
+  fechaInicio?: string;
+  fechaProximoCobro?: string;
+  fechaCancelacion?: string;
+  deletedAt?: string;
+  trialEndDate?: string;
+  enPeriodoPrueba?: boolean;
 }
 
 export type TipoDocumento = 'DNI' | 'CE' | 'RUC' | 'PASAPORTE';
 
 export interface SuscripcionCheckoutRequestDTO {
-  planId: Exclude<PlanId, 'FREE'>;
+  planId: PlanId;
   tipoDocumento?: TipoDocumento;
   numeroDocumento?: string;
 }

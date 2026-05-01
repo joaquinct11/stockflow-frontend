@@ -10,7 +10,7 @@ import { useAuthStore } from '../../store/authStore';
 import { suscripcionService } from '../../services/suscripcion.service';
 import type { PlanId, TipoDocumento } from '../../types';
 
-type PaidPlanId = Exclude<PlanId, 'FREE'>;
+type PaidPlanId = PlanId;
 
 const PLAN_DETAILS: Record<PaidPlanId, { name: string; price: number; description: string }> = {
   BASICO: {
@@ -21,7 +21,7 @@ const PLAN_DETAILS: Record<PaidPlanId, { name: string; price: number; descriptio
   PRO: {
     name: 'Pro',
     price: 99.99,
-    description: 'Usuarios y productos ilimitados, con todas las funcionalidades.',
+    description: 'Hasta 10 usuarios, productos ilimitados, facturación electrónica y RBAC completo.',
   },
 };
 
