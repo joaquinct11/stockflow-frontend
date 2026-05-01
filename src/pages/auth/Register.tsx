@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
@@ -28,19 +28,24 @@ interface ApiErrorShape {
 export function Register() {
   const navigate = useNavigate();
   const { setUser } = useAuthStore();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const planFromUrl = searchParams.get('plan');
+  const initialPlan: PlanId = planFromUrl === 'PRO' ? 'PRO' : 'BASICO';
+
   const [formData, setFormData] = useState<RegistrationRequestDTO>({
     email: '',
     contraseña: '',
     nombre: '',
     nombreFarmacia: '',
-    planId: 'FREE',
+    planId: initialPlan,
   });
   const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento>('DNI');
   const [numeroDocumento, setNumeroDocumento] = useState('');
 
-  const requiresDocumento = formData.planId !== 'FREE';
+  const requiresDocumento = true;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,17 +81,13 @@ export function Register() {
     try {
       const response = await authService.register(formData);
       setUser(response);
-      toast.success(`¡Bienvenido a StockFlow! Plan ${response.suscripcion?.planId} activado`);
-      if (formData.planId === 'FREE') {
-        navigate('/dashboard');
-      } else {
-        // Guardar datos de documento en sessionStorage para el checkout
-        sessionStorage.setItem(
-          'mp_checkout_doc',
-          JSON.stringify({ tipoDocumento, numeroDocumento: numeroDocumento.trim() })
-        );
-        navigate(`/checkout?plan=${formData.planId}`);
-      }
+      toast.success(`¡Bienvenido! Tu prueba de 14 días del plan ${response.suscripcion?.planId} ha comenzado.`);
+      // Guardar datos de documento en sessionStorage para el checkout posterior
+      sessionStorage.setItem(
+        'mp_checkout_doc',
+        JSON.stringify({ tipoDocumento, numeroDocumento: numeroDocumento.trim() })
+      );
+      navigate('/dashboard');
     } catch (error: unknown) {
       const typedError = error as ApiErrorShape;
       const message = typedError.response?.data?.mensaje || typedError.message || 'Error en el registro';
@@ -107,7 +108,7 @@ export function Register() {
           </div>
           <CardTitle className="text-2xl font-bold">Registra tu Empresa</CardTitle>
           <CardDescription>
-            Crea tu cuenta y comienza a gestionar tu inventario
+            14 días de prueba gratis · Sin tarjeta de crédito · Cancela cuando quieras
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -204,19 +205,15 @@ export function Register() {
                 onChange={(e) => setFormData({ ...formData, planId: e.target.value as PlanId })}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <option value="FREE">Gratis - S/ 0.00/mes</option>
-                <option value="BASICO">Básico - S/ 49.99/mes</option>
-                <option value="PRO">Pro - S/ 99.99/mes</option>
+                <option value="BASICO">Básico — S/ 49.99/mes (14 días gratis)</option>
+                <option value="PRO">Pro — S/ 99.99/mes (14 días gratis)</option>
               </select>
               <div className="text-xs text-muted-foreground space-y-1">
-                {formData.planId === 'FREE' && (
-                  <p>✓ 1 usuario • 100 productos • Reportes básicos</p>
-                )}
                 {formData.planId === 'BASICO' && (
-                  <p>✓ 5 usuarios • 500 productos • Reportes avanzados</p>
+                  <p>✓ Hasta 5 usuarios · 500 productos · OC, Recepciones, Ventas</p>
                 )}
                 {formData.planId === 'PRO' && (
-                  <p>✓ Usuarios ilimitados • Productos ilimitados • Todas las funciones</p>
+                  <p>✓ Hasta 10 usuarios · Productos ilimitados · Facturación electrónica · Lotes y vencimientos · RBAC completo</p>
                 )}
               </div>
             </div>
@@ -263,7 +260,7 @@ export function Register() {
             )}
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creando tu cuenta...' : formData.planId === 'FREE' ? 'Comenzar gratis' : 'Crear cuenta y pagar'}
+              {loading ? 'Creando tu cuenta...' : 'Crear cuenta · 14 días gratis'}
             </Button>
           </form>
 

@@ -38,13 +38,13 @@ import { usePermissions } from '../../hooks/usePermissions';
 const ESTADO_BADGE: Record<string, string> = {
   BORRADOR: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
   ENVIADA: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
-  PARCIAL: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100',
-  COMPLETADA: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
+  RECIBIDA_PARCIAL: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100',
+  RECIBIDA: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
   CANCELADA: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
 };
 
 type Option = { id: number | string; label: string; subtitle?: string };
-type EstadoOCFilter = 'TODOS' | 'BORRADOR' | 'ENVIADA' | 'RECIBIDA' | 'COMPLETADA' | 'CANCELADA';
+type EstadoOCFilter = 'TODOS' | 'BORRADOR' | 'ENVIADA' | 'RECIBIDA_PARCIAL' | 'RECIBIDA' | 'CANCELADA';
 
 export function OrdenComprasList() {
   const navigate = useNavigate();
@@ -489,6 +489,7 @@ export function OrdenComprasList() {
                     { key: 'TODOS', label: 'Todos' },
                     { key: 'BORRADOR', label: 'Borrador' },
                     { key: 'ENVIADA', label: 'Enviada' },
+                    { key: 'RECIBIDA_PARCIAL', label: 'Parcial' },
                     { key: 'RECIBIDA', label: 'Recibida' },
                     { key: 'CANCELADA', label: 'Cancelada' },
                   ] as Array<{ key: EstadoOCFilter; label: string }>

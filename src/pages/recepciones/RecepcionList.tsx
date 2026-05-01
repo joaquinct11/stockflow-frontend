@@ -205,11 +205,13 @@ export function RecepcionList() {
 
   const ocOptions: Option[] = useMemo(
     () =>
-      ocs.map((oc) => ({
-        id: oc.id!,
-        label: `OC #${oc.id} — ${oc.proveedorNombre ?? `Proveedor #${oc.proveedorId}`}`,
-        subtitle: `Estado: ${oc.estado}`,
-      })),
+      ocs
+        .filter((oc) => oc.estado === 'ENVIADA' || oc.estado === 'RECIBIDA_PARCIAL')
+        .map((oc) => ({
+          id: oc.id!,
+          label: `OC #${oc.id} — ${oc.proveedorNombre ?? `Proveedor #${oc.proveedorId}`}`,
+          subtitle: `Estado: ${oc.estado}`,
+        })),
     [ocs]
   );
 
@@ -302,11 +304,9 @@ export function RecepcionList() {
     setCreating(true);
     try {
       const createdRaw = await recepcionService.create({
-        ordenCompraId: selectedOc?.id,
-        proveedorId,
-        estado: 'BORRADOR',
+        ocId: selectedOc?.id,
+        proveedorId: selectedOc ? undefined : proveedorId,
         observaciones: createObs || undefined,
-        items: [],
       } as any);
 
       toast.success('Recepción creada');

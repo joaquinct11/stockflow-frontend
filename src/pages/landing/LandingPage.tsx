@@ -15,27 +15,24 @@ export function LandingPage() {
 
   return (
     <div className="landing-page">
+
       {/* ===== HEADER ===== */}
       <header className="landing-header">
         <nav className="landing-nav">
           <a href="/" className="landing-logo" aria-label="Fluxus - Inicio">
-            <img
-              src="/fluxus.png"
-              alt="Fluxus logo"
-              className="landing-logo-icon"
-            />
+            <img src="/fluxus.png" alt="Fluxus logo" className="landing-logo-icon" />
             <span className="landing-logo-text">Fluxus</span>
           </a>
 
           <ul className="landing-nav-links">
             <li><a href="#features">Módulos</a></li>
+            <li><a href="#para-quien">¿Para quién?</a></li>
             <li><a href="#pricing">Precios</a></li>
-            <li><a href="#demo">Demo</a></li>
           </ul>
 
           <div className="landing-nav-actions">
             <Link to="/login" className="btn-ghost">Iniciar Sesión</Link>
-            <Link to="/register" className="btn-primary"><span>Empezar Gratis</span></Link>
+            <Link to="/register?plan=BASICO" className="btn-primary"><span>Probar 14 días</span></Link>
           </div>
         </nav>
       </header>
@@ -44,38 +41,40 @@ export function LandingPage() {
       <section className="landing-hero">
         <div className="landing-hero-grid" aria-hidden="true" />
         <div className="landing-hero-content">
+
           {/* Left: Copy */}
           <div className="landing-hero-text">
             <div className="landing-hero-badge">
               <span className="landing-hero-badge-dot" />
-              Mini‑ERP en la nube para tu negocio
+              Mini‑ERP para negocios peruanos
             </div>
 
             <h1 className="landing-hero-title">
-              Gestiona{' '}
-              <span className="landing-hero-title-highlight">compras, ventas e inventario</span>
-              {' '}en un solo sistema
+              Controla tus{' '}
+              <span className="landing-hero-title-highlight">compras, stock y ventas</span>
+              {' '}desde un solo lugar
             </h1>
 
             <p className="landing-hero-subtitle">
-              Fluxus centraliza tu operación: órdenes de compra, recepciones, stock en tiempo real,
-              ventas y reportes. Menos Excel, más control.
+              Órdenes de compra, recepciones, inventario en tiempo real, ventas con IGV
+              y facturación electrónica. Todo conectado, sin complicaciones.
             </p>
 
             <div className="landing-hero-actions">
-              <Link to="/register" className="btn-hero-primary">
-                Empezar gratis
+              <Link to="/register?plan=BASICO" className="btn-hero-primary">
+                Probar 14 días gratis
               </Link>
-              <a href="#demo" className="btn-hero-secondary">
-                ▶ Ver demo
+              <a href="#features" className="btn-hero-secondary">
+                Ver módulos
               </a>
             </div>
 
             <div className="landing-hero-trust">
-              <span className="landing-hero-trust-text">Sin tarjeta de crédito ·</span>
+              <span className="landing-hero-trust-text">Sin permanencia ·</span>
               <div className="landing-hero-trust-badges">
                 <span className="landing-trust-badge">Soporte en español</span>
                 <span className="landing-trust-badge">Multi‑usuario</span>
+                <span className="landing-trust-badge">Datos seguros</span>
               </div>
             </div>
           </div>
@@ -137,89 +136,153 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* ===== FLUJO ===== */}
+      <section className="landing-section landing-flow">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <span className="landing-section-label">Cómo funciona</span>
+            <h2 className="landing-section-title">Del pedido al cliente, todo conectado</h2>
+            <p className="landing-section-subtitle">
+              Un flujo unificado que elimina el trabajo doble y los errores en Excel.
+            </p>
+          </div>
+
+          <div className="landing-flow-steps">
+            <div className="landing-flow-step">
+              <div className="landing-flow-number">1</div>
+              <div className="landing-flow-content">
+                <h4>Orden de compra</h4>
+                <p>Genera OCs a tus proveedores con cantidad y precio pactado.</p>
+              </div>
+            </div>
+            <div className="landing-flow-arrow">→</div>
+            <div className="landing-flow-step">
+              <div className="landing-flow-number">2</div>
+              <div className="landing-flow-content">
+                <h4>Recepción</h4>
+                <p>Registra lo recibido, lote y vencimiento. El stock se actualiza solo.</p>
+              </div>
+            </div>
+            <div className="landing-flow-arrow">→</div>
+            <div className="landing-flow-step">
+              <div className="landing-flow-number">3</div>
+              <div className="landing-flow-content">
+                <h4>Venta</h4>
+                <p>Registra la venta, descuenta stock y calcula IGV automáticamente.</p>
+              </div>
+            </div>
+            <div className="landing-flow-arrow">→</div>
+            <div className="landing-flow-step">
+              <div className="landing-flow-number">4</div>
+              <div className="landing-flow-content">
+                <h4>Comprobante</h4>
+                <p>Emite boleta o factura electrónica directamente desde la venta.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ===== FEATURES / MODULES ===== */}
       <section className="landing-section landing-features" id="features">
         <div className="landing-container">
           <div className="landing-section-header">
             <span className="landing-section-label">Módulos</span>
             <h2 className="landing-section-title">
-              Un sistema modular que crece contigo
+              Todo lo que necesita tu negocio, en un solo sistema
             </h2>
             <p className="landing-section-subtitle">
-              Empieza con lo esencial y agrega módulos cuando tu operación lo necesite.
+              Módulos integrados que trabajan juntos. Sin apps separadas, sin doble ingreso.
             </p>
           </div>
 
           <div className="landing-features-grid">
             <div className="landing-feature-card">
               <div className="landing-feature-icon">📦</div>
-              <h3 className="landing-feature-title">Inventario + Kardex</h3>
+              <h3 className="landing-feature-title">Inventario en tiempo real</h3>
               <p className="landing-feature-desc">
-                Movimientos en tiempo real, stock mínimo/máximo, trazabilidad y control por producto.
+                Stock actualizado automáticamente con cada compra y venta. Alertas de mínimo,
+                kardex completo y control por lote y fecha de vencimiento.
               </p>
             </div>
 
             <div className="landing-feature-card">
-              <div className="landing-feature-icon">🧾</div>
+              <div className="landing-feature-icon">🛍️</div>
               <h3 className="landing-feature-title">Compras y recepciones</h3>
               <p className="landing-feature-desc">
-                Órdenes de compra, recepción de mercadería, validación de pendientes y control de costos.
+                Órdenes de compra con estados (borrador → enviada → recibida), recepciones
+                parciales y propagación automática del costo al inventario.
               </p>
             </div>
 
             <div className="landing-feature-card">
               <div className="landing-feature-icon">🛒</div>
-              <h3 className="landing-feature-title">Ventas</h3>
+              <h3 className="landing-feature-title">Ventas con IGV</h3>
               <p className="landing-feature-desc">
-                Registra ventas y actualiza el stock automáticamente. Historial y métricas por periodo.
+                Registra ventas en efectivo, tarjeta o transferencia. Calcula subtotal,
+                IGV 18% y vuelto. Historial completo por vendedor y período.
+              </p>
+            </div>
+
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon">🧾</div>
+              <h3 className="landing-feature-title">Facturación electrónica</h3>
+              <p className="landing-feature-desc">
+                Emite boletas y facturas electrónicas directamente desde cada venta.
+                Registro de RUC, razón social y control de comprobantes emitidos.
               </p>
             </div>
 
             <div className="landing-feature-card">
               <div className="landing-feature-icon">👥</div>
-              <h3 className="landing-feature-title">Usuarios, roles y permisos</h3>
+              <h3 className="landing-feature-title">Roles y permisos</h3>
               <p className="landing-feature-desc">
-                Controla qué puede hacer cada usuario por módulo: admin, compras, ventas, inventario, etc.
+                Define qué puede hacer cada usuario: admin, gerente, vendedor, gestor de
+                inventario. Permisos granulares por módulo y acción.
               </p>
             </div>
 
             <div className="landing-feature-card">
               <div className="landing-feature-icon">📊</div>
-              <h3 className="landing-feature-title">Reportes</h3>
+              <h3 className="landing-feature-title">Reportes y métricas</h3>
               <p className="landing-feature-desc">
-                Indicadores clave para decidir mejor: rotación, valorización, márgenes y tendencias.
-              </p>
-            </div>
-
-            <div className="landing-feature-card">
-              <div className="landing-feature-icon">🔁</div>
-              <h3 className="landing-feature-title">Suscripciones (SaaS)</h3>
-              <p className="landing-feature-desc">
-                Planes, límites por cuenta y crecimiento por etapas (ideal para multi‑tenant).
+                Ingresos por período, ticket promedio, productos más vendidos, rotación
+                de inventario y alertas de vencimiento próximo.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ===== DEMO ===== */}
-      <section className="landing-section" id="demo">
+      {/* ===== PARA QUIÉN ===== */}
+      <section className="landing-section" id="para-quien">
         <div className="landing-container">
           <div className="landing-section-header">
-            <span className="landing-section-label">Demo</span>
-            <h2 className="landing-section-title">Mira Fluxus en acción</h2>
-            <p className="landing-section-subtitle">
-              Crea una cuenta y prueba el flujo completo: OC → Recepción → Stock → Venta.
-            </p>
+            <span className="landing-section-label">¿Para quién es?</span>
+            <h2 className="landing-section-title">Diseñado para negocios que mueven producto</h2>
           </div>
 
-          <div className="landing-hero-actions" style={{ justifyContent: 'center' }}>
-            <Link to="/register" className="btn-hero-primary">
-              Crear cuenta
-            </Link>
-            <Link to="/login" className="btn-hero-secondary">
-              Entrar a mi panel
-            </Link>
+          <div className="landing-audience-grid">
+            <div className="landing-audience-card">
+              <div className="landing-audience-icon">💊</div>
+              <h4>Farmacias y boticas</h4>
+              <p>Control de lotes, fechas de vencimiento y stock crítico por producto.</p>
+            </div>
+            <div className="landing-audience-card">
+              <div className="landing-audience-icon">🏪</div>
+              <h4>Tiendas y bodegas</h4>
+              <p>Ventas rápidas con vuelto, historial diario y control de proveedores.</p>
+            </div>
+            <div className="landing-audience-card">
+              <div className="landing-audience-icon">🔧</div>
+              <h4>Ferreterías y distribuidoras</h4>
+              <p>OCs a varios proveedores, recepciones parciales y costos de compra.</p>
+            </div>
+            <div className="landing-audience-card">
+              <div className="landing-audience-icon">📦</div>
+              <h4>Almacenes y depósitos</h4>
+              <p>Movimientos de inventario, kardex y reportes de valorización de stock.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -229,78 +292,77 @@ export function LandingPage() {
         <div className="landing-container">
           <div className="landing-section-header">
             <span className="landing-section-label">Precios</span>
-            <h2 className="landing-section-title">Planes simples y transparentes</h2>
+            <h2 className="landing-section-title">Dos planes, sin letra chica</h2>
             <p className="landing-section-subtitle">
-              Empieza gratis y escala cuando lo necesites. Sin costos ocultos.
+              14 días de prueba incluidos en ambos planes. Sin tarjeta hasta que decidas quedarte.
             </p>
           </div>
 
-          <div className="landing-pricing-grid">
+          <div className="landing-pricing-grid landing-pricing-grid-2">
+
+            {/* BÁSICO */}
             <div className="landing-pricing-card">
-              <div className="landing-pricing-plan">Starter</div>
+              <div className="landing-pricing-plan">Básico</div>
               <div className="landing-pricing-price">
-                <span>S/</span>0<sub>/mes</sub>
+                <span>S/</span>49.99<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
-                Para comenzar a operar con lo esencial.
+                Para negocios pequeños que necesitan orden en su inventario y ventas.
               </p>
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
-                <li><span className="check">✓</span> Hasta 100 productos</li>
-                <li><span className="check">✓</span> 1 usuario</li>
-                <li><span className="check">✓</span> Inventario básico</li>
-                <li><span className="check">✓</span> Alertas de stock</li>
-                <li><span className="cross">✗</span> Reportes avanzados</li>
-                <li><span className="cross">✗</span> Múltiples sucursales</li>
+                <li><span className="check">✓</span> Hasta 500 productos</li>
+                <li><span className="check">✓</span> Hasta 3 usuarios</li>
+                <li><span className="check">✓</span> Inventario + alertas de stock mínimo</li>
+                <li><span className="check">✓</span> Compras y recepciones</li>
+                <li><span className="check">✓</span> Ventas (efectivo / tarjeta)</li>
+                <li><span className="check">✓</span> Reportes últimos 30 días</li>
+                <li><span className="check">✓</span> 1 rol de administrador</li>
+                <li><span className="cross">✗</span> Facturación electrónica</li>
+                <li><span className="cross">✗</span> Control de lotes y vencimientos</li>
+                <li><span className="cross">✗</span> Roles y permisos avanzados</li>
+                <li><span className="cross">✗</span> Reportes históricos sin límite</li>
               </ul>
-              <Link to="/register" className="landing-pricing-cta outline">
-                Empezar Gratis
+              <Link to="/register?plan=BASICO" className="landing-pricing-cta outline">
+                Probar 14 días gratis
               </Link>
             </div>
 
+            {/* PRO */}
             <div className="landing-pricing-card featured">
-              <div className="landing-pricing-badge">⭐ Más Popular</div>
+              <div className="landing-pricing-badge">⭐ Recomendado</div>
               <div className="landing-pricing-plan">Pro</div>
               <div className="landing-pricing-price">
-                <span>S/</span>99<sub>/mes</sub>
+                <span>S/</span>99.99<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
-                Para negocios en crecimiento que necesitan más usuarios y reportes.
+                Para negocios en crecimiento que necesitan trazabilidad, facturación y control total.
               </p>
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
                 <li><span className="check">✓</span> Productos ilimitados</li>
                 <li><span className="check">✓</span> Hasta 10 usuarios</li>
-                <li><span className="check">✓</span> Compras + Ventas + Inventario</li>
-                <li><span className="check">✓</span> Reportes avanzados</li>
-                <li><span className="check">✓</span> Roles y permisos</li>
-                <li><span className="cross">✗</span> Múltiples sucursales</li>
+                <li><span className="check">✓</span> Todo lo del plan Básico</li>
+                <li><span className="check">✓</span> <strong>Facturación electrónica</strong> (boletas y facturas)</li>
+                <li><span className="check">✓</span> <strong>Control de lotes y fechas de vencimiento</strong></li>
+                <li><span className="check">✓</span> <strong>Roles y permisos por módulo</strong> (RBAC completo)</li>
+                <li><span className="check">✓</span> Reportes históricos sin límite de fecha</li>
+                <li><span className="check">✓</span> Alertas de vencimiento próximo</li>
+                <li><span className="check">✓</span> Recepciones parciales de OC</li>
+                <li><span className="check">✓</span> Múltiples proveedores con historial</li>
+                <li><span className="check">✓</span> Soporte prioritario por WhatsApp</li>
               </ul>
-              <Link to="/register" className="landing-pricing-cta primary">
-                Probar Pro (30 días)
+              <Link to="/register?plan=PRO" className="landing-pricing-cta primary">
+                Probar Pro 14 días gratis
               </Link>
             </div>
 
-            <div className="landing-pricing-card">
-              <div className="landing-pricing-plan">Enterprise</div>
-              <div className="landing-pricing-price" style={{ fontSize: '2rem' }}>
-                A medida
-              </div>
-              <p className="landing-pricing-description">
-                Para empresas con múltiples sedes y necesidades específicas.
-              </p>
-              <div className="landing-pricing-divider" />
-              <ul className="landing-pricing-features">
-                <li><span className="check">✓</span> Usuarios ilimitados</li>
-                <li><span className="check">✓</span> Multi‑sucursal</li>
-                <li><span className="check">✓</span> Integraciones</li>
-                <li><span className="check">✓</span> Soporte prioritario</li>
-              </ul>
-              <a href="mailto:contacto@fluxus.pe" className="landing-pricing-cta outline">
-                Contactar Ventas
-              </a>
-            </div>
           </div>
+
+          <p className="landing-pricing-note">
+            ¿Más de 10 usuarios o necesidades especiales?{' '}
+            <a href="mailto:contacto@fluxus.pe">Contáctanos</a> para un plan a medida.
+          </p>
         </div>
       </section>
 
@@ -308,22 +370,22 @@ export function LandingPage() {
       <section className="landing-cta-section">
         <div className="landing-container">
           <h2 className="landing-cta-title">
-            ¿Listo para operar tu negocio con{' '}
-            <span className="landing-hero-title-highlight">más control</span>?
+            ¿Listo para operar con{' '}
+            <span className="landing-hero-title-highlight">más orden y control</span>?
           </h2>
           <p className="landing-cta-subtitle">
-            Fluxus es tu suite de compras, ventas e inventario en la nube.
+            Empieza hoy. 14 días de prueba, sin tarjeta de crédito, sin permanencia.
           </p>
           <div className="landing-cta-actions">
-            <Link to="/register" className="btn-accent">
-              Empezar gratis
+            <Link to="/register?plan=BASICO" className="btn-accent">
+              Crear mi cuenta gratis
             </Link>
             <Link to="/login" className="btn-ghost">
               Ya tengo cuenta
             </Link>
           </div>
           <p className="landing-cta-note">
-            Sin tarjeta de crédito · Cancela cuando quieras · Soporte en español
+            Sin permanencia · Cancela cuando quieras · Soporte en español
           </p>
         </div>
       </section>
@@ -333,16 +395,12 @@ export function LandingPage() {
         <div className="landing-footer-grid">
           <div className="landing-footer-brand">
             <Link to="/" className="landing-logo" style={{ textDecoration: 'none' }}>
-              <img
-                src="/fluxus.png"
-                alt="Fluxus logo"
-                className="landing-logo-icon"
-              />
+              <img src="/fluxus.png" alt="Fluxus logo" className="landing-logo-icon" />
               <span className="landing-logo-text">Fluxus</span>
             </Link>
             <p>
-              Fluxus es una plataforma modular para gestionar compras, ventas e inventario.
-              Hecha para negocios que quieren operar con orden y visibilidad.
+              Sistema de gestión para negocios que mueven producto: compras, inventario,
+              ventas y facturación en una sola plataforma.
             </p>
           </div>
 
@@ -350,16 +408,16 @@ export function LandingPage() {
             <h4>Producto</h4>
             <ul>
               <li><a href="#features">Módulos</a></li>
+              <li><a href="#para-quien">¿Para quién?</a></li>
               <li><a href="#pricing">Precios</a></li>
-              <li><a href="#demo">Demo</a></li>
-              <li><Link to="/register">Registro</Link></li>
+              <li><Link to="/register?plan=BASICO">Crear cuenta</Link></li>
             </ul>
           </div>
 
           <div className="landing-footer-col">
             <h4>Empresa</h4>
             <ul>
-              <li><a href="#demo">Contacto</a></li>
+              <li><a href="mailto:contacto@fluxus.pe">Contacto</a></li>
               <li><a href="mailto:soporte@fluxus.pe">Soporte</a></li>
             </ul>
           </div>
@@ -385,6 +443,7 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
+
     </div>
   );
 }

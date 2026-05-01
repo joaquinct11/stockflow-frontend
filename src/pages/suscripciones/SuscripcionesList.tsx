@@ -52,6 +52,13 @@ function estadoBadge(estado: string) {
           Pendiente
         </Badge>
       );
+    case 'TRIAL':
+      return (
+        <Badge variant="outline" className="border-blue-400 text-blue-700">
+          <Calendar className="h-3.5 w-3.5 mr-1" />
+          Prueba gratuita
+        </Badge>
+      );
     default:
       return <Badge variant="outline">{estado || '—'}</Badge>;
   }
@@ -176,7 +183,7 @@ export function SuscripcionesList() {
     );
   }
 
-  const esActiva = suscripcion.estado === 'ACTIVA';
+  const esActiva = suscripcion.estado === 'ACTIVA' || suscripcion.estado === 'TRIAL';
   const esCancelableOReactivable = ['CANCELADA', 'SUSPENDIDA', 'PENDIENTE'].includes(suscripcion.estado ?? '');
   const planLabel = suscripcion.planId === 'PRO' ? 'Pro' : suscripcion.planId === 'BASICO' ? 'Básico' : suscripcion.planId;
 

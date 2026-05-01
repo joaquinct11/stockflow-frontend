@@ -238,11 +238,17 @@ export function ComprobantesPage() {
   //   setFechaHasta('');
   // };
 
-  const ventasOptions = ventas.map((v) => ({
-    id: v.id!,
-    label: `Venta #${v.id} · S/.${v.total.toFixed(2)}`,
-    subtitle: `${v.vendedorNombre ?? ''} · ${v.metodoPago}${v.createdAt ? ' · ' + new Date(v.createdAt).toLocaleDateString('es-PE') : ''}`,
-  }));
+  const ventasYaFacturadas = new Set(
+    comprobantes.filter((c) => c.estado === 'EMITIDO').map((c) => c.ventaId)
+  );
+
+  const ventasOptions = ventas
+    .filter((v) => !ventasYaFacturadas.has(v.id!))
+    .map((v) => ({
+      id: v.id!,
+      label: `Venta #${v.id} · S/.${v.total.toFixed(2)}`,
+      subtitle: `${v.vendedorNombre ?? ''} · ${v.metodoPago}${v.createdAt ? ' · ' + new Date(v.createdAt).toLocaleDateString('es-PE') : ''}`,
+    }));
 
   if (!canView) {
     return (

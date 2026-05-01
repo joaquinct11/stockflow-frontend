@@ -44,8 +44,8 @@ export function AccountSettings() {
     }
   };
 
-  const planId = user?.suscripcion?.planId ?? 'FREE';
-  const planLabel = planId === 'PRO' ? 'Pro' : planId === 'BASICO' ? 'Básico' : 'Gratis';
+  const planId = user?.suscripcion?.planId ?? 'BASICO';
+  const planLabel = planId === 'PRO' ? 'Pro' : 'Básico';
   const planPrecio = planId === 'PRO' ? 'S/ 99.99/mes' : planId === 'BASICO' ? 'S/ 49.99/mes' : 'S/ 0.00/mes';
   const estadoSus = suscripcionEstado ?? user?.suscripcion?.estado ?? 'SIN_SUSCRIPCION';
   const isAdmin = user?.rol === 'ADMIN';

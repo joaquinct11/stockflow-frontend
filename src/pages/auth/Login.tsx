@@ -59,7 +59,7 @@ export function Login() {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">Fluxus</CardTitle>
-          <CardDescription>Sistema de Gestión de Inventario</CardDescription>
+          <CardDescription>Mini-ERP para negocios peruanos</CardDescription>
         </CardHeader>
 
         <CardContent>
