@@ -321,7 +321,7 @@ export interface EmitirComprobanteRequest {
 // ÓRDENES DE COMPRA
 // ========================================
 
-export type EstadoOC = 'BORRADOR' | 'ENVIADA' | 'PARCIAL' | 'RECIBIDA' | 'CANCELADA';
+export type EstadoOC = 'BORRADOR' | 'ENVIADA' | 'RECIBIDA_PARCIAL' | 'RECIBIDA' | 'CANCELADA';
 
 export interface OrdenCompraItemDTO {
   id?: number;
