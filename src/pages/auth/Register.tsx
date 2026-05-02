@@ -79,13 +79,18 @@ export function Register() {
     setLoading(true);
 
     try {
-      const response = await authService.register(formData);
+      const doc = numeroDocumento.trim();
+      const response = await authService.register({
+        ...formData,
+        tipoDocumento,
+        numeroDocumento: doc || undefined,
+      });
       setUser(response);
       toast.success(`¡Bienvenido! Tu prueba de 14 días del plan ${response.suscripcion?.planId} ha comenzado.`);
       // Guardar datos de documento en sessionStorage para el checkout posterior
       sessionStorage.setItem(
         'mp_checkout_doc',
-        JSON.stringify({ tipoDocumento, numeroDocumento: numeroDocumento.trim() })
+        JSON.stringify({ tipoDocumento, numeroDocumento: doc })
       );
       navigate('/dashboard');
     } catch (error: unknown) {

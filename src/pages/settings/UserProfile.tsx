@@ -10,7 +10,7 @@ import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { Dialog } from '../../components/ui/Dialog';
-import { User, Mail, Building2, Calendar, Lock, Edit2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { User, Mail, Building2, Calendar, Lock, Edit2, Eye, EyeOff, ShieldCheck, Phone, CreditCard } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const AVATAR_COLORS = [
@@ -56,9 +56,14 @@ export function UserProfile() {
     confirmarContraseña: '',
   });
 
-  // Editar perfil (solo nombre)
+  // Editar perfil
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
-  const [editProfileData, setEditProfileData] = useState({ nombre: '' });
+  const [editProfileData, setEditProfileData] = useState({
+    nombre: '',
+    tipoDocumento: '',
+    numeroDocumento: '',
+    numeroCelular: '',
+  });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCurrentPwd, setShowCurrentPwd] = useState(false);
@@ -74,7 +79,12 @@ export function UserProfile() {
       setLoading(true);
       const data = await authService.obtenerPerfil();
       setProfile(data);
-      setEditProfileData({ nombre: data.nombre || '' });
+      setEditProfileData({
+        nombre: data.nombre || '',
+        tipoDocumento: data.tipoDocumento || '',
+        numeroDocumento: data.numeroDocumento || '',
+        numeroCelular: data.numeroCelular || '',
+      });
     } catch (error) {
       if (import.meta.env.DEV) { console.error('Error obteniendo perfil:', error);}
       toast.error('Error al cargar el perfil');
@@ -85,7 +95,12 @@ export function UserProfile() {
 
   const handleOpenEditProfile = () => {
     if (!profile) return;
-    setEditProfileData({ nombre: profile.nombre || '' });
+    setEditProfileData({
+      nombre: profile.nombre || '',
+      tipoDocumento: profile.tipoDocumento || '',
+      numeroDocumento: profile.numeroDocumento || '',
+      numeroCelular: profile.numeroCelular || '',
+    });
     setIsEditProfileOpen(true);
   };
 
@@ -107,6 +122,9 @@ export function UserProfile() {
         rolNombre: profile.rol,
         tenantId: profile.tenantId,
         activo: profile.activo,
+        tipoDocumento: editProfileData.tipoDocumento || undefined,
+        numeroDocumento: editProfileData.numeroDocumento || undefined,
+        numeroCelular: editProfileData.numeroCelular || undefined,
       } as any);
 
       toast.success('Perfil actualizado');
@@ -261,6 +279,28 @@ export function UserProfile() {
                 {profile.ultimoLogin ? new Date(profile.ultimoLogin).toLocaleDateString('es-PE') : 'Primera sesión'}
               </div>
             </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                Documento
+              </label>
+              <div className="p-3 bg-muted rounded-md text-sm">
+                {profile.tipoDocumento && profile.numeroDocumento
+                  ? `${profile.tipoDocumento}: ${profile.numeroDocumento}`
+                  : <span className="text-muted-foreground italic">No registrado</span>}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                Celular
+              </label>
+              <div className="p-3 bg-muted rounded-md text-sm">
+                {profile.numeroCelular || <span className="text-muted-foreground italic">No registrado</span>}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -302,10 +342,48 @@ export function UserProfile() {
             <Input
               placeholder="Tu nombre"
               value={editProfileData.nombre}
-              onChange={(e) => setEditProfileData({ nombre: e.target.value })}
+              onChange={(e) => setEditProfileData({ ...editProfileData, nombre: e.target.value })}
               required
               minLength={3}
               maxLength={150}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tipo de Documento</label>
+              <select
+                value={editProfileData.tipoDocumento}
+                onChange={(e) => setEditProfileData({ ...editProfileData, tipoDocumento: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">Sin especificar</option>
+                <option value="DNI">DNI</option>
+                <option value="CE">Carné de Extranjería</option>
+                <option value="RUC">RUC</option>
+                <option value="PASAPORTE">Pasaporte</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Número de Documento</label>
+              <Input
+                placeholder="Ej: 12345678"
+                value={editProfileData.numeroDocumento}
+                onChange={(e) => setEditProfileData({ ...editProfileData, numeroDocumento: e.target.value })}
+                maxLength={20}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Celular</label>
+            <Input
+              type="tel"
+              placeholder="Ej: 999888777"
+              value={editProfileData.numeroCelular}
+              onChange={(e) => setEditProfileData({ ...editProfileData, numeroCelular: e.target.value })}
+              maxLength={20}
             />
           </div>
 

@@ -36,10 +36,9 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
     {
     label: 'Órdenes de Compra',
     codes: [
-      'VER_COMPRAS',
-      'CREAR_ORDEN_COMPRA',
-      'EDITAR_ORDEN_COMPRA',
-      'ELIMINAR_ORDEN_COMPRA',
+      'VER_OC',
+      'CREAR_OC',
+      'EDITAR_OC',
     ],
   },
 
@@ -48,8 +47,7 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
     codes: [
       'VER_RECEPCIONES',
       'CREAR_RECEPCION',
-      'EDITAR_RECEPCION',
-      'ELIMINAR_RECEPCION',
+      'CONFIRMAR_RECEPCION',
     ],
   },
 
@@ -123,7 +121,10 @@ export function PermisosConfig() {
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
   const [permisosCatalog, setPermisosCatalog] = useState<Permiso[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  /** Permisos efectivos mostrados (base del rol + extras explícitos del usuario) */
   const [userPermisos, setUserPermisos] = useState<string[]>([]);
+  /** Permisos base del rol seleccionado — no se pueden desmarcar, siempre activos */
+  const [basePermisos, setBasePermisos] = useState<string[]>([]);
   const [loadingInit, setLoadingInit] = useState(true);
   const [loadingPermisos, setLoadingPermisos] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -141,31 +142,20 @@ export function PermisosConfig() {
       setLoadingInit(true);
 
       const [users, perms] = await Promise.all([
-        adminService.getUsuarios().catch(() => {
-          throw new Error('usuarios');
-        }),
-        adminService.getPermisos().catch(() => {
-          throw new Error('permisos');
-        }),
+        adminService.getUsuarios().catch(() => { throw new Error('usuarios'); }),
+        adminService.getPermisos().catch(() => { throw new Error('permisos'); }),
       ]);
 
-      setUsuarios(users);
+      // El ADMIN siempre tiene todos los permisos (hardcoded en backend) → excluirlo.
+      setUsuarios(users.filter((u: AdminUsuario) => u.rolNombre !== 'ADMIN'));
       setPermisosCatalog(perms);
 
-      // Expand all groups by default
       const expanded: Record<string, boolean> = {};
-      PERMISSION_GROUPS.forEach((g) => {
-        expanded[g.label] = true;
-      });
+      PERMISSION_GROUPS.forEach((g) => { expanded[g.label] = true; });
       setExpandedGroups(expanded);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
-      const resource =
-        message === 'usuarios'
-          ? 'usuarios'
-          : message === 'permisos'
-            ? 'catálogo de permisos'
-            : 'datos';
+      const resource = message === 'usuarios' ? 'usuarios' : message === 'permisos' ? 'catálogo de permisos' : 'datos';
       toast.error(`Error al cargar ${resource}`);
     } finally {
       setLoadingInit(false);
@@ -175,11 +165,20 @@ export function PermisosConfig() {
   const handleSelectUser = async (user: AdminUsuario) => {
     setSelectedUserId(user.id);
     setUserPermisos([]);
+    setBasePermisos([]);
 
     try {
       setLoadingPermisos(true);
-      const perms = await adminService.getUsuarioPermisos(user.id);
-      setUserPermisos(perms);
+      // Cargamos en paralelo: permisos base del rol + extras explícitos del usuario
+      const [defaults, extras] = await Promise.all([
+        adminService.getDefaultPermisos(user.rolNombre).catch(() => [] as string[]),
+        adminService.getUsuarioPermisos(user.id).catch(() => [] as string[]),
+      ]);
+
+      setBasePermisos(defaults);
+      // Efectivos = unión de base + extras
+      const efectivos = Array.from(new Set([...defaults, ...extras]));
+      setUserPermisos(efectivos);
     } catch {
       toast.error(`Error al cargar permisos de ${user.nombre}`);
     } finally {
@@ -188,6 +187,8 @@ export function PermisosConfig() {
   };
 
   const togglePermiso = (code: string) => {
+    // Los permisos base del rol no se pueden desmarcar
+    if (basePermisos.includes(code)) return;
     setUserPermisos((prev) =>
       prev.includes(code) ? prev.filter((p) => p !== code) : [...prev, code]
     );
@@ -198,7 +199,10 @@ export function PermisosConfig() {
 
     try {
       setSaving(true);
-      await adminService.updateUsuarioPermisos(selectedUserId, userPermisos);
+      // Solo guardamos los permisos EXTRAS (los que no son base del rol)
+      // El backend añade los base del rol automáticamente desde RolePermissionDefaults
+      const extras = userPermisos.filter((p) => !basePermisos.includes(p));
+      await adminService.updateUsuarioPermisos(selectedUserId, extras);
       toast.success('Permisos actualizados correctamente');
     } catch {
       toast.error('Error al guardar permisos');
@@ -392,18 +396,13 @@ export function PermisosConfig() {
 
             {selectedUser && !loadingPermisos && (
               <div className="space-y-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="secondary">
-                    {userPermisos.length} permiso{userPermisos.length !== 1 ? 's' : ''} asignado
-                    {userPermisos.length !== 1 ? 's' : ''}
+                    {basePermisos.length} por rol
                   </Badge>
-
-                  {selectedUser.rolNombre === 'ADMIN' && (
-                    <Badge
-                      variant="default"
-                      className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
-                    >
-                      Admin — acceso total por rol
+                  {userPermisos.filter((p) => !basePermisos.includes(p)).length > 0 && (
+                    <Badge variant="default">
+                      +{userPermisos.filter((p) => !basePermisos.includes(p)).length} extras
                     </Badge>
                   )}
                 </div>
@@ -413,6 +412,18 @@ export function PermisosConfig() {
                     No se encontraron permisos{permSearch ? ` para "${permSearch}"` : ''}
                   </p>
                 )}
+
+                {/* Leyenda */}
+                <div className="flex items-center gap-4 text-xs text-muted-foreground pb-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded border border-primary bg-primary/20" />
+                    Por defecto del rol (no editable)
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded border border-primary bg-primary" />
+                    Permiso extra asignado
+                  </span>
+                </div>
 
                 {groupedPermisos.map((group) => (
                   <div key={group.key} className="border rounded-lg overflow-hidden">
@@ -439,23 +450,36 @@ export function PermisosConfig() {
                       <div className="divide-y">
                         {group.perms.map((perm) => {
                           const code = getPermCode(perm);
+                          const isBase = basePermisos.includes(code);
+                          const isChecked = userPermisos.includes(code);
                           return (
                             <label
                               key={code}
-                              className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors"
+                              className={`flex items-start gap-3 px-4 py-3 transition-colors ${
+                                isBase
+                                  ? 'cursor-not-allowed opacity-70 bg-muted/30'
+                                  : 'cursor-pointer hover:bg-accent/50'
+                              }`}
                             >
                               <input
                                 type="checkbox"
-                                checked={userPermisos.includes(code)}
+                                checked={isChecked}
                                 onChange={() => togglePermiso(code)}
-                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary cursor-pointer"
+                                disabled={isBase}
+                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary cursor-pointer disabled:cursor-not-allowed"
                               />
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium">{code}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium">{code}</p>
+                                  {isBase && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                                      rol
+                                    </span>
+                                  )}
+                                </div>
                                 {perm.descripcion && (
                                   <p className="text-xs text-muted-foreground">{perm.descripcion}</p>
                                 )}
-                                <code className="text-xs text-muted-foreground font-mono">{code}</code>
                               </div>
                             </label>
                           );

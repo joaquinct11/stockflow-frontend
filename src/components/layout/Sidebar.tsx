@@ -193,7 +193,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       isPathActive('/dashboard/ventas') || isPathActive('/dashboard/facturacion');
     const usuariosOpen =
       isPathActive('/dashboard/usuarios') || isPathActive('/dashboard/admin');
-
     return { compras: comprasOpen, ventas: ventasOpen, usuarios: usuariosOpen };
   }, [location.pathname]);
 
