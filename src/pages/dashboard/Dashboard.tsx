@@ -187,9 +187,11 @@ export function Dashboard() {
       // ✅ Productos siempre
       const productosPromise = productoService.getAll();
 
-      // ✅ Movimientos siempre
+      // ✅ Movimientos: solo roles con acceso a inventario (VENDEDOR no tiene permiso)
       let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
-      if (movimientoService.getAll) {
+      if (rol === 'VENDEDOR') {
+        movimientosPromise = Promise.resolve([]);
+      } else if (movimientoService.getAll) {
         movimientosPromise = movimientoService
           .getAll()
           .catch((err) => {

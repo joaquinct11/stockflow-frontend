@@ -118,6 +118,9 @@ export function UsuariosList() {
     contraseña: '',
     rolNombre: 'VENDEDOR',
     activo: true,
+    tipoDocumento: '',
+    numeroDocumento: '',
+    numeroCelular: '',
   });
 
   useEffect(() => {
@@ -160,6 +163,9 @@ export function UsuariosList() {
       contraseña: '',
       rolNombre: defaultRolNombre,
       activo: true,
+      tipoDocumento: '',
+      numeroDocumento: '',
+      numeroCelular: '',
     });
     setEditingId(null);
     setIsDialogOpen(false);
@@ -174,6 +180,9 @@ export function UsuariosList() {
           rolNombre: formData.rolNombre,
           activo: formData.activo,
           tenantId: tenantId!,
+          tipoDocumento: formData.tipoDocumento || undefined,
+          numeroDocumento: formData.numeroDocumento || undefined,
+          numeroCelular: formData.numeroCelular || undefined,
         };
 
         await usuarioService.update(editingId, usuarioToUpdate as Usuario);
@@ -203,6 +212,9 @@ export function UsuariosList() {
       contraseña: '',
       rolNombre: usuario.rolNombre as Role,
       activo: usuario.activo ?? true,
+      tipoDocumento: usuario.tipoDocumento ?? '',
+      numeroDocumento: usuario.numeroDocumento ?? '',
+      numeroCelular: usuario.numeroCelular ?? '',
     });
     setEditingId(usuario.id!);
     setIsDialogOpen(true);
@@ -594,6 +606,43 @@ export function UsuariosList() {
                   />
                 </div>
               )}
+
+              {/* Tipo + Número de documento */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tipo de Documento</label>
+                <select
+                  value={formData.tipoDocumento ?? ''}
+                  onChange={(e) => setFormData({ ...formData, tipoDocumento: e.target.value })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Sin especificar</option>
+                  <option value="DNI">DNI</option>
+                  <option value="CE">Carné de Extranjería</option>
+                  <option value="RUC">RUC</option>
+                  <option value="PASAPORTE">Pasaporte</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Número de Documento</label>
+                <Input
+                  placeholder="Ej: 12345678"
+                  value={formData.numeroDocumento ?? ''}
+                  onChange={(e) => setFormData({ ...formData, numeroDocumento: e.target.value })}
+                  maxLength={20}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Celular</label>
+                <Input
+                  type="tel"
+                  placeholder="Ej: 999888777"
+                  value={formData.numeroCelular ?? ''}
+                  onChange={(e) => setFormData({ ...formData, numeroCelular: e.target.value })}
+                  maxLength={20}
+                />
+              </div>
 
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium">

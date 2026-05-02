@@ -89,18 +89,16 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
     eliminar: 'ANULAR_COMPROBANTE',
   },
   COMPRAS: {
-    ver: 'VER_COMPRAS',
-    ver_todas: 'VER_COMPRAS',
-    crear: 'CREAR_ORDEN_COMPRA',
-    editar: 'EDITAR_ORDEN_COMPRA',
-    eliminar: 'ELIMINAR_ORDEN_COMPRA',
+    ver: 'VER_OC',
+    ver_todas: 'VER_OC',
+    crear: 'CREAR_OC',
+    editar: 'EDITAR_OC',
   },
   RECEPCIONES: {
     ver: 'VER_RECEPCIONES',
     ver_todas: 'VER_RECEPCIONES',
     crear: 'CREAR_RECEPCION',
-    editar: 'EDITAR_RECEPCION',
-    eliminar: 'ELIMINAR_RECEPCION',
+    editar: 'CONFIRMAR_RECEPCION',
   },
 };
 
@@ -114,54 +112,54 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
   },
 
   PROVEEDORES: {
-    ADMIN: ['crear', 'editar', 'activar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'ver'],
+    ADMIN: ['crear', 'editar', 'activar', 'cambiarEstado', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
     VENDEDOR: [],
-    GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
+    GESTOR_INVENTARIO: ['crear', 'editar', 'cambiarEstado', 'ver'],
   },
-  
+
   PRODUCTOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: ['ver'],
-    GESTOR_INVENTARIO: ['crear', 'editar', 'eliminar', 'ver'],
+    GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
   },
-  
+
   VENTAS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver_todas'],
-    GERENTE: ['crear', 'editar', 'eliminar', 'ver_todas'],
+    GERENTE: ['crear', 'ver_todas'],
     VENDEDOR: ['crear', 'ver_propias'],
     GESTOR_INVENTARIO: [],
   },
 
   INVENTARIO: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'ver'],
+    GERENTE: ['crear', 'ver'],
     VENDEDOR: [],
-    GESTOR_INVENTARIO: ['crear', 'editar', 'eliminar', 'ver'],
+    GESTOR_INVENTARIO: ['crear', 'ver'],
   },
-  
+
   USUARIOS: {
-    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'ver'],
+    ADMIN: ['crear', 'editar', 'eliminar', 'cambiarEstado', 'ver'],
+    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
   },
-  
+
   SUSCRIPCIONES: {
-    ADMIN: ['ver', 'activar','eliminar'],
-    GERENTE: [],
-    VENDEDOR: [],
-    GESTOR_INVENTARIO: [],
-  },
-  
-  REPORTES: {
-    ADMIN: ['ver'],
+    ADMIN: ['ver', 'activar', 'eliminar'],
     GERENTE: ['ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
   },
-  
+
+  REPORTES: {
+    ADMIN: ['ver'],
+    GERENTE: ['ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: ['ver'],
+  },
+
   FACTURACION: {
     ADMIN: ['ver', 'ver_todas', 'crear', 'eliminar'],
     GERENTE: ['ver', 'ver_todas', 'crear', 'eliminar'],
@@ -173,19 +171,19 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
     GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: [],
-    GESTOR_INVENTARIO: ['ver'],
+    GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
   },
 
   RECEPCIONES: {
-    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    ADMIN: ['crear', 'editar', 'ver'],
     GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
   },
-  
+
   CONFIGURACION: {
     ADMIN: ['ver', 'editar'],
-    GERENTE: ['ver'],
+    GERENTE: ['ver', 'editar'],
     VENDEDOR: ['ver'],
     GESTOR_INVENTARIO: ['ver'],
   },

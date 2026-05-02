@@ -30,9 +30,19 @@ export const adminService = {
   },
 
   /**
-   * Reemplazar lista completa de permisos de un usuario
+   * Reemplazar lista completa de permisos EXTRAS de un usuario (no incluye defaults del rol)
    */
   updateUsuarioPermisos: async (userId: number, permisos: string[]): Promise<void> => {
     await axiosInstance.put(API_ENDPOINTS.ADMIN.USUARIO_PERMISOS(userId), permisos);
+  },
+
+  /**
+   * Obtener los códigos de permisos por defecto de un rol (para pre-marcar checkboxes)
+   */
+  getDefaultPermisos: async (rolNombre: string): Promise<string[]> => {
+    const { data } = await axiosInstance.get<string[]>(
+      `/admin/permisos-defaults/${rolNombre}`
+    );
+    return data;
   },
 };

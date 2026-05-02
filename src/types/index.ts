@@ -11,7 +11,10 @@ export interface Usuario {
   activo?: boolean;
   tenantId: string;
   ultimoLogin?: string;
-  deletedAt?: string;  // ✅ AGREGADO
+  deletedAt?: string;
+  tipoDocumento?: string;
+  numeroDocumento?: string;
+  numeroCelular?: string;
 }
 
 export interface JwtResponse {
@@ -63,6 +66,8 @@ export interface RegistrationRequestDTO {
   nombre: string;
   nombreFarmacia: string;
   planId: PlanId;
+  tipoDocumento?: string;
+  numeroDocumento?: string;
 }
 
 // ========================================

@@ -195,10 +195,12 @@ export function SuscripcionesList() {
           <h1 className="text-3xl font-bold tracking-tight">Mi Suscripción</h1>
           <p className="text-muted-foreground">Gestiona tu plan y facturación</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleSincronizar} disabled={syncing}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Sincronizando...' : 'Sincronizar con MP'}
-        </Button>
+        {canToggleState('SUSCRIPCIONES') && (
+          <Button variant="outline" size="sm" onClick={handleSincronizar} disabled={syncing}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar con MP'}
+          </Button>
+        )}
       </div>
 
       {/* Tarjeta principal */}
@@ -270,7 +272,7 @@ export function SuscripcionesList() {
 
           {/* Acciones */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            {esCancelableOReactivable && (
+            {esCancelableOReactivable && canToggleState('SUSCRIPCIONES') && (
               <Button className="sm:flex-1" onClick={() => navigate(`/checkout?plan=${suscripcion.planId}`)}>
                 <CreditCard className="mr-2 h-4 w-4" />
                 Reactivar suscripción

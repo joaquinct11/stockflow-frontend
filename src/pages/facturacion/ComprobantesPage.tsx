@@ -16,6 +16,7 @@ import { Pagination } from '../../components/ui/Pagination';
 import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, Calendar, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuthStore } from '../../store/authStore';
 
 const TIPO_OPTIONS: TipoComprobante[] = ['BOLETA', 'FACTURA'];
 // const ESTADO_OPTIONS = ['EMITIDO', 'ANULADO'];
@@ -44,7 +45,8 @@ const emptyForm = (): EmitirComprobanteForm => ({
 });
 
 export function ComprobantesPage() {
-  const { canAccess, puede, canCreate, canDelete } = usePermissions();
+  const { canAccess, puede, canCreate, canDelete, isVendedor } = usePermissions();
+  const { user } = useAuthStore();
 
   const canView = canAccess('FACTURACION');
   const canEmitir = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
@@ -93,7 +95,10 @@ export function ComprobantesPage() {
 
   const fetchVentas = async () => {
     try {
-      const data = await ventaService.getAll();
+      // VENDEDOR solo puede ver sus propias ventas (VER_MIS_VENTAS)
+      const data = isVendedor && user?.usuarioId
+        ? await ventaService.getByVendor(user.usuarioId)
+        : await ventaService.getAll();
       setVentas(data);
     } catch { /* no bloquear si falla */ }
   };
