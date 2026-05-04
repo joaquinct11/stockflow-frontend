@@ -425,8 +425,8 @@ export function VentasList() {
 
     return true;
   }).sort((a, b) => {
-    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
-    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : (a.id ?? 0);
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : (b.id ?? 0);
     return dateB - dateA; // más reciente primero
   });
 

@@ -316,6 +316,13 @@ export interface ComprobanteDTO {
   tenantId?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Campos planos del receptor (algunos backends los devuelven así)
+  receptorNombre?: string;
+  receptorDocTipo?: string;
+  receptorDocNumero?: string;
+  receptorDireccion?: string;
+  // Estado de envío a SUNAT
+  sunatEstado?: string;
 }
 
 export interface EmitirComprobanteForm {
