@@ -25,10 +25,10 @@ export const ordenCompraService = {
     return data;
   },
 
-  update: async (id: number, dto: Partial<OrdenCompraDTO>): Promise<OrdenCompraDTO> => {
-    const { data } = await axiosInstance.put<OrdenCompraDTO>(
+  editarCabecera: async (id: number, observaciones: string | null): Promise<OrdenCompraDTO> => {
+    const { data } = await axiosInstance.patch<OrdenCompraDTO>(
       API_ENDPOINTS.ORDENES_COMPRA.UPDATE(id),
-      dto
+      { observaciones }
     );
     return data;
   },

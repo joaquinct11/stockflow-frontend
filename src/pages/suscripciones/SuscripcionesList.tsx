@@ -52,6 +52,13 @@ function estadoBadge(estado: string) {
           Pendiente
         </Badge>
       );
+    case 'TRIAL':
+      return (
+        <Badge variant="outline" className="border-blue-400 text-blue-700">
+          <Calendar className="h-3.5 w-3.5 mr-1" />
+          Prueba gratuita
+        </Badge>
+      );
     default:
       return <Badge variant="outline">{estado || '—'}</Badge>;
   }
@@ -176,7 +183,7 @@ export function SuscripcionesList() {
     );
   }
 
-  const esActiva = suscripcion.estado === 'ACTIVA';
+  const esActiva = suscripcion.estado === 'ACTIVA' || suscripcion.estado === 'TRIAL';
   const esCancelableOReactivable = ['CANCELADA', 'SUSPENDIDA', 'PENDIENTE'].includes(suscripcion.estado ?? '');
   const planLabel = suscripcion.planId === 'PRO' ? 'Pro' : suscripcion.planId === 'BASICO' ? 'Básico' : suscripcion.planId;
 
@@ -188,10 +195,12 @@ export function SuscripcionesList() {
           <h1 className="text-3xl font-bold tracking-tight">Mi Suscripción</h1>
           <p className="text-muted-foreground">Gestiona tu plan y facturación</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleSincronizar} disabled={syncing}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Sincronizando...' : 'Sincronizar con MP'}
-        </Button>
+        {canToggleState('SUSCRIPCIONES') && (
+          <Button variant="outline" size="sm" onClick={handleSincronizar} disabled={syncing}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar con MP'}
+          </Button>
+        )}
       </div>
 
       {/* Tarjeta principal */}
@@ -263,7 +272,7 @@ export function SuscripcionesList() {
 
           {/* Acciones */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            {esCancelableOReactivable && (
+            {esCancelableOReactivable && canToggleState('SUSCRIPCIONES') && (
               <Button className="sm:flex-1" onClick={() => navigate(`/checkout?plan=${suscripcion.planId}`)}>
                 <CreditCard className="mr-2 h-4 w-4" />
                 Reactivar suscripción

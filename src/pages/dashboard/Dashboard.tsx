@@ -6,7 +6,7 @@ import { ventaService } from '../../services/venta.service';
 import { movimientoService } from '../../services/movimiento.service';
 import { suscripcionService } from '../../services/suscripcion.service';
 import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -150,9 +150,23 @@ export function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billingParam]);
 
-  const estadoSuscripcion = suscripcionEstado ?? suscripcion?.estado ?? user?.suscripcion?.estado ?? '';
-  const suscripcionActiva = estadoSuscripcion === 'ACTIVA' || estadoSuscripcion === '' || !estadoSuscripcion;
+  const estadoSuscripcionRaw = suscripcionEstado ?? suscripcion?.estado ?? user?.suscripcion?.estado ?? '';
+  const trialEndDate = (suscripcion?.trialEndDate ?? user?.suscripcion?.trialEndDate) as string | undefined;
+
+  // Si el backend aún dice TRIAL pero la fecha ya venció, tratarlo como PENDIENTE en el cliente
+  const trialVencidoClientSide = estadoSuscripcionRaw === 'TRIAL' && !!trialEndDate && new Date(trialEndDate) < new Date();
+  const estadoSuscripcion = trialVencidoClientSide ? 'PENDIENTE' : estadoSuscripcionRaw;
+
+  const suscripcionActiva = estadoSuscripcion === 'ACTIVA' || estadoSuscripcion === 'TRIAL' || estadoSuscripcion === '' || !estadoSuscripcion;
   const mostrarBloqueo = rol === 'ADMIN' && !suscripcionActiva && !!estadoSuscripcion;
+  const esTrial = estadoSuscripcion === 'TRIAL';
+
+  // Calcular días restantes de trial (solo cuando sigue en TRIAL activo)
+  const diasTrialRestantes = (() => {
+    if (!esTrial || !trialEndDate) return null;
+    const diff = Math.ceil((new Date(trialEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, diff);
+  })();
 
   const planParaReintentar = (suscripcion?.planId ?? user?.suscripcion?.planId ?? '') as string;
   const puedeReintentar = planParaReintentar === 'BASICO' || planParaReintentar === 'PRO';
@@ -173,9 +187,11 @@ export function Dashboard() {
       // ✅ Productos siempre
       const productosPromise = productoService.getAll();
 
-      // ✅ Movimientos siempre
+      // ✅ Movimientos: solo roles con acceso a inventario (VENDEDOR no tiene permiso)
       let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
-      if (movimientoService.getAll) {
+      if (rol === 'VENDEDOR') {
+        movimientosPromise = Promise.resolve([]);
+      } else if (movimientoService.getAll) {
         movimientosPromise = movimientoService
           .getAll()
           .catch((err) => {
@@ -392,7 +408,7 @@ export function Dashboard() {
                     <div>
                       <p className="font-semibold">Tu pago fue rechazado o cancelado</p>
                       <p className="text-sm">
-                        Tu suscripción no está activa. Vuelve a intentarlo para continuar usando StockFlow.
+                        Tu suscripción no está activa. Vuelve a intentarlo para continuar usando Fluxus.
                       </p>
                     </div>
                   </div>
@@ -408,6 +424,33 @@ export function Dashboard() {
           </div>
         </>
       )}
+      {/* Banner de período de prueba */}
+      {rol === 'ADMIN' && esTrial && (
+        <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <Calendar className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-semibold">
+                  {diasTrialRestantes === 0
+                    ? 'Tu período de prueba vence hoy'
+                    : `Período de prueba — ${diasTrialRestantes} día${diasTrialRestantes === 1 ? '' : 's'} restante${diasTrialRestantes === 1 ? '' : 's'}`}
+                </p>
+                <p className="text-sm">
+                  Estás usando el plan <strong>{planParaReintentar}</strong>. Al vencer, deberás activar tu suscripción para continuar.
+                </p>
+              </div>
+            </div>
+            {puedeReintentar && (
+              <Button size="sm" className="shrink-0" onClick={handleReintentar}>
+                <CreditCard className="mr-2 h-4 w-4" />
+                Activar suscripción
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>

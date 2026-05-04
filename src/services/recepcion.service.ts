@@ -51,4 +51,14 @@ export const recepcionService = {
     );
     return data;
   },
+
+  // DELETE /recepciones/{id} — anula recepción BORRADOR
+  anular: async (id: number): Promise<void> => {
+    await axiosInstance.delete(API_ENDPOINTS.RECEPCIONES.ANULAR(id));
+  },
+
+  // DELETE /recepciones/{id}/items/{itemId} — quita un ítem de recepción BORRADOR
+  removeItem: async (recepcionId: number, itemId: number): Promise<void> => {
+    await axiosInstance.delete(API_ENDPOINTS.RECEPCIONES.REMOVE_ITEM(recepcionId, itemId));
+  },
 };

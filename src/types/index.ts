@@ -11,7 +11,10 @@ export interface Usuario {
   activo?: boolean;
   tenantId: string;
   ultimoLogin?: string;
-  deletedAt?: string;  // ✅ AGREGADO
+  deletedAt?: string;
+  tipoDocumento?: string;
+  numeroDocumento?: string;
+  numeroCelular?: string;
 }
 
 export interface JwtResponse {
@@ -54,7 +57,7 @@ export interface LoginDTO {
   contraseña: string;
 }
 
-export type PlanId = 'FREE' | 'BASICO' | 'PRO';
+export type PlanId = 'BASICO' | 'PRO';
 
 // ✅ NUEVO: Para registro de nueva farmacia
 export interface RegistrationRequestDTO {
@@ -63,6 +66,8 @@ export interface RegistrationRequestDTO {
   nombre: string;
   nombreFarmacia: string;
   planId: PlanId;
+  tipoDocumento?: string;
+  numeroDocumento?: string;
 }
 
 // ========================================
@@ -138,21 +143,23 @@ export interface SuscripcionDTO {
   planId: string;
   precioMensual: number;
   preapprovalId?: string;
-  intentosFallidos?: number;  // ✅ AGREGADO
+  intentosFallidos?: number;
   estado: string;
   metodoPago?: string;
   ultimos4Digitos?: string;
-  tenantId?: string;  // ✅ AGREGADO
-  fechaInicio?: string;  // ✅ AGREGADO
-  fechaProximoCobro?: string;  // ✅ AGREGADO
-  fechaCancelacion?: string;  // ✅ AGREGADO
-  deletedAt?: string;  // ✅ AGREGADO
+  tenantId?: string;
+  fechaInicio?: string;
+  fechaProximoCobro?: string;
+  fechaCancelacion?: string;
+  deletedAt?: string;
+  trialEndDate?: string;
+  enPeriodoPrueba?: boolean;
 }
 
 export type TipoDocumento = 'DNI' | 'CE' | 'RUC' | 'PASAPORTE';
 
 export interface SuscripcionCheckoutRequestDTO {
-  planId: Exclude<PlanId, 'FREE'>;
+  planId: PlanId;
   tipoDocumento?: TipoDocumento;
   numeroDocumento?: string;
 }
@@ -284,6 +291,15 @@ export interface ReceptorDTO {
   direccion?: string;
 }
 
+export interface ItemComprobanteDTO {
+  productoId?: number;
+  productoNombre?: string;
+  codigoBarras?: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+}
+
 export interface ComprobanteDTO {
   id?: number;
   numero?: string;       // e.g. B001-00000001
@@ -293,10 +309,20 @@ export interface ComprobanteDTO {
   estado: EstadoComprobante;
   ventaId: number;
   receptor?: ReceptorDTO;
-  total?: number;
+  subtotal?: number;     // base imponible (total / 1.18)
+  igv?: number;          // IGV incluido
+  total?: number;        // total con IGV
+  items?: ItemComprobanteDTO[];
   tenantId?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Campos planos del receptor (algunos backends los devuelven así)
+  receptorNombre?: string;
+  receptorDocTipo?: string;
+  receptorDocNumero?: string;
+  receptorDireccion?: string;
+  // Estado de envío a SUNAT
+  sunatEstado?: string;
 }
 
 export interface EmitirComprobanteForm {
@@ -319,7 +345,7 @@ export interface EmitirComprobanteRequest {
 // ÓRDENES DE COMPRA
 // ========================================
 
-export type EstadoOC = 'BORRADOR' | 'ENVIADA' | 'PARCIAL' | 'RECIBIDA' | 'CANCELADA';
+export type EstadoOC = 'BORRADOR' | 'ENVIADA' | 'RECIBIDA_PARCIAL' | 'RECIBIDA' | 'CANCELADA';
 
 export interface OrdenCompraItemDTO {
   id?: number;

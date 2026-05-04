@@ -33,6 +33,9 @@ export interface UserProfile {
   activo: boolean;
   nombreFarmacia: string;
   permisos: string[];
+  tipoDocumento?: string;
+  numeroDocumento?: string;
+  numeroCelular?: string;
 }
 
 export const authService = {

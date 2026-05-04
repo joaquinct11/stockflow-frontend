@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // usado para el banner de recepciones
 import { ordenCompraService } from '../../services/ordenCompra.service';
 import { proveedorService } from '../../services/proveedor.service';
-import { recepcionService } from '../../services/recepcion.service';
 import { productoService } from '../../services/producto.service';
 import type { OrdenCompraDTO, OrdenCompraItemDTO, ProveedorDTO, ProductoDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -31,6 +30,10 @@ import {
   BadgeCheck,
   AlertTriangle,
   Clock,
+  Pencil,
+  Trash2,
+  Check,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -38,13 +41,13 @@ import { usePermissions } from '../../hooks/usePermissions';
 const ESTADO_BADGE: Record<string, string> = {
   BORRADOR: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
   ENVIADA: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
-  PARCIAL: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100',
-  COMPLETADA: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
+  RECIBIDA_PARCIAL: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100',
+  RECIBIDA: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
   CANCELADA: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
 };
 
 type Option = { id: number | string; label: string; subtitle?: string };
-type EstadoOCFilter = 'TODOS' | 'BORRADOR' | 'ENVIADA' | 'RECIBIDA' | 'COMPLETADA' | 'CANCELADA';
+type EstadoOCFilter = 'TODOS' | 'BORRADOR' | 'ENVIADA' | 'RECIBIDA_PARCIAL' | 'RECIBIDA' | 'CANCELADA';
 
 export function OrdenComprasList() {
   const navigate = useNavigate();
@@ -77,6 +80,17 @@ export function OrdenComprasList() {
   const [detailActionLoading, setDetailActionLoading] = useState(false);
   const [selectedOcId, setSelectedOcId] = useState<number | null>(null);
   const [selectedOc, setSelectedOc] = useState<OrdenCompraDTO | null>(null);
+
+  // Edit-in-detail state (solo BORRADOR)
+  const [editObs, setEditObs] = useState(false);
+  const [editObsValue, setEditObsValue] = useState('');
+  const [editItemId, setEditItemId] = useState<number | null>(null);
+  const [editItemQty, setEditItemQty] = useState<number>(1);
+  const [editItemPrice, setEditItemPrice] = useState<number | ''>('');
+  const [addProdId, setAddProdId] = useState<number | null>(null);
+  const [addQty, setAddQty] = useState<number>(1);
+  const [addPrice, setAddPrice] = useState<number | ''>('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Create form (IDs)
   const [selectedProveedorId, setSelectedProveedorId] = useState<number | null>(null);
@@ -186,7 +200,7 @@ export function OrdenComprasList() {
       total: ordenes.length,
       borrador: ordenes.filter((o) => o.estado === 'BORRADOR').length,
       enviada: ordenes.filter((o) => o.estado === 'ENVIADA').length,
-      parcial: ordenes.filter((o) => o.estado === 'PARCIAL').length,
+      parcial: ordenes.filter((o) => o.estado === 'RECIBIDA_PARCIAL').length,
       recibida: ordenes.filter((o) => o.estado === 'RECIBIDA').length,
       cancelada: ordenes.filter((o) => o.estado === 'CANCELADA').length,
       retrasadas: ordenes.filter((o) => o.estado === 'ENVIADA' && diasDesde(o.createdAt) > 30).length,
@@ -206,6 +220,10 @@ export function OrdenComprasList() {
 
       if (estadoFilter === 'TODOS') return true;
       return o.estado === estadoFilter;
+    }).sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt).getTime() : (a.id ?? 0);
+      const db = b.createdAt ? new Date(b.createdAt).getTime() : (b.id ?? 0);
+      return db - da;
     });
   }, [ordenes, searchTerm, estadoFilter]);
 
@@ -213,7 +231,7 @@ export function OrdenComprasList() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentOrdenes = filteredOrdenes.slice(startIndex, startIndex + itemsPerPage);
 
-  const handleAddItem = () => {
+  const handleAddCreateItem = () => {
     if (!selectedProducto) {
       toast.error('Selecciona un producto');
       return;
@@ -244,7 +262,7 @@ export function OrdenComprasList() {
     setItemPrice('');
   };
 
-  const handleRemoveItem = (productoId: number) => {
+  const handleRemoveCreateItem = (productoId: number) => {
     setItems((prev) => prev.filter((i) => i.productoId !== productoId));
   };
 
@@ -297,6 +315,72 @@ export function OrdenComprasList() {
     setIsDetailOpen(false);
     setSelectedOcId(null);
     setSelectedOc(null);
+    setEditObs(false);
+    setEditItemId(null);
+    setAddProdId(null);
+  };
+
+  // ── Edit handlers (solo BORRADOR) ────────────────────────────────────────
+
+  const handleSaveObs = async () => {
+    if (!selectedOc?.id) return;
+    try {
+      setSavingEdit(true);
+      const updated = await ordenCompraService.editarCabecera(selectedOc.id, editObsValue);
+      setSelectedOc(updated);
+      setEditObs(false);
+      toast.success('Observaciones actualizadas');
+    } catch { toast.error('Error al guardar observaciones'); }
+    finally { setSavingEdit(false); }
+  };
+
+  const handleSaveItem = async (itemId: number) => {
+    if (!selectedOc?.id) return;
+    const item = selectedOc.items?.find((i) => i.id === itemId);
+    if (!item) return;
+    try {
+      setSavingEdit(true);
+      const updated = await ordenCompraService.addItem(selectedOc.id, {
+        productoId: item.productoId,
+        cantidadSolicitada: editItemQty,
+        precioUnitario: editItemPrice === '' ? undefined : editItemPrice,
+      });
+      setSelectedOc(updated);
+      setEditItemId(null);
+      toast.success('Ítem actualizado');
+    } catch { toast.error('Error al actualizar ítem'); }
+    finally { setSavingEdit(false); }
+  };
+
+  const handleRemoveItem = async (itemId: number) => {
+    if (!selectedOc?.id) return;
+    try {
+      setSavingEdit(true);
+      await ordenCompraService.removeItem(selectedOc.id, itemId);
+      const updated = await ordenCompraService.getById(selectedOc.id);
+      setSelectedOc(updated);
+      toast.success('Ítem eliminado');
+    } catch { toast.error('Error al eliminar ítem'); }
+    finally { setSavingEdit(false); }
+  };
+
+  const handleAddItem = async () => {
+    if (!selectedOc?.id || !addProdId) return;
+    try {
+      setSavingEdit(true);
+      const updated = await ordenCompraService.addItem(selectedOc.id, {
+        productoId: addProdId,
+        cantidadSolicitada: addQty,
+        precioUnitario: addPrice === '' ? undefined : addPrice,
+      });
+      setSelectedOc(updated);
+      setAddProdId(null);
+      setAddQty(1);
+      setAddPrice('');
+      toast.success('Producto agregado');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.mensaje ?? 'Error al agregar producto');
+    } finally { setSavingEdit(false); }
   };
 
   const handleEnviar = async () => {
@@ -331,29 +415,6 @@ export function OrdenComprasList() {
     }
   };
 
-  const handleRecepcionar = async () => {
-    if (!selectedOc?.id) return;
-
-    try {
-      setDetailActionLoading(true);
-
-      // ✅ backend espera ocId (no ordenCompraId)
-      await recepcionService.create({
-        ocId: selectedOc.id,
-        observaciones: `Recepción desde OC #${selectedOc.id}`,
-      } as any);
-
-      toast.success(`Recepción creada (OC #${selectedOc.id})`);
-
-      closeDetail();
-      navigate('/dashboard/recepciones');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.mensaje ?? 'Error al crear recepción desde la OC');
-      if (import.meta.env.DEV) console.error(e);
-    } finally {
-      setDetailActionLoading(false);
-    }
-  };
 
   if (loading) return <LoadingSpinner />;
 
@@ -489,6 +550,7 @@ export function OrdenComprasList() {
                     { key: 'TODOS', label: 'Todos' },
                     { key: 'BORRADOR', label: 'Borrador' },
                     { key: 'ENVIADA', label: 'Enviada' },
+                    { key: 'RECIBIDA_PARCIAL', label: 'Parcial' },
                     { key: 'RECIBIDA', label: 'Recibida' },
                     { key: 'CANCELADA', label: 'Cancelada' },
                   ] as Array<{ key: EstadoOCFilter; label: string }>
@@ -607,9 +669,31 @@ export function OrdenComprasList() {
                           </TableCell>
 
                           <TableCell className="text-right">
-                            <Button variant="outline" size="sm" onClick={() => openDetail(oc.id!)}>
-                              Ver detalle
-                            </Button>
+                            <div className="flex justify-end gap-2">
+                              {(oc.estado === 'BORRADOR' || oc.estado === 'ENVIADA') && canEditOC && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Cancelar OC"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (!window.confirm(`¿Cancelar OC #${oc.id}? Esta acción no se puede deshacer.`)) return;
+                                    try {
+                                      await ordenCompraService.cancelar(oc.id!);
+                                      toast.success(`OC #${oc.id} cancelada`);
+                                      await fetchData();
+                                    } catch {
+                                      toast.error('Error al cancelar la OC');
+                                    }
+                                  }}
+                                >
+                                  <XCircle className="h-4 w-4 text-red-500" />
+                                </Button>
+                              )}
+                              <Button variant="outline" size="sm" onClick={() => openDetail(oc.id!)}>
+                                Ver detalle
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -645,100 +729,245 @@ export function OrdenComprasList() {
         ) : !selectedOc ? (
           <EmptyState icon={ClipboardList} title="No se pudo cargar la OC" description="Intenta nuevamente." />
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-5">
             {/* Header info */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm text-muted-foreground">Proveedor</p>
-                <p className="font-medium">{selectedOc.proveedorNombre || `#${selectedOc.proveedorId}`}</p>
+                <p className="text-xs text-muted-foreground">Proveedor</p>
+                <p className="font-semibold">{selectedOc.proveedorNombre || `#${selectedOc.proveedorId}`}</p>
               </div>
-
+              <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${ESTADO_BADGE[selectedOc.estado] || ''}`}>
+                {selectedOc.estado}
+              </span>
               <div>
-                <span
-                  className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
-                    ESTADO_BADGE[selectedOc.estado] || ''
-                  }`}
-                >
-                  {selectedOc.estado}
-                </span>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Pendiente total</p>
+                <p className="text-xs text-muted-foreground">Pendiente total</p>
                 <p className={`font-bold ${pendienteTotal(selectedOc) > 0 ? 'text-orange-600' : 'text-green-600'}`}>
                   {pendienteTotal(selectedOc)} unidades
                 </p>
               </div>
             </div>
 
-            {selectedOc.observaciones && (
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <p className="text-sm font-semibold flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  Observaciones
+            {/* Observaciones — editable en BORRADOR */}
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <FileText size={12} /> Observaciones
                 </p>
-                <p className="text-sm mt-2">{selectedOc.observaciones}</p>
+                {selectedOc.estado === 'BORRADOR' && canEditOC && !editObs && (
+                  <button
+                    className="text-xs text-primary flex items-center gap-1 hover:underline"
+                    onClick={() => { setEditObsValue(selectedOc.observaciones ?? ''); setEditObs(true); }}
+                  >
+                    <Pencil size={12} /> Editar
+                  </button>
+                )}
+              </div>
+              {editObs ? (
+                <div className="flex gap-2 items-center mt-1">
+                  <Input
+                    value={editObsValue}
+                    onChange={(e) => setEditObsValue(e.target.value)}
+                    placeholder="Observaciones..."
+                    className="flex-1 h-8 text-sm"
+                  />
+                  <Button size="sm" onClick={handleSaveObs} disabled={savingEdit}><Check size={14} /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditObs(false)}><X size={14} /></Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {selectedOc.observaciones || <span className="italic">Sin observaciones</span>}
+                </p>
+              )}
+            </div>
+
+            {/* Items table */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Productos</p>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted">
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead className="text-center">Solicitado</TableHead>
+                      <TableHead className="text-center">Recibido</TableHead>
+                      <TableHead className="text-center">Pendiente</TableHead>
+                      <TableHead className="text-right">Precio unit.</TableHead>
+                      {selectedOc.estado === 'BORRADOR' && canEditOC && (
+                        <TableHead className="text-right">Acciones</TableHead>
+                      )}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(selectedOc.items ?? []).map((it, idx) => {
+                      const recibido = it.cantidadRecibida ?? 0;
+                      const pendiente = Math.max(0, it.cantidadSolicitada - recibido);
+                      const isEditing = editItemId === it.id;
+                      return (
+                        <TableRow key={it.id ?? idx}>
+                          <TableCell className="font-medium">{it.productoNombre || `#${it.productoId}`}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{it.codigoBarras || '—'}</TableCell>
+                          <TableCell className="text-center">
+                            {isEditing ? (
+                              <Input
+                                type="number" min={1}
+                                value={editItemQty}
+                                onChange={(e) => setEditItemQty(Number(e.target.value))}
+                                className="w-20 h-7 text-center text-sm mx-auto"
+                              />
+                            ) : it.cantidadSolicitada}
+                          </TableCell>
+                          <TableCell className="text-center text-green-600">{recibido}</TableCell>
+                          <TableCell className="text-center">
+                            <span className={pendiente > 0 ? 'text-orange-600 font-medium' : 'text-green-600'}>
+                              {pendiente}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isEditing ? (
+                              <Input
+                                type="number" min={0} step={0.01}
+                                value={editItemPrice}
+                                onChange={(e) => setEditItemPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                                className="w-24 h-7 text-right text-sm ml-auto"
+                                placeholder="Precio"
+                              />
+                            ) : it.precioUnitario != null ? `S/. ${Number(it.precioUnitario).toFixed(2)}` : '—'}
+                          </TableCell>
+                          {selectedOc.estado === 'BORRADOR' && canEditOC && (
+                            <TableCell className="text-right">
+                              {isEditing ? (
+                                <div className="flex gap-1 justify-end">
+                                  <Button size="sm" onClick={() => it.id && handleSaveItem(it.id)} disabled={savingEdit}>
+                                    <Check size={13} />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={() => setEditItemId(null)}>
+                                    <X size={13} />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex gap-1 justify-end">
+                                  <Button
+                                    size="sm" variant="ghost"
+                                    onClick={() => {
+                                      setEditItemId(it.id ?? null);
+                                      setEditItemQty(it.cantidadSolicitada);
+                                      setEditItemPrice(it.precioUnitario ?? '');
+                                    }}
+                                    title="Editar"
+                                  >
+                                    <Pencil size={13} className="text-primary" />
+                                  </Button>
+                                  <Button
+                                    size="sm" variant="ghost"
+                                    onClick={() => it.id && handleRemoveItem(it.id)}
+                                    disabled={savingEdit}
+                                    title="Quitar"
+                                  >
+                                    <Trash2 size={13} className="text-destructive" />
+                                  </Button>
+                                </div>
+                              )}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            {/* Agregar producto — solo BORRADOR */}
+            {selectedOc.estado === 'BORRADOR' && canEditOC && (
+              <div className="rounded-lg border border-dashed p-3 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  + Agregar producto
+                </p>
+                <div className="flex flex-wrap gap-2 items-end">
+                  <div className="flex-1 min-w-[180px]">
+                    <Autocomplete
+                      options={productos
+                        .filter((p) => !(selectedOc.items ?? []).some((i) => i.productoId === p.id))
+                        .map((p) => ({
+                          id: p.id!,
+                          label: p.nombre,
+                          subtitle: p.codigoBarras ?? undefined,
+                        }))}
+                      value={addProdId ? { id: addProdId, label: productos.find((p) => p.id === addProdId)?.nombre ?? '' } : null}
+                      onChange={(opt) => setAddProdId(opt ? Number(opt.id) : null)}
+                      placeholder="Buscar producto..."
+                      emptyMessage="Sin resultados"
+                    />
+                  </div>
+                  <div className="w-20">
+                    <label className="text-xs text-muted-foreground">Cant.</label>
+                    <Input
+                      type="number" min={1}
+                      value={addQty}
+                      onChange={(e) => setAddQty(Number(e.target.value))}
+                      className="h-8 text-center"
+                    />
+                  </div>
+                  <div className="w-28">
+                    <label className="text-xs text-muted-foreground">Precio unit.</label>
+                    <Input
+                      type="number" min={0} step={0.01}
+                      value={addPrice}
+                      onChange={(e) => setAddPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="S/. 0.00"
+                      className="h-8"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleAddItem}
+                    disabled={!addProdId || addQty < 1 || savingEdit}
+                  >
+                    <Plus size={14} className="mr-1" /> Agregar
+                  </Button>
+                </div>
               </div>
             )}
 
-            {/* Items */}
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Producto</TableHead>
-                    <TableHead>Código</TableHead>
-                    <TableHead className="text-right">Solicitado</TableHead>
-                    <TableHead className="text-right">Recibido</TableHead>
-                    <TableHead className="text-right">Pendiente</TableHead>
-                    <TableHead className="text-right">Precio unit.</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(selectedOc.items ?? []).map((it, idx) => {
-                    const recibido = it.cantidadRecibida ?? 0;
-                    const pendiente = Math.max(0, it.cantidadSolicitada - recibido);
-                    return (
-                      <TableRow key={it.id ?? idx}>
-                        <TableCell className="font-medium">{it.productoNombre || `#${it.productoId}`}</TableCell>
-                        <TableCell className="text-muted-foreground text-xs">{it.codigoBarras || '—'}</TableCell>
-                        <TableCell className="text-right">{it.cantidadSolicitada}</TableCell>
-                        <TableCell className="text-right text-green-600">{recibido}</TableCell>
-                        <TableCell className="text-right">
-                          <span className={pendiente > 0 ? 'text-orange-600 font-medium' : 'text-green-600'}>
-                            {pendiente}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {it.precioUnitario != null ? `S/. ${it.precioUnitario.toFixed(2)}` : '—'}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            {/* Banner guía → Recepciones */}
+            {(selectedOc.estado === 'ENVIADA' || selectedOc.estado === 'RECIBIDA_PARCIAL') && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-300">
+                  <Truck size={16} className="shrink-0" />
+                  <span>
+                    {selectedOc.estado === 'RECIBIDA_PARCIAL'
+                      ? 'Recepción parcial — quedan unidades pendientes.'
+                      : 'OC enviada — registra la llegada de la mercadería en Recepciones.'}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-blue-300 text-blue-700 hover:bg-blue-100"
+                  onClick={() => { closeDetail(); navigate('/dashboard/recepciones'); }}
+                >
+                  <PackagePlus size={14} className="mr-1" />
+                  Ir a Recepciones
+                </Button>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">
               {(selectedOc.estado === 'BORRADOR' || selectedOc.estado === 'ENVIADA') && canEditOC && (
                 <Button variant="outline" onClick={handleCancelar} disabled={detailActionLoading}>
                   <XCircle size={16} className="mr-2" />
-                  Cancelar
+                  Cancelar OC
                 </Button>
               )}
-
               {selectedOc.estado === 'BORRADOR' && canEditOC && (
-                <Button onClick={handleEnviar} disabled={detailActionLoading || (selectedOc.items ?? []).length === 0}>
+                <Button
+                  onClick={handleEnviar}
+                  disabled={detailActionLoading || (selectedOc.items ?? []).length === 0}
+                >
                   <Send size={16} className="mr-2" />
-                  Enviar
-                </Button>
-              )}
-
-              {(selectedOc.estado === 'ENVIADA' || selectedOc.estado === 'PARCIAL') && (
-                <Button onClick={handleRecepcionar} disabled={detailActionLoading}>
-                  <PackagePlus size={16} className="mr-2" />
-                  Recepcionar
+                  Enviar OC
                 </Button>
               )}
             </div>
@@ -865,7 +1094,7 @@ export function OrdenComprasList() {
                 />
               </div>
 
-              <Button type="button" variant="outline" onClick={handleAddItem} className="h-11">
+              <Button type="button" variant="outline" onClick={handleAddCreateItem} className="h-11">
                 <Plus size={16} className="mr-2" />
                 Agregar
               </Button>
@@ -900,7 +1129,7 @@ export function OrdenComprasList() {
                           <TableCell className="text-right">
                             <button
                               type="button"
-                              onClick={() => handleRemoveItem(it.productoId)}
+                              onClick={() => handleRemoveCreateItem(it.productoId)}
                               className="text-red-500 hover:text-red-700 text-xs"
                             >
                               Quitar

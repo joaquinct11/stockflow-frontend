@@ -8,6 +8,7 @@ import type {
   DetalleVentaDTO,
   EmitirComprobanteRequest,
   EmitirComprobanteForm,
+  ComprobanteDTO,
   // MetodoPago,
 } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -31,6 +32,7 @@ import {
   Calendar,
   FileText,
   TrendingUp,
+  Hash,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
@@ -65,6 +67,7 @@ export function VentasList() {
 
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
+  const [comprobantes, setComprobantes] = useState<ComprobanteDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
@@ -181,17 +184,20 @@ export function VentasList() {
     setCurrentPage(1);
   }, [searchTerm, fechaDesde, fechaHasta, metodoPagoFilter]);
 
-  const calculateSubtotal = () => {
-    return formData.detalles.reduce((total, detalle) => total + detalle.cantidad * detalle.precioUnitario, 0);
+  const calculateTotal = () =>
+    formData.detalles.reduce((sum, d) => sum + d.cantidad * d.precioUnitario, 0);
+
+  // desglose informativo: extrae IGV del precio (precio ya incluye IGV)
+  const calculateIGVIncluido = () => {
+    const total = calculateTotal();
+    return total * IGV_RATE / (1 + IGV_RATE); // = total * 18/118
   };
 
-  const calculateIGV = () => calculateSubtotal() * IGV_RATE;
-
-  const calculateTotalWithIGV = () => calculateSubtotal() + calculateIGV();
+  const calculateBaseImponible = () => calculateTotal() / (1 + IGV_RATE);
 
   useEffect(() => {
     if (formData.metodoPago === 'EFECTIVO') {
-      const total = calculateTotalWithIGV();
+      const total = calculateTotal();
       const cambio = montoRecibido - total;
       setVuelto(cambio >= 0 ? cambio : 0);
     } else {
@@ -216,10 +222,17 @@ export function VentasList() {
       const productosPromise =
         hasViewPermission || canCreate('VENTAS') ? productoService.getAll() : Promise.resolve([] as ProductoDTO[]);
 
-      const [ventasData, productosData] = await Promise.all([ventasPromise, productosPromise]);
+      const comprobantesPromise = facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[]);
+
+      const [ventasData, productosData, comprobantesData] = await Promise.all([
+        ventasPromise,
+        productosPromise,
+        comprobantesPromise,
+      ]);
 
       setVentas(ventasData);
       setProductos(productosData);
+      setComprobantes(comprobantesData);
     } catch (error) {
       toast.error('Error al cargar datos');
       if (import.meta.env.DEV) console.error(error);
@@ -271,7 +284,7 @@ export function VentasList() {
     }
 
     if (formData.metodoPago === 'EFECTIVO') {
-      const total = calculateTotalWithIGV();
+      const total = calculateTotal();
       if (montoRecibido < total) {
         toast.error(`El monto recibido (S/.${montoRecibido.toFixed(2)}) es menor al total (S/.${total.toFixed(2)})`);
         return;
@@ -279,7 +292,7 @@ export function VentasList() {
     }
 
     try {
-      const ventaToSend = { ...formData, total: calculateTotalWithIGV() };
+      const ventaToSend = { ...formData, total: calculateTotal() };
       await ventaService.create(ventaToSend);
       toast.success('Venta creada exitosamente');
 
@@ -411,6 +424,10 @@ export function VentasList() {
     }
 
     return true;
+  }).sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : (a.id ?? 0);
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : (b.id ?? 0);
+    return dateB - dateA; // más reciente primero
   });
 
   const totalPages = Math.ceil(filteredVentas.length / itemsPerPage);
@@ -714,6 +731,7 @@ export function VentasList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>ID</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Vendedor</TableHead>
                       <TableHead>Método de Pago</TableHead>
@@ -726,6 +744,12 @@ export function VentasList() {
                   <TableBody>
                     {currentVentas.map((venta) => (
                       <TableRow key={venta.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Hash className="h-3 w-3" />
+                            <span className="font-semibold text-foreground">{venta.id}</span>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="text-sm">
                             {venta.createdAt ? new Date(venta.createdAt).toLocaleDateString('es-PE') : '-'}
@@ -845,70 +869,6 @@ export function VentasList() {
               <input type="hidden" value="COMPLETADA" />
             </div>
           </div>
-
-          {/* ✅ Sección de Efectivo */}
-          {formData.metodoPago === 'EFECTIVO' && formData.detalles.length > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3">
-              <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Pago en Efectivo
-              </h3>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Total a Pagar (incl. IGV)</label>
-                  <div className="h-10 rounded-md border-2 border-blue-300 dark:border-blue-700 bg-blue-100 dark:bg-blue-900 px-3 py-2 flex items-center justify-between font-bold text-blue-900 dark:text-blue-100">
-                    <span>S/.</span>
-                    <span>{calculateTotalWithIGV().toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Monto Recibido
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={montoRecibido || ''}
-                    onChange={(e) => setMontoRecibido(parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className="h-10 font-bold text-right"
-                    required={formData.metodoPago === 'EFECTIVO'}
-                  />
-                </div>
-              </div>
-
-              {montoRecibido > 0 && (
-                <div
-                  className={`rounded-lg p-3 border-2 ${
-                    vuelto >= 0
-                      ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800'
-                      : 'bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-sm">{vuelto >= 0 ? 'Vuelto:' : 'Falta:'}</span>
-                    <span
-                      className={`text-2xl font-bold ${
-                        vuelto >= 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
-                      }`}
-                    >
-                      S/.{Math.abs(vuelto).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {montoRecibido > 0 && vuelto < 0 && (
-                <div className="bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-lg p-2 text-sm text-red-800 dark:text-red-200">
-                  ⚠️ El monto recibido es insuficiente
-                </div>
-              )}
-            </div>
-          )}
 
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -1034,20 +994,82 @@ export function VentasList() {
 
           <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 space-y-2">
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground font-medium">Subtotal:</span>
-              <span className="font-semibold">S/.{calculateSubtotal().toFixed(2)}</span>
+              <span className="text-muted-foreground font-medium">Base imponible:</span>
+              <span className="font-semibold">S/.{calculateBaseImponible().toFixed(2)}</span>
             </div>
-
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground font-medium">IGV (18%):</span>
-              <span className="font-semibold">S/.{calculateIGV().toFixed(2)}</span>
+              <span className="text-muted-foreground font-medium">IGV (18%) incl.:</span>
+              <span className="font-semibold">S/.{calculateIGVIncluido().toFixed(2)}</span>
             </div>
-
             <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
               <span className="text-lg font-semibold">Total:</span>
-              <span className="text-2xl font-bold text-primary">S/.{calculateTotalWithIGV().toFixed(2)}</span>
+              <span className="text-2xl font-bold text-primary">S/.{calculateTotal().toFixed(2)}</span>
             </div>
           </div>
+
+          {/* Sección de Efectivo — debajo del resumen de totales */}
+          {formData.metodoPago === 'EFECTIVO' && formData.detalles.length > 0 && (
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3">
+              <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Pago en Efectivo
+              </h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Total a Pagar</label>
+                  <div className="h-10 rounded-md border-2 border-blue-300 dark:border-blue-700 bg-blue-100 dark:bg-blue-900 px-3 py-2 flex items-center justify-between font-bold text-blue-900 dark:text-blue-100">
+                    <span>S/.</span>
+                    <span>{calculateTotal().toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Monto Recibido
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={montoRecibido || ''}
+                    onChange={(e) => setMontoRecibido(parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="h-10 font-bold text-right"
+                    required={formData.metodoPago === 'EFECTIVO'}
+                  />
+                </div>
+              </div>
+
+              {montoRecibido > 0 && (
+                <div
+                  className={`rounded-lg p-3 border-2 ${
+                    vuelto >= 0
+                      ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-sm">{vuelto >= 0 ? 'Vuelto:' : 'Falta:'}</span>
+                    <span
+                      className={`text-2xl font-bold ${
+                        vuelto >= 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                      }`}
+                    >
+                      S/.{Math.abs(vuelto).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {montoRecibido > 0 && vuelto < 0 && (
+                <div className="bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-lg p-2 text-sm text-red-800 dark:text-red-200">
+                  ⚠️ El monto recibido es insuficiente
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-2 justify-end pt-4 border-t">
             <Button type="button" variant="outline" onClick={resetForm}>
@@ -1057,7 +1079,7 @@ export function VentasList() {
               type="submit"
               disabled={
                 formData.detalles.length === 0 ||
-                (formData.metodoPago === 'EFECTIVO' && montoRecibido < calculateTotalWithIGV())
+                (formData.metodoPago === 'EFECTIVO' && montoRecibido < calculateTotal())
               }
             >
               Crear Venta
@@ -1077,8 +1099,10 @@ export function VentasList() {
         {selectedVenta &&
           (() => {
             const subtotalVenta = selectedVenta.detalles.reduce((acc, d) => acc + d.cantidad * d.precioUnitario, 0);
-            const igvVenta = subtotalVenta * IGV_RATE;
-            const totalCalculado = subtotalVenta + igvVenta;
+            // subtotalVenta = total (precio ya incluye IGV)
+            const igvVenta = subtotalVenta * IGV_RATE / (1 + IGV_RATE);
+            const baseImponible = subtotalVenta / (1 + IGV_RATE);
+            const totalCalculado = subtotalVenta;
 
             return (
               <div className="space-y-4">
@@ -1145,37 +1169,41 @@ export function VentasList() {
 
                 <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-3">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground font-medium">Subtotal:</span>
-                    <span className="font-semibold">S/.{subtotalVenta.toFixed(2)}</span>
+                    <span className="text-muted-foreground font-medium">Base imponible:</span>
+                    <span className="font-semibold">S/.{baseImponible.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground font-medium">IGV (18%):</span>
+                    <span className="text-muted-foreground font-medium">IGV (18%) incl.:</span>
                     <span className="font-semibold">S/.{igvVenta.toFixed(2)}</span>
                   </div>
 
                   <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
                     <span className="text-lg font-semibold">Total:</span>
-                    <span className="text-2xl font-bold text-primary">S/.{selectedVenta.total.toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-primary">S/.{totalCalculado.toFixed(2)}</span>
                   </div>
-
-                  {Math.abs(selectedVenta.total - totalCalculado) > 0.01 && (
-                    <p className="text-xs text-muted-foreground">
-                      Nota: total guardado S/.{selectedVenta.total.toFixed(2)} (calculado S/.{totalCalculado.toFixed(2)}).
-                    </p>
-                  )}
                 </div>
 
-                {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (
-                  <Button
-                    variant="outline"
-                    className="w-full flex items-center gap-2"
-                    onClick={() => handleOpenEmitirComprobante(selectedVenta)}
-                  >
-                    <FileText size={16} />
-                    Emitir Comprobante
-                  </Button>
-                )}
+                {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (() => {
+                  const yaFacturada = comprobantes.some(
+                    (c) => c.ventaId === selectedVenta.id && c.estado === 'EMITIDO'
+                  );
+                  return yaFacturada ? (
+                    <div className="w-full flex items-center justify-center gap-2 rounded-md border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800 px-4 py-2 text-sm text-green-700 dark:text-green-300 font-medium">
+                      <FileText size={16} />
+                      Comprobante ya emitido
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center gap-2"
+                      onClick={() => handleOpenEmitirComprobante(selectedVenta)}
+                    >
+                      <FileText size={16} />
+                      Emitir Comprobante
+                    </Button>
+                  );
+                })()}
 
                 <Button onClick={closeDetailDialog} className="w-full">
                   Cerrar

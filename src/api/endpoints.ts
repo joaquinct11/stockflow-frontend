@@ -136,6 +136,7 @@ export const API_ENDPOINTS = {
     REMOVE_ITEM: (id: number, itemId: number) => `/recepciones/${id}/items/${itemId}`,
     SET_COMPROBANTE: (id: number) => `/recepciones/${id}/comprobante`,
     CONFIRMAR: (id: number) => `/recepciones/${id}/confirmar`,
+    ANULAR: (id: number) => `/recepciones/${id}`,
   },
 
   REPORTES: {
