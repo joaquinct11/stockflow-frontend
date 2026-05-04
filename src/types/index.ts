@@ -291,6 +291,15 @@ export interface ReceptorDTO {
   direccion?: string;
 }
 
+export interface ItemComprobanteDTO {
+  productoId?: number;
+  productoNombre?: string;
+  codigoBarras?: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+}
+
 export interface ComprobanteDTO {
   id?: number;
   numero?: string;       // e.g. B001-00000001
@@ -300,7 +309,10 @@ export interface ComprobanteDTO {
   estado: EstadoComprobante;
   ventaId: number;
   receptor?: ReceptorDTO;
-  total?: number;
+  subtotal?: number;     // base imponible (total / 1.18)
+  igv?: number;          // IGV incluido
+  total?: number;        // total con IGV
+  items?: ItemComprobanteDTO[];
   tenantId?: string;
   createdAt?: string;
   updatedAt?: string;
