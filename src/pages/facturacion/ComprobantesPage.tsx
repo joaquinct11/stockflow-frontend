@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { facturacionService } from '../../services/facturacion.service';
 import { ventaService } from '../../services/venta.service';
-import type { ComprobanteDTO, EmitirComprobanteForm, EmitirComprobanteRequest, TipoComprobante, VentaDTO } from '../../types';
+import type { ComprobanteDTO, EmitirComprobanteForm, EmitirComprobanteRequest, TipoComprobante, VentaDTO, ItemComprobanteDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -13,7 +13,7 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, Calendar, DollarSign } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, Calendar, DollarSign, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
@@ -158,8 +158,14 @@ export function ComprobantesPage() {
     );
   });
 
-  const totalPages = Math.ceil(filteredComprobantes.length / itemsPerPage);
-  const paginatedComprobantes = filteredComprobantes.slice(
+  const sortedComprobantes = [...filteredComprobantes].sort((a, b) => {
+    const da = a.createdAt ? new Date(a.createdAt).getTime() : (a.id ?? 0);
+    const db = b.createdAt ? new Date(b.createdAt).getTime() : (b.id ?? 0);
+    return db - da;
+  });
+
+  const totalPages = Math.ceil(sortedComprobantes.length / itemsPerPage);
+  const paginatedComprobantes = sortedComprobantes.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
@@ -478,14 +484,14 @@ export function ComprobantesPage() {
         <CardHeader>
           <CardTitle>Comprobantes</CardTitle>
           <CardDescription>
-            {filteredComprobantes.length} comprobante{filteredComprobantes.length !== 1 ? 's' : ''} encontrado
-            {filteredComprobantes.length !== 1 ? 's' : ''}
+            {sortedComprobantes.length} comprobante{sortedComprobantes.length !== 1 ? 's' : ''} encontrado
+            {sortedComprobantes.length !== 1 ? 's' : ''}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
             <LoadingSpinner />
-          ) : filteredComprobantes.length === 0 ? (
+          ) : sortedComprobantes.length === 0 ? (
             <EmptyState
               icon={FileText}
               title="Sin comprobantes"
@@ -565,7 +571,7 @@ export function ComprobantesPage() {
                   <Pagination
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    totalItems={filteredComprobantes.length}
+                    totalItems={sortedComprobantes.length}
                     itemsPerPage={itemsPerPage}
                     onPageChange={setCurrentPage}
                   />
@@ -758,92 +764,176 @@ export function ComprobantesPage() {
         </form>
       </Dialog>
 
-      {/* Detail Dialog */}
+      {/* Detail Dialog — vista tipo comprobante real */}
       <Dialog
         isOpen={isDetailOpen}
         onClose={() => {
           setIsDetailOpen(false);
           setSelectedComprobante(null);
         }}
-        title="Detalle de Comprobante"
-        description={selectedComprobante ? `${selectedComprobante.numero ?? `ID ${selectedComprobante.id}`}` : ''}
-        size="md"
+        title=""
+        description=""
+        size="lg"
       >
         {selectedComprobante && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1 p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground font-medium">Número</p>
-                <p className="font-mono font-semibold">{selectedComprobante.numero ?? '—'}</p>
-              </div>
-              <div className="space-y-1 p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground font-medium">Tipo</p>
-                <Badge variant={selectedComprobante.tipo === 'FACTURA' ? 'default' : 'secondary'}>
-                  {selectedComprobante.tipo}
+          <div className="space-y-0 text-sm" id="comprobante-print">
+
+            {/* ── Cabecera del comprobante ── */}
+            <div className="text-center border-b pb-4 mb-4 space-y-1">
+              <div className="flex items-center justify-center gap-3 mb-2">
+                <Badge
+                  variant={selectedComprobante.tipo === 'FACTURA' ? 'default' : 'secondary'}
+                  className="text-base px-3 py-1"
+                >
+                  {selectedComprobante.tipo === 'BOLETA' ? '🧾 BOLETA DE VENTA' : '🏢 FACTURA ELECTRÓNICA'}
                 </Badge>
-              </div>
-              <div className="space-y-1 p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground font-medium">Estado</p>
-                <Badge variant={estadoBadgeVariant(selectedComprobante.estado)}>
+                <Badge variant={estadoBadgeVariant(selectedComprobante.estado)} className="text-xs">
                   {estadoIcon(selectedComprobante.estado)}
                   {selectedComprobante.estado}
                 </Badge>
               </div>
-              <div className="space-y-1 p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground font-medium">Venta ID</p>
-                <p className="font-semibold">#{selectedComprobante.ventaId}</p>
+              <p className="text-xl font-bold tracking-wide">{selectedComprobante.numero ?? '—'}</p>
+              <p className="text-xs text-muted-foreground">
+                Fecha de emisión:{' '}
+                {selectedComprobante.createdAt
+                  ? new Date(selectedComprobante.createdAt).toLocaleString('es-PE', {
+                      day: '2-digit', month: '2-digit', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })
+                  : '—'}
+              </p>
+            </div>
+
+            {/* ── Receptor ── */}
+            <div className="border rounded-lg p-3 mb-4 space-y-1 bg-muted/30">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                {selectedComprobante.tipo === 'FACTURA' ? 'Razón Social' : 'Cliente'}
+              </p>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {selectedComprobante.receptorDocTipo ?? selectedComprobante.receptor?.tipoDocumento ?? 'DOC'}
+                </span>
+                <span className="font-medium">
+                  {selectedComprobante.receptorDocNumero
+                    ?? selectedComprobante.receptor?.numeroDocumento
+                    ?? 'CLIENTES VARIOS'}
+                </span>
+              </div>
+              {(selectedComprobante.receptorNombre ?? selectedComprobante.receptor?.razonSocial) && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Nombre / Razón Social</span>
+                  <span className="font-medium text-right max-w-[60%]">
+                    {selectedComprobante.receptorNombre ?? selectedComprobante.receptor?.razonSocial}
+                  </span>
+                </div>
+              )}
+              {(selectedComprobante.receptorDireccion ?? selectedComprobante.receptor?.direccion) && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Dirección</span>
+                  <span className="font-medium text-right max-w-[60%]">
+                    {selectedComprobante.receptorDireccion ?? selectedComprobante.receptor?.direccion}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* ── Detalle de productos ── */}
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Detalle
+              </p>
+              <div className="rounded-md border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted text-left">
+                      <th className="px-3 py-2 font-semibold text-xs">Producto</th>
+                      <th className="px-3 py-2 font-semibold text-xs text-center">Cant.</th>
+                      <th className="px-3 py-2 font-semibold text-xs text-right">P. Unit.</th>
+                      <th className="px-3 py-2 font-semibold text-xs text-right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedComprobante.items && selectedComprobante.items.length > 0 ? (
+                      selectedComprobante.items.map((item: ItemComprobanteDTO, idx: number) => (
+                        <tr key={idx} className="border-t">
+                          <td className="px-3 py-2">
+                            <p className="font-medium leading-tight">{item.productoNombre ?? `Producto #${item.productoId}`}</p>
+                            {item.codigoBarras && (
+                              <p className="text-xs text-muted-foreground">{item.codigoBarras}</p>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">{item.cantidad}</td>
+                          <td className="px-3 py-2 text-right">S/.{Number(item.precioUnitario).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right font-medium">S/.{Number(item.subtotal).toFixed(2)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-4 text-center text-muted-foreground text-xs">
+                          Sin detalle de productos
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
-            {selectedComprobante.receptor && (
-              <div className="border rounded-lg p-3 space-y-2">
-                <p className="text-sm font-semibold">Receptor</p>
-                {selectedComprobante.receptor.tipoDocumento && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{selectedComprobante.receptor.tipoDocumento}</span>
-                    <span className="font-medium">{selectedComprobante.receptor.numeroDocumento ?? '—'}</span>
-                  </div>
-                )}
-                {selectedComprobante.receptor.razonSocial && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Razón Social / Nombre</span>
-                    <span className="font-medium">{selectedComprobante.receptor.razonSocial}</span>
-                  </div>
-                )}
-                {selectedComprobante.receptor.direccion && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Dirección</span>
-                    <span className="font-medium">{selectedComprobante.receptor.direccion}</span>
-                  </div>
-                )}
+            {/* ── Resumen financiero ── */}
+            <div className="border rounded-lg overflow-hidden mb-4">
+              <div className="flex justify-between px-4 py-2 border-b bg-muted/30">
+                <span className="text-sm text-muted-foreground">OP. GRAVADA</span>
+                <span className="text-sm font-medium">
+                  S/.{selectedComprobante.subtotal != null ? Number(selectedComprobante.subtotal).toFixed(2) : '—'}
+                </span>
               </div>
-            )}
-
-            {selectedComprobante.total != null && (
-              <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 flex justify-between items-center">
-                <span className="font-semibold">Total</span>
-                <span className="text-2xl font-bold text-primary">S/.{selectedComprobante.total.toFixed(2)}</span>
+              <div className="flex justify-between px-4 py-2 border-b bg-muted/30">
+                <span className="text-sm text-muted-foreground">IGV (18%)</span>
+                <span className="text-sm font-medium">
+                  S/.{selectedComprobante.igv != null ? Number(selectedComprobante.igv).toFixed(2) : '—'}
+                </span>
               </div>
-            )}
+              <div className="flex justify-between px-4 py-3 bg-primary/10">
+                <span className="font-bold text-base">IMPORTE TOTAL</span>
+                <span className="text-xl font-bold text-primary">
+                  S/.{selectedComprobante.total != null ? Number(selectedComprobante.total).toFixed(2) : '—'}
+                </span>
+              </div>
+            </div>
 
-            <div className="flex justify-between text-xs text-muted-foreground">
-              {selectedComprobante.createdAt && (
-                <span>Emitido: {new Date(selectedComprobante.createdAt).toLocaleString('es-PE')}</span>
+            {/* ── Footer info ── */}
+            <div className="text-center text-xs text-muted-foreground space-y-1 border-t pt-3 mb-4">
+              <p>Venta #{selectedComprobante.ventaId}</p>
+              {selectedComprobante.sunatEstado && (
+                <p>Estado SUNAT: <span className="font-medium">{selectedComprobante.sunatEstado}</span></p>
               )}
-              {selectedComprobante.updatedAt && selectedComprobante.estado === 'ANULADO' && (
-                <span>Anulado: {new Date(selectedComprobante.updatedAt).toLocaleString('es-PE')}</span>
+              {selectedComprobante.estado === 'ANULADO' && selectedComprobante.updatedAt && (
+                <p className="text-destructive font-medium">
+                  Anulado: {new Date(selectedComprobante.updatedAt).toLocaleString('es-PE')}
+                </p>
               )}
             </div>
 
-            <Button
-              className="w-full"
-              onClick={() => {
-                setIsDetailOpen(false);
-                setSelectedComprobante(null);
-              }}
-            >
-              Cerrar
-            </Button>
+            {/* ── Acciones ── */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 gap-2"
+                onClick={() => window.print()}
+              >
+                <Printer size={15} />
+                Imprimir
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  setIsDetailOpen(false);
+                  setSelectedComprobante(null);
+                }}
+              >
+                Cerrar
+              </Button>
+            </div>
           </div>
         )}
       </Dialog>

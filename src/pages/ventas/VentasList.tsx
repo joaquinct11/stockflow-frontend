@@ -184,17 +184,20 @@ export function VentasList() {
     setCurrentPage(1);
   }, [searchTerm, fechaDesde, fechaHasta, metodoPagoFilter]);
 
-  const calculateSubtotal = () => {
-    return formData.detalles.reduce((total, detalle) => total + detalle.cantidad * detalle.precioUnitario, 0);
+  const calculateTotal = () =>
+    formData.detalles.reduce((sum, d) => sum + d.cantidad * d.precioUnitario, 0);
+
+  // desglose informativo: extrae IGV del precio (precio ya incluye IGV)
+  const calculateIGVIncluido = () => {
+    const total = calculateTotal();
+    return total * IGV_RATE / (1 + IGV_RATE); // = total * 18/118
   };
 
-  const calculateIGV = () => calculateSubtotal() * IGV_RATE;
-
-  const calculateTotalWithIGV = () => calculateSubtotal() + calculateIGV();
+  const calculateBaseImponible = () => calculateTotal() / (1 + IGV_RATE);
 
   useEffect(() => {
     if (formData.metodoPago === 'EFECTIVO') {
-      const total = calculateTotalWithIGV();
+      const total = calculateTotal();
       const cambio = montoRecibido - total;
       setVuelto(cambio >= 0 ? cambio : 0);
     } else {
@@ -281,7 +284,7 @@ export function VentasList() {
     }
 
     if (formData.metodoPago === 'EFECTIVO') {
-      const total = calculateTotalWithIGV();
+      const total = calculateTotal();
       if (montoRecibido < total) {
         toast.error(`El monto recibido (S/.${montoRecibido.toFixed(2)}) es menor al total (S/.${total.toFixed(2)})`);
         return;
@@ -289,7 +292,7 @@ export function VentasList() {
     }
 
     try {
-      const ventaToSend = { ...formData, total: calculateTotalWithIGV() };
+      const ventaToSend = { ...formData, total: calculateTotal() };
       await ventaService.create(ventaToSend);
       toast.success('Venta creada exitosamente');
 
@@ -421,6 +424,10 @@ export function VentasList() {
     }
 
     return true;
+  }).sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : (a.id ?? 0);
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : (b.id ?? 0);
+    return dateB - dateA; // más reciente primero
   });
 
   const totalPages = Math.ceil(filteredVentas.length / itemsPerPage);
@@ -987,18 +994,16 @@ export function VentasList() {
 
           <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 space-y-2">
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground font-medium">Subtotal:</span>
-              <span className="font-semibold">S/.{calculateSubtotal().toFixed(2)}</span>
+              <span className="text-muted-foreground font-medium">Base imponible:</span>
+              <span className="font-semibold">S/.{calculateBaseImponible().toFixed(2)}</span>
             </div>
-
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground font-medium">IGV (18%):</span>
-              <span className="font-semibold">S/.{calculateIGV().toFixed(2)}</span>
+              <span className="text-muted-foreground font-medium">IGV (18%) incl.:</span>
+              <span className="font-semibold">S/.{calculateIGVIncluido().toFixed(2)}</span>
             </div>
-
             <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
               <span className="text-lg font-semibold">Total:</span>
-              <span className="text-2xl font-bold text-primary">S/.{calculateTotalWithIGV().toFixed(2)}</span>
+              <span className="text-2xl font-bold text-primary">S/.{calculateTotal().toFixed(2)}</span>
             </div>
           </div>
 
@@ -1012,10 +1017,10 @@ export function VentasList() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Total a Pagar (incl. IGV)</label>
+                  <label className="text-sm font-medium">Total a Pagar</label>
                   <div className="h-10 rounded-md border-2 border-blue-300 dark:border-blue-700 bg-blue-100 dark:bg-blue-900 px-3 py-2 flex items-center justify-between font-bold text-blue-900 dark:text-blue-100">
                     <span>S/.</span>
-                    <span>{calculateTotalWithIGV().toFixed(2)}</span>
+                    <span>{calculateTotal().toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -1074,7 +1079,7 @@ export function VentasList() {
               type="submit"
               disabled={
                 formData.detalles.length === 0 ||
-                (formData.metodoPago === 'EFECTIVO' && montoRecibido < calculateTotalWithIGV())
+                (formData.metodoPago === 'EFECTIVO' && montoRecibido < calculateTotal())
               }
             >
               Crear Venta
@@ -1094,8 +1099,10 @@ export function VentasList() {
         {selectedVenta &&
           (() => {
             const subtotalVenta = selectedVenta.detalles.reduce((acc, d) => acc + d.cantidad * d.precioUnitario, 0);
-            const igvVenta = subtotalVenta * IGV_RATE;
-            const totalCalculado = subtotalVenta + igvVenta;
+            // subtotalVenta = total (precio ya incluye IGV)
+            const igvVenta = subtotalVenta * IGV_RATE / (1 + IGV_RATE);
+            const baseImponible = subtotalVenta / (1 + IGV_RATE);
+            const totalCalculado = subtotalVenta;
 
             return (
               <div className="space-y-4">
@@ -1162,25 +1169,19 @@ export function VentasList() {
 
                 <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-3">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground font-medium">Subtotal:</span>
-                    <span className="font-semibold">S/.{subtotalVenta.toFixed(2)}</span>
+                    <span className="text-muted-foreground font-medium">Base imponible:</span>
+                    <span className="font-semibold">S/.{baseImponible.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground font-medium">IGV (18%):</span>
+                    <span className="text-muted-foreground font-medium">IGV (18%) incl.:</span>
                     <span className="font-semibold">S/.{igvVenta.toFixed(2)}</span>
                   </div>
 
                   <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
                     <span className="text-lg font-semibold">Total:</span>
-                    <span className="text-2xl font-bold text-primary">S/.{selectedVenta.total.toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-primary">S/.{totalCalculado.toFixed(2)}</span>
                   </div>
-
-                  {Math.abs(selectedVenta.total - totalCalculado) > 0.01 && (
-                    <p className="text-xs text-muted-foreground">
-                      Nota: total guardado S/.{selectedVenta.total.toFixed(2)} (calculado S/.{totalCalculado.toFixed(2)}).
-                    </p>
-                  )}
                 </div>
 
                 {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (() => {
