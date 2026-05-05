@@ -308,46 +308,60 @@ export function ProductosList() {
         <>
           {/* Stats */}
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Productos</CardTitle>
-                <Package className="h-4 w-4 text-muted-foreground" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Productos</p>
+                <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                  <Package className="text-blue-600 dark:text-blue-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalProductos}</div>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">{totalProductos}</div>
+                <p className="text-xs text-muted-foreground mt-1">En inventario activo</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Stock Bajo</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stock Bajo</p>
+                <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="text-amber-600 dark:text-amber-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{productosConStockBajo}</div>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">{productosConStockBajo}</div>
+                <p className="text-xs text-muted-foreground mt-1">Requieren atención</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Valor Inventario</CardTitle>
-                <DollarSign className="h-4 w-4 text-green-600" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor Inventario</p>
+                <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                  <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">S/.{valorTotalInventario.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground">Valorizado al costo</p>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">S/.{valorTotalInventario.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground mt-1">Valorizado al costo</p>
               </CardContent>
             </Card>
 
             {/* ✅ Card nuevo: Riesgo de precios */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Precios en riesgo</CardTitle>
-                <Timer className="h-4 w-4 text-red-600" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Precios en riesgo</p>
+                <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                  <Timer className="text-red-600 dark:text-red-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">{productosConPrecioRiesgoso}</div>
-                <p className="text-xs text-muted-foreground">Precio ≤ costo (margen 0 o pérdida)</p>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">{productosConPrecioRiesgoso}</div>
+                <p className="text-xs text-muted-foreground mt-1">Precio ≤ costo</p>
               </CardContent>
             </Card>
           </div>

@@ -519,56 +519,68 @@ export function VentasList() {
 
       {/* Stats */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Ventas</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Ventas</p>
+            <div className="h-9 w-9 rounded-xl bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+              <ShoppingCart className="text-violet-600 dark:text-violet-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalVentas}</div>
-            <p className="text-xs text-muted-foreground">Transacciones registradas</p>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight">{totalVentas}</div>
+            <p className="text-xs text-muted-foreground mt-1">Transacciones registradas</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ventas de hoy</CardTitle>
-            <Calendar className="h-4 w-4 text-blue-600" />
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ventas de hoy</p>
+            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <Calendar className="text-blue-600 dark:text-blue-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalVentasHoy}</div>
-            <p className="text-xs text-muted-foreground">Transacciones del día</p>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight">{totalVentasHoy}</div>
+            <p className="text-xs text-muted-foreground mt-1">Transacciones del día</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Producto más vendido</CardTitle>
-            <TrendingUp className="h-4 w-4 text-orange-600" />
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Producto más vendido</p>
+            <div className="h-9 w-9 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="text-orange-600 dark:text-orange-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {topProducto ? (
               <>
-                <div className="text-lg font-bold leading-tight">{topProducto.nombre}</div>
-                <p className="text-xs text-muted-foreground">{topProducto.cantidad} unidad(es)</p>
+                <div className="text-xl font-bold tracking-tight leading-tight">{topProducto.nombre}</div>
+                <p className="text-xs text-muted-foreground mt-1">{topProducto.cantidad} unidad(es)</p>
               </>
             ) : (
               <>
-                <div className="text-2xl font-bold">—</div>
-                <p className="text-xs text-muted-foreground">Sin datos</p>
+                <div className="text-3xl font-bold tracking-tight text-muted-foreground">—</div>
+                <p className="text-xs text-muted-foreground mt-1">Sin datos aún</p>
               </>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ingresos del Período</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-600" />
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ingresos del Período</p>
+            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">S/.{ingresosFiltrads.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Ticket prom. S/.{ticketPromedio.toFixed(2)}</p>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight">S/.{ingresosFiltrads.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Ticket prom. S/.{ticketPromedio.toFixed(2)}</p>
           </CardContent>
         </Card>
       </div>

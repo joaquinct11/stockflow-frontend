@@ -111,24 +111,25 @@ interface StatCardProps {
 
 function StatCard({ icon, title, value, description, colorClass = 'text-foreground', trend }: StatCardProps) {
   return (
-    <Card>
-      <CardContent className="pt-5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="space-y-1 min-w-0">
-            <p className="text-sm text-muted-foreground truncate">{title}</p>
-            <p className={`text-2xl font-bold ${colorClass}`}>{value}</p>
-            {trend && (
-              <p className={`text-xs flex items-center gap-1 ${trend.value >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {trend.value >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {trend.value >= 0 ? '+' : ''}{trend.value.toFixed(1)}% {trend.label}
-              </p>
-            )}
-            {description && !trend && (
-              <p className="text-xs text-muted-foreground">{description}</p>
-            )}
-          </div>
-          <div className="rounded-md bg-muted p-2 text-muted-foreground shrink-0">{icon}</div>
+    <Card className="relative overflow-hidden border-0 shadow-sm">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{title}</p>
+        <div className="h-9 w-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 text-muted-foreground">
+          {icon}
         </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <p className={`text-3xl font-bold tracking-tight ${colorClass}`}>{value}</p>
+        {trend && (
+          <p className={`text-xs flex items-center gap-1 mt-1 ${trend.value >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+            {trend.value >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {trend.value >= 0 ? '+' : ''}{trend.value.toFixed(1)}% {trend.label}
+          </p>
+        )}
+        {description && !trend && (
+          <p className="text-xs text-muted-foreground mt-1">{description}</p>
+        )}
       </CardContent>
     </Card>
   );

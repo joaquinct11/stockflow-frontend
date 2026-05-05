@@ -6,24 +6,27 @@ export function Breadcrumb() {
   const pathnames = location.pathname.split('/').filter((x) => x);
 
   const breadcrumbNameMap: Record<string, string> = {
-    dashboard: 'Dashboard',
-    productos: 'Productos',
-    ventas: 'Ventas',
-    usuarios: 'Usuarios',
-    suscripciones: 'Suscripciones',
-    inventario: 'Inventario',
-    reportes: 'Reportes',
-    configuracion: 'Configuración',
-    proveedores: 'Proveedores',
-    facturacion: 'Facturación',
-    kardex: 'Kardex',
-    perfil: 'Mi Perfil',
-    admin: 'Administración',
-    permisos: 'Permisos',
+    dashboard:    'Dashboard',
+    productos:    'Productos',
+    ventas:       'Ventas',
+    usuarios:     'Usuarios',
+    suscripciones:'Suscripciones',
+    inventario:   'Inventario',
+    reportes:     'Reportes',
+    configuracion:'Configuración',
+    proveedores:  'Proveedores',
+    facturacion:  'Facturación',
+    compras:      'Compras',
+    ordenes:      'Órdenes de compra',
+    recepciones:  'Recepciones',
+    kardex:       'Kardex',
+    perfil:       'Mi Perfil',
+    admin:        'Administración',
+    permisos:     'Permisos',
   };
 
   return (
-    <nav className="flex items-center space-x-1 text-sm text-muted-foreground mb-4">
+    <nav className="flex items-center space-x-1 text-sm text-muted-foreground mb-4 overflow-x-auto scrollbar-none min-w-0">
       <Link
         to="/dashboard"
         className="flex items-center hover:text-foreground transition-colors"
@@ -35,8 +38,9 @@ export function Breadcrumb() {
         const to = `/${pathnames.slice(0, index + 1).join('/')}`;
         const name = breadcrumbNameMap[value] || value;
 
-        // Skip rendering 'dashboard' segment as a separate breadcrumb item
-        if (value === 'dashboard' && index === 0) return null;
+        // Solo salta 'dashboard' si hay más segmentos después (ej: /dashboard/productos)
+        // Si es la ruta final (/dashboard), sí lo muestra
+        if (value === 'dashboard' && index === 0 && pathnames.length > 1) return null;
 
         return (
           <div key={to} className="flex items-center">
