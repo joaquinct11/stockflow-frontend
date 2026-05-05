@@ -451,127 +451,127 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+      {/* Header personalizado */}
+      <div className="animate-fade-in-up flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">
+            {(() => {
+              const h = new Date().getHours();
+              return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+            })()}, {user?.nombre?.split(' ')[0] ?? 'bienvenido'} 👋
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
 
-        {rol === 'ADMIN' || rol === 'GERENTE' ? (
-          <p className="text-muted-foreground">Resumen general del sistema.</p>
-        ) : rol === 'VENDEDOR' ? (
-          <p className="text-muted-foreground">Resumen de tu desempeño (ventas {ventasScopeLabel}).</p>
-        ) : (
-          <p className="text-muted-foreground">Resumen de inventario (sin métricas de ventas).</p>
+        {/* Quick filter — segmented control */}
+        {showVentasCards && (
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-1 self-start sm:self-auto">
+            {(['HOY', 'SEMANA', 'MES', 'ANUAL'] as TimeFilter[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setTimeFilter(f)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                  timeFilter === f
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {f === 'HOY' ? 'Hoy' : f === 'SEMANA' ? 'Semana' : f === 'MES' ? 'Mes' : 'Anual'}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Quick filter (solo si se muestran métricas de ventas) */}
-      {showVentasCards && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground mr-2">Filtrar:</span>
-          <Button
-            type="button"
-            variant={timeFilter === 'HOY' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setTimeFilter('HOY')}
-          >
-            Hoy
-          </Button>
-          <Button
-            type="button"
-            variant={timeFilter === 'SEMANA' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setTimeFilter('SEMANA')}
-          >
-            Semana
-          </Button>
-          <Button
-            type="button"
-            variant={timeFilter === 'MES' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setTimeFilter('MES')}
-          >
-            Mes
-          </Button>
-          <Button
-            type="button"
-            variant={timeFilter === 'ANUAL' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setTimeFilter('ANUAL')}
-          >
-            Anual
-          </Button>
-
-          <Badge variant="secondary" className="ml-auto">
-            {timeFilter === 'HOY'
-              ? 'Hoy'
-              : timeFilter === 'SEMANA'
-                ? 'Esta semana'
-                : timeFilter === 'MES'
-                  ? 'Este mes'
-                  : 'Este año'}
-          </Badge>
-        </div>
-      )}
-
       {/* Stats Grid */}
-      <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 ${gridColsClass}`}>
+      <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 ${gridColsClass} animate-fade-in-up-delay-1`}>
         {/* Productos */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Productos</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+        <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Productos</p>
+            </div>
+            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <Package className="h-4.5 w-4.5 text-blue-600 dark:text-blue-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProductos}</div>
-            <p className="text-xs text-muted-foreground">En inventario</p>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight">{stats.totalProductos}</div>
+            <p className="text-xs text-muted-foreground mt-1">En inventario activo</p>
           </CardContent>
         </Card>
 
         {/* Bajo stock */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Bajo Stock</CardTitle>
-            <AlertCircle className="h-4 w-4 text-destructive" />
+        <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bajo Stock</p>
+            </div>
+            <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="text-red-600 dark:text-red-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{stats.bajoStockCount}</div>
-            <p className="text-xs text-muted-foreground">Requieren atención</p>
+          <CardContent className="pt-0">
+            <div className={`text-3xl font-bold tracking-tight ${stats.bajoStockCount > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+              {stats.bajoStockCount}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.bajoStockCount === 0 ? 'Sin alertas 🎉' : 'Requieren reabastecimiento'}
+            </p>
           </CardContent>
         </Card>
 
         {/* Ventas e Ingresos SOLO para ADMIN/GERENTE/VENDEDOR */}
         {showVentasCards && (
           <>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {rol === 'VENDEDOR' ? 'Tus Ventas' : 'Ventas'}
-                </CardTitle>
-                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {rol === 'VENDEDOR' ? 'Tus Ventas' : 'Ventas'}
+                  </p>
+                </div>
+                <div className="h-9 w-9 rounded-xl bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                  <ShoppingCart className="text-violet-600 dark:text-violet-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalVentasFiltradas}</div>
-                <p className="text-xs text-muted-foreground">+{stats.ventasHoy} hoy</p>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">{stats.totalVentasFiltradas}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  +{stats.ventasHoy} hoy
+                </p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {rol === 'VENDEDOR' ? 'Tus Ingresos' : 'Ingresos'}
-                </CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {rol === 'VENDEDOR' ? 'Tus Ingresos' : 'Ingresos'}
+                  </p>
+                </div>
+                <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                  <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">S/.{stats.ingresoFiltrado.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground">
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">S/.{stats.ingresoFiltrado.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
                   {timeFilter === 'HOY'
                     ? 'Ingresos de hoy'
                     : timeFilter === 'SEMANA'
-                      ? 'Ingresos de la semana'
+                      ? 'Esta semana'
                       : timeFilter === 'MES'
-                        ? 'Ingresos del mes'
-                        : 'Ingresos del año'}
+                        ? 'Este mes'
+                        : 'Este año'}
                 </p>
               </CardContent>
             </Card>
@@ -581,28 +581,32 @@ export function Dashboard() {
 
       {/* Low Stock Alert */}
       {stats.bajoStockItems.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              Productos con Bajo Stock
-            </CardTitle>
-            <CardDescription>Productos que necesitan reabastecimiento urgente</CardDescription>
+        <Card className="border-0 shadow-sm animate-fade-in-up-delay-2">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Productos con Bajo Stock</CardTitle>
+                <CardDescription className="text-xs">Requieren reabastecimiento urgente</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="divide-y divide-border/60">
               {stats.bajoStockItems.map((producto) => (
-                <div key={producto.id} className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="font-medium">{producto.nombre}</p>
-                    <p className="text-sm text-muted-foreground">Código: {producto.codigoBarras}</p>
+                <div key={producto.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{producto.nombre}</p>
+                    <p className="text-xs text-muted-foreground">{producto.codigoBarras}</p>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 ml-3 flex-shrink-0">
                     <div className="text-right">
-                      <p className="text-sm font-medium">Stock: {producto.stockActual}</p>
-                      <p className="text-xs text-muted-foreground">Mínimo: {producto.stockMinimo}</p>
+                      <p className="text-sm font-semibold">{producto.stockActual} uds</p>
+                      <p className="text-xs text-muted-foreground">mín. {producto.stockMinimo}</p>
                     </div>
-                    <Badge variant="destructive">Bajo</Badge>
+                    <Badge variant="destructive" className="text-xs">Bajo</Badge>
                   </div>
                 </div>
               ))}
@@ -613,18 +617,22 @@ export function Dashboard() {
 
       {/* Productos próximos a vencer (30 días) */}
       {stats.productosProximosAVencer.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-orange-600" />
-              Productos Próximos a Vencer
-            </CardTitle>
-            <CardDescription>
-              {stats.productosProximosAVencer.length} producto(s) vencen en los próximos 30 días
-            </CardDescription>
+        <Card className="border-0 shadow-sm animate-fade-in-up-delay-3">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Próximos a Vencer</CardTitle>
+                <CardDescription className="text-xs">
+                  {stats.productosProximosAVencer.length} producto(s) vencen en los próximos 30 días
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="divide-y divide-border/60">
               {stats.productosProximosAVencer.map((producto) => {
                 const fechaParts = producto.fechaVencimiento.split('T')[0].split('-');
                 const fv = new Date(
@@ -644,21 +652,21 @@ export function Dashboard() {
                 return (
                   <div
                     key={`${producto.id}-${producto.fechaVencimiento}`}
-                    className="flex items-center justify-between border-b pb-3 last:border-b-0"
+                    className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
                   >
-                    <div className="flex-1">
-                      <p className="font-medium">{producto.nombre}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Código: {producto.codigoBarras}
-                        {producto.lote ? ` | Lote: ${producto.lote}` : ''}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{producto.nombre}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {producto.codigoBarras}
+                        {producto.lote ? ` · Lote: ${producto.lote}` : ''}
                       </p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 ml-3 flex-shrink-0">
                       <div className="text-right">
-                        <p className="text-sm font-medium">Vence: {fv.toLocaleDateString('es-PE')}</p>
-                        <p className="text-xs text-muted-foreground">{diasRestantes} días restantes</p>
+                        <p className="text-sm font-semibold">{fv.toLocaleDateString('es-PE')}</p>
+                        <p className="text-xs text-muted-foreground">{diasRestantes} días</p>
                       </div>
-                      <Badge variant={urgencia as any}>
+                      <Badge variant={urgencia as any} className="text-xs">
                         {diasRestantes <= 7
                           ? 'Urgente'
                           : diasRestantes <= 15

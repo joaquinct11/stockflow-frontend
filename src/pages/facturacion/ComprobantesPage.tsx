@@ -295,50 +295,65 @@ export function ComprobantesPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Comprobantes</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Comprobantes</p>
+            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <FileText className="text-blue-600 dark:text-blue-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{comprobantes.length}</div>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight">{comprobantes.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">Registrados en el sistema</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Emitidos</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
+
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Emitidos</p>
+            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <CheckCircle className="text-emerald-600 dark:text-emerald-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
               {comprobantes.filter((c) => c.estado === 'EMITIDO').length}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">Válidos y enviados</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Anulados</CardTitle>
-            <XCircle className="h-4 w-4 text-destructive" />
+
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Anulados</p>
+            <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+              <XCircle className="text-red-600 dark:text-red-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">
               {comprobantes.filter((c) => c.estado === 'ANULADO').length}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">Anulados</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Facturado</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              S/.{comprobantes
-                .filter((c) => c.estado === 'EMITIDO')
-                .reduce((s, c) => s + (c.total ?? 0), 0)
-                .toFixed(2)}
+
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Facturado</p>
+            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
             </div>
-            <p className="text-xs text-muted-foreground">De comprobantes emitidos</p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+              S/.{comprobantes.filter((c) => c.estado === 'EMITIDO').reduce((s, c) => s + (c.total ?? 0), 0).toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">De comprobantes emitidos</p>
           </CardContent>
         </Card>
       </div>

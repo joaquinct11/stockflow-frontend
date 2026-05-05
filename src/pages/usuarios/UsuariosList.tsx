@@ -332,47 +332,59 @@ export function UsuariosList() {
         <>
           {/* Stats */}
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Usuarios</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Usuarios</p>
+                <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                  <Users className="text-blue-600 dark:text-blue-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalUsuarios}</div>
-                <p className="text-xs text-muted-foreground">Registrados en el sistema</p>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">{totalUsuarios}</div>
+                <p className="text-xs text-muted-foreground mt-1">Registrados en el sistema</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Activos</CardTitle>
-                <UserCheck className="h-4 w-4 text-green-600" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Activos</p>
+                <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                  <UserCheck className="text-emerald-600 dark:text-emerald-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-700">{totalActivos}</div>
-                <p className="text-xs text-muted-foreground">Pueden iniciar sesión</p>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">{totalActivos}</div>
+                <p className="text-xs text-muted-foreground mt-1">Pueden iniciar sesión</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
-                <UserX className="h-4 w-4 text-orange-600" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Inactivos</p>
+                <div className="h-9 w-9 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+                  <UserX className="text-orange-600 dark:text-orange-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-700">{totalInactivos}</div>
-                <p className="text-xs text-muted-foreground">Sin acceso temporal</p>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight text-orange-600 dark:text-orange-400">{totalInactivos}</div>
+                <p className="text-xs text-muted-foreground mt-1">Sin acceso temporal</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Administradores</CardTitle>
-                <Shield className="h-4 w-4 text-primary" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Administradores</p>
+                <div className="h-9 w-9 rounded-xl bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                  <Shield className="text-violet-600 dark:text-violet-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalAdmins}</div>
-                <p className="text-xs text-muted-foreground">Control total</p>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">{totalAdmins}</div>
+                <p className="text-xs text-muted-foreground mt-1">Control total</p>
               </CardContent>
             </Card>
           </div>

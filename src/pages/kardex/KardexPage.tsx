@@ -22,6 +22,8 @@ import {
   ArrowLeftRight,
   Star,
   BookOpen,
+  AlertTriangle,
+  DollarSign,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -78,6 +80,12 @@ export function KardexPage() {
     proveedores.forEach((p) => m.set(p.id!, p));
     return m;
   }, [proveedores]);
+
+  const kardexStats = useMemo(() => ({
+    total:     productos.length,
+    bajoStock: productos.filter((p) => p.stockActual <= p.stockMinimo).length,
+    valor:     productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0),
+  }), [productos]);
 
   const openKardex = async (producto: ProductoDTO) => {
     setKardexProducto(producto);
@@ -165,6 +173,53 @@ export function KardexPage() {
             Consulta el historial de movimientos por producto
           </p>
         </div>
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+        {/* Total */}
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Productos en kardex</p>
+            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <Package className="h-4 w-4 text-blue-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-3xl font-bold tracking-tight text-blue-600">{kardexStats.total}</p>
+          </CardContent>
+        </Card>
+
+        {/* Bajo stock */}
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Requieren reabastecimiento</p>
+            <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className={`text-3xl font-bold tracking-tight ${kardexStats.bajoStock > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+              {kardexStats.bajoStock}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Valor */}
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valorizado al costo</p>
+            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <DollarSign className="h-4 w-4 text-emerald-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-3xl font-bold tracking-tight text-emerald-600">S/.{kardexStats.valor.toFixed(2)}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {!hasViewPermission ? (

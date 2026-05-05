@@ -3,9 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
-import { Package, Mail, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AuthShell, AuthCard, Field, Spinner, AuthFooter } from './Login';
 
 export function ForgotPassword() {
   const navigate = useNavigate();
@@ -16,106 +16,88 @@ export function ForgotPassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      if (import.meta.env.DEV) {console.log('📧 Solicitando recuperación de contraseña para:', email);}
+      if (import.meta.env.DEV) console.log('📧 Solicitando recuperación de contraseña para:', email);
       await authService.solicitarRecuperacionContraseña({ email });
-      
       toast.success('Email de recuperación enviado');
       setSubmitted(true);
-      
-      // Después de 3 segundos, redirige al login
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
+      setTimeout(() => navigate('/login'), 5000);
     } catch (error: any) {
-      console.error('❌ Error:', error);
-      const message = error.response?.data?.message || 'Error al solicitar recuperación';
-      toast.error(message);
+      if (import.meta.env.DEV) console.error('❌ Error:', error);
+      toast.error(error.response?.data?.message || 'Error al solicitar recuperación');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="rounded-full bg-primary/10 p-3">
-              <Package className="h-8 w-8 text-primary" />
+    <AuthShell>
+      <AuthCard
+        title={submitted ? '¡Revisa tu correo!' : 'Recuperar contraseña'}
+        description={
+          submitted
+            ? `Enviamos un enlace a ${email}`
+            : 'Te enviaremos un enlace para restablecer tu contraseña'
+        }
+      >
+        {!submitted ? (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Field label="Correo electrónico" htmlFor="email">
+              <Input
+                id="email"
+                type="email"
+                placeholder="tu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-11"
+                autoFocus
+              />
+            </Field>
+
+            <Button
+              type="submit"
+              className="w-full h-11 font-semibold text-sm mt-2"
+              disabled={loading}
+            >
+              {loading ? <Spinner label="Enviando..." /> : 'Enviar enlace de recuperación'}
+            </Button>
+          </form>
+        ) : (
+          /* Estado de éxito */
+          <div className="flex flex-col items-center gap-4 py-2 text-center">
+            <div className="h-14 w-14 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
             </div>
-          </div>
-          <CardTitle className="text-2xl font-bold">¿Olvidaste tu contraseña?</CardTitle>
-          <CardDescription>
-            Ingresa tu email para recibir un enlace de recuperación
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          {!submitted ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-2" htmlFor="email">
-                  <Mail className="h-4 w-4" />
-                  Email
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="tu@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Te enviaremos un enlace para recuperar tu contraseña
-                </p>
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Enviando...' : 'Enviar enlace de recuperación'}
-              </Button>
-
-              {/* Link de vuelta al login */}
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Revisa tu bandeja de entrada (y la carpeta de spam si no aparece).
+              </p>
+            </div>
+            <div className="w-full pt-4 border-t border-border/60">
+              <p className="text-xs text-muted-foreground mb-3">
+                Redirigiendo al inicio de sesión en 5 segundos...
+              </p>
               <Link
                 to="/login"
-                className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+                className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
               >
-                <ArrowLeft size={16} />
-                Volver a login
+                Ir al inicio de sesión
               </Link>
-            </form>
-          ) : (
-            // Mensaje de éxito
-            <div className="space-y-4 text-center">
-              <div className="rounded-full bg-green-100 dark:bg-green-900/30 p-4 w-16 h-16 flex items-center justify-center mx-auto">
-                <Mail className="h-8 w-8 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Email enviado</h3>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Revisa tu bandeja de entrada en <strong>{email}</strong>
-                </p>
-                <p className="text-xs text-muted-foreground mt-3">
-                  Si no ves el email, revisa la carpeta de spam
-                </p>
-              </div>
-              <div className="pt-4 border-t">
-                <p className="text-xs text-muted-foreground mb-3">
-                  Redirigiendo a login en 3 segundos...
-                </p>
-                <Link
-                  to="/login"
-                  className="text-primary hover:underline text-sm font-medium"
-                >
-                  Click aquí si no quieres esperar
-                </Link>
-              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+        )}
+
+        <AuthFooter>
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground font-medium transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Volver a iniciar sesión
+          </Link>
+        </AuthFooter>
+      </AuthCard>
+    </AuthShell>
   );
 }

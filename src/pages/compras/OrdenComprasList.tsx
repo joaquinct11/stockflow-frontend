@@ -468,57 +468,59 @@ export function OrdenComprasList() {
 
       {/* Stats (estilo proveedores/productos) */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {/* <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total OC</CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Borradores</p>
+            <div className="h-9 w-9 rounded-xl bg-slate-500/10 flex items-center justify-center flex-shrink-0">
+              <FileText className="text-slate-600 dark:text-slate-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </CardContent>
-        </Card> */}
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Borradores</CardTitle>
-            <FileText className="h-4 w-4 text-gray-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.borrador}</div>
-            <p className="text-xs text-muted-foreground">Aún no enviadas</p>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight">{stats.borrador}</div>
+            <p className="text-xs text-muted-foreground mt-1">Aún no enviadas</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Enviadas</CardTitle>
-            <Truck className="h-4 w-4 text-blue-600" />
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Enviadas</p>
+            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <Truck className="text-blue-600 dark:text-blue-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.enviada}</div>
-            <p className="text-xs text-muted-foreground">Esperando recepción</p>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight">{stats.enviada}</div>
+            <p className="text-xs text-muted-foreground mt-1">Esperando recepción</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Recibidas</CardTitle>
-            <BadgeCheck className="h-4 w-4 text-green-600" />
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recibidas</p>
+            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <BadgeCheck className="text-emerald-600 dark:text-emerald-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-700">{stats.recibida}</div>
-            <p className="text-xs text-muted-foreground">Recibidas al 100%</p>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">{stats.recibida}</div>
+            <p className="text-xs text-muted-foreground mt-1">Recibidas al 100%</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Canceladas</CardTitle>
-            <BadgeCheck className="h-4 w-4 text-red-600" />
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Canceladas</p>
+            <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+              <XCircle className="text-red-600 dark:text-red-400" size={18} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-700">{stats.cancelada}</div>
-            <p className="text-xs text-muted-foreground">Canceladas</p>
+          <CardContent className="pt-0">
+            <div className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">{stats.cancelada}</div>
+            <p className="text-xs text-muted-foreground mt-1">Canceladas</p>
           </CardContent>
         </Card>
       </div>
