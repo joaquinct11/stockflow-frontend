@@ -110,11 +110,11 @@ export function Dashboard() {
   // Parámetro billing que viene de la página de retorno de Mercado Pago
   const billingParam = searchParams.get('billing');
 
-  const ventasScopeLabel = useMemo(() => {
-    if (rol === 'ADMIN' || rol === 'GERENTE') return 'globales';
-    if (rol === 'VENDEDOR') return 'tuyas';
-    return '—';
-  }, [rol]);
+  // const ventasScopeLabel = useMemo(() => {
+  //   if (rol === 'ADMIN' || rol === 'GERENTE') return 'globales';
+  //   if (rol === 'VENDEDOR') return 'tuyas';
+  //   return '—';
+  // }, [rol]);
 
   // Al regresar de Mercado Pago: sincronizar estado real desde MP
   useEffect(() => {
