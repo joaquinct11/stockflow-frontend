@@ -26,6 +26,8 @@ import { usePermissions } from '../../hooks/usePermissions';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  collapsed: boolean;
+  onCollapsedChange: (v: boolean) => void;
 }
 
 type LeafItem = {
@@ -47,9 +49,23 @@ type GroupItem = {
 
 type MenuEntry = LeafItem | GroupItem;
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+const ROL_BADGE: Record<string, string> = {
+  ADMIN:             'bg-rose-500/20 text-rose-300 border border-rose-500/30',
+  GERENTE:           'bg-blue-500/20 text-blue-300 border border-blue-500/30',
+  VENDEDOR:          'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
+  GESTOR_INVENTARIO: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+};
+
+function getInitials(nombre?: string) {
+  if (!nombre) return '?';
+  const parts = nombre.trim().split(' ');
+  return parts.length >= 2
+    ? (parts[0][0] + parts[1][0]).toUpperCase()
+    : parts[0].slice(0, 2).toUpperCase();
+}
+
+export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: SidebarProps) {
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuthStore();
   const { canAccess, isAdmin } = usePermissions();
 
@@ -82,8 +98,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         icon: Package,
         show: canAccess('PRODUCTOS'),
       },
-
-      // ===== Compras =====
       {
         type: 'group',
         key: 'compras',
@@ -105,8 +119,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           },
         ],
       },
-
-      // ===== Ventas =====
       {
         type: 'group',
         key: 'ventas',
@@ -128,7 +140,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           },
         ],
       },
-
       {
         type: 'item',
         title: 'Inventario',
@@ -136,8 +147,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         icon: PackageOpen,
         show: canAccess('INVENTARIO'),
       },
-
-      // ===== Usuarios/Admin =====
       {
         type: 'group',
         key: 'usuarios',
@@ -159,7 +168,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           },
         ],
       },
-
       {
         type: 'item',
         title: 'Suscripciones',
@@ -185,21 +193,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     [canAccess, isAdmin]
   );
 
-  // auto-expand si estás en una ruta del grupo
   const defaultExpanded = useMemo(() => {
-    const comprasOpen =
-      isPathActive('/dashboard/compras') || isPathActive('/dashboard/recepciones');
-    const ventasOpen =
-      isPathActive('/dashboard/ventas') || isPathActive('/dashboard/facturacion');
-    const usuariosOpen =
-      isPathActive('/dashboard/usuarios') || isPathActive('/dashboard/admin');
+    const comprasOpen = isPathActive('/dashboard/compras') || isPathActive('/dashboard/recepciones');
+    const ventasOpen = isPathActive('/dashboard/ventas') || isPathActive('/dashboard/facturacion');
+    const usuariosOpen = isPathActive('/dashboard/usuarios') || isPathActive('/dashboard/admin');
     return { compras: comprasOpen, ventas: ventasOpen, usuarios: usuariosOpen };
   }, [location.pathname]);
 
   const [openGroups, setOpenGroups] = useState(defaultExpanded);
 
-  // si cambia la ruta, abrimos el grupo correspondiente (sin cerrar los otros)
-  // (evita que al navegar se quede cerrado el grupo activo)
   useMemo(() => {
     setOpenGroups((prev) => ({ ...prev, ...defaultExpanded }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,65 +213,86 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Overlay para móviles */}
+      {/* Overlay móvil */}
       {isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={onClose}
+        />
       )}
 
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 h-screen border-r bg-card transition-all duration-300',
+          'fixed left-0 top-0 z-50 h-screen flex flex-col',
+          'bg-slate-900 border-r border-slate-800',
+          'transition-all duration-300 ease-in-out',
           'lg:translate-x-0',
           collapsed ? 'lg:w-16' : 'lg:w-64',
           isOpen ? 'translate-x-0' : '-translate-x-full',
           'w-64 lg:z-40'
         )}
       >
-        {/* Logo */}
-        <div className="flex h-16 items-center justify-between border-b px-4">
+        {/* ── Logo ──────────────────────────────────────────────── */}
+        <div className={cn(
+          'flex h-16 items-center border-b border-slate-800 flex-shrink-0',
+          collapsed ? 'justify-center px-3' : 'justify-between px-4'
+        )}>
           {!collapsed && (
-            <div className="flex items-center gap-2">
-              <img src="/fluxus.png" alt="Fluxus" className="h-7 w-7" />
-              <span className="text-lg font-bold">Fluxus</span>
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
+                <img src="/fluxus.png" alt="Fluxus" className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="text-white font-bold text-base tracking-tight">Fluxus</span>
+                <p className="text-slate-500 text-[10px] leading-tight">ERP · Gestión</p>
+              </div>
             </div>
           )}
 
-          <button onClick={onClose} className="rounded-md p-2 hover:bg-accent lg:hidden">
+          {collapsed && (
+            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
+              <img src="/fluxus.png" alt="Fluxus" className="h-5 w-5" />
+            </div>
+          )}
+
+          <button
+            onClick={onClose}
+            className="rounded-md p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 lg:hidden"
+          >
             <X size={18} />
           </button>
 
           <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="hidden lg:block rounded-md p-2 hover:bg-accent"
+            onClick={() => onCollapsedChange(!collapsed)}
+            className={cn(
+              'hidden lg:flex items-center justify-center rounded-md p-1.5',
+              'text-slate-400 hover:text-white hover:bg-slate-800',
+              collapsed && 'absolute -right-3 top-5 bg-slate-900 border border-slate-700 shadow-md'
+            )}
             aria-label={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
           >
-            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
         </div>
 
-        {/* Badge de Rol */}
+        {/* ── Badge de Rol ──────────────────────────────────────── */}
         {!collapsed && user && (
-          <div className="border-b px-4 py-3">
+          <div className="px-4 py-2.5 border-b border-slate-800 flex-shrink-0">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">ROL</span>
-              <span
-                className={cn(
-                  'px-2 py-1 rounded-full text-xs font-bold',
-                  user.rol === 'ADMIN' && 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
-                  user.rol === 'GERENTE' && 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
-                  user.rol === 'VENDEDOR' && 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
-                  user.rol === 'GESTOR_INVENTARIO' && 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100'
-                )}
-              >
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Rol</span>
+              <span className={cn(
+                'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide',
+                ROL_BADGE[user.rol] ?? 'bg-slate-700 text-slate-300'
+              )}>
                 {user.rol}
               </span>
             </div>
           </div>
         )}
 
-        {/* Navigation */}
-        <nav className="space-y-1 p-2 overflow-y-auto h-[calc(100vh-12rem)]">
+        {/* ── Navegación ────────────────────────────────────────── */}
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
           {menu
             .filter((entry) => entry.show)
             .map((entry) => {
@@ -282,15 +305,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     key={entry.href}
                     to={entry.href}
                     onClick={onClose}
-                    className={cn(
-                      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                      active
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                    )}
                     title={collapsed ? entry.title : undefined}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+                      collapsed && 'justify-center px-2',
+                      active
+                        ? 'bg-primary text-white shadow-md shadow-primary/20'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    )}
                   >
-                    <Icon size={20} className="flex-shrink-0" />
+                    <Icon size={18} className="flex-shrink-0" />
                     {!collapsed && <span>{entry.title}</span>}
                   </Link>
                 );
@@ -305,27 +329,27 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               const expanded = !!openGroups[entry.key];
 
               return (
-                <div key={entry.key} className="space-y-1">
+                <div key={entry.key} className="space-y-0.5">
                   <button
                     type="button"
                     onClick={() => (collapsed ? undefined : toggleGroup(entry.key))}
                     className={cn(
-                      'w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                      'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+                      collapsed && 'justify-center px-2',
                       groupActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                      collapsed && 'justify-center px-2'
+                        ? 'bg-primary/20 text-primary'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
                     )}
                     title={collapsed ? entry.title : undefined}
                     aria-expanded={collapsed ? undefined : expanded}
                   >
-                    <GroupIcon size={20} className="flex-shrink-0" />
+                    <GroupIcon size={18} className="flex-shrink-0" />
                     {!collapsed && (
                       <>
                         <span className="flex-1 text-left">{entry.title}</span>
                         <ChevronDown
-                          size={16}
-                          className={cn('transition-transform', expanded ? 'rotate-180' : 'rotate-0')}
+                          size={14}
+                          className={cn('transition-transform duration-200', expanded ? 'rotate-180' : 'rotate-0')}
                         />
                       </>
                     )}
@@ -333,7 +357,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
                   {/* Subitems */}
                   {!collapsed && expanded && (
-                    <div className="ml-2 border-l pl-2 space-y-1">
+                    <div className="ml-3 pl-3 border-l border-slate-700/60 space-y-0.5">
                       {visibleChildren.map((it) => {
                         const Icon = it.icon;
                         const active = isPathActive(it.href);
@@ -343,13 +367,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                             to={it.href}
                             onClick={onClose}
                             className={cn(
-                              'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
                               active
-                                ? 'bg-accent text-accent-foreground font-medium'
-                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                                ? 'text-white bg-slate-800 font-medium'
+                                : 'text-slate-500 hover:text-white hover:bg-slate-800'
                             )}
                           >
-                            <Icon size={18} className="flex-shrink-0" />
+                            <Icon size={16} className="flex-shrink-0" />
                             <span>{it.title}</span>
                           </Link>
                         );
@@ -361,18 +385,22 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             })}
         </nav>
 
-        {/* User Info */}
-        {!collapsed && user && (
-          <div className="absolute bottom-0 w-full border-t p-4 bg-card">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Users size={16} className="text-primary" />
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium truncate">{user.nombre}</p>
-                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-              </div>
+        {/* ── User Info ─────────────────────────────────────────── */}
+        {user && (
+          <div className={cn(
+            'border-t border-slate-800 p-3 flex-shrink-0',
+            collapsed ? 'flex justify-center' : 'flex items-center gap-3'
+          )}>
+            {/* Avatar con iniciales */}
+            <div className="h-8 w-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
+              <span className="text-xs font-bold text-primary">{getInitials(user.nombre)}</span>
             </div>
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{user.nombre}</p>
+                <p className="text-xs text-slate-500 truncate">{user.email}</p>
+              </div>
+            )}
           </div>
         )}
       </aside>

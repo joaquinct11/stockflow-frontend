@@ -245,33 +245,45 @@ export function ProveedoresList() {
         <>
           {/* Stats */}
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Proveedores</CardTitle>
-                <Building2 className="h-4 w-4 text-muted-foreground" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Proveedores</p>
+                <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="text-blue-600 dark:text-blue-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalProveedores}</div>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">{totalProveedores}</div>
+                <p className="text-xs text-muted-foreground mt-1">Registrados</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Activos</CardTitle>
-                <Building2 className="h-4 w-4 text-green-600" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Activos</p>
+                <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="text-emerald-600 dark:text-emerald-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{proveedoresActivos}</div>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">{proveedoresActivos}</div>
+                <p className="text-xs text-muted-foreground mt-1">Disponibles para compras</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
-                <Building2 className="h-4 w-4 text-red-600" />
+            <Card className="relative overflow-hidden border-0 shadow-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Inactivos</p>
+                <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="text-red-600 dark:text-red-400" size={18} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">{proveedoresInactivos}</div>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">{proveedoresInactivos}</div>
+                <p className="text-xs text-muted-foreground mt-1">Deshabilitados</p>
               </CardContent>
             </Card>
           </div>

@@ -461,22 +461,61 @@ export function RecepcionList() {
 
       {/* Stats */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Total', value: stats.total, icon: Inbox, color: '' },
-          { label: 'Borrador', value: stats.borrador, icon: Clock, color: 'text-gray-600' },
-          { label: 'Confirmadas', value: stats.confirmada, icon: BadgeCheck, color: 'text-green-600' },
-          { label: 'Anuladas', value: stats.anulada, icon: Trash2, color: 'text-red-600' },
-        ].map((s) => (
-          <Card key={s.label}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{s.label}</CardTitle>
-              <s.icon className={`h-4 w-4 text-muted-foreground ${s.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-            </CardContent>
-          </Card>
-        ))}
+        {/* Total */}
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total</p>
+            <div className="h-9 w-9 rounded-xl bg-slate-500/10 flex items-center justify-center flex-shrink-0">
+              <Inbox className="h-4 w-4 text-slate-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-3xl font-bold tracking-tight text-slate-700 dark:text-slate-300">{stats.total}</p>
+          </CardContent>
+        </Card>
+
+        {/* Borrador */}
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Borrador</p>
+            <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+              <Clock className="h-4 w-4 text-amber-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-3xl font-bold tracking-tight text-amber-600">{stats.borrador}</p>
+          </CardContent>
+        </Card>
+
+        {/* Confirmadas */}
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Confirmadas</p>
+            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <BadgeCheck className="h-4 w-4 text-emerald-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-3xl font-bold tracking-tight text-emerald-600">{stats.confirmada}</p>
+          </CardContent>
+        </Card>
+
+        {/* Anuladas */}
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Anuladas</p>
+            <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+              <Trash2 className="h-4 w-4 text-red-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-3xl font-bold tracking-tight text-red-600">{stats.anulada}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filtros */}
