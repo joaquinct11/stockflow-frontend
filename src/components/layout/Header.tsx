@@ -37,7 +37,7 @@ interface Notificacion {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { isDark, toggleTheme } = useThemeStore();
-  const { user, logout } = useAuthStore();
+  const { user, logout, suscripcionEstado } = useAuthStore();
   const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -84,8 +84,8 @@ export function Header({ onMenuClick }: HeaderProps) {
       }
 
       // 🔵 Trial por vencer
-      const suscEstado = user?.suscripcionEstado;
-      const fechaVenc = (user as any)?.fechaProximoCobro as string | undefined;
+      const suscEstado = suscripcionEstado ?? user?.suscripcion?.estado;
+      const fechaVenc = user?.suscripcion?.fechaProximoCobro;
       if (suscEstado === 'TRIAL' && fechaVenc) {
         const diff = new Date(fechaVenc).getTime() - Date.now();
         const dias = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
