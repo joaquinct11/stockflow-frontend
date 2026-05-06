@@ -1,5 +1,5 @@
 {
-  "name": "stockflow-frontend",
+  "name": "fluxus-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -14,6 +14,8 @@
     "@types/recharts": "^1.8.29",
     "axios": "^1.13.5",
     "clsx": "^2.1.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.574.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -22,6 +24,7 @@
     "react-router-dom": "^7.13.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.4.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   },
