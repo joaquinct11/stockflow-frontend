@@ -467,7 +467,7 @@ export function OrdenComprasList() {
       )}
 
       {/* Stats (estilo proveedores/productos) */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card className="relative overflow-hidden border-0 shadow-sm">
           <div className="absolute inset-0 bg-gradient-to-br from-slate-500/5 to-transparent pointer-events-none" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -525,10 +525,10 @@ export function OrdenComprasList() {
         </Card>
       </div>
 
-      {/* Filtros (mismo estilo de proveedores/productos) */}
+      {/* Filtros */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <CardContent className="p-4">
+          <div className="flex flex-col gap-3">
             {/* Search */}
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -541,32 +541,32 @@ export function OrdenComprasList() {
             </div>
 
             {/* Estado filter (segmented control) */}
-            <div className="sm:w-[520px]">
+            <div className="w-full">
               <div
-                className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
+                className="flex gap-1 overflow-x-auto scrollbar-hide rounded-lg border border-input bg-muted p-1"
                 role="tablist"
                 aria-label="Filtrar OC por estado"
               >
                 {(
                   [
-                    { key: 'TODOS', label: 'Todos' },
-                    { key: 'BORRADOR', label: 'Borrador' },
-                    { key: 'ENVIADA', label: 'Enviada' },
+                    { key: 'TODOS',           label: 'Todos' },
+                    { key: 'BORRADOR',        label: 'Borrador' },
+                    { key: 'ENVIADA',         label: 'Enviada' },
                     { key: 'RECIBIDA_PARCIAL', label: 'Parcial' },
-                    { key: 'RECIBIDA', label: 'Recibida' },
-                    { key: 'CANCELADA', label: 'Cancelada' },
+                    { key: 'RECIBIDA',        label: 'Recibida' },
+                    { key: 'CANCELADA',       label: 'Cancelada' },
                   ] as Array<{ key: EstadoOCFilter; label: string }>
                 ).map((t) => (
                   <button
                     key={t.key}
                     type="button"
                     onClick={() => setEstadoFilter(t.key)}
-                    className={`flex-1 rounded-md px-3 py-2 text-xs sm:text-sm font-medium transition
-                      ${
-                        estadoFilter === t.key
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                    className={[
+                      'whitespace-nowrap flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition',
+                      estadoFilter === t.key
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
+                    ].join(' ')}
                     aria-pressed={estadoFilter === t.key}
                   >
                     {t.label}

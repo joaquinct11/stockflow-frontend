@@ -488,7 +488,7 @@ export function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 ${gridColsClass} animate-fade-in-up-delay-1`}>
+      <div className={`grid gap-4 grid-cols-2 ${gridColsClass} animate-fade-in-up-delay-1`}>
         {/* Productos */}
         <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />

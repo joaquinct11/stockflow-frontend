@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   BarChart3,
   TrendingUp,
@@ -42,6 +42,7 @@ import type {
   InventarioSlowMoverDTO,
   InventarioCoberturaDTO,
   ComprasPorProveedorDTO,
+  ProductoBajoStockDTO,
 } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -203,7 +204,7 @@ function TabError({ message, onRetry }: { message: string; onRetry: () => void }
 }
 
 function TabEmpty() {
-  return <EmptyState icon={BarChart3} title="Sin datos" description='Presiona "Actualizar" para cargar los reportes.' />;
+  return <EmptyState icon={BarChart3} title="Sin datos" description="No hay información disponible para el rango seleccionado." />;
 }
 
 // ─── Resumen tab ──────────────────────────────────────────────────────────────
@@ -215,8 +216,13 @@ function ResumenTab({ loading, error, data, onRetry }: {
   if (error) return <TabError message={error} onRetry={onRetry} />;
   if (!data) return <TabEmpty />;
 
-  const margenPct = data.ventas?.ingresosTotal && data.ventas.margenEstimado != null
-    ? (data.ventas.margenEstimado / data.ventas.ingresosTotal) * 100
+  const inv   = data.inventario;
+  const mov   = data.movimientos;
+  const comp  = data.comprasRecepciones;
+  const ventas = data.ventas;
+
+  const margenPct = ventas?.ingresosTotal && ventas.margenEstimado != null
+    ? (ventas.margenEstimado / ventas.ingresosTotal) * 100
     : null;
 
   const margenColor = margenPct == null ? 'text-foreground'
@@ -224,35 +230,37 @@ function ResumenTab({ loading, error, data, onRetry }: {
     : margenPct >= 15 ? 'text-yellow-600'
     : 'text-red-600';
 
+  const bajoStockList: ProductoBajoStockDTO[] = inv?.productosBajoStock ?? [];
+
   return (
     <div className="space-y-6">
       {/* KPIs de ventas */}
-      {data.ventas != null && (
+      {ventas != null && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Ventas del período</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               icon={<DollarSign className="h-5 w-5" />}
               title="Ingresos totales"
-              value={formatSoles(data.ventas.ingresosTotal)}
+              value={formatSoles(ventas.ingresosTotal)}
               colorClass="text-green-600"
             />
             <StatCard
               icon={<ShoppingCart className="h-5 w-5" />}
               title="Nº de ventas"
-              value={formatNum(data.ventas.ventasCount)}
+              value={formatNum(ventas.ventasCount)}
             />
             <StatCard
               icon={<Target className="h-5 w-5" />}
               title="Ticket promedio"
-              value={formatSoles(data.ventas.ticketPromedio)}
+              value={formatSoles(ventas.ticketPromedio)}
             />
             <StatCard
               icon={<TrendingUp className="h-5 w-5" />}
               title="Margen estimado"
-              value={margenPct != null ? formatPct(margenPct) : formatSoles(data.ventas.margenEstimado)}
+              value={margenPct != null ? formatPct(margenPct) : formatSoles(ventas.margenEstimado)}
               colorClass={margenColor}
-              description={margenPct != null ? formatSoles(data.ventas.margenEstimado) : undefined}
+              description={margenPct != null ? formatSoles(ventas.margenEstimado) : undefined}
             />
           </div>
         </section>
@@ -262,30 +270,31 @@ function ResumenTab({ loading, error, data, onRetry }: {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inventario</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={<Package className="h-5 w-5" />} title="Total productos" value={formatNum(data.totalProductos)} />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización" value={formatSoles(data.valorizacionStock)} colorClass="text-green-600" />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas" value={formatNum(data.entradasCantidad)} colorClass="text-blue-600" description="unidades" />
+          <StatCard icon={<Package className="h-5 w-5" />} title="Total productos" value={formatNum(inv?.totalProductos)} />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización" value={formatSoles(inv?.valorizacionStock)} colorClass="text-green-600" />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas período" value={formatNum(mov?.entradasCantidad)} colorClass="text-blue-600" description="unidades ingresadas" />
           <StatCard
             icon={<AlertTriangle className="h-5 w-5" />}
             title="Bajo stock"
-            value={formatNum(data.productosBajoStock?.length)}
-            colorClass={(data.productosBajoStock?.length ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}
-            description={(data.productosBajoStock?.length ?? 0) > 0 ? 'requieren reposición' : 'todo en orden'}
+            value={formatNum(bajoStockList.length)}
+            colorClass={bajoStockList.length > 0 ? 'text-red-600' : 'text-green-600'}
+            description={bajoStockList.length > 0 ? 'requieren reposición' : 'todo en orden'}
           />
         </div>
       </section>
 
-      {/* Recepciones */}
+      {/* Recepciones y compras */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recepciones</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(data.recepcionesConfirmadasCount)} />
-          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(data.unidadesRecibidas)} />
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recepciones del período</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 [&>*:last-child]:col-span-2 [&>*:last-child]:mx-auto [&>*:last-child]:max-w-[calc(50%-0.5rem)] sm:[&>*:last-child]:col-auto sm:[&>*:last-child]:max-w-none sm:[&>*:last-child]:mx-0">
+          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(comp?.recepcionesConfirmadasCount)} />
+          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(comp?.unidadesRecibidas)} />
+          <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto compras est." value={formatSoles(comp?.montoComprasEstimado)} colorClass="text-amber-600" description="costo unitario actual" />
         </div>
       </section>
 
       {/* Top productos */}
-      {(data.ventas?.topProductosVendidos?.length ?? 0) > 0 && (
+      {(ventas?.topProductosVendidos?.length ?? 0) > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Top productos del período</CardTitle>
@@ -293,8 +302,8 @@ function ResumenTab({ loading, error, data, onRetry }: {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {data.ventas!.topProductosVendidos.slice(0, 5).map((p, i) => {
-                const maxIngresos = data.ventas!.topProductosVendidos[0].ingresos ?? 1;
+              {ventas!.topProductosVendidos.slice(0, 5).map((p, i) => {
+                const maxIngresos = ventas!.topProductosVendidos[0].ingresos ?? 1;
                 const pct = ((p.ingresos ?? 0) / maxIngresos) * 100;
                 return (
                   <div key={p.productoId} className="flex items-center gap-3">
@@ -317,14 +326,14 @@ function ResumenTab({ loading, error, data, onRetry }: {
       )}
 
       {/* Bajo stock */}
-      {(data.productosBajoStock?.length ?? 0) > 0 && (
+      {bajoStockList.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-red-500" />
               Productos que requieren reposición
             </CardTitle>
-            <CardDescription>{data.productosBajoStock.length} producto(s) por debajo del stock mínimo</CardDescription>
+            <CardDescription>{bajoStockList.length} producto(s) por debajo del stock mínimo</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -338,8 +347,8 @@ function ResumenTab({ loading, error, data, onRetry }: {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.productosBajoStock.slice(0, 10).map((p) => (
-                    <TableRow key={p.id}>
+                  {bajoStockList.slice(0, 10).map((p) => (
+                    <TableRow key={p.productoId}>
                       <TableCell className="font-medium">{p.nombre}</TableCell>
                       <TableCell className="text-center text-red-600 font-semibold">{p.stockActual}</TableCell>
                       <TableCell className="text-center text-muted-foreground">{p.stockMinimo}</TableCell>
@@ -379,31 +388,31 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
   if (error) return <TabError message={error} onRetry={onRetry} />;
   if (!data) return <TabEmpty />;
 
-  const totalIngresos = data.porMetodoPago.reduce((s, r) => s + (r.ingresos ?? 0), 0);
+  const totalIngresos = data.porMetodoPago.reduce((s, r) => s + (r.ingresosTotal ?? 0), 0);
 
   // Tendencia para gráfico
   const tendenciaChart = data.tendencia.map((p) => ({
     periodo: shortLabel(p.periodo, 8),
-    ingresos: p.ingresos ?? 0,
+    ingresos: p.ingresosTotal ?? 0,
     ventas: p.ventasCount ?? 0,
   }));
 
   // Top 5 productos para gráfico
   const topChart = data.topProductos.slice(0, 6).map((p) => ({
     nombre: shortLabel(p.nombre, 14),
-    valor: metrica === 'UNIDADES' ? (p.cantidadVendida ?? 0) : (p.ingresos ?? 0),
+    valor: metrica === 'UNIDADES' ? (p.cantidad ?? 0) : (p.ingresos ?? 0),
   }));
 
   // Categorías para gráfico pie
   const catChart = data.porCategoria.slice(0, 7).map((c) => ({
     name: shortLabel(c.categoria, 14),
-    value: c.ingresos ?? 0,
+    value: c.ingresosTotal ?? 0,
   }));
 
   // Vendedores para gráfico horizontal
   const vendedorChart = data.porVendedor.slice(0, 6).map((v) => ({
     nombre: shortLabel(v.vendedorNombre, 16),
-    ingresos: v.ingresos ?? 0,
+    ingresos: v.ingresosTotal ?? 0,
     ventas: v.ventasCount ?? 0,
   }));
 
@@ -544,7 +553,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
                     <TableRow key={v.vendedorId}>
                       <TableCell className="font-medium">{v.vendedorNombre}</TableCell>
                       <TableCell className="text-center">{formatNum(v.ventasCount)}</TableCell>
-                      <TableCell className="text-right">{formatSoles(v.ingresos)}</TableCell>
+                      <TableCell className="text-right">{formatSoles(v.ingresosTotal)}</TableCell>
                       <TableCell className="text-right">{formatSoles(v.ticketPromedio)}</TableCell>
                     </TableRow>
                   ))}
@@ -567,7 +576,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
           ) : (
             <div className="space-y-3">
               {data.porMetodoPago.map((m) => {
-                const pct = m.porcentaje ?? (totalIngresos > 0 ? (m.ingresos / totalIngresos) * 100 : 0);
+                const pct = m.porcentaje ?? (totalIngresos > 0 ? (m.ingresosTotal / totalIngresos) * 100 : 0);
                 return (
                   <div key={m.metodoPago} className="flex items-center gap-3">
                     <span className="text-sm font-medium w-28 shrink-0">{m.metodoPago}</span>
@@ -575,7 +584,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
                       <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
                     </div>
                     <span className="text-sm text-muted-foreground w-12 text-right shrink-0">{pct.toFixed(0)}%</span>
-                    <span className="text-sm font-medium w-28 text-right shrink-0">{formatSoles(m.ingresos)}</span>
+                    <span className="text-sm font-medium w-28 text-right shrink-0">{formatSoles(m.ingresosTotal)}</span>
                   </div>
                 );
               })}
@@ -607,7 +616,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
                   <TableRow key={p.productoId}>
                     <TableCell className="font-medium">{p.nombre}</TableCell>
                     <TableCell className="text-right text-muted-foreground">
-                      {metrica === 'UNIDADES' ? formatNum(p.cantidadVendida) : formatSoles(p.ingresos)}
+                      {metrica === 'UNIDADES' ? formatNum(p.cantidad) : formatSoles(p.ingresos)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -812,16 +821,16 @@ function ComprasTab({ loading, error, data, onRetry }: {
   const chartData = data.slice(0, 8).map((p) => ({
     nombre: shortLabel(p.proveedorNombre, 16),
     monto: p.montoEstimado ?? 0,
-    unidades: p.unidades ?? 0,
+    unidades: p.unidadesRecibidas ?? 0,
   }));
 
   const totalMonto = data.reduce((s, p) => s + (p.montoEstimado ?? 0), 0);
-  const totalUnidades = data.reduce((s, p) => s + (p.unidades ?? 0), 0);
+  const totalUnidades = data.reduce((s, p) => s + (p.unidadesRecibidas ?? 0), 0);
 
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 [&>*:last-child]:col-span-2 [&>*:last-child]:mx-auto [&>*:last-child]:max-w-[calc(50%-0.5rem)] sm:[&>*:last-child]:col-auto sm:[&>*:last-child]:max-w-none sm:[&>*:last-child]:mx-0">
         <StatCard icon={<Truck className="h-5 w-5" />} title="Proveedores activos" value={formatNum(data.length)} />
         <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto total compras" value={formatSoles(totalMonto)} colorClass="text-blue-600" />
         <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(totalUnidades)} />
@@ -874,8 +883,8 @@ function ComprasTab({ loading, error, data, onRetry }: {
                     return (
                       <TableRow key={p.proveedorId}>
                         <TableCell className="font-medium">{p.proveedorNombre}</TableCell>
-                        <TableCell className="text-center">{formatNum(p.recepciones)}</TableCell>
-                        <TableCell className="text-center">{formatNum(p.unidades)}</TableCell>
+                        <TableCell className="text-center">{formatNum(p.recepcionesCount)}</TableCell>
+                        <TableCell className="text-center">{formatNum(p.unidadesRecibidas)}</TableCell>
                         <TableCell className="text-right">{formatSoles(p.montoEstimado)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -985,6 +994,12 @@ export function ReportesPage() {
     fetchCompras();
   };
 
+  // Auto-carga al montar con el rango por defecto (últimos 30 días)
+  useEffect(() => {
+    handleActualizar(desde, hasta);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleQuickRange = (rango: typeof QUICK_RANGES[0]) => {
     const d = rango.desde();
     const h = rango.hasta();
@@ -1011,39 +1026,94 @@ export function ReportesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Reportes</h1>
-        <p className="text-muted-foreground">Indicadores clave para la toma de decisiones</p>
-      </div>
+      {/* Header + filtros integrados */}
+      <div className="flex flex-col gap-4">
+        {/* Título */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Reportes</h1>
+            <p className="text-muted-foreground">Indicadores clave para la toma de decisiones</p>
+          </div>
+          {/* Botón actualizar — visible en desktop junto al título */}
+          <Button
+            onClick={() => handleActualizar()}
+            disabled={isAnyLoading}
+            className="hidden sm:inline-flex items-center gap-2 h-10 px-5"
+          >
+            <RefreshCw className={`h-4 w-4 ${isAnyLoading ? 'animate-spin' : ''}`} />
+            {isAnyLoading ? 'Cargando…' : 'Actualizar'}
+          </Button>
+        </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardContent className="pt-5 space-y-3">
+        {/* Barra de filtros */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl border bg-card shadow-sm">
           {/* Atajos rápidos */}
-          <div className="flex flex-wrap gap-2">
-            {QUICK_RANGES.map((r) => (
-              <Button key={r.label} size="sm" variant="outline" onClick={() => handleQuickRange(r)}>
-                {r.label}
-              </Button>
-            ))}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-1 hidden sm:inline">
+              Período
+            </span>
+            {QUICK_RANGES.map((r) => {
+              const isActive = desde === r.desde() && hasta === r.hasta();
+              return (
+                <button
+                  key={r.label}
+                  onClick={() => handleQuickRange(r)}
+                  className={[
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                    isActive
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                      : 'bg-background text-muted-foreground border-input hover:text-foreground hover:border-primary/40',
+                  ].join(' ')}
+                >
+                  {r.label}
+                </button>
+              );
+            })}
           </div>
+
+          {/* Separador vertical */}
+          <div className="hidden sm:block h-8 w-px bg-border/60 mx-1" />
+
           {/* Rango personalizado */}
-          <div className="flex flex-col sm:flex-row items-end gap-3">
-            <div className="flex flex-col gap-1 w-full sm:w-auto">
-              <label className="text-sm font-medium" htmlFor="rpt-desde">Desde</label>
-              <Input id="rpt-desde" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-full sm:w-40" />
+          <div className="flex items-center gap-2 flex-1 pt-2 sm:pt-0">
+            <div className="relative flex-1 sm:flex-initial">
+              <label className="absolute -top-2 left-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-card px-1">
+                Desde
+              </label>
+              <Input
+                id="rpt-desde"
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
+                className="h-9 w-full sm:w-36 text-sm"
+              />
             </div>
-            <div className="flex flex-col gap-1 w-full sm:w-auto">
-              <label className="text-sm font-medium" htmlFor="rpt-hasta">Hasta</label>
-              <Input id="rpt-hasta" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-full sm:w-40" />
+            <span className="text-muted-foreground text-sm shrink-0">→</span>
+            <div className="relative flex-1 sm:flex-initial">
+              <label className="absolute -top-2 left-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-card px-1">
+                Hasta
+              </label>
+              <Input
+                id="rpt-hasta"
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+                className="h-9 w-full sm:w-36 text-sm"
+              />
             </div>
-            <Button onClick={() => handleActualizar()} disabled={isAnyLoading} className="w-full sm:w-auto">
-              <RefreshCw className={`h-4 w-4 mr-2 ${isAnyLoading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Botón actualizar — mobile */}
+          <Button
+            onClick={() => handleActualizar()}
+            disabled={isAnyLoading}
+            className="sm:hidden w-full h-9 gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isAnyLoading ? 'animate-spin' : ''}`} />
+            {isAnyLoading ? 'Cargando…' : 'Actualizar'}
+          </Button>
+        </div>
+      </div>
 
       <TabBar active={activeTab} onChange={setActiveTab} />
 
