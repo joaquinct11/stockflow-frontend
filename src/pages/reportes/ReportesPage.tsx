@@ -13,7 +13,10 @@ import {
   Truck,
   DollarSign,
   Target,
+  FileSpreadsheet,
+  FileDown,
 } from 'lucide-react';
+import { exportarExcel, exportarPDF } from '../../utils/reportes-export';
 import {
   AreaChart,
   Area,
@@ -97,6 +100,65 @@ function formatPct(value: number | null | undefined): string {
 
 function shortLabel(label: string, max = 12): string {
   return label.length > max ? label.slice(0, max) + '…' : label;
+}
+
+// Formatea el período del eje X según la agrupación
+const MESES_CORTOS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function formatPeriodoEje(periodo: string, agrupacion: AgrupacionTendencia): string {
+  if (!periodo) return '';
+  // DIA → "2026-04-06" → "06 abr"
+  if (agrupacion === 'DIA' && /^\d{4}-\d{2}-\d{2}$/.test(periodo)) {
+    const [, m, d] = periodo.split('-');
+    return `${d} ${MESES_CORTOS[parseInt(m, 10) - 1]}`;
+  }
+  // MES → "2026-04" → "abr '26"
+  if (agrupacion === 'MES' && /^\d{4}-\d{2}$/.test(periodo)) {
+    const [y, m] = periodo.split('-');
+    return `${MESES_CORTOS[parseInt(m, 10) - 1]} '${y.slice(2)}`;
+  }
+  // SEMANA → "2026-W15" u otro formato → recortar
+  if (agrupacion === 'SEMANA') {
+    return periodo.replace(/^\d{4}-/, '');   // quita el año → "W15" o "04-06"
+  }
+  return periodo.length > 10 ? periodo.slice(5) : periodo;
+}
+
+// Formatea valores del eje Y de forma adaptativa (sin hardcodear /1000)
+function formatYAxisSoles(v: number): string {
+  if (v === 0) return 'S/0';
+  if (Math.abs(v) >= 1_000_000) return `S/${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000)     return `S/${(v / 1_000).toFixed(1)}k`;
+  if (Math.abs(v) >= 1)         return `S/${v.toFixed(0)}`;
+  return `S/${v.toFixed(2)}`;
+}
+
+function formatYAxisNum(v: number): string {
+  if (v === 0) return '0';
+  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
+  return String(Math.round(v));
+}
+
+// ─── Comparativa período anterior ────────────────────────────────────────────
+
+/** Calcula el período anterior de igual duración, justo antes del período actual */
+function calcPrevPeriod(desde: string, hasta: string): { prevDesde: string; prevHasta: string } {
+  const d1 = new Date(desde);
+  const d2 = new Date(hasta);
+  const duracionMs = d2.getTime() - d1.getTime();
+  const prevHastaDate = new Date(d1.getTime() - 86_400_000);          // desde − 1 día
+  const prevDesdeDate = new Date(prevHastaDate.getTime() - duracionMs);
+  return { prevDesde: toDateString(prevDesdeDate), prevHasta: toDateString(prevHastaDate) };
+}
+
+/** Retorna el delta % entre valor actual y anterior, o null si no aplica */
+function delta(current: number | null | undefined, prev: number | null | undefined): number | null {
+  if (current == null || prev == null || prev === 0) return null;
+  return ((current - prev) / Math.abs(prev)) * 100;
+}
+
+function trendLabel(prevDesde: string, prevHasta: string): string {
+  return `vs ${prevDesde} → ${prevHasta}`;
 }
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
@@ -209,17 +271,28 @@ function TabEmpty() {
 
 // ─── Resumen tab ──────────────────────────────────────────────────────────────
 
-function ResumenTab({ loading, error, data, onRetry }: {
-  loading: boolean; error: string | null; data: ReportesResumenDTO | null; onRetry: () => void;
+function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRetry }: {
+  loading: boolean; error: string | null;
+  data: ReportesResumenDTO | null;
+  prevData: ReportesResumenDTO | null;
+  prevDesde: string; prevHasta: string;
+  onRetry: () => void;
 }) {
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
   if (!data) return <TabEmpty />;
 
-  const inv   = data.inventario;
-  const mov   = data.movimientos;
-  const comp  = data.comprasRecepciones;
+  const inv    = data.inventario;
+  const mov    = data.movimientos;
+  const comp   = data.comprasRecepciones;
   const ventas = data.ventas;
+
+  const prevInv    = prevData?.inventario;
+  const prevMov    = prevData?.movimientos;
+  const prevComp   = prevData?.comprasRecepciones;
+  const prevVentas = prevData?.ventas;
+
+  const tl = trendLabel(prevDesde, prevHasta);
 
   const margenPct = ventas?.ingresosTotal && ventas.margenEstimado != null
     ? (ventas.margenEstimado / ventas.ingresosTotal) * 100
@@ -244,16 +317,25 @@ function ResumenTab({ loading, error, data, onRetry }: {
               title="Ingresos totales"
               value={formatSoles(ventas.ingresosTotal)}
               colorClass="text-green-600"
+              trend={delta(ventas.ingresosTotal, prevVentas?.ingresosTotal) != null
+                ? { value: delta(ventas.ingresosTotal, prevVentas?.ingresosTotal)!, label: tl }
+                : undefined}
             />
             <StatCard
               icon={<ShoppingCart className="h-5 w-5" />}
               title="Nº de ventas"
               value={formatNum(ventas.ventasCount)}
+              trend={delta(ventas.ventasCount, prevVentas?.ventasCount) != null
+                ? { value: delta(ventas.ventasCount, prevVentas?.ventasCount)!, label: tl }
+                : undefined}
             />
             <StatCard
               icon={<Target className="h-5 w-5" />}
               title="Ticket promedio"
               value={formatSoles(ventas.ticketPromedio)}
+              trend={delta(ventas.ticketPromedio, prevVentas?.ticketPromedio) != null
+                ? { value: delta(ventas.ticketPromedio, prevVentas?.ticketPromedio)!, label: tl }
+                : undefined}
             />
             <StatCard
               icon={<TrendingUp className="h-5 w-5" />}
@@ -261,6 +343,9 @@ function ResumenTab({ loading, error, data, onRetry }: {
               value={margenPct != null ? formatPct(margenPct) : formatSoles(ventas.margenEstimado)}
               colorClass={margenColor}
               description={margenPct != null ? formatSoles(ventas.margenEstimado) : undefined}
+              trend={delta(ventas.margenEstimado, prevVentas?.margenEstimado) != null
+                ? { value: delta(ventas.margenEstimado, prevVentas?.margenEstimado)!, label: tl }
+                : undefined}
             />
           </div>
         </section>
@@ -271,8 +356,16 @@ function ResumenTab({ loading, error, data, onRetry }: {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inventario</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={<Package className="h-5 w-5" />} title="Total productos" value={formatNum(inv?.totalProductos)} />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización" value={formatSoles(inv?.valorizacionStock)} colorClass="text-green-600" />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas período" value={formatNum(mov?.entradasCantidad)} colorClass="text-blue-600" description="unidades ingresadas" />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización" value={formatSoles(inv?.valorizacionStock)} colorClass="text-green-600"
+            trend={delta(inv?.valorizacionStock, prevInv?.valorizacionStock) != null
+              ? { value: delta(inv?.valorizacionStock, prevInv?.valorizacionStock)!, label: tl }
+              : undefined}
+          />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas período" value={formatNum(mov?.entradasCantidad)} colorClass="text-blue-600"
+            trend={delta(mov?.entradasCantidad, prevMov?.entradasCantidad) != null
+              ? { value: delta(mov?.entradasCantidad, prevMov?.entradasCantidad)!, label: tl }
+              : undefined}
+          />
           <StatCard
             icon={<AlertTriangle className="h-5 w-5" />}
             title="Bajo stock"
@@ -287,9 +380,21 @@ function ResumenTab({ loading, error, data, onRetry }: {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recepciones del período</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 [&>*:last-child]:col-span-2 [&>*:last-child]:mx-auto [&>*:last-child]:max-w-[calc(50%-0.5rem)] sm:[&>*:last-child]:col-auto sm:[&>*:last-child]:max-w-none sm:[&>*:last-child]:mx-0">
-          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(comp?.recepcionesConfirmadasCount)} />
-          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(comp?.unidadesRecibidas)} />
-          <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto compras est." value={formatSoles(comp?.montoComprasEstimado)} colorClass="text-amber-600" description="costo unitario actual" />
+          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(comp?.recepcionesConfirmadasCount)}
+            trend={delta(comp?.recepcionesConfirmadasCount, prevComp?.recepcionesConfirmadasCount) != null
+              ? { value: delta(comp?.recepcionesConfirmadasCount, prevComp?.recepcionesConfirmadasCount)!, label: tl }
+              : undefined}
+          />
+          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(comp?.unidadesRecibidas)}
+            trend={delta(comp?.unidadesRecibidas, prevComp?.unidadesRecibidas) != null
+              ? { value: delta(comp?.unidadesRecibidas, prevComp?.unidadesRecibidas)!, label: tl }
+              : undefined}
+          />
+          <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto compras est." value={formatSoles(comp?.montoComprasEstimado)} colorClass="text-amber-600"
+            trend={delta(comp?.montoComprasEstimado, prevComp?.montoComprasEstimado) != null
+              ? { value: delta(comp?.montoComprasEstimado, prevComp?.montoComprasEstimado)!, label: tl }
+              : undefined}
+          />
         </div>
       </section>
 
@@ -392,7 +497,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
 
   // Tendencia para gráfico
   const tendenciaChart = data.tendencia.map((p) => ({
-    periodo: shortLabel(p.periodo, 8),
+    periodo: formatPeriodoEje(p.periodo, agrupacion),
     ingresos: p.ingresosTotal ?? 0,
     ventas: p.ventasCount ?? 0,
   }));
@@ -449,7 +554,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.1} />
                 <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `S/${(v / 1000).toFixed(0)}k`} width={55} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={formatYAxisSoles} width={65} />
                 <Tooltip content={<ChartTooltip isSoles />} />
                 <Area type="monotone" dataKey="ingresos" name="Ingresos" stroke={COLOR_PRIMARY} strokeWidth={2} fill="url(#gradIngresos)" />
               </AreaChart>
@@ -484,7 +589,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={topChart} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="currentColor" strokeOpacity={0.1} />
-                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => metrica === 'INGRESOS' ? `S/${(v/1000).toFixed(0)}k` : String(v)} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => metrica === 'INGRESOS' ? formatYAxisSoles(v) : formatYAxisNum(v)} />
                   <YAxis type="category" dataKey="nombre" tick={{ fontSize: 11 }} width={90} />
                   <Tooltip content={<ChartTooltip isSoles={metrica === 'INGRESOS'} />} />
                   <Bar dataKey="valor" name={metrica === 'UNIDADES' ? 'Unidades' : 'Ingresos'} fill={COLOR_SUCCESS} radius={[0, 4, 4, 0]} />
@@ -532,7 +637,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
               <BarChart data={vendedorChart} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.1} />
                 <XAxis dataKey="nombre" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `S/${(v/1000).toFixed(0)}k`} width={55} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={formatYAxisSoles} width={65} />
                 <Tooltip content={<ChartTooltip isSoles />} />
                 <Bar dataKey="ingresos" name="Ingresos" fill={COLOR_PRIMARY} radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -847,7 +952,7 @@ function ComprasTab({ loading, error, data, onRetry }: {
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="currentColor" strokeOpacity={0.1} />
-                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `S/${(v / 1000).toFixed(0)}k`} />
+                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={formatYAxisSoles} />
                 <YAxis type="category" dataKey="nombre" tick={{ fontSize: 11 }} width={100} />
                 <Tooltip content={<ChartTooltip isSoles />} />
                 <Bar dataKey="monto" name="Monto" fill={COLOR_WARNING} radius={[0, 4, 4, 0]} />
@@ -929,6 +1034,9 @@ export function ReportesPage() {
   const [resumenLoading, setResumenLoading] = useState(false);
   const [resumenError, setResumenError] = useState<string | null>(null);
   const [resumenData, setResumenData] = useState<ReportesResumenDTO | null>(null);
+  const [resumenPrevData, setResumenPrevData] = useState<ReportesResumenDTO | null>(null);
+  const [prevDesde, setPrevDesde] = useState('');
+  const [prevHasta, setPrevHasta] = useState('');
 
   const [ventasLoading, setVentasLoading] = useState(false);
   const [ventasError, setVentasError] = useState<string | null>(null);
@@ -944,9 +1052,19 @@ export function ReportesPage() {
   const [comprasError, setComprasError] = useState<string | null>(null);
   const [comprasData, setComprasData] = useState<ComprasPorProveedorDTO[] | null>(null);
 
+  const [exporting, setExporting] = useState(false);
+
   const fetchResumen = async (d = desde, h = hasta) => {
-    try { setResumenLoading(true); setResumenError(null);
-      setResumenData(await reportesService.getResumen(d, h));
+    try {
+      setResumenLoading(true); setResumenError(null);
+      const { prevDesde: pd, prevHasta: ph } = calcPrevPeriod(d, h);
+      setPrevDesde(pd); setPrevHasta(ph);
+      const [current, prev] = await Promise.all([
+        reportesService.getResumen(d, h),
+        reportesService.getResumen(pd, ph).catch(() => null),
+      ]);
+      setResumenData(current);
+      setResumenPrevData(prev);
     } catch { setResumenError('Error al cargar el resumen.'); toast.error('Error al cargar el resumen.');
     } finally { setResumenLoading(false); }
   };
@@ -1018,6 +1136,56 @@ export function ReportesPage() {
     if (ventasData) fetchVentas(desde, hasta, agrupacion, met);
   };
 
+  const handleExportExcel = async () => {
+    if (!resumenData && !ventasData && !inventarioData && !comprasData) {
+      toast.error('No hay datos para exportar. Carga el reporte primero.');
+      return;
+    }
+    setExporting(true);
+    try {
+      exportarExcel(
+        desde, hasta,
+        resumenData,
+        ventasData ? {
+          porVendedor: ventasData.porVendedor,
+          porCategoria: ventasData.porCategoria,
+          porMetodoPago: ventasData.porMetodoPago,
+          topProductos: ventasData.topProductos,
+          menosProductos: ventasData.menosProductos,
+        } : null,
+        inventarioData,
+        comprasData,
+      );
+      toast.success('Excel descargado');
+    } catch { toast.error('Error al exportar Excel');
+    } finally { setExporting(false); }
+  };
+
+  const handleExportPDF = async () => {
+    if (!resumenData && !ventasData && !inventarioData && !comprasData) {
+      toast.error('No hay datos para exportar. Carga el reporte primero.');
+      return;
+    }
+    setExporting(true);
+    try {
+      exportarPDF(
+        desde, hasta,
+        resumenData,
+        ventasData ? {
+          porVendedor: ventasData.porVendedor,
+          porCategoria: ventasData.porCategoria,
+          porMetodoPago: ventasData.porMetodoPago,
+          topProductos: ventasData.topProductos,
+          menosProductos: ventasData.menosProductos,
+        } : null,
+        inventarioData,
+        comprasData,
+      );
+      toast.success('PDF descargado');
+    } catch { toast.error('Error al exportar PDF');
+    } finally { setExporting(false); }
+  };
+
   const isAnyLoading = resumenLoading || ventasLoading || inventarioLoading || comprasLoading;
 
   if (!hasAccess) {
@@ -1034,15 +1202,21 @@ export function ReportesPage() {
             <h1 className="text-3xl font-bold tracking-tight">Reportes</h1>
             <p className="text-muted-foreground">Indicadores clave para la toma de decisiones</p>
           </div>
-          {/* Botón actualizar — visible en desktop junto al título */}
-          <Button
-            onClick={() => handleActualizar()}
-            disabled={isAnyLoading}
-            className="hidden sm:inline-flex items-center gap-2 h-10 px-5"
-          >
-            <RefreshCw className={`h-4 w-4 ${isAnyLoading ? 'animate-spin' : ''}`} />
-            {isAnyLoading ? 'Cargando…' : 'Actualizar'}
-          </Button>
+          {/* Acciones — desktop */}
+          <div className="hidden sm:flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={exporting || isAnyLoading} className="gap-2">
+              <FileSpreadsheet className="h-4 w-4 text-green-600" />
+              Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={exporting || isAnyLoading} className="gap-2">
+              <FileDown className="h-4 w-4 text-red-500" />
+              PDF
+            </Button>
+            <Button onClick={() => handleActualizar()} disabled={isAnyLoading} className="gap-2 h-10 px-5">
+              <RefreshCw className={`h-4 w-4 ${isAnyLoading ? 'animate-spin' : ''}`} />
+              {isAnyLoading ? 'Cargando…' : 'Actualizar'}
+            </Button>
+          </div>
         </div>
 
         {/* Barra de filtros */}
@@ -1103,15 +1277,21 @@ export function ReportesPage() {
             </div>
           </div>
 
-          {/* Botón actualizar — mobile */}
-          <Button
-            onClick={() => handleActualizar()}
-            disabled={isAnyLoading}
-            className="sm:hidden w-full h-9 gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isAnyLoading ? 'animate-spin' : ''}`} />
-            {isAnyLoading ? 'Cargando…' : 'Actualizar'}
-          </Button>
+          {/* Botones mobile */}
+          <div className="sm:hidden flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={exporting || isAnyLoading} className="flex-1 gap-1.5">
+              <FileSpreadsheet className="h-4 w-4 text-green-600" />
+              Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={exporting || isAnyLoading} className="flex-1 gap-1.5">
+              <FileDown className="h-4 w-4 text-red-500" />
+              PDF
+            </Button>
+            <Button onClick={() => handleActualizar()} disabled={isAnyLoading} className="flex-1 h-9 gap-1.5">
+              <RefreshCw className={`h-4 w-4 ${isAnyLoading ? 'animate-spin' : ''}`} />
+              {isAnyLoading ? 'Cargando…' : 'Actualizar'}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1119,7 +1299,11 @@ export function ReportesPage() {
 
       <div>
         {activeTab === 'resumen' && (
-          <ResumenTab loading={resumenLoading} error={resumenError} data={resumenData} onRetry={fetchResumen} />
+          <ResumenTab
+            loading={resumenLoading} error={resumenError} data={resumenData}
+            prevData={resumenPrevData} prevDesde={prevDesde} prevHasta={prevHasta}
+            onRetry={fetchResumen}
+          />
         )}
         {activeTab === 'ventas' && (
           <VentasTab

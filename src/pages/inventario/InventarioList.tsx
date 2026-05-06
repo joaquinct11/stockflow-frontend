@@ -27,10 +27,13 @@ import {
   Star,
   AlertTriangle,
   DollarSign,
+  FileSpreadsheet,
+  FileDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
+import { exportarStockExcel, exportarStockPDF } from '../../utils/reportes-export';
 
 export function InventarioList() {
   const { userId } = useCurrentUser();
@@ -317,12 +320,40 @@ export function InventarioList() {
           <h1 className="text-3xl font-bold tracking-tight">Inventario</h1>
           <p className="text-muted-foreground">Consulta el stock de productos y registra movimientos</p>
         </div>
-        {canCreate('INVENTARIO') && (
-          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo Movimiento
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {hasViewPermission && productos.length > 0 && (
+            <>
+              <Button
+                variant="outline" size="sm"
+                onClick={() => {
+                  try { exportarStockExcel(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—'); }
+                  catch { toast.error('Error al exportar Excel'); }
+                }}
+                className="flex-1 sm:flex-none"
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" />
+                Excel
+              </Button>
+              <Button
+                variant="outline" size="sm"
+                onClick={() => {
+                  try { exportarStockPDF(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—'); }
+                  catch { toast.error('Error al exportar PDF'); }
+                }}
+                className="flex-1 sm:flex-none"
+              >
+                <FileDown className="mr-2 h-4 w-4 text-red-500" />
+                PDF
+              </Button>
+            </>
+          )}
+          {canCreate('INVENTARIO') && (
+            <Button onClick={() => setIsDialogOpen(true)} className="flex-1 sm:flex-none">
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo Movimiento
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Stat cards */}
