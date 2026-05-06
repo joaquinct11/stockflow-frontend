@@ -33,6 +33,7 @@ import {
   FileText,
   TrendingUp,
   Hash,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
@@ -518,7 +519,7 @@ export function VentasList() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card className="relative overflow-hidden border-0 shadow-sm">
           <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -585,119 +586,114 @@ export function VentasList() {
         </Card>
       </div>
 
-      {/* Filtros (nuevo layout: Buscar + fechas arriba, método abajo) */}
+      {/* Filtros */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            {/* Rangos rápidos */}
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  { key: 'HOY', label: 'Hoy' },
-                  { key: '7_DIAS', label: 'Últ. 7 días' },
-                  { key: '30_DIAS', label: 'Últ. 30 días' },
-                  { key: 'PERSONALIZADO', label: 'Personalizado' },
-                ] as Array<{ key: RangoFecha; label: string }>
-              ).map((r) => (
-                <Button
-                  key={r.key}
-                  type="button"
-                  size="sm"
-                  variant={rangoFecha === r.key ? 'default' : 'outline'}
-                  onClick={() => setRangoFecha(r.key)}
-                >
-                  {r.label}
-                </Button>
-              ))}
+        <CardContent className="p-4">
+          <div className="space-y-3">
+
+            {/* Rangos rápidos — tab bar scrollable (sin wrap) */}
+            <div className="rounded-lg border border-input bg-muted p-1">
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide" role="tablist">
+                {(
+                  [
+                    { key: 'HOY',          label: 'Hoy' },
+                    { key: '7_DIAS',       label: '7 días' },
+                    { key: '30_DIAS',      label: '30 días' },
+                    { key: 'PERSONALIZADO', label: 'Personalizado' },
+                  ] as Array<{ key: RangoFecha; label: string }>
+                ).map((r) => (
+                  <button
+                    key={r.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={rangoFecha === r.key}
+                    onClick={() => setRangoFecha(r.key)}
+                    className={[
+                      'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition flex-1',
+                      rangoFecha === r.key
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
+                    ].join(' ')}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Row 1: Buscar + Desde/Hasta + Limpiar */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-              {/* Search */}
-              <div className="lg:col-span-7">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por #ID, vendedor, método de pago..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
+            {/* Buscar */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por ID, vendedor, método de pago..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 pr-8"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Desde / Hasta / Limpiar */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rango de fechas</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setFechaDesde('');
+                    setFechaHasta('');
+                    setMetodoPagoFilter('TODOS');
+                    setRangoFecha('PERSONALIZADO');
+                  }}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                  Limpiar
+                </button>
               </div>
-
-              {/* <select
-                value={filterTipo}
-                onChange={(e) => setFilterTipo(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="">Todos los tipos</option>
-                {TIPO_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select> */}
-
-              {/* Desde */}
-              <div className="lg:col-span-2">
-                <label className="text-xs text-muted-foreground font-medium">Desde</label>
-                <div className="relative mt-1">
-                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Desde</label>
                   <Input
                     type="date"
                     value={fechaDesde}
                     onChange={(e) => { setFechaDesde(e.target.value); setRangoFecha('PERSONALIZADO'); }}
-                    className="pl-8"
+                    className="h-9 text-sm w-full"
                   />
                 </div>
-              </div>
-
-              {/* Hasta */}
-              <div className="lg:col-span-2">
-                <label className="text-xs text-muted-foreground font-medium">Hasta</label>
-                <div className="relative mt-1">
-                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Hasta</label>
                   <Input
                     type="date"
                     value={fechaHasta}
                     onChange={(e) => { setFechaHasta(e.target.value); setRangoFecha('PERSONALIZADO'); }}
-                    className="pl-8"
+                    className="h-9 text-sm w-full"
                   />
                 </div>
               </div>
-
-              {/* Limpiar */}
-              <div className="lg:col-span-1">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearchTerm('');
-                      setFechaDesde('');
-                      setFechaHasta('');
-                      setMetodoPagoFilter('TODOS');
-                      setRangoFecha('PERSONALIZADO');
-                    }}
-                    className="w-full"
-                  >
-                    Limpiar
-                  </Button>
-                
-              </div>
             </div>
 
-            {/* Row 2: Método de pago (debajo) */}
-            <div className="w-full rounded-lg border border-input bg-muted p-1">
+            {/* Método de pago — tab bar scrollable */}
+            <div className="rounded-lg border border-input bg-muted p-1">
               <div
                 className="flex gap-1 overflow-x-auto scrollbar-hide"
                 role="tablist"
-                aria-label="Filtrar ventas por método de pago"
+                aria-label="Filtrar por método de pago"
               >
                 {(
                   [
-                    { key: 'TODOS', label: 'Todos' },
-                    { key: 'EFECTIVO', label: '💵 Efectivo' },
-                    { key: 'TARJETA', label: '💳 Tarjeta' },
+                    { key: 'TODOS',         label: 'Todos' },
+                    { key: 'EFECTIVO',      label: '💵 Efectivo' },
+                    { key: 'TARJETA',       label: '💳 Tarjeta' },
                     { key: 'TRANSFERENCIA', label: '🏦 Transferencia' },
                   ] as Array<{ key: MetodoPagoFilter; label: string }>
                 ).map((t) => {
@@ -708,8 +704,7 @@ export function VentasList() {
                       type="button"
                       onClick={() => setMetodoPagoFilter(t.key)}
                       className={[
-                        'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
-                        'min-w-[140px] sm:min-w-0 flex-1',
+                        'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition flex-1',
                         active
                           ? 'bg-background text-foreground shadow-sm'
                           : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
@@ -722,6 +717,7 @@ export function VentasList() {
                 })}
               </div>
             </div>
+
           </div>
         </CardContent>
       </Card>

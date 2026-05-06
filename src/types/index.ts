@@ -443,18 +443,47 @@ export interface DatosEliminacionDTO {
 // REPORTES
 // ========================================
 
+// ── Bajo stock ────────────────────────────────────────────────────────────────
 export interface ProductoBajoStockDTO {
-  id: number;
+  productoId: number;   // ← campo real del backend
   nombre: string;
   stockActual: number;
   stockMinimo: number;
 }
 
+// ── Top productos vendidos (resumen) ──────────────────────────────────────────
 export interface TopProductoVendidoDTO {
   productoId: number;
   nombre: string;
   cantidadVendida: number;
   ingresos: number;
+}
+
+// ── Top movimientos (resumen) ─────────────────────────────────────────────────
+export interface TopMovimientoProductoDTO {
+  productoId: number;
+  nombre: string;
+  tipo: string;
+  cantidadTotal: number;
+}
+
+// ── Sub-secciones del resumen (estructura anidada del backend) ────────────────
+export interface ReportesResumenInventarioDTO {
+  totalProductos: number;
+  productosBajoStock: ProductoBajoStockDTO[];
+  valorizacionStock: number | null;
+}
+
+export interface ReportesResumenMovimientosDTO {
+  entradasCantidad: number;
+  salidasCantidad: number;
+  topMovimientosProductos: TopMovimientoProductoDTO[];
+}
+
+export interface ReportesResumenComprasDTO {
+  recepcionesConfirmadasCount: number;
+  unidadesRecibidas: number;
+  montoComprasEstimado: number | null;
 }
 
 export interface VentasResumenDTO {
@@ -465,14 +494,12 @@ export interface VentasResumenDTO {
   topProductosVendidos: TopProductoVendidoDTO[];
 }
 
+// ── DTO raíz del resumen (estructura ANIDADA que devuelve el backend) ─────────
 export interface ReportesResumenDTO {
-  totalProductos: number;
-  valorizacionStock: number | null;
-  productosBajoStock: ProductoBajoStockDTO[];
-  entradasCantidad: number;
-  salidasCantidad: number;
-  recepcionesConfirmadasCount: number;
-  unidadesRecibidas: number;
+  rango: { desde: string; hasta: string };
+  inventario: ReportesResumenInventarioDTO;
+  movimientos: ReportesResumenMovimientosDTO;
+  comprasRecepciones: ReportesResumenComprasDTO;
   ventas: VentasResumenDTO | null;
 }
 
@@ -480,7 +507,7 @@ export interface ReportesResumenDTO {
 export interface VentasTendenciaPuntoDTO {
   periodo: string;
   ventasCount: number;
-  ingresos: number;
+  ingresosTotal: number;   // ← campo real del backend
 }
 
 // ── Ventas por vendedor ────────────────────────────────────────────────────────
@@ -488,7 +515,7 @@ export interface VentasPorVendedorDTO {
   vendedorId: number;
   vendedorNombre: string;
   ventasCount: number;
-  ingresos: number;
+  ingresosTotal: number;   // ← campo real del backend
   ticketPromedio: number | null;
 }
 
@@ -497,22 +524,22 @@ export interface VentasPorCategoriaDTO {
   categoria: string;
   ventasCount: number;
   unidades: number;
-  ingresos: number;
+  ingresosTotal: number;   // ← campo real del backend
 }
 
 // ── Ventas por método de pago ──────────────────────────────────────────────────
 export interface VentasPorMetodoPagoDTO {
   metodoPago: string;
   ventasCount: number;
-  ingresos: number;
+  ingresosTotal: number;   // ← campo real del backend
   porcentaje: number | null;
 }
 
-// ── Ventas productos (top / menos) ────────────────────────────────────────────
+// ── Ventas productos (top / menos vendidos) ───────────────────────────────────
 export interface VentasProductoDTO {
   productoId: number;
   nombre: string;
-  cantidadVendida: number;
+  cantidad: number;        // ← campo real del backend (era cantidadVendida)
   ingresos: number;
 }
 
@@ -539,7 +566,7 @@ export interface InventarioCoberturaDTO {
   productoId: number;
   nombre: string;
   stockActual: number;
-  promedioSalidasDia: number | null;
+  promedioSalidasDiarias: number | null;  // ← campo real del backend
   diasCobertura: number | null;
 }
 
@@ -547,8 +574,8 @@ export interface InventarioCoberturaDTO {
 export interface ComprasPorProveedorDTO {
   proveedorId: number;
   proveedorNombre: string;
-  recepciones: number;
-  unidades: number;
+  recepcionesCount: number;    // ← campo real del backend
+  unidadesRecibidas: number;   // ← campo real del backend
   montoEstimado: number | null;
 }
 
