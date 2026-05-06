@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { Dialog } from '../../components/ui/Dialog';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
@@ -34,9 +35,11 @@ import {
   Trash2,
   Check,
   X,
+  FileDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { exportarOCPDF } from '../../utils/reportes-export';
 
 const ESTADO_BADGE: Record<string, string> = {
   BORRADOR: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
@@ -91,6 +94,11 @@ export function OrdenComprasList() {
   const [addQty, setAddQty] = useState<number>(1);
   const [addPrice, setAddPrice] = useState<number | ''>('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Confirm dialog state (cancelar OC)
+  const [confirmCancel, setConfirmCancel] = useState<{ isOpen: boolean; ocId: number | null; fromDetail: boolean }>({
+    isOpen: false, ocId: null, fromDetail: false,
+  });
 
   // Create form (IDs)
   const [selectedProveedorId, setSelectedProveedorId] = useState<number | null>(null);
@@ -166,6 +174,7 @@ export function OrdenComprasList() {
       productos.map((p) => ({
         id: p.id!,
         label: `${p.nombre}${p.codigoBarras ? ` (${p.codigoBarras})` : ''}`,
+        subtitle: p.costoUnitario ? `Último costo: S/. ${p.costoUnitario.toFixed(2)}` : 'Sin costo registrado',
       })),
     [productos]
   );
@@ -399,19 +408,24 @@ export function OrdenComprasList() {
     }
   };
 
-  const handleCancelar = async () => {
+  const handleCancelar = () => {
     if (!selectedOc?.id) return;
+    setConfirmCancel({ isOpen: true, ocId: selectedOc.id, fromDetail: true });
+  };
+
+  const ejecutarCancelacion = async (ocId: number, fromDetail: boolean) => {
     try {
-      setDetailActionLoading(true);
-      const updated = await ordenCompraService.cancelar(selectedOc.id);
-      setSelectedOc(updated);
-      toast.success('Orden de compra cancelada');
+      if (fromDetail) setDetailActionLoading(true);
+      const updated = await ordenCompraService.cancelar(ocId);
+      if (fromDetail) setSelectedOc(updated);
+      toast.success(`OC #${ocId} cancelada`);
       await fetchData();
     } catch (e) {
-      toast.error('Error al cancelar OC');
+      toast.error('Error al cancelar la OC');
       if (import.meta.env.DEV) console.error(e);
     } finally {
-      setDetailActionLoading(false);
+      if (fromDetail) setDetailActionLoading(false);
+      setConfirmCancel({ isOpen: false, ocId: null, fromDetail: false });
     }
   };
 
@@ -677,16 +691,9 @@ export function OrdenComprasList() {
                                   variant="ghost"
                                   size="icon"
                                   title="Cancelar OC"
-                                  onClick={async (e) => {
+                                  onClick={(e) => {
                                     e.stopPropagation();
-                                    if (!window.confirm(`¿Cancelar OC #${oc.id}? Esta acción no se puede deshacer.`)) return;
-                                    try {
-                                      await ordenCompraService.cancelar(oc.id!);
-                                      toast.success(`OC #${oc.id} cancelada`);
-                                      await fetchData();
-                                    } catch {
-                                      toast.error('Error al cancelar la OC');
-                                    }
+                                    setConfirmCancel({ isOpen: true, ocId: oc.id!, fromDetail: false });
                                   }}
                                 >
                                   <XCircle className="h-4 w-4 text-red-500" />
@@ -956,26 +963,53 @@ export function OrdenComprasList() {
             )}
 
             {/* Actions */}
-            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">
-              {(selectedOc.estado === 'BORRADOR' || selectedOc.estado === 'ENVIADA') && canEditOC && (
-                <Button variant="outline" onClick={handleCancelar} disabled={detailActionLoading}>
-                  <XCircle size={16} className="mr-2" />
-                  Cancelar OC
-                </Button>
-              )}
-              {selectedOc.estado === 'BORRADOR' && canEditOC && (
-                <Button
-                  onClick={handleEnviar}
-                  disabled={detailActionLoading || (selectedOc.items ?? []).length === 0}
-                >
-                  <Send size={16} className="mr-2" />
-                  Enviar OC
-                </Button>
-              )}
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-between pt-2 border-t">
+              {/* Izquierda: descargar PDF */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exportarOCPDF(selectedOc)}
+                className="text-muted-foreground"
+              >
+                <FileDown size={15} className="mr-2 text-red-500" />
+                Descargar PDF
+              </Button>
+
+              {/* Derecha: acciones de estado */}
+              <div className="flex flex-col-reverse sm:flex-row gap-2">
+                {(selectedOc.estado === 'BORRADOR' || selectedOc.estado === 'ENVIADA') && canEditOC && (
+                  <Button variant="outline" onClick={handleCancelar} disabled={detailActionLoading}>
+                    <XCircle size={16} className="mr-2" />
+                    Cancelar OC
+                  </Button>
+                )}
+                {selectedOc.estado === 'BORRADOR' && canEditOC && (
+                  <Button
+                    onClick={handleEnviar}
+                    disabled={detailActionLoading || (selectedOc.items ?? []).length === 0}
+                  >
+                    <Send size={16} className="mr-2" />
+                    Enviar OC
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         )}
       </Dialog>
+
+      {/* Confirm cancelar OC */}
+      <ConfirmDialog
+        isOpen={confirmCancel.isOpen}
+        title={`Cancelar OC #${confirmCancel.ocId}`}
+        description="¿Estás seguro? Esta acción no se puede deshacer y la orden quedará cancelada."
+        confirmText="Sí, cancelar"
+        type="danger"
+        onConfirm={async () => {
+          if (confirmCancel.ocId) await ejecutarCancelacion(confirmCancel.ocId, confirmCancel.fromDetail);
+        }}
+        onCancel={() => setConfirmCancel({ isOpen: false, ocId: null, fromDetail: false })}
+      />
 
       {/* Create modal (estilo coherente) */}
       <Dialog
@@ -1068,7 +1102,17 @@ export function OrdenComprasList() {
                         }
                       : null
                   }
-                  onChange={(opt) => setSelectedProductoId(opt ? Number(opt.id) : null)}
+                  onChange={(opt) => {
+                    const id = opt ? Number(opt.id) : null;
+                    setSelectedProductoId(id);
+                    // Pre-llenar con el último costo unitario del producto
+                    if (id) {
+                      const prod = productos.find((p) => p.id === id);
+                      setItemPrice(prod?.costoUnitario ? prod.costoUnitario : '');
+                    } else {
+                      setItemPrice('');
+                    }
+                  }}
                   placeholder="Buscar producto..."
                 />
               </div>
@@ -1085,12 +1129,20 @@ export function OrdenComprasList() {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Precio (opc.)</label>
+                <label className="text-xs text-muted-foreground mb-1 block">
+                  Precio compra (S/.)
+                  {selectedProducto?.costoUnitario != null && (
+                    <span className="ml-1 text-primary font-medium">
+                      · último: {selectedProducto.costoUnitario.toFixed(2)}
+                    </span>
+                  )}
+                </label>
                 <Input
                   type="number"
                   min={0}
                   step="0.01"
                   className="w-32 h-11"
+                  placeholder="0.00"
                   value={itemPrice}
                   onChange={(e) => setItemPrice(e.target.value === '' ? '' : Number(e.target.value))}
                 />

@@ -34,12 +34,15 @@ import {
   TrendingUp,
   Hash,
   X,
+  FileSpreadsheet,
+  FileDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
+import { exportarVentasExcel, exportarVentasPDF } from '../../utils/reportes-export';
 
 const IGV_RATE = 0.18;
 // const TIPO_OPTIONS: MetodoPago[] = ['TODOS', 'EFECTIVO', 'TARJETA', 'TRANSFERENCIA'];
@@ -81,7 +84,7 @@ export function VentasList() {
   // ✅ filtros
   const [metodoPagoFilter, setMetodoPagoFilter] = useState<MetodoPagoFilter>('TODOS');
 
-  const [rangoFecha, setRangoFecha] = useState<RangoFecha>('30_DIAS');
+  const [rangoFecha, setRangoFecha] = useState<RangoFecha>('HOY');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
 
@@ -490,6 +493,30 @@ export function VentasList() {
       return best;
   }, [ventas, productoById]);
 
+  const etiquetaFiltro =
+    rangoFecha === 'HOY'    ? 'Hoy' :
+    rangoFecha === 'AYER'   ? 'Ayer' :
+    rangoFecha === '7_DIAS' ? 'Últimos 7 días' :
+    rangoFecha === '30_DIAS'? 'Últimos 30 días' :
+    fechaDesde && fechaHasta ? `${fechaDesde} al ${fechaHasta}` :
+    fechaDesde ? `Desde ${fechaDesde}` : 'Período personalizado';
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = () => {
+    try {
+      exportarVentasExcel(filteredVentas, etiquetaFiltro);
+    } catch { toast.error('Error al exportar Excel'); }
+  };
+
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      exportarVentasPDF(filteredVentas, etiquetaFiltro);
+    } catch { toast.error('Error al exportar PDF'); }
+    finally { setExporting(false); }
+  };
+
   if (loading) return <LoadingSpinner />;
 
   if (!canViewAll('VENTAS') && !canViewOwn('VENTAS') && !canCreate('VENTAS')) {
@@ -510,12 +537,26 @@ export function VentasList() {
           <h1 className="text-3xl font-bold tracking-tight">Ventas</h1>
           <p className="text-muted-foreground">Gestiona las ventas y transacciones</p>
         </div>
-        {canCreate('VENTAS') && (
-          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-            <Plus className="mr-2 h-4 w-4" />
-            Nueva Venta
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {(canViewAll('VENTAS') || canViewOwn('VENTAS')) && filteredVentas.length > 0 && (
+            <>
+              <Button variant="outline" size="sm" onClick={handleExportExcel} className="flex-1 sm:flex-none">
+                <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" />
+                Excel
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={exporting} className="flex-1 sm:flex-none">
+                <FileDown className="mr-2 h-4 w-4 text-red-500" />
+                {exporting ? 'Exportando...' : 'PDF'}
+              </Button>
+            </>
+          )}
+          {canCreate('VENTAS') && (
+            <Button onClick={() => setIsDialogOpen(true)} className="flex-1 sm:flex-none">
+              <Plus className="mr-2 h-4 w-4" />
+              Nueva Venta
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -726,7 +767,7 @@ export function VentasList() {
       <Card>
         <CardHeader>
           <CardTitle>Lista de Ventas</CardTitle>
-          <CardDescription>{filteredVentas.length} venta(s) encontrada(s)</CardDescription>
+          <CardDescription>{filteredVentas.length} venta(s) — {etiquetaFiltro}</CardDescription>
         </CardHeader>
         <CardContent>
           {!canViewAll('VENTAS') && !canViewOwn('VENTAS') ? (
