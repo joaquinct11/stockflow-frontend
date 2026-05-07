@@ -83,6 +83,16 @@ export interface UnidadMedidaDTO {
 }
 
 // ========================================
+// CATEGORÍAS
+// ========================================
+
+export interface CategoriaDTO {
+  id: number;
+  nombre: string;
+  esGlobal: boolean;
+}
+
+// ========================================
 // PRODUCTOS
 // ========================================
 
@@ -90,7 +100,11 @@ export interface ProductoDTO {
   id?: number;
   nombre: string;
   codigoBarras: string;
-  categoria: string;
+  /** @deprecated Usar categoriaId en su lugar. Mantenido para backward compat. */
+  categoria?: string;
+  categoriaId?: number;
+  /** Solo lectura — nombre de la categoría devuelta por el backend. */
+  categoriaNombre?: string;
   stockActual: number;
   stockMinimo: number;
   stockMaximo: number;
@@ -102,9 +116,7 @@ export interface ProductoDTO {
   activo?: boolean;
   deletedAt?: string;
   tenantId: string;
-  // ✅ NUEVO (elige lo que tu backend exponga)
   unidadMedidaId: number;
-  // opcional para mostrar sin otra llamada (si tu backend lo manda)
   unidadMedidaNombre?: string;
 }
 
@@ -121,6 +133,7 @@ export interface VentaDTO {
   estado: string;
   tenantId: string;
   createdAt?: string;
+  cajaId?: number;
   detalles: DetalleVentaDTO[];
 }
 
@@ -181,6 +194,23 @@ export interface SuscripcionEstadoResponseDTO {
 // ========================================
 // TENANTS
 // ========================================
+
+export interface TenantConfigDTO {
+  tenantId?: string;
+  nombreNegocio?: string;
+  ruc?: string;
+  direccion?: string;
+  telefono?: string;
+  emailContacto?: string;
+  ciudad?: string;
+  /** data:image/png;base64,... o null para borrar */
+  logoBase64?: string | null;
+  moneda?: string;
+  igvPorcentaje?: number;
+  piePaginaPdf?: string;
+  serieBoleta?: string;
+  serieFactura?: string;
+}
 
 // ✅ NUEVO
 export interface TenantDTO {
@@ -559,6 +589,39 @@ export interface InventarioSlowMoverDTO {
   stockActual: number;
   costoTotal: number | null;
   diasSinSalida: number;
+}
+
+// ========================================
+// CAJA (Cuadre de caja)
+// ========================================
+
+export interface CajaDTO {
+  id: number;
+  tenantId: string;
+  usuarioId: number;
+  usuarioNombre: string;
+  montoApertura: number;
+  totalEfectivo: number | null;
+  totalTarjeta: number | null;
+  totalYapePlin: number | null;
+  totalIngresos: number | null;
+  cantidadVentas: number;
+  montoContado: number | null;
+  diferencia: number | null;
+  estado: 'ABIERTA' | 'CERRADA';
+  observaciones: string | null;
+  fechaApertura: string;
+  fechaCierre: string | null;
+}
+
+export interface AbrirCajaDTO {
+  montoApertura: number;
+  observaciones?: string;
+}
+
+export interface CerrarCajaDTO {
+  montoContado: number;
+  observaciones?: string;
 }
 
 // ── Inventario cobertura ───────────────────────────────────────────────────────

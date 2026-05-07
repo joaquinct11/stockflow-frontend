@@ -5,6 +5,7 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import type { TenantConfigDTO } from '../types';
 import type {
   ReportesResumenDTO,
   VentasPorVendedorDTO,
@@ -21,6 +22,66 @@ import type {
 } from '../types';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Dibuja el encabezado del negocio en un PDF.
+ * Retorna la posición Y después del encabezado.
+ */
+function dibujarEncabezadoNegocio(
+  doc: jsPDF,
+  negocio: TenantConfigDTO | null | undefined,
+  tituloDocumento: string,
+  subtituloDocumento?: string,
+): number {
+  const pageW = doc.internal.pageSize.getWidth();
+  let y = 14;
+  let xTexto = 14;
+
+  // Logo (si existe)
+  if (negocio?.logoBase64) {
+    try {
+      const formato = negocio.logoBase64.includes('image/png') ? 'PNG' : 'JPEG';
+      doc.addImage(negocio.logoBase64, formato, 14, y, 20, 20);
+      xTexto = 38;
+    } catch { /* logo inválido — ignorar */ }
+  }
+
+  // Nombre + datos del negocio
+  if (negocio?.nombreNegocio) {
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 30, 30);
+    doc.text(negocio.nombreNegocio, xTexto, y + 5);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    const lineas: string[] = [];
+    if (negocio.ruc)        lineas.push(`RUC: ${negocio.ruc}`);
+    if (negocio.direccion)  lineas.push(negocio.direccion + (negocio.ciudad ? `, ${negocio.ciudad}` : ''));
+    if (negocio.telefono)   lineas.push(`Tel: ${negocio.telefono}`);
+    lineas.forEach((l, i) => doc.text(l, xTexto, y + 10 + i * 4));
+  }
+
+  // Título del documento (derecha)
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(99, 102, 241);
+  doc.text(tituloDocumento, pageW - 14, y + 5, { align: 'right' });
+  if (subtituloDocumento) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text(subtituloDocumento, pageW - 14, y + 11, { align: 'right' });
+  }
+
+  y += negocio?.nombreNegocio ? 28 : 18;
+
+  // Línea divisora
+  doc.setDrawColor(220, 220, 220);
+  doc.line(14, y, pageW - 14, y);
+  return y + 5;
+}
 
 function sol(v: number | null | undefined): string {
   if (v == null) return '—';
@@ -466,26 +527,13 @@ export function exportarVentasExcel(ventas: VentaDTO[], etiqueta: string): void 
   XLSX.writeFile(wb, `ventas_${etiqueta.replace(/[\s/]/g, '_')}.xlsx`);
 }
 
-export function exportarVentasPDF(ventas: VentaDTO[], etiqueta: string): void {
+export function exportarVentasPDF(ventas: VentaDTO[], etiqueta: string, negocio?: TenantConfigDTO | null): void {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
-  let y = 15;
-
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
-  doc.text('Fluxus — Listado de Ventas', 14, y);
-  y += 6;
 
   const totalIngresos = ventas.reduce((s, v) => s + (v.total ?? 0), 0);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text(
-    `Período: ${etiqueta}   ·   ${ventas.length} venta(s)   ·   Total: ${sol(totalIngresos)}`,
-    14, y
-  );
-  y += 8;
+  let y = dibujarEncabezadoNegocio(doc, negocio, 'Listado de Ventas', `Período: ${etiqueta} · ${ventas.length} venta(s) · Total: ${sol(totalIngresos)}`);
+
 
   autoTable(doc, {
     startY: y,
@@ -526,31 +574,16 @@ export function exportarVentasPDF(ventas: VentaDTO[], etiqueta: string): void {
 // OC: PDF de orden de compra individual
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function exportarOCPDF(oc: OrdenCompraDTO): void {
+export function exportarOCPDF(oc: OrdenCompraDTO, negocio?: TenantConfigDTO | null): void {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
-  let y = 15;
 
   const fechaEmision = oc.createdAt
     ? new Date(oc.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
 
-  // ── Encabezado ──────────────────────────────────────────────────────────────
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
-  doc.text('Fluxus — Orden de Compra', 14, y);
+  let y = dibujarEncabezadoNegocio(doc, negocio, `OC #${oc.id}`, `Fecha: ${fechaEmision}   ·   Estado: ${oc.estado}`);
 
-  doc.setFontSize(14);
-  doc.setTextColor(99, 102, 241);
-  doc.text(`OC #${oc.id}`, pageW - 14, y, { align: 'right' });
-  y += 7;
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Fecha de emisión: ${fechaEmision}   ·   Estado: ${oc.estado}`, 14, y);
-  y += 10;
 
   // ── Datos del proveedor ──────────────────────────────────────────────────────
   doc.setDrawColor(220, 220, 220);
@@ -680,28 +713,17 @@ export function exportarStockExcel(
 export function exportarStockPDF(
   productos: ProductoDTO[],
   nombreUnidad: (id: number) => string,
+  negocio?: TenantConfigDTO | null,
 ): void {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const fecha = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
-  let y = 15;
-
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
-  doc.text('Fluxus — Stock Actual de Inventario', 14, y);
-  y += 6;
 
   const valorTotal = productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0);
   const bajoStockCount = productos.filter((p) => (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)).length;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text(
-    `Fecha: ${fecha}   ·   ${productos.length} productos   ·   ${bajoStockCount} bajo stock   ·   Valorizado: ${sol(valorTotal)}`,
-    14, y
-  );
-  y += 8;
+  let y = dibujarEncabezadoNegocio(doc, negocio, 'Stock Actual',
+    `${fecha}  ·  ${productos.length} productos  ·  ${bajoStockCount} bajo stock  ·  Valorizado: ${sol(valorTotal)}`);
+
 
   autoTable(doc, {
     startY: y,

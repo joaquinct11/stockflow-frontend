@@ -5,11 +5,9 @@ import { facturacionService } from '../../services/facturacion.service';
 import type {
   VentaDTO,
   ProductoDTO,
-  DetalleVentaDTO,
   EmitirComprobanteRequest,
   EmitirComprobanteForm,
   ComprobanteDTO,
-  // MetodoPago,
 } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -19,10 +17,8 @@ import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
 import {
-  Plus,
   Trash2,
   ShoppingCart,
   Search,
@@ -43,10 +39,10 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 import { exportarVentasExcel, exportarVentasPDF } from '../../utils/reportes-export';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 const IGV_RATE = 0.18;
-// const TIPO_OPTIONS: MetodoPago[] = ['TODOS', 'EFECTIVO', 'TARJETA', 'TRANSFERENCIA'];
-type MetodoPagoFilter = 'TODOS' | 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA';
+type MetodoPagoFilter = 'TODOS' | 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
 type RangoFecha = 'HOY' | 'AYER' | '7_DIAS' | '30_DIAS' | 'PERSONALIZADO';
 
 function toYyyyMmDdLocal(date: Date) {
@@ -67,13 +63,13 @@ function endOfDay(d: Date) {
 export function VentasList() {
   const { userId } = useCurrentUser();
   const { user } = useAuthStore();
-  const { canCreate, canDelete, canViewAll, canViewOwn, rol, puede } = usePermissions();
+  const { canDelete, canViewAll, canViewOwn, rol, puede } = usePermissions();
+  const { config: negocioConfig } = useTenantConfigStore();
 
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [comprobantes, setComprobantes] = useState<ComprobanteDTO[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVenta, setSelectedVenta] = useState<VentaDTO | null>(null);
@@ -87,11 +83,6 @@ export function VentasList() {
   const [rangoFecha, setRangoFecha] = useState<RangoFecha>('HOY');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
-
-  const [montoRecibido, setMontoRecibido] = useState<number>(0);
-  const [vuelto, setVuelto] = useState<number>(0);
-
-  const [selectedProductos, setSelectedProductos] = useState<{ [key: number]: any }>({});
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -114,30 +105,10 @@ export function VentasList() {
   });
 
   // Emitir comprobante desde detalle de venta
-  const canEmitirComprobante = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
+  const canEmitirComprobante = puede('EMITIR_COMPROBANTE') || puede('CREAR_VENTA');
   const [isEmitirComprobanteOpen, setIsEmitirComprobanteOpen] = useState(false);
   const [emitirForm, setEmitirForm] = useState<EmitirComprobanteForm>(emptyForm());
   const [emitirSubmitting, setEmitirSubmitting] = useState(false);
-
-  const [formData, setFormData] = useState<VentaDTO>({
-    vendedorId: 0,
-    total: 0,
-    metodoPago: 'EFECTIVO',
-    estado: 'COMPLETADA',
-    tenantId: user?.tenantId ?? '',
-    detalles: [],
-  });
-
-  useEffect(() => {
-    if (userId) {
-      const tenantId = user?.tenantId;
-      setFormData((prev) => ({
-        ...prev,
-        vendedorId: userId,
-        tenantId: tenantId ?? prev.tenantId,
-      }));
-    }
-  }, [userId, user?.tenantId]);
 
   useEffect(() => {
     if (userId) {
@@ -188,29 +159,6 @@ export function VentasList() {
     setCurrentPage(1);
   }, [searchTerm, fechaDesde, fechaHasta, metodoPagoFilter]);
 
-  const calculateTotal = () =>
-    formData.detalles.reduce((sum, d) => sum + d.cantidad * d.precioUnitario, 0);
-
-  // desglose informativo: extrae IGV del precio (precio ya incluye IGV)
-  const calculateIGVIncluido = () => {
-    const total = calculateTotal();
-    return total * IGV_RATE / (1 + IGV_RATE); // = total * 18/118
-  };
-
-  const calculateBaseImponible = () => calculateTotal() / (1 + IGV_RATE);
-
-  useEffect(() => {
-    if (formData.metodoPago === 'EFECTIVO') {
-      const total = calculateTotal();
-      const cambio = montoRecibido - total;
-      setVuelto(cambio >= 0 ? cambio : 0);
-    } else {
-      setMontoRecibido(0);
-      setVuelto(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [montoRecibido, formData.detalles, formData.metodoPago]);
-
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -224,7 +172,7 @@ export function VentasList() {
       })();
 
       const productosPromise =
-        hasViewPermission || canCreate('VENTAS') ? productoService.getAll() : Promise.resolve([] as ProductoDTO[]);
+        hasViewPermission ? productoService.getAll() : Promise.resolve([] as ProductoDTO[]);
 
       const comprobantesPromise = facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[]);
 
@@ -243,72 +191,6 @@ export function VentasList() {
       setVentas([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const productosOptions = productos.map((p) => ({
-    id: p.id!,
-    label: p.nombre,
-    subtitle: `Código: ${p.codigoBarras} | Stock: ${p.stockActual} | S/.${p.precioVenta.toFixed(2)}`,
-  }));
-
-  const handleAddDetalle = () => {
-    setFormData({
-      ...formData,
-      detalles: [...formData.detalles, { productoId: 0, cantidad: 1, precioUnitario: 0 }],
-    });
-  };
-
-  const handleDetalleChange = (index: number, field: keyof DetalleVentaDTO, value: any) => {
-    const newDetalles = [...formData.detalles];
-    newDetalles[index] = { ...newDetalles[index], [field]: value };
-
-    if (field === 'productoId') {
-      const producto = productos.find((p) => p.id === parseInt(value));
-      if (producto) newDetalles[index].precioUnitario = producto.precioVenta;
-    }
-
-    setFormData({ ...formData, detalles: newDetalles });
-  };
-
-  const handleRemoveDetalle = (index: number) => {
-    const newSelectedProductos = { ...selectedProductos };
-    delete newSelectedProductos[index];
-    setSelectedProductos(newSelectedProductos);
-
-    setFormData({ ...formData, detalles: formData.detalles.filter((_, i) => i !== index) });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (formData.detalles.length === 0) {
-      toast.error('Debes agregar al menos un producto');
-      return;
-    }
-
-    if (formData.metodoPago === 'EFECTIVO') {
-      const total = calculateTotal();
-      if (montoRecibido < total) {
-        toast.error(`El monto recibido (S/.${montoRecibido.toFixed(2)}) es menor al total (S/.${total.toFixed(2)})`);
-        return;
-      }
-    }
-
-    try {
-      const ventaToSend = { ...formData, total: calculateTotal() };
-      await ventaService.create(ventaToSend);
-      toast.success('Venta creada exitosamente');
-
-      if (formData.metodoPago === 'EFECTIVO' && vuelto > 0) {
-        toast.success(`Vuelto: S/.${vuelto.toFixed(2)}`, { duration: 5000 });
-      }
-
-      resetForm();
-      await fetchData();
-    } catch (error) {
-      toast.error('Error al crear venta');
-      if (import.meta.env.DEV) console.error(error);
     }
   };
 
@@ -380,21 +262,6 @@ export function VentasList() {
         }
       },
     });
-  };
-
-  const resetForm = () => {
-    setFormData({
-      vendedorId: userId || 0,
-      total: 0,
-      metodoPago: 'EFECTIVO',
-      estado: 'COMPLETADA',
-      tenantId: user?.tenantId ?? '',
-      detalles: [],
-    });
-    setSelectedProductos({});
-    setMontoRecibido(0);
-    setVuelto(0);
-    setIsDialogOpen(false);
   };
 
   const filteredVentas = ventas.filter((v) => {
@@ -512,7 +379,7 @@ export function VentasList() {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
-      exportarVentasPDF(filteredVentas, etiquetaFiltro);
+      exportarVentasPDF(filteredVentas, etiquetaFiltro, negocioConfig);
     } catch { toast.error('Error al exportar PDF'); }
     finally { setExporting(false); }
   };
@@ -549,12 +416,6 @@ export function VentasList() {
                 {exporting ? 'Exportando...' : 'PDF'}
               </Button>
             </>
-          )}
-          {canCreate('VENTAS') && (
-            <Button onClick={() => setIsDialogOpen(true)} className="flex-1 sm:flex-none">
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Venta
-            </Button>
           )}
         </div>
       </div>
@@ -732,10 +593,10 @@ export function VentasList() {
               >
                 {(
                   [
-                    { key: 'TODOS',         label: 'Todos' },
-                    { key: 'EFECTIVO',      label: '💵 Efectivo' },
-                    { key: 'TARJETA',       label: '💳 Tarjeta' },
-                    { key: 'TRANSFERENCIA', label: '🏦 Transferencia' },
+                    { key: 'TODOS',     label: 'Todos' },
+                    { key: 'EFECTIVO',  label: '💵 Efectivo' },
+                    { key: 'TARJETA',   label: '💳 Tarjeta' },
+                    { key: 'YAPE_PLIN', label: '📱 Yape/Plin' },
                   ] as Array<{ key: MetodoPagoFilter; label: string }>
                 ).map((t) => {
                   const active = metodoPagoFilter === t.key;
@@ -879,263 +740,6 @@ export function VentasList() {
           )}
         </CardContent>
       </Card>
-
-      {/* Dialog para crear venta */}
-      <Dialog
-        isOpen={isDialogOpen}
-        onClose={resetForm}
-        title="Nueva Venta"
-        description="Registra una nueva venta al sistema"
-        size="lg"
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Método de Pago
-                <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.metodoPago}
-                onChange={(e) => setFormData({ ...formData, metodoPago: e.target.value })}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                required
-              >
-                <option value="EFECTIVO">Efectivo</option>
-                <option value="TARJETA">Tarjeta</option>
-                <option value="TRANSFERENCIA">Transferencia</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Estado
-                <span className="text-red-500">*</span>
-              </label>
-              <div className="h-10 rounded-md border border-input bg-muted px-3 py-2 flex items-center">
-                <span className="text-sm font-medium">COMPLETADA</span>
-              </div>
-              <input type="hidden" value="COMPLETADA" />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold">Productos</h3>
-              <Button type="button" variant="outline" size="sm" onClick={handleAddDetalle}>
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar Producto
-              </Button>
-            </div>
-
-            {formData.detalles.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                <ShoppingCart className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No hay productos agregados</p>
-                <p className="text-sm">Click en &quot;Agregar Producto&quot; para comenzar</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {formData.detalles.map((detalle, index) => {
-                  const productoSeleccionado = productos.find((p) => p.id === parseInt(String(detalle.productoId)));
-                  const subtotal = detalle.cantidad * detalle.precioUnitario;
-
-                  return (
-                    <div key={index} className="border rounded-lg p-4 bg-card space-y-3">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Producto</label>
-                        <Autocomplete
-                          options={productosOptions}
-                          value={selectedProductos[index] || null}
-                          onChange={(option) => {
-                            if (option) {
-                              const producto = productos.find((p) => p.id === option.id);
-                              if (producto) {
-                                setSelectedProductos({ ...selectedProductos, [index]: option });
-                                handleDetalleChange(index, 'productoId', producto.id);
-                              }
-                            } else {
-                              const newSelectedProductos = { ...selectedProductos };
-                              delete newSelectedProductos[index];
-                              setSelectedProductos(newSelectedProductos);
-                              handleDetalleChange(index, 'productoId', 0);
-                            }
-                          }}
-                          placeholder="Buscar producto por nombre..."
-                          emptyMessage="No se encontró el producto"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-12 gap-3 items-end">
-                        <div className="col-span-2 space-y-2">
-                          <label className="text-sm font-medium">Stock Actual</label>
-                          <Input
-                            type="number"
-                            value={productoSeleccionado?.stockActual || 0}
-                            disabled
-                            className={`h-10 font-bold text-center ${
-                              productoSeleccionado &&
-                              productoSeleccionado.stockActual! <= productoSeleccionado.stockMinimo!
-                                ? 'bg-red-50 border-red-300 text-destructive'
-                                : 'bg-green-50 border-green-300 text-green-600'
-                            }`}
-                          />
-                        </div>
-
-                        <div className="col-span-3 space-y-2">
-                          <label className="text-sm font-medium">Cantidad</label>
-                          <Input
-                            type="number"
-                            min="1"
-                            max={productoSeleccionado?.stockActual || 999}
-                            value={detalle.cantidad}
-                            onChange={(e) => {
-                              const cantidad = parseInt(e.target.value);
-                              if (productoSeleccionado && cantidad > productoSeleccionado.stockActual!) {
-                                toast.error(`Solo hay ${productoSeleccionado.stockActual} unidades disponibles`);
-                                handleDetalleChange(index, 'cantidad', productoSeleccionado.stockActual!);
-                              } else {
-                                handleDetalleChange(index, 'cantidad', cantidad);
-                              }
-                            }}
-                            className="h-10 font-bold text-center"
-                            required
-                          />
-                        </div>
-
-                        <div className="col-span-3 space-y-2">
-                          <label className="text-sm font-medium">Precio Unit.</label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={detalle.precioUnitario}
-                            disabled
-                            className="h-10 bg-muted font-bold text-center text-primary"
-                          />
-                        </div>
-
-                        <div className="col-span-3 space-y-2">
-                          <label className="text-sm font-medium">Total</label>
-                          <div className="h-10 rounded-md border-2 border-primary bg-primary/10 px-3 py-2 flex items-center justify-center font-bold text-primary">
-                            S/.{subtotal.toFixed(2)}
-                          </div>
-                        </div>
-
-                        <div className="col-span-1 flex items-end justify-center h-10">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveDetalle(index)}
-                            title="Eliminar producto"
-                            className="h-10 w-10 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 space-y-2">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground font-medium">Base imponible:</span>
-              <span className="font-semibold">S/.{calculateBaseImponible().toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground font-medium">IGV (18%) incl.:</span>
-              <span className="font-semibold">S/.{calculateIGVIncluido().toFixed(2)}</span>
-            </div>
-            <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
-              <span className="text-lg font-semibold">Total:</span>
-              <span className="text-2xl font-bold text-primary">S/.{calculateTotal().toFixed(2)}</span>
-            </div>
-          </div>
-
-          {/* Sección de Efectivo — debajo del resumen de totales */}
-          {formData.metodoPago === 'EFECTIVO' && formData.detalles.length > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3">
-              <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Pago en Efectivo
-              </h3>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Total a Pagar</label>
-                  <div className="h-10 rounded-md border-2 border-blue-300 dark:border-blue-700 bg-blue-100 dark:bg-blue-900 px-3 py-2 flex items-center justify-between font-bold text-blue-900 dark:text-blue-100">
-                    <span>S/.</span>
-                    <span>{calculateTotal().toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Monto Recibido
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={montoRecibido || ''}
-                    onChange={(e) => setMontoRecibido(parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className="h-10 font-bold text-right"
-                    required={formData.metodoPago === 'EFECTIVO'}
-                  />
-                </div>
-              </div>
-
-              {montoRecibido > 0 && (
-                <div
-                  className={`rounded-lg p-3 border-2 ${
-                    vuelto >= 0
-                      ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800'
-                      : 'bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-sm">{vuelto >= 0 ? 'Vuelto:' : 'Falta:'}</span>
-                    <span
-                      className={`text-2xl font-bold ${
-                        vuelto >= 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
-                      }`}
-                    >
-                      S/.{Math.abs(vuelto).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {montoRecibido > 0 && vuelto < 0 && (
-                <div className="bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-lg p-2 text-sm text-red-800 dark:text-red-200">
-                  ⚠️ El monto recibido es insuficiente
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-2 justify-end pt-4 border-t">
-            <Button type="button" variant="outline" onClick={resetForm}>
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={
-                formData.detalles.length === 0 ||
-                (formData.metodoPago === 'EFECTIVO' && montoRecibido < calculateTotal())
-              }
-            >
-              Crear Venta
-            </Button>
-          </div>
-        </form>
-      </Dialog>
 
       {/* Dialog - Detalle de Venta */}
       <Dialog

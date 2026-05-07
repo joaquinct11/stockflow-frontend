@@ -23,6 +23,7 @@ export function Breadcrumb() {
     perfil:       'Mi Perfil',
     admin:        'Administración',
     permisos:     'Permisos',
+    caja:         'Caja',
   };
 
   return (

@@ -126,7 +126,13 @@ export function ComprobantesPage() {
     }
   };
 
-  const filteredComprobantes = comprobantes.filter((c) => {
+  // VENDEDOR solo ve comprobantes de sus propias ventas
+  const ventasIds = isVendedor ? new Set(ventas.map(v => v.id)) : null;
+  const comprobantesBase = ventasIds
+    ? comprobantes.filter(c => ventasIds.has(c.ventaId))
+    : comprobantes;
+
+  const filteredComprobantes = comprobantesBase.filter((c) => {
     // ✅ 1) filtro fechas (createdAt)
     if (fechaDesde || fechaHasta) {
       const created = c.createdAt ? new Date(c.createdAt) : null;
@@ -252,6 +258,8 @@ export function ComprobantesPage() {
   const ventasYaFacturadas = new Set(
     comprobantes.filter((c) => c.estado === 'EMITIDO').map((c) => c.ventaId)
   );
+
+  const ventaById = new Map(ventas.map(v => [v.id, v]));
 
   const ventasOptions = ventas
     .filter((v) => !ventasYaFacturadas.has(v.id!))
@@ -520,7 +528,8 @@ export function ComprobantesPage() {
                     <TableRow className="bg-muted">
                       <TableHead>Número</TableHead>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Venta ID</TableHead>
+                      <TableHead>Venta</TableHead>
+                      <TableHead>Vendedor</TableHead>
                       <TableHead>Receptor</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead>Estado</TableHead>
@@ -529,13 +538,18 @@ export function ComprobantesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedComprobantes.map((c) => (
+                    {paginatedComprobantes.map((c) => {
+                      const vendedor = ventaById.get(c.ventaId)?.vendedorNombre;
+                      return (
                       <TableRow key={c.id}>
                         <TableCell className="font-mono font-semibold">{c.numero ?? '—'}</TableCell>
                         <TableCell>
                           <Badge variant={c.tipo === 'FACTURA' ? 'default' : 'secondary'}>{c.tipo}</Badge>
                         </TableCell>
-                        <TableCell>#{c.ventaId}</TableCell>
+                        <TableCell className="text-muted-foreground">#{c.ventaId}</TableCell>
+                        <TableCell className="max-w-[140px] truncate text-sm">
+                          {vendedor ?? <span className="text-muted-foreground">—</span>}
+                        </TableCell>
                         <TableCell className="max-w-[160px] truncate">
                           {c.receptor?.razonSocial || c.receptor?.numeroDocumento || '—'}
                         </TableCell>
@@ -577,7 +591,7 @@ export function ComprobantesPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    );})}
                   </TableBody>
                 </Table>
               </div>

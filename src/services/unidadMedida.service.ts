@@ -9,4 +9,12 @@ export const unidadMedidaService = {
     );
     return data;
   },
+
+  crear: async (nombre: string): Promise<UnidadMedidaDTO> => {
+    const { data } = await axiosInstance.post<UnidadMedidaDTO>(
+      API_ENDPOINTS.UNIDADES_MEDIDA.LIST,
+      { nombre }
+    );
+    return data;
+  },
 };

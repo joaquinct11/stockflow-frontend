@@ -2,10 +2,11 @@ import { useAuthStore } from '../store/authStore';
 
 type Permission = 'crear'| 'activar' | 'cambiarEstado' | 'editar' | 'eliminar' | 'ver' | 'ver_todas' | 'ver_propias' | 'ver_global' | 'ver_personal';
 
-export type Module = 
+export type Module =
   | 'DASHBOARD'
   | 'PRODUCTOS'
   | 'VENTAS'
+  | 'POS'
   | 'USUARIOS'
   | 'INVENTARIO'
   | 'PROVEEDORES'
@@ -128,7 +129,14 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
   VENTAS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver_todas'],
     GERENTE: ['crear', 'ver_todas'],
-    VENDEDOR: ['crear', 'ver_propias'],
+    VENDEDOR: ['crear', 'ver_propias'], // puede crear via POS, pero no ve el módulo historial
+    GESTOR_INVENTARIO: [],
+  },
+
+  POS: {
+    ADMIN: ['ver', 'crear'],
+    GERENTE: ['ver', 'crear'],
+    VENDEDOR: ['ver', 'crear'],
     GESTOR_INVENTARIO: [],
   },
 
@@ -244,6 +252,12 @@ export function usePermissions() {
    */
   const canAccess = (module: Module): boolean => {
     if (isAdmin) return true;
+
+    // POS no tiene códigos de permiso en el backend → usar tabla por rol directamente
+    if (module === 'POS') {
+      return (PERMISSIONS.POS[rol] ?? []).length > 0;
+    }
+
     return (
       canView(module) ||
       canViewAll(module) ||

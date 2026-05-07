@@ -40,6 +40,8 @@ import { KardexPage } from './pages/kardex/KardexPage';
 import { OrdenComprasList } from './pages/compras/OrdenComprasList';
 import { RecepcionList } from './pages/recepciones/RecepcionList';
 import { ReportesPage } from './pages/reportes/ReportesPage';
+import { POSPage } from './pages/pos/POSPage';
+import { CajaPage } from './pages/caja/CajaPage';
 
 function App() {
   const { initialize, isAuthenticated, setSuscripcionEstado } = useAuthStore();
@@ -172,6 +174,18 @@ function App() {
               }
             />
 
+            {/* Caja */}
+            <Route
+              path="caja"
+              element={
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="POS">
+                    <CajaPage />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
+              }
+            />
+
             {/* Inventario */}
             <Route
               path="inventario"
@@ -281,6 +295,20 @@ function App() {
               }
             />
           </Route>
+
+          {/* POS - Fullscreen, fuera del AppLayout */}
+          <Route
+            path="/pos"
+            element={
+              <ProtectedRoute>
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="POS">
+                    <POSPage />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Catch all - redirect to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
