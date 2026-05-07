@@ -1,4 +1,7 @@
 export const API_ENDPOINTS = {
+  TENANT: {
+    CONFIG: '/tenant/config',
+  },
   AUTH: {
     LOGIN: '/auth/login',
     REGISTER: '/auth/register',
@@ -31,6 +34,11 @@ export const API_ENDPOINTS = {
     UPDATE: (id: number) => `/unidad-medida/${id}`,
     DELETE: (id: number) => `/unidad-medida/${id}`,
   },
+
+  CATEGORIAS: {
+    LIST: '/categorias',
+    CREATE: '/categorias',
+  },
   
   PRODUCTOS: {
     LIST: '/productos',
@@ -42,6 +50,7 @@ export const API_ENDPOINTS = {
     CREATE: '/productos',
     UPDATE: (id: number) => `/productos/${id}`,
     DELETE: (id: number) => `/productos/${id}`,
+    IMPORTAR: '/productos/importar',
   },
   
   VENTAS: {
@@ -125,6 +134,7 @@ export const API_ENDPOINTS = {
     REMOVE_ITEM: (id: number, itemId: number) => `/oc/${id}/items/${itemId}`,
     ENVIAR: (id: number) => `/oc/${id}/enviar`,
     CANCELAR: (id: number) => `/oc/${id}/cancelar`,
+    PDF: (id: number) => `/oc/${id}/pdf`,
   },
 
   RECEPCIONES: {
@@ -137,6 +147,14 @@ export const API_ENDPOINTS = {
     SET_COMPROBANTE: (id: number) => `/recepciones/${id}/comprobante`,
     CONFIRMAR: (id: number) => `/recepciones/${id}/confirmar`,
     ANULAR: (id: number) => `/recepciones/${id}`,
+  },
+
+  CAJAS: {
+    ACTIVA: '/cajas/activa',
+    LIST: '/cajas',
+    GET: (id: number) => `/cajas/${id}`,
+    ABRIR: '/cajas/abrir',
+    CERRAR: (id: number) => `/cajas/${id}/cerrar`,
   },
 
   REPORTES: {

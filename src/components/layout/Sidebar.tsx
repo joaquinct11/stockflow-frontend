@@ -18,6 +18,8 @@ import {
   ClipboardList,
   Inbox,
   ChevronDown,
+  ScanLine,
+  Wallet,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -70,9 +72,9 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const { canAccess, isAdmin } = usePermissions();
 
   const isPathActive = (href: string) => {
-    return href === '/dashboard'
-      ? location.pathname === '/dashboard'
-      : location.pathname.startsWith(href);
+    if (href === '/dashboard') return location.pathname === '/dashboard';
+    if (href === '/pos') return location.pathname === '/pos';
+    return location.pathname.startsWith(href);
   };
 
   const menu: MenuEntry[] = useMemo(
@@ -119,6 +121,22 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
           },
         ],
       },
+      // Punto de Venta — solo visible cuando tiene acceso a POS (VENDEDOR, ADMIN, GERENTE)
+      {
+        type: 'item',
+        title: 'Punto de Venta',
+        href: '/pos',
+        icon: ScanLine,
+        show: canAccess('POS'),
+      },
+      {
+        type: 'item',
+        title: 'Cuadre de Caja',
+        href: '/dashboard/caja',
+        icon: Wallet,
+        show: canAccess('POS'),
+      },
+      // Ventas historial — VENDEDOR ve sus propias ventas y facturación
       {
         type: 'group',
         key: 'ventas',

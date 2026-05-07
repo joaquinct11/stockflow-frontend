@@ -29,15 +29,19 @@ import {
   DollarSign,
   FileSpreadsheet,
   FileDown,
+  Upload,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
 import { exportarStockExcel, exportarStockPDF } from '../../utils/reportes-export';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { ImportarProductosModal } from '../../components/inventario/ImportarProductosModal';
 
 export function InventarioList() {
   const { userId } = useCurrentUser();
   const { canCreate, canView } = usePermissions();
+  const { config: negocioConfig } = useTenantConfigStore();
   const hasViewPermission = canView('INVENTARIO');
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
@@ -45,6 +49,7 @@ export function InventarioList() {
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
   const [, setSelectedProveedorMov] = useState<any>(null);
@@ -337,7 +342,7 @@ export function InventarioList() {
               <Button
                 variant="outline" size="sm"
                 onClick={() => {
-                  try { exportarStockPDF(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—'); }
+                  try { exportarStockPDF(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—', negocioConfig); }
                   catch { toast.error('Error al exportar PDF'); }
                 }}
                 className="flex-1 sm:flex-none"
@@ -346,6 +351,12 @@ export function InventarioList() {
                 PDF
               </Button>
             </>
+          )}
+          {canCreate('INVENTARIO') && (
+            <Button variant="outline" onClick={() => setIsImportOpen(true)} className="flex-1 sm:flex-none">
+              <Upload className="mr-2 h-4 w-4 text-primary" />
+              Importar
+            </Button>
           )}
           {canCreate('INVENTARIO') && (
             <Button onClick={() => setIsDialogOpen(true)} className="flex-1 sm:flex-none">
@@ -844,6 +855,14 @@ export function InventarioList() {
           </Button>
         </div>
       </Dialog>
+
+      {/* Modal de importación masiva */}
+      <ImportarProductosModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onSuccess={fetchData}
+        unidadesMedida={unidadesMedida}
+      />
     </div>
   );
 }
