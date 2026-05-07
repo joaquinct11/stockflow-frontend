@@ -19,7 +19,7 @@ import type { DeleteAccountValidationDTO, TenantConfigDTO } from '../../types';
 
 export function AccountSettings() {
   const { user, suscripcionEstado } = useAuthStore();
-  const { config, setConfig } = useTenantConfigStore();
+  const { setConfig } = useTenantConfigStore();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 

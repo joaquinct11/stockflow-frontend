@@ -349,7 +349,6 @@ export function POSPage() {
         total,
         metodoPago,
         estado: 'COMPLETADA',
-        tenantId: user!.tenantId,
         cajaId: cajaActiva?.id,
         detalles,
       });

@@ -988,7 +988,7 @@ export function OrdenComprasList() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => selectedOc && descargarPdfOC(selectedOc.id)}
+                onClick={() => selectedOc?.id != null && descargarPdfOC(selectedOc.id)}
                 className="text-muted-foreground"
               >
                 <FileDown size={15} className="mr-2 text-red-500" />

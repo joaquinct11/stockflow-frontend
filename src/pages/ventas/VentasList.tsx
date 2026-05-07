@@ -37,7 +37,6 @@ import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
-import { useAuthStore } from '../../store/authStore';
 import { exportarVentasExcel, exportarVentasPDF } from '../../utils/reportes-export';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
@@ -62,8 +61,7 @@ function endOfDay(d: Date) {
 
 export function VentasList() {
   const { userId } = useCurrentUser();
-  const { user } = useAuthStore();
-  const { canDelete, canViewAll, canViewOwn, rol, puede } = usePermissions();
+  const { canDelete, canViewAll, canViewOwn, canCreate, rol, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
 
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
