@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
+import { categoriaService } from '../../services/categoria.service';
 import { movimientoService } from '../../services/movimiento.service';
-import type { ProductoDTO, UnidadMedidaDTO } from '../../types';
+import type { ProductoDTO, UnidadMedidaDTO, CategoriaDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -28,6 +29,8 @@ import {
   Boxes,
   Wallet,
   Timer,
+  X,
+  Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -42,8 +45,19 @@ export function ProductosList() {
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingUnidades, setLoadingUnidades] = useState(false);
+
+  // Mini-modal nueva unidad de medida
+  const [nuevaUnidadOpen, setNuevaUnidadOpen] = useState(false);
+  const [nuevaUnidadNombre, setNuevaUnidadNombre] = useState('');
+  const [savingUnidad, setSavingUnidad] = useState(false);
+
+  // Mini-panel nueva categoría
+  const [nuevaCategoriaOpen, setNuevaCategoriaOpen] = useState(false);
+  const [nuevaCategoriaNombre, setNuevaCategoriaNombre] = useState('');
+  const [savingCategoria, setSavingCategoria] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoFilter, setEstadoFilter] = useState<EstadoProductoFilter>('TODOS');
@@ -66,7 +80,7 @@ export function ProductosList() {
   const [formData, setFormData] = useState<ProductoDTO>({
     nombre: '',
     codigoBarras: '',
-    categoria: '',
+    categoriaId: 0,
     stockActual: 0,
     stockMinimo: 10,
     stockMaximo: 500,
@@ -96,9 +110,13 @@ export function ProductosList() {
   const fetchUnidades = async () => {
     try {
       setLoadingUnidades(true);
-      const unidades = await unidadMedidaService.getAll();
+      const [unidades, cats] = await Promise.all([
+        unidadMedidaService.getAll(),
+        categoriaService.getAll(),
+      ]);
       const unidadesActivas = unidades.filter((u) => u.activo !== false);
       setUnidadesMedida(unidadesActivas);
+      setCategorias(cats);
       if (!formData.unidadMedidaId && unidadesActivas.length > 0) {
         setFormData((prev) => ({ ...prev, unidadMedidaId: unidadesActivas[0].id }));
       }
@@ -118,9 +136,13 @@ export function ProductosList() {
       setProductos(productosData);
 
       setLoadingUnidades(true);
-      const unidades = await unidadMedidaService.getAll();
+      const [unidades, cats] = await Promise.all([
+        unidadMedidaService.getAll(),
+        categoriaService.getAll(),
+      ]);
       const unidadesActivas = unidades.filter((u) => u.activo !== false);
       setUnidadesMedida(unidadesActivas);
+      setCategorias(cats);
 
       if (!formData.unidadMedidaId && unidadesActivas.length > 0) {
         setFormData((prev) => ({ ...prev, unidadMedidaId: unidadesActivas[0].id }));
@@ -206,7 +228,7 @@ export function ProductosList() {
       id: producto.id,
       nombre: producto.nombre,
       codigoBarras: producto.codigoBarras || '',
-      categoria: producto.categoria || '',
+      categoriaId: producto.categoriaId || 0,
       stockActual: producto.stockActual || 0,
       stockMinimo: producto.stockMinimo || 10,
       stockMaximo: producto.stockMaximo || 500,
@@ -225,7 +247,7 @@ export function ProductosList() {
     setFormData({
       nombre: '',
       codigoBarras: '',
-      categoria: '',
+      categoriaId: 0,
       stockActual: 0,
       stockMinimo: 10,
       stockMaximo: 500,
@@ -239,13 +261,50 @@ export function ProductosList() {
     setIsDialogOpen(false);
   };
 
+  // Crear nueva unidad de medida inline
+  const handleCrearUnidad = async () => {
+    if (!nuevaUnidadNombre.trim()) return;
+    try {
+      setSavingUnidad(true);
+      const nueva = await unidadMedidaService.crear(nuevaUnidadNombre.trim());
+      setUnidadesMedida(prev => [...prev, nueva]);
+      setFormData(prev => ({ ...prev, unidadMedidaId: nueva.id! }));
+      setNuevaUnidadNombre('');
+      setNuevaUnidadOpen(false);
+      toast.success(`Unidad "${nueva.nombre}" creada`);
+    } catch {
+      toast.error('Error al crear la unidad de medida');
+    } finally {
+      setSavingUnidad(false);
+    }
+  };
+
+  // Crear nueva categoría inline
+  const handleCrearCategoria = async () => {
+    if (!nuevaCategoriaNombre.trim()) return;
+    try {
+      setSavingCategoria(true);
+      const nueva = await categoriaService.crear(nuevaCategoriaNombre.trim());
+      setCategorias(prev => [...prev, nueva]);
+      setFormData(prev => ({ ...prev, categoriaId: nueva.id }));
+      setNuevaCategoriaNombre('');
+      setNuevaCategoriaOpen(false);
+      toast.success(`Categoría "${nueva.nombre}" creada`);
+    } catch {
+      toast.error('Error al crear la categoría');
+    } finally {
+      setSavingCategoria(false);
+    }
+  };
+
   // ✅ Filtrado: búsqueda + estado
   const filteredProductos = productos.filter((p) => {
     const q = searchTerm.toLowerCase();
     const matchesSearch =
       p.nombre.toLowerCase().includes(q) ||
       p.codigoBarras?.toLowerCase().includes(q) ||
-      p.categoria?.toLowerCase().includes(q);
+      p.categoriaNombre?.toLowerCase().includes(q) ||
+      p.categoria?.toLowerCase().includes(q); // backward compat
 
     if (!matchesSearch) return false;
 
@@ -477,7 +536,9 @@ export function ProductosList() {
                               </TableCell>
                               <TableCell className="font-mono text-sm">{producto.codigoBarras}</TableCell>
                               <TableCell>
-                                <Badge variant="outline">{producto.categoria || '-'}</Badge>
+                                <Badge variant="outline">
+                                  {producto.categoriaNombre || producto.categoria || '-'}
+                                </Badge>
                               </TableCell>
                               <TableCell>
                                 <span className="text-sm text-muted-foreground">{unidadLabel}</span>
@@ -607,62 +668,142 @@ export function ProductosList() {
                 </div>
               </div>
 
+              {/* ── Categoría: select + botón crear ── */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Categoría <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
-                  <Tag className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                  <select
-                    value={formData.categoria}
-                    onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                    className="flex h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    required
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Tag className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <select
+                      value={formData.categoriaId || ''}
+                      onChange={(e) => setFormData({ ...formData, categoriaId: Number(e.target.value) })}
+                      className="flex h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      required
+                      disabled={loadingUnidades}
+                    >
+                      <option value="" disabled>
+                        {loadingUnidades ? 'Cargando...' : 'Seleccione categoría'}
+                      </option>
+                      {categorias.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre}{c.esGlobal ? '' : ' ✓'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNuevaCategoriaOpen(true)}
+                    title="Agregar nueva categoría"
+                    className="h-11 w-11 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors flex-shrink-0"
                   >
-                    <option value="">Seleccione una categoría</option>
-                    <optgroup label="Farmacia">
-                      <option value="MEDICAMENTOS">Medicamentos</option>
-                      <option value="CUIDADO_PERSONAL">Cuidado Personal</option>
-                      <option value="HIGIENE">Higiene</option>
-                    </optgroup>
-                    <optgroup label="Bodega">
-                      <option value="BEBIDAS">Bebidas</option>
-                      <option value="SNACKS">Snacks</option>
-                      <option value="ABARROTES">Abarrotes</option>
-                    </optgroup>
-                    <optgroup label="Ferretería">
-                      <option value="HERRAMIENTAS">Herramientas</option>
-                      <option value="ELECTRICIDAD">Electricidad</option>
-                    </optgroup>
-                    <option value="OTROS">Otros</option>
-                  </select>
+                    <Plus size={16} />
+                  </button>
                 </div>
+
+                {/* Mini-panel nueva categoría */}
+                {nuevaCategoriaOpen && (
+                  <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-primary">Nueva categoría</p>
+                      <button type="button" onClick={() => { setNuevaCategoriaOpen(false); setNuevaCategoriaNombre(''); }}
+                        className="text-muted-foreground hover:text-foreground">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={nuevaCategoriaNombre}
+                        onChange={e => setNuevaCategoriaNombre(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCrearCategoria())}
+                        placeholder="Ej: Lácteos, Snacks, Ferretería..."
+                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCrearCategoria}
+                        disabled={!nuevaCategoriaNombre.trim() || savingCategoria}
+                        className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors flex items-center gap-1"
+                      >
+                        {savingCategoria ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                        Crear
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* ── Unidad de medida: select + botón crear ── */}
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium">
                   Unidad de Medida <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
-                  <Scale className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                  <select
-                    value={formData.unidadMedidaId || ''}
-                    onChange={(e) => setFormData({ ...formData, unidadMedidaId: Number(e.target.value) })}
-                    className="flex h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    required
-                    disabled={loadingUnidades}
-                  >
-                    <option value="" disabled>
-                      {loadingUnidades ? 'Cargando unidades...' : 'Seleccione unidad de medida'}
-                    </option>
-                    {unidadesMedida.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.nombre}
-                        {u.abreviatura ? ` (${u.abreviatura})` : ''}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Scale className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <select
+                      value={formData.unidadMedidaId || ''}
+                      onChange={(e) => setFormData({ ...formData, unidadMedidaId: Number(e.target.value) })}
+                      className="flex h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      required
+                      disabled={loadingUnidades}
+                    >
+                      <option value="" disabled>
+                        {loadingUnidades ? 'Cargando...' : 'Seleccione unidad de medida'}
                       </option>
-                    ))}
-                  </select>
+                      {unidadesMedida.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNuevaUnidadOpen(true)}
+                    title="Agregar nueva unidad de medida"
+                    className="h-11 w-11 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors flex-shrink-0"
+                  >
+                    <Plus size={16} />
+                  </button>
                 </div>
+
+                {/* Mini-panel nueva unidad */}
+                {nuevaUnidadOpen && (
+                  <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-primary">Nueva unidad de medida</p>
+                      <button type="button" onClick={() => { setNuevaUnidadOpen(false); setNuevaUnidadNombre(''); }}
+                        className="text-muted-foreground hover:text-foreground">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={nuevaUnidadNombre}
+                        onChange={e => setNuevaUnidadNombre(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCrearUnidad())}
+                        placeholder="Ej: Caja, Docena, Litro..."
+                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCrearUnidad}
+                        disabled={!nuevaUnidadNombre.trim() || savingUnidad}
+                        className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors flex items-center gap-1"
+                      >
+                        {savingUnidad ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                        Crear
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

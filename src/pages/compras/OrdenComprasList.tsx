@@ -39,7 +39,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
-import { exportarOCPDF } from '../../utils/reportes-export';
+import axiosInstance from '../../api/axios.config';
+import { API_ENDPOINTS } from '../../api/endpoints';
 
 const ESTADO_BADGE: Record<string, string> = {
   BORRADOR: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
@@ -94,6 +95,25 @@ export function OrdenComprasList() {
   const [addQty, setAddQty] = useState<number>(1);
   const [addPrice, setAddPrice] = useState<number | ''>('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // ── Descarga PDF desde el backend (idéntico al que se envía por correo) ──
+  const descargarPdfOC = async (ocId: number) => {
+    try {
+      const response = await axiosInstance.get(API_ENDPOINTS.ORDENES_COMPRA.PDF(ocId), {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `OC-${String(ocId).padStart(5, '0')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('No se pudo descargar el PDF');
+    }
+  };
 
   // Confirm dialog state (cancelar OC)
   const [confirmCancel, setConfirmCancel] = useState<{ isOpen: boolean; ocId: number | null; fromDetail: boolean }>({
@@ -968,7 +988,7 @@ export function OrdenComprasList() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => exportarOCPDF(selectedOc)}
+                onClick={() => selectedOc?.id != null && descargarPdfOC(selectedOc.id)}
                 className="text-muted-foreground"
               >
                 <FileDown size={15} className="mr-2 text-red-500" />

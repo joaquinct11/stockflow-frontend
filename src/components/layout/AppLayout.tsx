@@ -1,12 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { Breadcrumb } from './Breadcrumb';
+import { tenantConfigService } from '../../services/tenantConfig.service';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { useAuthStore } from '../../store/authStore';
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen]     = useState(false);   // móvil
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // desktop
+  const { setConfig } = useTenantConfigStore();
+  const { isAuthenticated } = useAuthStore();
+
+  // Cargar config del negocio al montar (una sola vez por sesión)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    tenantConfigService.getConfig()
+      .then(setConfig)
+      .catch(() => { /* silencioso — no bloquear el layout */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   return (
     <div className="flex h-screen overflow-hidden">
