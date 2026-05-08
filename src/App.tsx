@@ -135,8 +135,15 @@ function App() {
             {/* Dashboard - Todos pueden acceder */}
             <Route index element={<Dashboard />} />
 
-            {/* ✅ MI PERFIL - TODOS ACCEDEN */}
-            <Route path="perfil" element={<UserProfile />} />
+            {/* MI PERFIL */}
+            <Route
+              path="perfil"
+              element={
+                <SubscripcionGuard>
+                  <UserProfile />
+                </SubscripcionGuard>
+              }
+            />
 
             {/* Proveedores */}
             <Route
@@ -232,8 +239,15 @@ function App() {
               }
             />
 
-            {/* Configuración - Todos pueden acceder */}
-            <Route path="configuracion" element={<AccountSettings />} />
+            {/* Configuración */}
+            <Route
+              path="configuracion"
+              element={
+                <SubscripcionGuard>
+                  <AccountSettings />
+                </SubscripcionGuard>
+              }
+            />
 
             {/* Gestión de Permisos - Solo ADMIN */}
             <Route
