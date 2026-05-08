@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { productoService } from '../../services/producto.service';
@@ -126,6 +126,15 @@ export function Dashboard() {
     }, { replace: true });
 
     if (rol === 'ADMIN') {
+      // Aplicar inmediatamente el estado que ya viene del param (lo puso CheckoutReturnPage
+      // tras llamar a sincronizar). Esto evita el parpadeo de "acceso restringido".
+      setSuscripcionEstado(billingParam);
+      setSuscripcion((prev) => ({
+        ...(prev ?? { usuarioPrincipalId: 0, planId: '', precioMensual: 0, estado: '' }),
+        estado: billingParam,
+      }));
+
+      // Confirmación en segundo plano para traer datos completos (planId, fechas, etc.)
       setSuscripcionLoading(true);
       suscripcionService
         .sincronizar()
@@ -139,12 +148,7 @@ export function Dashboard() {
             fechaProximoCobro: s.fechaProximoCobro,
           }));
         })
-        .catch(() => {
-          setSuscripcion((prev) => ({
-            ...(prev ?? { usuarioPrincipalId: 0, planId: '', precioMensual: 0, estado: '' }),
-            estado: billingParam,
-          }));
-        })
+        .catch(() => { /* ya aplicamos billingParam arriba */ })
         .finally(() => setSuscripcionLoading(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,10 +156,73 @@ export function Dashboard() {
 
   const estadoSuscripcionRaw = suscripcionEstado ?? suscripcion?.estado ?? user?.suscripcion?.estado ?? '';
   const trialEndDate = (suscripcion?.trialEndDate ?? user?.suscripcion?.trialEndDate) as string | undefined;
+  const preapprovalId = suscripcion?.preapprovalId ?? user?.suscripcion?.preapprovalId;
+
+  // ── Auto-polling: cuando hay un pago real en proceso (PENDIENTE + preapprovalId),
+  //    consultar cada 8 s hasta que el webhook de MP active la suscripción o pasen 3 min.
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingStartRef = useRef<number | null>(null);
+  const POLL_INTERVAL_MS = 8_000;
+  const POLL_TIMEOUT_MS  = 3 * 60 * 1_000; // 3 minutos
+
+  useEffect(() => {
+    const debePollear =
+      rol === 'ADMIN' &&
+      estadoSuscripcionRaw === 'PENDIENTE' &&
+      !!preapprovalId;
+
+    if (!debePollear) {
+      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+      return;
+    }
+
+    // Arrancar polling solo si no estaba corriendo
+    if (pollingRef.current) return;
+    pollingStartRef.current = Date.now();
+
+    pollingRef.current = setInterval(async () => {
+      // Detener después de 3 minutos
+      if (Date.now() - (pollingStartRef.current ?? 0) > POLL_TIMEOUT_MS) {
+        clearInterval(pollingRef.current!);
+        pollingRef.current = null;
+        return;
+      }
+      try {
+        const s = await suscripcionService.sincronizar();
+        if (s.estado !== 'PENDIENTE') {
+          // ¡El webhook ya activó la suscripción!
+          setSuscripcionEstado(s.estado);
+          setSuscripcion((prev) => ({
+            ...(prev ?? { usuarioPrincipalId: 0, planId: s.planId ?? '', precioMensual: 0, estado: '' }),
+            estado: s.estado,
+            planId: s.planId,
+            preapprovalId: s.preapprovalId,
+            fechaProximoCobro: s.fechaProximoCobro,
+          }));
+          clearInterval(pollingRef.current!);
+          pollingRef.current = null;
+          if (s.estado === 'ACTIVA') toast.success('¡Suscripción activada correctamente!');
+        }
+      } catch { /* ignorar errores de red — reintentará en el siguiente tick */ }
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estadoSuscripcionRaw, preapprovalId, rol]);
 
   // Si el backend aún dice TRIAL pero la fecha ya venció, tratarlo como PENDIENTE en el cliente
   const trialVencidoClientSide = estadoSuscripcionRaw === 'TRIAL' && !!trialEndDate && new Date(trialEndDate) < new Date();
   const estadoSuscripcion = trialVencidoClientSide ? 'PENDIENTE' : estadoSuscripcionRaw;
+
+  // "Trial vencido" cubre dos escenarios:
+  //  1. Backend aún dice TRIAL pero la fecha ya pasó (detección client-side)
+  //  2. Backend ya cambió a PENDIENTE porque el trial venció, pero NO hay preapprovalId
+  //     (si hubiera preapprovalId, significaría que hay un pago real de MP en curso)
+  const esTrialVencido =
+    trialVencidoClientSide ||
+    (estadoSuscripcionRaw === 'PENDIENTE' && !preapprovalId && !!trialEndDate && new Date(trialEndDate) < new Date());
 
   const suscripcionActiva = estadoSuscripcion === 'ACTIVA' || estadoSuscripcion === 'TRIAL' || estadoSuscripcion === '' || !estadoSuscripcion;
   const mostrarBloqueo = rol === 'ADMIN' && !suscripcionActiva && !!estadoSuscripcion;
@@ -380,15 +447,37 @@ export function Dashboard() {
 
           {/* Banner de alerta (fuera del overlay para que sea clicable) */}
           <div className="relative z-20">
-            {estadoSuscripcion === 'PENDIENTE' ? (
+            {esTrialVencido ? (
+              /* Trial expirado sin pago — nunca hubo transacción en curso */
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <Calendar className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Tu período de prueba venció</p>
+                      <p className="text-sm">
+                        Activa tu suscripción para seguir usando el sistema sin interrupciones.
+                      </p>
+                    </div>
+                  </div>
+                  {puedeReintentar && (
+                    <Button size="sm" className="shrink-0" onClick={handleReintentar}>
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Activar suscripción
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : estadoSuscripcion === 'PENDIENTE' ? (
+              /* Pago iniciado pero aún no confirmado por Mercado Pago */
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-3">
                     <Clock className="mt-0.5 h-5 w-5 shrink-0" />
                     <div>
-                      <p className="font-semibold">Tu suscripción está pendiente</p>
+                      <p className="font-semibold">Pago en proceso</p>
                       <p className="text-sm">
-                        Tu pago está siendo procesado. Intenta nuevamente o espera la confirmación de Mercado Pago.
+                        Tu pago está siendo procesado por Mercado Pago. Si ya pagaste, espera unos minutos o reintenta.
                       </p>
                     </div>
                   </div>
@@ -401,14 +490,19 @@ export function Dashboard() {
                 </div>
               </div>
             ) : (
+              /* CANCELADA o SUSPENDIDA — pago rechazado / cancelado explícitamente */
               <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
                     <div>
-                      <p className="font-semibold">Tu pago fue rechazado o cancelado</p>
+                      <p className="font-semibold">
+                        {estadoSuscripcion === 'CANCELADA' ? 'Suscripción cancelada' : 'Suscripción suspendida'}
+                      </p>
                       <p className="text-sm">
-                        Tu suscripción no está activa. Vuelve a intentarlo para continuar usando Fluxus.
+                        {estadoSuscripcion === 'CANCELADA'
+                          ? 'Tu suscripción fue cancelada. Reactívala para continuar usando el sistema.'
+                          : 'Tu suscripción está suspendida por un pago fallido. Actualiza tu método de pago.'}
                       </p>
                     </div>
                   </div>

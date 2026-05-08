@@ -17,10 +17,16 @@ export function SubscripcionGuard({ children }: SubscripcionGuardProps) {
   const rol = user?.rol;
   const estadoRaw = suscripcionEstado ?? user?.suscripcion?.estado ?? '';
   const trialEndDate = user?.suscripcion?.trialEndDate as string | undefined;
-  const trialVencido = estadoRaw === 'TRIAL' && !!trialEndDate && new Date(trialEndDate) < new Date();
-  const estado = trialVencido ? 'PENDIENTE' : estadoRaw;
+  const preapprovalId = user?.suscripcion?.preapprovalId;
+  const trialVencidoClientSide = estadoRaw === 'TRIAL' && !!trialEndDate && new Date(trialEndDate) < new Date();
+  const estado = trialVencidoClientSide ? 'PENDIENTE' : estadoRaw;
   const planId = user?.suscripcion?.planId ?? '';
   const puedeReintentar = planId === 'BASICO' || planId === 'PRO';
+
+  // Trial vencido: backend aún en TRIAL con fecha pasada, O ya cambió a PENDIENTE sin preapprovalId
+  const esTrialVencido =
+    trialVencidoClientSide ||
+    (estadoRaw === 'PENDIENTE' && !preapprovalId && !!trialEndDate && new Date(trialEndDate) < new Date());
 
   // Usuarios no-ADMIN nunca son bloqueados por suscripción
   if (rol !== 'ADMIN') {
@@ -75,8 +81,10 @@ export function SubscripcionGuard({ children }: SubscripcionGuardProps) {
               <p className="text-sm text-muted-foreground">
                 {estado === 'CANCELADA'
                   ? 'Tu suscripción fue cancelada. Reactívala para seguir usando este módulo.'
-                  : estado === 'PENDIENTE'
+                  : estado === 'PENDIENTE' && esTrialVencido
                   ? 'Tu período de prueba venció. Activa tu suscripción para continuar usando el sistema.'
+                  : estado === 'PENDIENTE'
+                  ? 'Tu pago está siendo procesado. Espera la confirmación de Mercado Pago o reintenta.'
                   : 'Tu suscripción está suspendida por un pago fallido. Actualiza tu método de pago para continuar.'}
               </p>
             </div>

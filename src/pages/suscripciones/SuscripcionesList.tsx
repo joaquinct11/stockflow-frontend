@@ -22,7 +22,7 @@ import {
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
-function estadoBadge(estado: string) {
+function estadoBadge(estado: string, preapprovalId?: string | null) {
   switch (estado) {
     case 'ACTIVA':
       return (
@@ -46,10 +46,15 @@ function estadoBadge(estado: string) {
         </Badge>
       );
     case 'PENDIENTE':
-      return (
+      return preapprovalId ? (
         <Badge variant="outline">
           <Clock className="h-3.5 w-3.5 mr-1" />
-          Pendiente
+          Pago en proceso
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="border-amber-400 text-amber-700">
+          <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+          Trial vencido
         </Badge>
       );
     case 'TRIAL':
@@ -78,6 +83,7 @@ function formatFecha(fecha?: string | null) {
 export function SuscripcionesList() {
   const { canView, canToggleState } = usePermissions();
   const { user, setSuscripcionEstado } = useAuthStore();
+
   const navigate = useNavigate();
 
   const [suscripcion, setSuscripcion] = useState<SuscripcionDTO | null>(null);
@@ -102,6 +108,8 @@ export function SuscripcionesList() {
         setSuscripcion(null);
         return;
       }
+      // Sincronizar el store global para que Dashboard y Guards reflejen el estado real
+      setSuscripcionEstado(estado.estado);
       // Construir un SuscripcionDTO parcial con los datos disponibles
       setSuscripcion({
         planId: estado.planId,
@@ -226,7 +234,7 @@ export function SuscripcionesList() {
                 <CardDescription>S/. {(suscripcion.precioMensual ?? 0).toFixed(2)} / mes</CardDescription>
               </div>
             </div>
-            {estadoBadge(suscripcion.estado ?? '')}
+            {estadoBadge(suscripcion.estado ?? '', suscripcion.preapprovalId)}
           </div>
         </CardHeader>
 
@@ -292,11 +300,21 @@ export function SuscripcionesList() {
               </div>
             </div>
           )}
-          {suscripcion.estado === 'PENDIENTE' && (
+          {suscripcion.estado === 'PENDIENTE' && !suscripcion.preapprovalId && (
+            // Trial vencido sin pago — nunca hubo transacción con MP
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+              <div className="flex items-start gap-2">
+                <Calendar className="h-4 w-4 mt-0.5 shrink-0" />
+                <p>Tu período de prueba gratuito venció. Activa tu suscripción para seguir usando el sistema.</p>
+              </div>
+            </div>
+          )}
+          {suscripcion.estado === 'PENDIENTE' && !!suscripcion.preapprovalId && (
+            // Pago iniciado con MP pero aún no confirmado
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
               <div className="flex items-start gap-2">
                 <Clock className="h-4 w-4 mt-0.5 shrink-0" />
-                <p>Tu pago está siendo procesado. Una vez confirmado, el acceso se habilitará automáticamente.</p>
+                <p>Tu pago está siendo procesado por Mercado Pago. Una vez confirmado, el acceso se habilitará automáticamente.</p>
               </div>
             </div>
           )}
