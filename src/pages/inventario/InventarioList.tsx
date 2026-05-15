@@ -151,7 +151,7 @@ export function InventarioList() {
   const productosOptions = productos.map((p) => ({
     id: p.id!,
     label: `${p.nombre}`,
-    subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoria || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
+    subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoriaNombre || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
   }));
 
   const openKardex = async (producto: ProductoDTO) => {
@@ -302,7 +302,7 @@ export function InventarioList() {
     (p) =>
       p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.categoria?.toLowerCase().includes(searchTerm.toLowerCase()),
+      p.categoriaNombre?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
@@ -476,7 +476,7 @@ export function InventarioList() {
                                 </p>
                               </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">{producto.categoria || '-'}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">{producto.categoriaNombre || '-'}</TableCell>
                             <TableCell className="text-muted-foreground text-sm">
                               {unidadById.get(producto.unidadMedidaId)?.nombre || '-'}
                             </TableCell>

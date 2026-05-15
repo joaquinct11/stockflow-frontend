@@ -5,8 +5,10 @@ import {
   Package,
   ShoppingCart,
   Users,
+  UserCheck,
   CreditCard,
   BarChart3,
+  TrendingDown,
   Settings,
   PackageOpen,
   ChevronLeft,
@@ -20,6 +22,7 @@ import {
   ChevronDown,
   ScanLine,
   Wallet,
+  Receipt,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -45,7 +48,7 @@ type GroupItem = {
   title: string;
   icon: any;
   show: boolean;
-  key: 'compras' | 'ventas' | 'usuarios';
+  key: 'ventas' | 'gastos' | 'contactos' | 'inventario' | 'usuarios';
   items: Omit<LeafItem, 'type'>[];
 };
 
@@ -79,6 +82,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
 
   const menu: MenuEntry[] = useMemo(
     () => [
+      // ── Dashboard ────────────────────────────────────────────────
       {
         type: 'item',
         title: 'Dashboard',
@@ -86,29 +90,64 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         icon: LayoutDashboard,
         show: true,
       },
-      {
-        type: 'item',
-        title: 'Proveedores',
-        href: '/dashboard/proveedores',
-        icon: Building2,
-        show: canAccess('PROVEEDORES'),
-      },
-      {
-        type: 'item',
-        title: 'Productos',
-        href: '/dashboard/productos',
-        icon: Package,
-        show: canAccess('PRODUCTOS'),
-      },
+
+      // ── Ventas (Ingresos) ────────────────────────────────────────
       {
         type: 'group',
-        key: 'compras',
-        title: 'Compras',
-        icon: ClipboardList,
-        show: canAccess('COMPRAS') || canAccess('RECEPCIONES'),
+        key: 'ventas',
+        title: 'Ventas',
+        icon: ShoppingCart,
+        show: canAccess('VENTAS') || canAccess('FACTURACION') || canAccess('POS') || isAdmin || user?.rol === 'GERENTE',
         items: [
           {
-            title: 'Órdenes de compra',
+            title: 'Punto de Venta',
+            href: '/pos',
+            icon: ScanLine,
+            show: canAccess('POS'),
+          },
+          {
+            title: 'Cuadre de Caja',
+            href: '/dashboard/caja',
+            icon: Wallet,
+            show: canAccess('POS'),
+          },
+          {
+            title: 'Historial de Ventas',
+            href: '/dashboard/ventas',
+            icon: ShoppingCart,
+            show: canAccess('VENTAS'),
+          },
+          {
+            title: 'Facturación',
+            href: '/dashboard/facturacion',
+            icon: FileText,
+            show: canAccess('FACTURACION'),
+          },
+          {
+            title: 'Notas de Crédito',
+            href: '/dashboard/notas-credito',
+            icon: Receipt,
+            show: isAdmin || user?.rol === 'GERENTE',
+          },
+        ],
+      },
+
+      // ── Gastos ───────────────────────────────────────────────────
+      {
+        type: 'group',
+        key: 'gastos',
+        title: 'Gastos',
+        icon: TrendingDown,
+        show: canAccess('GASTOS') || canAccess('COMPRAS') || canAccess('RECEPCIONES'),
+        items: [
+          {
+            title: 'Gastos y Egresos',
+            href: '/dashboard/gastos',
+            icon: TrendingDown,
+            show: canAccess('GASTOS'),
+          },
+          {
+            title: 'Órdenes de Compra',
             href: '/dashboard/compras/ordenes',
             icon: ClipboardList,
             show: canAccess('COMPRAS'),
@@ -121,50 +160,54 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
           },
         ],
       },
-      // Punto de Venta — solo visible cuando tiene acceso a POS (VENDEDOR, ADMIN, GERENTE)
-      {
-        type: 'item',
-        title: 'Punto de Venta',
-        href: '/pos',
-        icon: ScanLine,
-        show: canAccess('POS'),
-      },
-      {
-        type: 'item',
-        title: 'Cuadre de Caja',
-        href: '/dashboard/caja',
-        icon: Wallet,
-        show: canAccess('POS'),
-      },
-      // Ventas historial — VENDEDOR ve sus propias ventas y facturación
+
+      // ── Contactos ────────────────────────────────────────────────
       {
         type: 'group',
-        key: 'ventas',
-        title: 'Ventas',
-        icon: ShoppingCart,
-        show: canAccess('VENTAS') || canAccess('FACTURACION'),
+        key: 'contactos',
+        title: 'Contactos',
+        icon: UserCheck,
+        show: canAccess('CLIENTES') || canAccess('PROVEEDORES'),
         items: [
           {
-            title: 'Ventas',
-            href: '/dashboard/ventas',
-            icon: ShoppingCart,
-            show: canAccess('VENTAS'),
+            title: 'Clientes',
+            href: '/dashboard/clientes',
+            icon: UserCheck,
+            show: canAccess('CLIENTES'),
           },
           {
-            title: 'Facturación',
-            href: '/dashboard/facturacion',
-            icon: FileText,
-            show: canAccess('FACTURACION'),
+            title: 'Proveedores',
+            href: '/dashboard/proveedores',
+            icon: Building2,
+            show: canAccess('PROVEEDORES'),
           },
         ],
       },
+
+      // ── Inventario ───────────────────────────────────────────────
       {
-        type: 'item',
+        type: 'group',
+        key: 'inventario',
         title: 'Inventario',
-        href: '/dashboard/inventario',
         icon: PackageOpen,
-        show: canAccess('INVENTARIO'),
+        show: canAccess('PRODUCTOS') || canAccess('INVENTARIO'),
+        items: [
+          {
+            title: 'Productos',
+            href: '/dashboard/productos',
+            icon: Package,
+            show: canAccess('PRODUCTOS'),
+          },
+          {
+            title: 'Movimientos',
+            href: '/dashboard/inventario',
+            icon: PackageOpen,
+            show: canAccess('INVENTARIO'),
+          },
+        ],
       },
+
+      // ── Usuarios ─────────────────────────────────────────────────
       {
         type: 'group',
         key: 'usuarios',
@@ -186,6 +229,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
           },
         ],
       },
+
+      // ── Resto ────────────────────────────────────────────────────
       {
         type: 'item',
         title: 'Suscripciones',
@@ -208,14 +253,31 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         show: true,
       },
     ],
-    [canAccess, isAdmin]
+    [canAccess, isAdmin, user?.rol]
   );
 
   const defaultExpanded = useMemo(() => {
-    const comprasOpen = isPathActive('/dashboard/compras') || isPathActive('/dashboard/recepciones');
-    const ventasOpen = isPathActive('/dashboard/ventas') || isPathActive('/dashboard/facturacion');
-    const usuariosOpen = isPathActive('/dashboard/usuarios') || isPathActive('/dashboard/admin');
-    return { compras: comprasOpen, ventas: ventasOpen, usuarios: usuariosOpen };
+    const ventasOpen =
+      isPathActive('/dashboard/ventas') ||
+      isPathActive('/dashboard/facturacion') ||
+      isPathActive('/dashboard/notas-credito') ||
+      isPathActive('/dashboard/caja') ||
+      location.pathname === '/pos';
+    const gastosOpen =
+      isPathActive('/dashboard/gastos') ||
+      isPathActive('/dashboard/compras') ||
+      isPathActive('/dashboard/recepciones');
+    const contactosOpen =
+      isPathActive('/dashboard/clientes') ||
+      isPathActive('/dashboard/proveedores');
+    const inventarioOpen =
+      isPathActive('/dashboard/productos') ||
+      isPathActive('/dashboard/inventario') ||
+      isPathActive('/dashboard/kardex');
+    const usuariosOpen =
+      isPathActive('/dashboard/usuarios') ||
+      isPathActive('/dashboard/admin');
+    return { ventas: ventasOpen, gastos: gastosOpen, contactos: contactosOpen, inventario: inventarioOpen, usuarios: usuariosOpen };
   }, [location.pathname]);
 
   const [openGroups, setOpenGroups] = useState(defaultExpanded);
@@ -223,10 +285,21 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   useMemo(() => {
     setOpenGroups((prev) => ({ ...prev, ...defaultExpanded }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultExpanded.compras, defaultExpanded.ventas, defaultExpanded.usuarios]);
+  }, [defaultExpanded.ventas, defaultExpanded.gastos, defaultExpanded.contactos, defaultExpanded.inventario, defaultExpanded.usuarios]);
 
   const toggleGroup = (key: GroupItem['key']) => {
-    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+    setOpenGroups((prev) => {
+      const isCurrentlyOpen = prev[key];
+      // Cierra todos y abre solo el clickeado (accordion)
+      return {
+        ventas:     false,
+        gastos:     false,
+        contactos:  false,
+        inventario: false,
+        usuarios:   false,
+        [key]: !isCurrentlyOpen,
+      };
+    });
   };
 
   return (

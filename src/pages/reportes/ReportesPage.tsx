@@ -55,6 +55,9 @@ import { Badge } from '../../components/ui/Badge';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { usePermissions } from '../../hooks/usePermissions';
+import { usePlan } from '../../hooks/usePlan';
+import { useNavigate } from 'react-router-dom';
+import { Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -1023,9 +1026,15 @@ const QUICK_RANGES = [
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+const MAX_DIAS_BASICO = 30;
+
 export function ReportesPage() {
   const { canView } = usePermissions();
+  const { isBasico } = usePlan();
+  const navigate = useNavigate();
   const hasAccess = canView('REPORTES');
+
+  const minimoFechaBasico = daysAgo(MAX_DIAS_BASICO);
 
   const [desde, setDesde] = useState<string>(daysAgo(30));
   const [hasta, setHasta] = useState<string>(toDateString(new Date()));
@@ -1106,6 +1115,15 @@ export function ReportesPage() {
   const handleActualizar = (d = desde, h = hasta) => {
     if (!d || !h) { toast.error('Selecciona un rango de fechas'); return; }
     if (d > h) { toast.error('La fecha "Desde" no puede ser mayor a "Hasta"'); return; }
+    // Clamp para plan BÁSICO: no se puede ir más atrás de 30 días
+    if (isBasico && d < minimoFechaBasico) {
+      toast('Plan Básico: el rango máximo es 30 días. Actualiza a Pro para ver historial completo.', {
+        icon: '👑',
+        style: { background: '#fffbeb', color: '#92400e', border: '1px solid #fcd34d' },
+      });
+      d = minimoFechaBasico;
+      setDesde(d);
+    }
     fetchResumen(d, h);
     fetchVentas(d, h, agrupacion, metrica);
     fetchInventario();
@@ -1192,8 +1210,29 @@ export function ReportesPage() {
     return <EmptyState icon={Lock} title="Sin acceso" description="No tienes permisos para ver el módulo de Reportes." />;
   }
 
+  // Para BÁSICO, solo mostrar rangos de ≤30 días
+  const visibleRanges = isBasico
+    ? QUICK_RANGES.filter((r) => r.label === '7d' || r.label === '30d')
+    : QUICK_RANGES;
+
   return (
     <div className="space-y-6">
+      {/* Banner plan BÁSICO */}
+      {isBasico && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3">
+          <Crown className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <p className="text-sm text-amber-800 dark:text-amber-200 flex-1">
+            <span className="font-semibold">Plan Básico</span> — los reportes están limitados a los últimos 30 días.
+          </p>
+          <button
+            onClick={() => navigate('/checkout?plan=PRO')}
+            className="text-xs font-semibold text-amber-700 dark:text-amber-300 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100 shrink-0"
+          >
+            Actualizar a Pro
+          </button>
+        </div>
+      )}
+
       {/* Header + filtros integrados */}
       <div className="flex flex-col gap-4">
         {/* Título */}
@@ -1226,7 +1265,7 @@ export function ReportesPage() {
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-1 hidden sm:inline">
               Período
             </span>
-            {QUICK_RANGES.map((r) => {
+            {visibleRanges.map((r) => {
               const isActive = desde === r.desde() && hasta === r.hasta();
               return (
                 <button
@@ -1243,6 +1282,15 @@ export function ReportesPage() {
                 </button>
               );
             })}
+            {isBasico && (
+              <button
+                onClick={() => navigate('/checkout?plan=PRO')}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all"
+              >
+                <Crown className="h-3 w-3" />
+                90d / Año
+              </button>
+            )}
           </div>
 
           {/* Separador vertical */}
@@ -1258,6 +1306,7 @@ export function ReportesPage() {
                 id="rpt-desde"
                 type="date"
                 value={desde}
+                min={isBasico ? minimoFechaBasico : undefined}
                 onChange={(e) => setDesde(e.target.value)}
                 className="h-9 w-full sm:w-36 text-sm"
               />

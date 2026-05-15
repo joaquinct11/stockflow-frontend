@@ -50,14 +50,14 @@ export function LandingPage() {
             </div>
 
             <h1 className="landing-hero-title">
-              Controla tus{' '}
-              <span className="landing-hero-title-highlight">compras, stock y ventas</span>
-              {' '}desde un solo lugar
+              Del pedido al{' '}
+              <span className="landing-hero-title-highlight">comprobante SUNAT</span>
+              {', '}todo en un solo sistema
             </h1>
 
             <p className="landing-hero-subtitle">
-              Órdenes de compra, recepciones, inventario en tiempo real, ventas con IGV
-              y facturación electrónica. Todo conectado, sin complicaciones.
+              POS con caja integrada, inventario en tiempo real, compras, devoluciones,
+              notas de crédito y facturación electrónica. Sin apps separadas, sin Excel.
             </p>
 
             <div className="landing-hero-actions">
@@ -141,7 +141,7 @@ export function LandingPage() {
         <div className="landing-container">
           <div className="landing-section-header">
             <span className="landing-section-label">Cómo funciona</span>
-            <h2 className="landing-section-title">Del pedido al cliente, todo conectado</h2>
+            <h2 className="landing-section-title">Del pedido al comprobante, todo conectado</h2>
             <p className="landing-section-subtitle">
               Un flujo unificado que elimina el trabajo doble y los errores en Excel.
             </p>
@@ -160,23 +160,23 @@ export function LandingPage() {
               <div className="landing-flow-number">2</div>
               <div className="landing-flow-content">
                 <h4>Recepción</h4>
-                <p>Registra lo recibido, lote y vencimiento. El stock se actualiza solo.</p>
+                <p>Registra lo recibido. El stock se actualiza automáticamente.</p>
               </div>
             </div>
             <div className="landing-flow-arrow">→</div>
             <div className="landing-flow-step">
               <div className="landing-flow-number">3</div>
               <div className="landing-flow-content">
-                <h4>Venta</h4>
-                <p>Registra la venta, descuenta stock y calcula IGV automáticamente.</p>
+                <h4>Venta en el POS</h4>
+                <p>Cobra con caja integrada, busca productos al instante y acepta cualquier método de pago.</p>
               </div>
             </div>
             <div className="landing-flow-arrow">→</div>
             <div className="landing-flow-step">
               <div className="landing-flow-number">4</div>
               <div className="landing-flow-content">
-                <h4>Comprobante</h4>
-                <p>Emite boleta o factura electrónica directamente desde la venta.</p>
+                <h4>Factura a SUNAT</h4>
+                <p>Emite boleta o factura con validez tributaria. CDR oficial incluido en el plan Pro.</p>
               </div>
             </div>
           </div>
@@ -192,16 +192,44 @@ export function LandingPage() {
               Todo lo que necesita tu negocio, en un solo sistema
             </h2>
             <p className="landing-section-subtitle">
-              Módulos integrados que trabajan juntos. Sin apps separadas, sin doble ingreso.
+              Nueve módulos integrados que trabajan juntos. Sin apps separadas, sin doble ingreso.
             </p>
           </div>
 
           <div className="landing-features-grid">
+
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon">🖥️</div>
+              <h3 className="landing-feature-title">Punto de Venta (POS)</h3>
+              <p className="landing-feature-desc">
+                POS ágil con búsqueda instantánea de productos por nombre, atajos de teclado
+                (F2 cobrar, F4 limpiar) y cálculo automático de vuelto.
+              </p>
+            </div>
+
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon">💰</div>
+              <h3 className="landing-feature-title">Caja registradora</h3>
+              <p className="landing-feature-desc">
+                Apertura y cierre de caja con fondo de apertura, totales por método de pago
+                (efectivo, tarjeta, Yape/Plin) y control de diferencias al cierre.
+              </p>
+            </div>
+
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon">🔄</div>
+              <h3 className="landing-feature-title">Devoluciones y notas de crédito</h3>
+              <p className="landing-feature-desc">
+                Registra devoluciones totales o parciales con reposición de stock automática.
+                Emite notas de crédito aplicables como descuento directamente en el POS.
+              </p>
+            </div>
+
             <div className="landing-feature-card">
               <div className="landing-feature-icon">📦</div>
               <h3 className="landing-feature-title">Inventario en tiempo real</h3>
               <p className="landing-feature-desc">
-                Stock actualizado automáticamente con cada compra y venta. Alertas de mínimo,
+                Stock actualizado con cada compra y venta. Alertas de mínimo,
                 kardex completo y control por lote y fecha de vencimiento.
               </p>
             </div>
@@ -219,7 +247,7 @@ export function LandingPage() {
               <div className="landing-feature-icon">🛒</div>
               <h3 className="landing-feature-title">Ventas con IGV</h3>
               <p className="landing-feature-desc">
-                Registra ventas en efectivo, tarjeta o transferencia. Calcula subtotal,
+                Registra ventas en efectivo, tarjeta o Yape/Plin. Calcula subtotal,
                 IGV 18% y vuelto. Historial completo por vendedor y período.
               </p>
             </div>
@@ -228,8 +256,8 @@ export function LandingPage() {
               <div className="landing-feature-icon">🧾</div>
               <h3 className="landing-feature-title">Facturación electrónica</h3>
               <p className="landing-feature-desc">
-                Emite boletas y facturas electrónicas directamente desde cada venta.
-                Registro de RUC, razón social y control de comprobantes emitidos.
+                Emite boletas y facturas desde cada venta. El plan Pro incluye envío
+                automático a SUNAT via OSE con CDR oficial y descarga del XML.
               </p>
             </div>
 
@@ -237,8 +265,8 @@ export function LandingPage() {
               <div className="landing-feature-icon">👥</div>
               <h3 className="landing-feature-title">Roles y permisos</h3>
               <p className="landing-feature-desc">
-                Define qué puede hacer cada usuario: admin, gerente, vendedor, gestor de
-                inventario. Permisos granulares por módulo y acción.
+                Cuatro roles predefinidos: Admin, Gerente, Vendedor y Gestor de Inventario.
+                Permisos granulares por módulo para control total de accesos.
               </p>
             </div>
 
@@ -247,9 +275,10 @@ export function LandingPage() {
               <h3 className="landing-feature-title">Reportes y métricas</h3>
               <p className="landing-feature-desc">
                 Ingresos por período, ticket promedio, productos más vendidos, rotación
-                de inventario y alertas de vencimiento próximo.
+                de inventario, kardex y exportación a Excel y PDF.
               </p>
             </div>
+
           </div>
         </div>
       </section>
@@ -271,7 +300,7 @@ export function LandingPage() {
             <div className="landing-audience-card">
               <div className="landing-audience-icon">🏪</div>
               <h4>Tiendas y bodegas</h4>
-              <p>Ventas rápidas con vuelto, historial diario y control de proveedores.</p>
+              <p>POS rápido con caja integrada, historial diario y control de proveedores.</p>
             </div>
             <div className="landing-audience-card">
               <div className="landing-audience-icon">🔧</div>
@@ -307,21 +336,24 @@ export function LandingPage() {
                 <span>S/</span>49.99<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
-                Para negocios pequeños que necesitan orden en su inventario y ventas.
+                Gestión completa de tu negocio: ventas, inventario, caja y comprobantes internos.
               </p>
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
                 <li><span className="check">✓</span> Hasta 500 productos</li>
                 <li><span className="check">✓</span> Hasta 3 usuarios</li>
+                <li><span className="check">✓</span> <strong>POS</strong> con caja integrada</li>
                 <li><span className="check">✓</span> Inventario + alertas de stock mínimo</li>
                 <li><span className="check">✓</span> Compras y recepciones</li>
-                <li><span className="check">✓</span> Ventas (efectivo / tarjeta)</li>
+                <li><span className="check">✓</span> Ventas (efectivo, tarjeta, Yape/Plin)</li>
+                <li><span className="check">✓</span> Devoluciones y notas de crédito</li>
+                <li><span className="check">✓</span> Facturación — boletas y facturas <em>en el sistema</em></li>
                 <li><span className="check">✓</span> Reportes últimos 30 días</li>
-                <li><span className="check">✓</span> 1 rol de administrador</li>
-                <li><span className="cross">✗</span> Facturación electrónica</li>
-                <li><span className="cross">✗</span> Control de lotes y vencimientos</li>
-                <li><span className="cross">✗</span> Roles y permisos avanzados</li>
+                <li><span className="check">✓</span> 2 roles (Admin + Vendedor)</li>
+                <li><span className="cross">✗</span> <strong>Envío a SUNAT</strong> (sin validez tributaria)</li>
+                <li><span className="cross">✗</span> Roles avanzados y permisos granulares</li>
                 <li><span className="cross">✗</span> Reportes históricos sin límite</li>
+                <li><span className="cross">✗</span> Control de lotes y vencimientos</li>
               </ul>
               <Link to="/register?plan=BASICO" className="landing-pricing-cta outline">
                 Probar 14 días gratis
@@ -336,20 +368,21 @@ export function LandingPage() {
                 <span>S/</span>99.99<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
-                Para negocios en crecimiento que necesitan trazabilidad, facturación y control total.
+                Todo el control del Básico más <strong>facturación con validez tributaria ante SUNAT</strong>.
               </p>
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
                 <li><span className="check">✓</span> Productos ilimitados</li>
                 <li><span className="check">✓</span> Hasta 10 usuarios</li>
                 <li><span className="check">✓</span> Todo lo del plan Básico</li>
-                <li><span className="check">✓</span> <strong>Facturación electrónica</strong> (boletas y facturas)</li>
-                <li><span className="check">✓</span> <strong>Control de lotes y fechas de vencimiento</strong></li>
-                <li><span className="check">✓</span> <strong>Roles y permisos por módulo</strong> (RBAC completo)</li>
+                <li><span className="check">✓</span> <strong>🏛 Envío a SUNAT via OSE</strong> (CDR oficial)</li>
+                <li><span className="check">✓</span> <strong>Descarga de XML y PDF oficial</strong></li>
+                <li><span className="check">✓</span> <strong>4 roles completos</strong>: Admin, Gerente, Vendedor, Gestor Inventario</li>
+                <li><span className="check">✓</span> <strong>Permisos granulares</strong> por módulo y acción</li>
                 <li><span className="check">✓</span> Reportes históricos sin límite de fecha</li>
+                <li><span className="check">✓</span> Control de lotes y fechas de vencimiento</li>
                 <li><span className="check">✓</span> Alertas de vencimiento próximo</li>
-                <li><span className="check">✓</span> Recepciones parciales de OC</li>
-                <li><span className="check">✓</span> Múltiples proveedores con historial</li>
+                <li><span className="check">✓</span> Exportación Excel y PDF de reportes</li>
                 <li><span className="check">✓</span> Soporte prioritario por WhatsApp</li>
               </ul>
               <Link to="/register?plan=PRO" className="landing-pricing-cta primary">
@@ -399,8 +432,8 @@ export function LandingPage() {
               <span className="landing-logo-text">Fluxus</span>
             </Link>
             <p>
-              Sistema de gestión para negocios que mueven producto: compras, inventario,
-              ventas y facturación en una sola plataforma.
+              Mini‑ERP para negocios peruanos. POS, inventario, compras,
+              devoluciones y facturación electrónica en una sola plataforma.
             </p>
           </div>
 

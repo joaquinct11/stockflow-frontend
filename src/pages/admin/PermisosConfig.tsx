@@ -67,6 +67,21 @@ const PERMISSION_GROUPS: { label: string; codes: string[] }[] = [
   },
 
   {
+    label: 'Caja',
+    codes: ['VER_CAJA', 'ABRIR_CAJA', 'CERRAR_CAJA'],
+  },
+
+  {
+    label: 'Devoluciones',
+    codes: ['VER_DEVOLUCIONES', 'CREAR_DEVOLUCION'],
+  },
+
+  {
+    label: 'Notas de Crédito',
+    codes: ['VER_NOTAS_CREDITO', 'EMITIR_NOTA_CREDITO'],
+  },
+
+  {
     label: 'Inventario',
     codes: ['VER_INVENTARIO', 'CREAR_INVENTARIO', 'ELIMINAR_INVENTARIO', 'VER_DETALLE_INVENTARIO'],
   },

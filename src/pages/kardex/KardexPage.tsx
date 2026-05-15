@@ -152,7 +152,7 @@ export function KardexPage() {
     (p) =>
       p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
+      p.categoriaNombre?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
@@ -287,7 +287,7 @@ export function KardexPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-muted-foreground text-sm">
-                              {producto.categoria || '-'}
+                              {producto.categoriaNombre || '-'}
                             </TableCell>
                             <TableCell className="text-center font-semibold">
                               <span

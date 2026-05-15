@@ -85,6 +85,7 @@ export function CajaPage() {
   };
 
   const cajasAbiertas = cajas.filter(c => c.estado === 'ABIERTA');
+  const cajaActiva = cajasAbiertas[0] ?? null;
   const totalIngresosHoy = cajas
     .filter(c => {
       if (!c.fechaApertura) return false;
@@ -92,6 +93,17 @@ export function CajaPage() {
       return new Date(c.fechaApertura).toDateString() === hoy;
     })
     .reduce((sum, c) => sum + (c.totalIngresos ?? 0), 0);
+
+  // Cuadre por método de pago de la sesión activa
+  const metodosPago = cajaActiva ? (() => {
+    const filas = [
+      { key: 'EFECTIVO',  label: 'Efectivo',  monto: cajaActiva.totalEfectivo ?? 0,  Icon: Banknote,    color: 'text-emerald-600 dark:text-emerald-400', bar: 'bg-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/30',  border: 'border-emerald-200 dark:border-emerald-800' },
+      { key: 'TARJETA',   label: 'Tarjeta',   monto: cajaActiva.totalTarjeta ?? 0,   Icon: CreditCard,  color: 'text-blue-600 dark:text-blue-400',       bar: 'bg-blue-500',    bg: 'bg-blue-50 dark:bg-blue-950/30',        border: 'border-blue-200 dark:border-blue-800' },
+      { key: 'YAPE_PLIN', label: 'Yape/Plin', monto: cajaActiva.totalYapePlin ?? 0,  Icon: Smartphone,  color: 'text-violet-600 dark:text-violet-400',   bar: 'bg-violet-500',  bg: 'bg-violet-50 dark:bg-violet-950/30',    border: 'border-violet-200 dark:border-violet-800' },
+    ];
+    const totalMonto = filas.reduce((s, f) => s + f.monto, 0);
+    return { filas, totalMonto };
+  })() : null;
 
   if (loading) return <LoadingSpinner />;
 
@@ -104,48 +116,109 @@ export function CajaPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 [&>*:last-child]:col-span-2 [&>*:last-child]:mx-auto [&>*:last-child]:max-w-[calc(50%-0.5rem)] sm:[&>*:last-child]:col-auto sm:[&>*:last-child]:max-w-none sm:[&>*:last-child]:mx-0">
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cajas abiertas</p>
-            <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center">
-              <Clock className="text-amber-600" size={18} />
+            <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+              <Clock className="text-amber-600 dark:text-amber-400" size={18} />
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className={`text-3xl font-bold ${cajasAbiertas.length > 0 ? 'text-amber-600' : ''}`}>
+            <div className={`text-3xl font-bold tracking-tight ${cajasAbiertas.length > 0 ? 'text-amber-600 dark:text-amber-400' : ''}`}>
               {cajasAbiertas.length}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Pendientes de cierre</p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ingresos hoy</p>
-            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <TrendingUp className="text-emerald-600" size={18} />
+            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="text-emerald-600 dark:text-emerald-400" size={18} />
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-3xl font-bold">{formatCurrency(totalIngresosHoy)}</div>
+            <div className="text-3xl font-bold tracking-tight">{formatCurrency(totalIngresosHoy)}</div>
             <p className="text-xs text-muted-foreground mt-1">De todas las cajas</p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className="relative overflow-hidden border-0 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total historial</p>
-            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
-              <Wallet className="text-blue-600" size={18} />
+            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <Wallet className="text-blue-600 dark:text-blue-400" size={18} />
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-3xl font-bold">{cajas.length}</div>
+            <div className="text-3xl font-bold tracking-tight">{cajas.length}</div>
             <p className="text-xs text-muted-foreground mt-1">Sesiones de caja</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Cuadre por método de pago — sesión activa */}
+      {cajaActiva && metodosPago && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Cuadre de sesión activa</CardTitle>
+                <CardDescription className="mt-0.5">
+                  Cajero: <span className="font-medium text-foreground">{cajaActiva.usuarioNombre}</span>
+                  {' · '}Apertura: <span className="font-medium text-foreground">{formatDate(cajaActiva.fechaApertura)}</span>
+                </CardDescription>
+              </div>
+              <Badge variant="warning"><Clock size={11} className="mr-1 inline" />ABIERTA</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {metodosPago.filas.map(({ key, label, monto, Icon, color, bar, bg, border }) => {
+                const pct = metodosPago.totalMonto > 0
+                  ? Math.round((monto / metodosPago.totalMonto) * 100)
+                  : 0;
+                return (
+                  <div key={key} className={`rounded-xl border p-4 ${bg} ${border}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Icon size={16} className={color} />
+                        <span className={`text-sm font-semibold ${color}`}>{label}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground font-medium">{pct}%</span>
+                    </div>
+                    <p className={`text-2xl font-bold font-mono ${color}`}>
+                      {formatCurrency(monto)}
+                    </p>
+                    {/* Progress bar */}
+                    <div className="mt-3 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${bar}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Total row */}
+            <div className="mt-4 flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
+              <span className="text-sm font-semibold flex items-center gap-2">
+                <Wallet size={15} className="text-muted-foreground" />
+                Total recaudado ({cajaActiva.cantidadVentas ?? 0} ventas)
+              </span>
+              <span className="font-mono font-bold text-lg text-emerald-600 dark:text-emerald-400">
+                {formatCurrency(metodosPago.totalMonto)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabla */}
       <Card className="border-0 shadow-sm">

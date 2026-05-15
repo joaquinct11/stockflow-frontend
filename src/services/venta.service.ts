@@ -66,9 +66,10 @@ export const ventaService = {
   },
 
   /**
-   * Eliminar venta
+   * Anular venta (cambia estado a ANULADA, no elimina)
    */
-  delete: async (id: number): Promise<void> => {
-    await axiosInstance.delete(API_ENDPOINTS.VENTAS.DELETE(id));
+  anular: async (id: number): Promise<VentaDTO> => {
+    const { data } = await axiosInstance.patch<VentaDTO>(API_ENDPOINTS.VENTAS.ANULAR(id));
+    return data;
   },
 };

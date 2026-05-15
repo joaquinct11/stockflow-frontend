@@ -100,8 +100,6 @@ export interface ProductoDTO {
   id?: number;
   nombre: string;
   codigoBarras: string;
-  /** @deprecated Usar categoriaId en su lugar. Mantenido para backward compat. */
-  categoria?: string;
   categoriaId?: number;
   /** Solo lectura — nombre de la categoría devuelta por el backend. */
   categoriaNombre?: string;
@@ -134,6 +132,11 @@ export interface VentaDTO {
   tenantId: string;
   createdAt?: string;
   cajaId?: number;
+  notaCreditoCodigo?: string;
+  descuentoNotaCredito?: number;
+  notaCreditoId?: number;
+  clienteId?: number;
+  clienteNombre?: string;
   detalles: DetalleVentaDTO[];
 }
 
@@ -144,6 +147,77 @@ export interface DetalleVentaDTO {
   cantidad: number;
   precioUnitario: number;
   subtotal?: number;
+}
+
+// ========================================
+// DEVOLUCIONES
+// ========================================
+
+export interface DevolucionDetalleItemDTO {
+  productoId: number;
+  cantidadDevuelta: number;
+  precioUnitario: number;
+}
+
+export interface CrearDevolucionDTO {
+  ventaId: number;
+  motivo: string;
+  observaciones?: string;
+  reponerStock: boolean;
+  detalles: DevolucionDetalleItemDTO[];
+}
+
+export interface DevolucionDetalleRespDTO {
+  productoId: number;
+  productoNombre: string;
+  cantidadDevuelta: number;
+  precioUnitario: number;
+  subtotal: number;
+}
+
+export interface DevolucionDTO {
+  id: number;
+  ventaId: number;
+  tenantId: string;
+  usuarioNombre: string;
+  motivo: string;
+  observaciones?: string;
+  totalDevuelto: number;
+  reponerStock: boolean;
+  estado: string;
+  fechaDevolucion: string;
+  detalles: DevolucionDetalleRespDTO[];
+  // Nota de credito generada automaticamente
+  notaCreditoCodigo?: string;
+  montoNotaCredito?: number;
+  fechaVencimientoNc?: string;
+}
+
+// ========================================
+// NOTAS DE CREDITO
+// ========================================
+
+export interface NotaCreditoDTO {
+  id: number;
+  codigo: string;
+  devolucionId: number;
+  ventaOrigenId?: number;
+  montoTotal: number;
+  estado: 'PENDIENTE' | 'USADA' | 'ANULADA';
+  fechaEmision: string;
+  fechaVencimiento: string;
+  fechaUso?: string;
+  ventaUsoId?: number;
+  tenantId?: string;
+}
+
+export interface ValidarNotaCreditoResponseDTO {
+  codigo: string;
+  montoTotal: number;
+  estado: string;
+  fechaVencimiento: string;
+  valida: boolean;
+  mensaje: string;
 }
 
 // ========================================

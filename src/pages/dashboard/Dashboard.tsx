@@ -6,8 +6,9 @@ import { ventaService } from '../../services/venta.service';
 import { movimientoService } from '../../services/movimiento.service';
 import { suscripcionService } from '../../services/suscripcion.service';
 import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard, TrendingDown, TrendingUp } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
+import { gastoService } from '../../services/gasto.service';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
@@ -102,6 +103,8 @@ export function Dashboard() {
   const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [canLoadVentas, setCanLoadVentas] = useState<boolean>(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('HOY');
+
+  const [totalGastosPeriodo, setTotalGastosPeriodo] = useState<number>(0);
 
   // Estado de suscripción
   const [suscripcion, setSuscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
@@ -246,6 +249,17 @@ export function Dashboard() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rol, userId]);
+
+  // Gastos del período — solo ADMIN y GERENTE ven esta métrica
+  useEffect(() => {
+    if (rol !== 'ADMIN' && rol !== 'GERENTE') return;
+    const now = new Date();
+    const inicio = getRangeStart(timeFilter, now);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    gastoService.getTotal(fmt(inicio), fmt(now))
+      .then((t) => setTotalGastosPeriodo(Number(t)))
+      .catch(() => setTotalGastosPeriodo(0));
+  }, [timeFilter, rol]);
 
   const fetchData = async () => {
     try {
@@ -431,7 +445,12 @@ export function Dashboard() {
     };
   }, [productos, ventas, filteredVentas, movimientos]);
 
-  const gridColsClass = rol === 'GESTOR_INVENTARIO' ? 'lg:grid-cols-2' : 'lg:grid-cols-4';
+  const gridColsClass =
+    rol === 'GESTOR_INVENTARIO'
+      ? 'lg:grid-cols-2'
+      : rol === 'ADMIN' || rol === 'GERENTE'
+        ? 'lg:grid-cols-3'
+        : 'lg:grid-cols-4';
 
   if (loading || suscripcionLoading) return <LoadingSpinner />;
 
@@ -669,6 +688,57 @@ export function Dashboard() {
                 </p>
               </CardContent>
             </Card>
+
+            {/* Gastos y Utilidad Neta — solo ADMIN / GERENTE */}
+            {(rol === 'ADMIN' || rol === 'GERENTE') && (
+              <>
+                <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+                  <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Gastos</p>
+                    </div>
+                    <div className="h-9 w-9 rounded-xl bg-rose-500/10 flex items-center justify-center flex-shrink-0">
+                      <TrendingDown className="text-rose-600 dark:text-rose-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
+                      S/.{totalGastosPeriodo.toFixed(2)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Egresos del período</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+                  <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Utilidad Neta</p>
+                    </div>
+                    <div className="h-9 w-9 rounded-xl bg-teal-500/10 flex items-center justify-center flex-shrink-0">
+                      <TrendingUp className="text-teal-600 dark:text-teal-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    {(() => {
+                      const utilidad = stats.ingresoFiltrado - totalGastosPeriodo;
+                      const positiva = utilidad >= 0;
+                      return (
+                        <>
+                          <div className={`text-3xl font-bold tracking-tight ${positiva ? 'text-teal-600 dark:text-teal-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                            S/.{utilidad.toFixed(2)}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {positiva ? 'Ingresos − Gastos' : 'Pérdida neta del período'}
+                          </p>
+                        </>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </>
         )}
       </div>

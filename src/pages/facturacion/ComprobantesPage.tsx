@@ -13,10 +13,12 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, Calendar, DollarSign, Printer } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, Printer, X, Send, Crown, ArrowRight, SlidersHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
+import { usePlan } from '../../hooks/usePlan';
+import { useNavigate } from 'react-router-dom';
 
 const TIPO_OPTIONS: TipoComprobante[] = ['BOLETA', 'FACTURA'];
 // const ESTADO_OPTIONS = ['EMITIDO', 'ANULADO'];
@@ -47,6 +49,8 @@ const emptyForm = (): EmitirComprobanteForm => ({
 export function ComprobantesPage() {
   const { canAccess, puede, canCreate, canDelete, isVendedor } = usePermissions();
   const { user } = useAuthStore();
+  const { isBasico } = usePlan();
+  const navigate = useNavigate();
 
   const canView = canAccess('FACTURACION');
   const canEmitir = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
@@ -60,6 +64,7 @@ export function ComprobantesPage() {
   const [filterEstado, setFilterEstado] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -78,6 +83,9 @@ export function ComprobantesPage() {
     isOpen: false,
     id: null,
   });
+
+  // SUNAT upgrade banner (para plan BÁSICO)
+  const [showSunatBanner, setShowSunatBanner] = useState(false);
 
   useEffect(() => {
     if (canView) {
@@ -261,6 +269,15 @@ export function ComprobantesPage() {
 
   const ventaById = new Map(ventas.map(v => [v.id, v]));
 
+  const activeFiltersCount = [filterTipo, filterEstado, fechaDesde, fechaHasta].filter(Boolean).length;
+
+  const limpiarFiltros = () => {
+    setFilterTipo('');
+    setFilterEstado('');
+    setFechaDesde('');
+    setFechaHasta('');
+  };
+
   const ventasOptions = ventas
     .filter((v) => !ventasYaFacturadas.has(v.id!))
     .map((v) => ({
@@ -366,144 +383,173 @@ export function ComprobantesPage() {
         </Card>
       </div>
 
-      {/* Filtros (layout igual a Ventas: Buscar + fechas arriba, tabs abajo) */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            {/* Row 1: Buscar + Desde/Hasta + Limpiar */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-              {/* Search */}
-              <div className="lg:col-span-7">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar número, venta, receptor..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
+      {/* Search + Filtros */}
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Buscar número, venta, receptor..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-10"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilterDrawer(true)}
+            className={[
+              'flex items-center gap-2 h-10 px-4 rounded-lg border text-sm font-semibold transition-all shrink-0',
+              activeFiltersCount > 0
+                ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                : 'border-input bg-background text-muted-foreground hover:text-foreground hover:border-primary/40',
+            ].join(' ')}
+          >
+            <SlidersHorizontal size={15} />
+            Filtros
+            {activeFiltersCount > 0 && (
+              <span className="h-5 w-5 rounded-full bg-blue-500 text-white text-[11px] font-bold flex items-center justify-center">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+        </div>
 
-              {/* Desde */}
-              <div className="lg:col-span-2">
-                <label className="text-xs text-muted-foreground font-medium">Desde</label>
-                <div className="relative mt-1">
-                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type="date"
-                    value={fechaDesde}
-                    onChange={(e) => setFechaDesde(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
+        {/* Active filter chips */}
+        {activeFiltersCount > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {filterTipo && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Tipo: {filterTipo}
+                <button onClick={() => setFilterTipo('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            {filterEstado && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                {filterEstado}
+                <button onClick={() => setFilterEstado('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            {fechaDesde && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Desde {fechaDesde}
+                <button onClick={() => setFechaDesde('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            {fechaHasta && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Hasta {fechaHasta}
+                <button onClick={() => setFechaHasta('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            <button onClick={limpiarFiltros} className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors px-1">
+              Limpiar todo
+            </button>
+          </div>
+        )}
+      </div>
 
-              {/* Hasta */}
-              <div className="lg:col-span-2">
-                <label className="text-xs text-muted-foreground font-medium">Hasta</label>
-                <div className="relative mt-1">
-                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type="date"
-                    value={fechaHasta}
-                    onChange={(e) => setFechaHasta(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
+      {/* Filter drawer backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/50 z-[35] transition-opacity duration-300 ${showFilterDrawer ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setShowFilterDrawer(false)}
+      />
 
-              {/* Limpiar */}
-              <div className="lg:col-span-1">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setFechaDesde('');
-                    setFechaHasta('');
-                    setFilterTipo('');
-                    setFilterEstado('');
-                  }}
-                  className="w-full"
-                >
-                  Limpiar
-                </Button>
-              </div>
+      {/* Filter drawer panel */}
+      <div
+        className={`fixed right-0 top-16 w-80 z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out rounded-l-2xl overflow-hidden bg-slate-900 border-l border-t border-b border-slate-700/50 ${showFilterDrawer ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{ height: 'calc(100vh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 shrink-0 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700/50">
+          <div className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-blue-400" />
             </div>
+            <h2 className="font-semibold text-sm text-white">Filtros</h2>
+            {activeFiltersCount > 0 && (
+              <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{activeFiltersCount}</span>
+            )}
+          </div>
+          <button onClick={() => setShowFilterDrawer(false)} className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
-            {/* Row 2: Tipo (debajo) */}
-            <div className="w-full rounded-lg border border-input bg-muted p-1">
-              <div className="flex gap-1 overflow-x-auto scrollbar-hide" role="tablist" aria-label="Filtrar por tipo">
-                {(
-                  [
-                    { key: '', label: 'Todos' },
-                    { key: 'BOLETA', label: '🧾 Boleta' },
-                    { key: 'FACTURA', label: '🏢 Factura' },
-                  ] as Array<{ key: '' | TipoComprobante; label: string }>
-                ).map((t) => {
-                  const active = filterTipo === t.key;
-                  return (
-                    <button
-                      key={t.key || 'ALL'}
-                      type="button"
-                      onClick={() => setFilterTipo(t.key)}
-                      className={[
-                        'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
-                        'min-w-[140px] sm:min-w-0 flex-1',
-                        active
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                      ].join(' ')}
-                      aria-pressed={active}
-                    >
-                      {t.label}
-                    </button>
-                  );
-                })}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+          {/* Rango de fechas */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Rango de fechas</p>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Desde</label>
+                <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 text-sm px-3 focus:outline-none focus:border-blue-500" />
               </div>
-            </div>
-
-            {/* Row 3: Estado (debajo) */}
-            <div className="w-full rounded-lg border border-input bg-muted p-1">
-              <div className="flex gap-1 overflow-x-auto scrollbar-hide" role="tablist" aria-label="Filtrar por estado">
-                {(
-                  [
-                    { key: '', label: 'Todos' },
-                    { key: 'EMITIDO', label: '✅ Emitido' },
-                    { key: 'ANULADO', label: '⛔ Anulado' },
-                  ] as Array<{ key: '' | 'EMITIDO' | 'ANULADO'; label: string }>
-                ).map((t) => {
-                  const active = filterEstado === t.key;
-                  return (
-                    <button
-                      key={t.key || 'ALL'}
-                      type="button"
-                      onClick={() => setFilterEstado(t.key)}
-                      className={[
-                        'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
-                        'min-w-[140px] sm:min-w-0 flex-1',
-                        active
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                      ].join(' ')}
-                      aria-pressed={active}
-                    >
-                      {/* Icono con color (igual idea que en Ventas) */}
-                      {t.key === 'EMITIDO' && <span className="mr-2 text-green-600"></span>}
-                      {t.key === 'ANULADO' && <span className="mr-2 text-red-600"></span>}
-                      {t.key === '' && <span className="mr-2 text-muted-foreground"></span>}
-                      {t.label}
-                    </button>
-                  );
-                })}
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Hasta</label>
+                <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 text-sm px-3 focus:outline-none focus:border-blue-500" />
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Tipo */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tipo</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['', 'BOLETA', 'FACTURA'] as const).map((key) => (
+                <button
+                  key={key || 'ALL'}
+                  onClick={() => setFilterTipo(key)}
+                  className={[
+                    'px-3 py-2 rounded-lg text-xs font-semibold border transition-all',
+                    filterTipo === key
+                      ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500',
+                  ].join(' ')}
+                >
+                  {key === '' ? 'Todos' : key === 'BOLETA' ? 'Boleta' : 'Factura'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Estado */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Estado</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['', 'EMITIDO', 'ANULADO'] as const).map((key) => (
+                <button
+                  key={key || 'ALL'}
+                  onClick={() => setFilterEstado(key)}
+                  className={[
+                    'px-3 py-2 rounded-lg text-xs font-semibold border transition-all',
+                    filterEstado === key
+                      ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500',
+                  ].join(' ')}
+                >
+                  {key === '' ? 'Todos' : key === 'EMITIDO' ? 'Emitido' : 'Anulado'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex gap-2">
+          <button onClick={limpiarFiltros} className="flex-1 h-9 rounded-xl border border-slate-600 text-xs font-semibold text-slate-400 hover:text-white hover:border-slate-500 transition-all">
+            Limpiar todo
+          </button>
+          <button onClick={() => setShowFilterDrawer(false)} className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all">
+            Ver {sortedComprobantes.length} resultado{sortedComprobantes.length !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
 
       {/* Table */}
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Comprobantes</CardTitle>
           <CardDescription>
@@ -522,10 +568,10 @@ export function ComprobantesPage() {
             />
           ) : (
             <>
-              <div className="rounded-md border overflow-hidden">
+              <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted">
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead>Número</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Venta</TableHead>
@@ -578,6 +624,25 @@ export function ComprobantesPage() {
                             >
                               <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
+                            {c.estado === 'EMITIDO' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title={isBasico ? 'Enviar a SUNAT (requiere Plan Pro)' : 'Enviar a SUNAT'}
+                                onClick={() => {
+                                  if (isBasico) {
+                                    setShowSunatBanner(true);
+                                  } else {
+                                    toast('Integración SUNAT próximamente disponible.', { icon: '🏛️' });
+                                  }
+                                }}
+                              >
+                                {isBasico
+                                  ? <Crown className="h-4 w-4 text-amber-500" />
+                                  : <Send className="h-4 w-4 text-indigo-500" />
+                                }
+                              </Button>
+                            )}
                             {canAnular && c.estado === 'EMITIDO' && (
                               <Button
                                 variant="ghost"
@@ -977,6 +1042,63 @@ export function ComprobantesPage() {
         onConfirm={handleAnular}
         onCancel={() => setConfirmAnular({ isOpen: false, id: null })}
       />
+
+      {/* SUNAT Upgrade Banner Dialog */}
+      <Dialog
+        isOpen={showSunatBanner}
+        onClose={() => setShowSunatBanner(false)}
+        title=""
+        description=""
+        size="sm"
+      >
+        <div className="space-y-5 text-center py-2">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-amber-100 dark:bg-amber-900/40 p-4">
+              <Crown className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold">Función exclusiva del plan Pro</h2>
+            <p className="text-sm text-muted-foreground">
+              El envío de comprobantes a SUNAT a través de un OSE está disponible únicamente en el plan Pro.
+              Actualiza para emitir comprobantes con validez tributaria oficial.
+            </p>
+          </div>
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 text-left space-y-2">
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
+              Plan Pro incluye
+            </p>
+            <ul className="text-sm text-amber-900 dark:text-amber-200 space-y-1">
+              <li className="flex items-center gap-2">
+                <span className="text-amber-600">✓</span> Envío a SUNAT con CDR oficial (OSE)
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-amber-600">✓</span> Boletas y facturas electrónicas válidas
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-amber-600">✓</span> Reportes históricos sin límite
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-amber-600">✓</span> Hasta 10 usuarios y productos ilimitados
+              </li>
+            </ul>
+          </div>
+          <button
+            onClick={() => { setShowSunatBanner(false); navigate('/checkout?plan=PRO'); }}
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 px-4 transition-colors"
+          >
+            <Crown className="h-4 w-4" />
+            Actualizar a Pro
+            <ArrowRight className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setShowSunatBanner(false)}
+            className="w-full rounded-lg border border-input py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      </Dialog>
     </div>
   );
 }

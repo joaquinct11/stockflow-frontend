@@ -55,19 +55,22 @@ export function Dialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div 
+    <div className="fixed inset-0 z-50">
+      {/* Backdrop — cubre todo incluyendo el header */}
+      <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in"
         onClick={onClose}
       />
 
+      {/* Contenedor centrado — empieza debajo del header (top-16) */}
+      <div className="fixed inset-0 top-16 flex items-center justify-center p-4 pointer-events-none">
+
       {/* Modal */}
-      <div 
+      <div
         className={`
-          relative bg-background rounded-lg shadow-lg w-full mx-4
+          pointer-events-auto relative bg-background rounded-lg shadow-lg w-full
           ${sizeClasses[size]}
-          max-h-[90vh] overflow-y-auto
+          max-h-[calc(100vh-5rem)] overflow-y-auto
           animate-in zoom-in-95 fade-in duration-200
         `}
       >
@@ -94,6 +97,8 @@ export function Dialog({
           {children}
         </div>
       </div>
+
+      </div>{/* fin contenedor centrado */}
     </div>
   );
 }
