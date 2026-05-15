@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { recepcionService } from '../../services/recepcion.service';
 import { ordenCompraService } from '../../services/ordenCompra.service';
 import { proveedorService } from '../../services/proveedor.service';
@@ -25,6 +25,7 @@ import {
   Plus, Inbox, Search, CheckCircle, Clock, Lock,
   PackagePlus, Save, Trash2, FileText, Building2,
   BadgeCheck, XCircle, Truck, AlertCircle, SlidersHorizontal, X,
+  Camera, CameraOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -162,6 +163,14 @@ export function RecepcionList() {
   const [compNumero, setCompNumero] = useState('');
   const [compUrl, setCompUrl]     = useState('');
   const [savingComp, setSavingComp] = useState(false);
+
+  // ── Cámara ────────────────────────────────────────────────────────────────
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
+  const [cameraError, setCameraError]             = useState<string | null>(null);
+  const videoRef      = useRef<HTMLVideoElement>(null);
+  const streamRef     = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -462,6 +471,69 @@ export function RecepcionList() {
       },
     });
   };
+
+  // ── Funciones de cámara ──────────────────────────────────────────────────
+  const stopCamera = useCallback(() => {
+    if (scanIntervalRef.current) { clearInterval(scanIntervalRef.current); scanIntervalRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    setShowCameraScanner(false);
+    setCameraError(null);
+  }, []);
+
+  const buscarPorCodigoRecepcion = useCallback((codigo: string) => {
+    const producto = productos.find(
+      p => p.codigoBarras?.toLowerCase() === codigo.toLowerCase()
+    );
+    if (producto) {
+      setSelectedProductoId(producto.id!);
+      toast.success(`Producto encontrado: ${producto.nombre}`);
+    } else {
+      toast.error(`Producto no encontrado: ${codigo}`);
+    }
+  }, [productos]);
+
+  const openCamera = useCallback(async () => {
+    setCameraError(null);
+    setShowCameraScanner(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }, audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+
+      if (!('BarcodeDetector' in window)) {
+        setCameraError('Tu navegador no soporta escaneo automático. Usa Chrome en Android o escribe el código manualmente.');
+        return;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detector = new (window as any).BarcodeDetector({
+        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'qr_code', 'upc_a', 'upc_e', 'itf'],
+      });
+      scanIntervalRef.current = setInterval(async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes.length > 0) {
+            const code: string = barcodes[0].rawValue;
+            stopCamera();
+            buscarPorCodigoRecepcion(code);
+          }
+        } catch { /* ignorar errores de frame */ }
+      }, 250);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')) {
+        setCameraError('Permiso de cámara denegado. Habilítalo en la configuración del navegador.');
+      } else if (msg.toLowerCase().includes('notfound')) {
+        setCameraError('No se encontró ninguna cámara en este dispositivo.');
+      } else {
+        setCameraError('No se pudo acceder a la cámara. Verifica los permisos.');
+      }
+    }
+  }, [stopCamera, buscarPorCodigoRecepcion]);
+
+  useEffect(() => () => stopCamera(), [stopCamera]);
 
   if (loading) return <LoadingSpinner />;
   if (!hasViewPermission)
@@ -982,12 +1054,26 @@ export function RecepcionList() {
                 <div className="flex flex-wrap gap-2 items-end">
                   <div className="flex-1 min-w-[200px]">
                     <label className="text-xs text-muted-foreground mb-1 block">Producto</label>
-                    <Autocomplete
-                      options={productoOptions}
-                      value={selectedProducto ? { id: selectedProducto.id!, label: selectedProducto.nombre } : null}
-                      onChange={(opt) => setSelectedProductoId(opt ? Number(opt.id) : null)}
-                      placeholder="Buscar producto..."
-                    />
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Autocomplete
+                          options={productoOptions}
+                          value={selectedProducto ? { id: selectedProducto.id!, label: selectedProducto.nombre } : null}
+                          onChange={(opt) => setSelectedProductoId(opt ? Number(opt.id) : null)}
+                          placeholder="Buscar producto..."
+                        />
+                      </div>
+                      {hasCamera && (
+                        <button
+                          type="button"
+                          onClick={openCamera}
+                          title="Escanear código de barras con cámara"
+                          className="flex items-center justify-center w-9 h-9 rounded-md border border-input bg-background hover:border-primary hover:text-primary text-muted-foreground transition-colors flex-shrink-0"
+                        >
+                          <Camera size={15} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="w-24">
                     <label className="text-xs text-muted-foreground mb-1 block">Cantidad</label>
@@ -1107,6 +1193,85 @@ export function RecepcionList() {
         onConfirm={async () => { if (confirmDialog.action) await confirmDialog.action(); }}
         onCancel={() => setConfirmDialog((p) => ({ ...p, isOpen: false }))}
       />
+
+      {/* ── Escáner de cámara ─────────────────────────────────────────────── */}
+      {showCameraScanner && (
+        <div className="fixed inset-0 z-[60] bg-black flex flex-col">
+          <style>{`
+            @keyframes scanline-r { 0%,100% { top: 15%; } 50% { top: 80%; } }
+            .animate-scanline-r { animation: scanline-r 2s ease-in-out infinite; }
+          `}</style>
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-black/90 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Camera size={18} className="text-primary" />
+              <span className="text-sm font-semibold">Escanear producto</span>
+            </div>
+            <button type="button" onClick={stopCamera}
+              className="p-2 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Visor */}
+          <div className="flex-1 relative overflow-hidden">
+            <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover"
+              playsInline muted autoPlay />
+
+            {!cameraError && (
+              <>
+                {/* Oscurecimiento alrededor del recuadro */}
+                <div className="absolute inset-0 flex flex-col pointer-events-none">
+                  <div className="flex-1 bg-black/55" />
+                  <div className="flex" style={{ height: 256 }}>
+                    <div className="flex-1 bg-black/55" />
+                    <div style={{ width: 256 }} />
+                    <div className="flex-1 bg-black/55" />
+                  </div>
+                  <div className="flex-1 bg-black/55" />
+                </div>
+                {/* Recuadro con esquinas */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="relative" style={{ width: 256, height: 256 }}>
+                    <div className="absolute top-0 left-0 w-9 h-9 border-t-[3px] border-l-[3px] border-primary rounded-tl" />
+                    <div className="absolute top-0 right-0 w-9 h-9 border-t-[3px] border-r-[3px] border-primary rounded-tr" />
+                    <div className="absolute bottom-0 left-0 w-9 h-9 border-b-[3px] border-l-[3px] border-primary rounded-bl" />
+                    <div className="absolute bottom-0 right-0 w-9 h-9 border-b-[3px] border-r-[3px] border-primary rounded-br" />
+                    <div className="absolute left-3 right-3 h-0.5 bg-primary/80 animate-scanline-r"
+                      style={{ top: '15%' }} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Error */}
+            {cameraError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-8">
+                <div className="text-center space-y-4 max-w-xs">
+                  <CameraOff size={44} className="mx-auto text-red-400" />
+                  <p className="text-sm text-gray-300 leading-relaxed">{cameraError}</p>
+                  <button type="button" onClick={stopCamera}
+                    className="px-6 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-sm font-medium transition-colors">
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {!cameraError && (
+            <div className="flex-shrink-0 bg-black/90 px-4 py-4 flex flex-col items-center gap-3">
+              <p className="text-xs text-gray-500">Apunta la cámara al código de barras del producto</p>
+              <button type="button" onClick={stopCamera}
+                className="px-10 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-sm font-medium transition-colors">
+                Cancelar
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
