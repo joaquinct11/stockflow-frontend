@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
@@ -28,12 +28,11 @@ const selectCls =
 export function Register() {
   const navigate = useNavigate();
   const { setUser } = useAuthStore();
-  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const planFromUrl = searchParams.get('plan');
-  const initialPlan: PlanId = planFromUrl === 'PRO' ? 'PRO' : 'BASICO';
+  // Un solo plan — siempre BASICO
+  const initialPlan: PlanId = 'BASICO';
 
   const [formData, setFormData] = useState<RegistrationRequestDTO>({
     email:         '',
@@ -169,23 +168,16 @@ export function Register() {
             <div className="flex-1 h-px bg-border/60" />
           </div>
 
-          {/* Plan */}
-          <Field label="Plan de suscripción" htmlFor="plan">
-            <select
-              id="plan"
-              value={formData.planId}
-              onChange={(e) => setFormData({ ...formData, planId: e.target.value as PlanId })}
-              className={selectCls}
-            >
-              <option value="BASICO">Básico — S/ 49.99/mes</option>
-              <option value="PRO">Pro — S/ 99.99/mes</option>
-            </select>
-            <p className="text-xs text-muted-foreground mt-1">
-              {formData.planId === 'BASICO'
-                ? '✓ Hasta 5 usuarios · 500 productos · OC, Recepciones, Ventas'
-                : '✓ Hasta 10 usuarios · Productos ilimitados · Facturación · RBAC completo'}
-            </p>
-          </Field>
+          {/* Plan — único */}
+          <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Plan Básico</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Todo incluido · POS, inventario, compras, facturación, reportes y más
+              </p>
+            </div>
+            <p className="text-sm font-bold text-primary shrink-0">S/ 150<span className="font-normal text-muted-foreground">/mes</span></p>
+          </div>
 
           {/* Separador */}
           <div className="flex items-center gap-2 pt-1">

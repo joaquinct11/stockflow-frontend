@@ -11,6 +11,7 @@ interface AuthState {
   logout: () => void;
   initialize: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** Actualiza el estado de suscripción sin necesidad de refrescar el JWT */
   setSuscripcionEstado: (estado: string) => void;
 }
 

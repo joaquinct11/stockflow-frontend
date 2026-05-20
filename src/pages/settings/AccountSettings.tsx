@@ -85,8 +85,8 @@ export function AccountSettings() {
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 500 * 1024) {
-      toast.error('El logo no puede superar 500 KB');
+    if (file.size > 2.5 * 1024 * 1024) {
+      toast.error('El logo no puede superar 2.5 MB');
       return;
     }
     const reader = new FileReader();
@@ -221,7 +221,7 @@ export function AccountSettings() {
                         <Upload size={14} className="mr-2" />
                         {logoPreview ? 'Cambiar logo' : 'Subir logo'}
                       </Button>
-                      <p className="text-xs text-muted-foreground">PNG, JPG · Máx. 500 KB</p>
+                      <p className="text-xs text-muted-foreground">PNG, JPG · Máx. 2.5 MB</p>
                     </div>
                     <input
                       ref={fileInputRef}

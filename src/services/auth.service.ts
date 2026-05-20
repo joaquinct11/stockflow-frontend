@@ -124,6 +124,17 @@ export const authService = {
   },
 
   /**
+   * Activar cuenta de usuario nuevo (link de bienvenida enviado por el admin)
+   */
+  activarCuenta: async (request: ResetPasswordRequest): Promise<{ mensaje: string }> => {
+    const { data } = await axiosInstance.post<{ mensaje: string }>(
+      API_ENDPOINTS.AUTH.ACTIVATE_ACCOUNT,
+      request
+    );
+    return data;
+  },
+
+  /**
    * Refrescar tokens
    * Usa el refreshToken para obtener nuevos accessToken + refreshToken
    */

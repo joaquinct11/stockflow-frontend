@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { movimientoService } from '../../services/movimiento.service';
+import type { LoteVencimientoDTO } from '../../services/movimiento.service';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { proveedorService } from '../../services/proveedor.service';
@@ -30,6 +31,7 @@ import {
   FileSpreadsheet,
   FileDown,
   Upload,
+  FlaskConical,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -62,6 +64,15 @@ export function InventarioList() {
   const [kardexTipoFilter, setKardexTipoFilter] = useState<string>('TODOS');
   const [kardexDesde, setKardexDesde] = useState('');
   const [kardexHasta, setKardexHasta] = useState('');
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'stock' | 'lotes'>('stock');
+
+  // Lotes
+  const [lotes, setLotes] = useState<LoteVencimientoDTO[]>([]);
+  const [lotesLoading, setLotesLoading] = useState(false);
+  const [lotesFiltro, setLotesFiltro] = useState<'todos' | 'vencidos' | 'proximos30' | 'proximos90'>('todos');
+  const [lotesSearch, setLotesSearch] = useState('');
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -100,6 +111,16 @@ export function InventarioList() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  useEffect(() => {
+    if (activeTab === 'lotes' && hasViewPermission) {
+      setLotesLoading(true);
+      movimientoService.getLotes()
+        .then(setLotes)
+        .catch(() => toast.error('Error al cargar lotes'))
+        .finally(() => setLotesLoading(false));
+    }
+  }, [activeTab, hasViewPermission]);
 
   const fetchFormData = async () => {
     try {
@@ -151,7 +172,7 @@ export function InventarioList() {
   const productosOptions = productos.map((p) => ({
     id: p.id!,
     label: `${p.nombre}`,
-    subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoria || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
+    subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoriaNombre || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
   }));
 
   const openKardex = async (producto: ProductoDTO) => {
@@ -302,7 +323,7 @@ export function InventarioList() {
     (p) =>
       p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.categoria?.toLowerCase().includes(searchTerm.toLowerCase()),
+      p.categoriaNombre?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
@@ -314,6 +335,25 @@ export function InventarioList() {
     bajoStock:  productos.filter((p) => p.stockActual <= p.stockMinimo).length,
     valor:      productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0),
   }), [productos]);
+
+  const lotesFiltrados = useMemo(() => {
+    return lotes.filter((l) => {
+      // filtro de estado
+      if (lotesFiltro === 'vencidos'   && l.diasRestantes >= 0)  return false;
+      if (lotesFiltro === 'proximos30' && (l.diasRestantes < 0 || l.diasRestantes > 30))  return false;
+      if (lotesFiltro === 'proximos90' && (l.diasRestantes < 0 || l.diasRestantes > 90))  return false;
+      // filtro de texto
+      if (lotesSearch) {
+        const q = lotesSearch.toLowerCase();
+        return (
+          l.productoNombre.toLowerCase().includes(q) ||
+          (l.lote?.toLowerCase().includes(q) ?? false) ||
+          (l.codigoBarras?.toLowerCase().includes(q) ?? false)
+        );
+      }
+      return true;
+    });
+  }, [lotes, lotesFiltro, lotesSearch]);
 
   if (loading) return <LoadingSpinner />;
 
@@ -422,105 +462,285 @@ export function InventarioList() {
         />
       ) : (
         <>
-          {/* Search (mismo estilo que Proveedores/Productos: CardContent pt-6 + icono) */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar producto por nombre, código o categoría..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </CardContent>
-          </Card>
+          {/* ── Tabs de navegación ── */}
+          <div className="flex gap-1 border-b">
+            {([
+              { key: 'stock',  label: 'Stock',  icon: <Package className="h-4 w-4" /> },
+              { key: 'lotes',  label: 'Lotes',  icon: <FlaskConical className="h-4 w-4" /> },
+            ] as const).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={[
+                  'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+                  activeTab === tab.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                ].join(' ')}
+              >
+                {tab.icon}
+                {tab.label}
+                {tab.key === 'lotes' && lotes.filter(l => l.diasRestantes !== null && l.diasRestantes <= 30).length > 0 && (
+                  <span className="ml-1 rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
+                    {lotes.filter(l => l.diasRestantes <= 30).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
 
-          {/* Products table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Productos</CardTitle>
-              <CardDescription>
-                {filteredProductos.length} producto(s) — haz clic en <Eye className="inline h-3 w-3" /> para ver el detalle
-                (Kardex)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {filteredProductos.length === 0 ? (
-                <EmptyState title="Sin productos" description="No se encontraron productos con ese criterio de búsqueda" />
-              ) : (
-                <>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Producto</TableHead>
-                          <TableHead>Categoría</TableHead>
-                          <TableHead>Unidad</TableHead>
-                          <TableHead className="text-center">Stock Actual</TableHead>
-                          <TableHead className="text-right">Costo Unit.</TableHead>
-                          <TableHead className="text-right">Precio Venta</TableHead>
-                          <TableHead className="text-right">Ver detalle</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {currentProductos.map((producto) => (
-                          <TableRow key={producto.id}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium">{producto.nombre}</p>
-                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                  <Package className="h-3 w-3" />
-                                  {producto.codigoBarras || 'Sin código'}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">{producto.categoria || '-'}</TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
-                              {unidadById.get(producto.unidadMedidaId)?.nombre || '-'}
-                            </TableCell>
-                            <TableCell className="text-center font-semibold">
-                              <span
-                                className={
-                                  producto.stockActual <= producto.stockMinimo ? 'text-red-600' : 'text-green-700'
-                                }
-                              >
-                                {producto.stockActual}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right text-muted-foreground text-sm">
-                              S/.{producto.costoUnitario.toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-right text-muted-foreground text-sm">
-                              S/.{producto.precioVenta.toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openKardex(producto)}
-                                title="Ver detalle (Kardex)"
-                              >
-                                <Eye className="h-4 w-4 text-blue-600" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+          {/* ── Tab Stock ── */}
+          {activeTab === 'stock' && (
+            <>
+              {/* Search */}
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar producto por nombre, código o categoría..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-8"
+                    />
                   </div>
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={setCurrentPage}
-                    totalItems={filteredProductos.length}
-                    itemsPerPage={itemsPerPage}
+                </CardContent>
+              </Card>
+
+              {/* Products table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Productos</CardTitle>
+                  <CardDescription>
+                    {filteredProductos.length} producto(s) — haz clic en <Eye className="inline h-3 w-3" /> para ver el detalle
+                    (Kardex)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {filteredProductos.length === 0 ? (
+                    <EmptyState title="Sin productos" description="No se encontraron productos con ese criterio de búsqueda" />
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Producto</TableHead>
+                              <TableHead>Categoría</TableHead>
+                              <TableHead>Unidad</TableHead>
+                              <TableHead className="text-center">Stock Actual</TableHead>
+                              <TableHead className="text-right">Costo Unit.</TableHead>
+                              <TableHead className="text-right">Precio Venta</TableHead>
+                              <TableHead className="text-right">Ver detalle</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {currentProductos.map((producto) => (
+                              <TableRow key={producto.id}>
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium">{producto.nombre}</p>
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                      <Package className="h-3 w-3" />
+                                      {producto.codigoBarras || 'Sin código'}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground text-sm">{producto.categoriaNombre || '-'}</TableCell>
+                                <TableCell className="text-muted-foreground text-sm">
+                                  {unidadById.get(producto.unidadMedidaId)?.nombre || '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-semibold">
+                                  <span
+                                    className={
+                                      producto.stockActual <= producto.stockMinimo ? 'text-red-600' : 'text-green-700'
+                                    }
+                                  >
+                                    {producto.stockActual}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground text-sm">
+                                  S/.{producto.costoUnitario.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground text-sm">
+                                  S/.{producto.precioVenta.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openKardex(producto)}
+                                    title="Ver detalle (Kardex)"
+                                  >
+                                    <Eye className="h-4 w-4 text-blue-600" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                        totalItems={filteredProductos.length}
+                        itemsPerPage={itemsPerPage}
+                      />
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* ── Tab Lotes ── */}
+          {activeTab === 'lotes' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FlaskConical className="h-5 w-5 text-primary" />
+                  Lotes y Vencimientos
+                </CardTitle>
+                <CardDescription>
+                  Movimientos de entrada con fecha de vencimiento registrada
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Filtros */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex flex-wrap gap-1">
+                    {([
+                      { key: 'todos',      label: 'Todos' },
+                      { key: 'vencidos',   label: 'Vencidos' },
+                      { key: 'proximos30', label: 'Próx. 30 días' },
+                      { key: 'proximos90', label: 'Próx. 90 días' },
+                    ] as const).map((f) => (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => setLotesFiltro(f.key)}
+                        className={[
+                          'px-3 py-1 rounded-md text-xs font-medium border transition',
+                          lotesFiltro === f.key
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-input bg-background text-muted-foreground hover:text-foreground',
+                        ].join(' ')}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative sm:ml-auto sm:w-64">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar producto o lote..."
+                      value={lotesSearch}
+                      onChange={(e) => setLotesSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                </div>
+
+                {lotesLoading ? (
+                  <LoadingSpinner />
+                ) : lotesFiltrados.length === 0 ? (
+                  <EmptyState
+                    icon={FlaskConical}
+                    title="Sin lotes"
+                    description={
+                      lotesFiltro === 'todos'
+                        ? 'No hay movimientos de entrada con fecha de vencimiento registrada'
+                        : 'No hay lotes que coincidan con el filtro seleccionado'
+                    }
                   />
-                </>
-              )}
-            </CardContent>
-          </Card>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      {lotesFiltrados.length} de {lotes.length} registros
+                    </p>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Producto</TableHead>
+                            <TableHead>Lote</TableHead>
+                            <TableHead>Fecha venc.</TableHead>
+                            <TableHead className="text-center">Cant. recibida</TableHead>
+                            <TableHead className="text-center">Días restantes</TableHead>
+                            <TableHead className="text-center">Estado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {lotesFiltrados.map((l) => {
+                            const dias = l.diasRestantes;
+                            const vencido    = dias < 0;
+                            const critico    = !vencido && dias <= 7;
+                            const proximo30  = !vencido && dias <= 30;
+                            const proximo90  = !vencido && dias <= 90;
+
+                            const estadoBadge = vencido
+                              ? <Badge variant="destructive">Vencido</Badge>
+                              : critico
+                              ? <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">Crítico</span>
+                              : proximo30
+                              ? <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">Próx. 30d</span>
+                              : proximo90
+                              ? <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20">Próx. 90d</span>
+                              : <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">Vigente</span>;
+
+                            const rowBg = vencido
+                              ? 'bg-red-500/5'
+                              : critico
+                              ? 'bg-red-500/5'
+                              : proximo30
+                              ? 'bg-amber-500/5'
+                              : '';
+
+                            return (
+                              <TableRow key={l.movimientoId} className={rowBg}>
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium text-sm">{l.productoNombre}</p>
+                                    {l.codigoBarras && (
+                                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                        <Package className="h-3 w-3" />
+                                        {l.codigoBarras}
+                                      </p>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-sm font-mono">
+                                  {l.lote || <span className="text-muted-foreground text-xs italic">Sin lote</span>}
+                                </TableCell>
+                                <TableCell className="text-sm whitespace-nowrap">
+                                  {new Date(l.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-PE', {
+                                    day: '2-digit', month: 'short', year: 'numeric',
+                                  })}
+                                </TableCell>
+                                <TableCell className="text-center text-sm font-semibold">
+                                  {l.cantidad}
+                                </TableCell>
+                                <TableCell className="text-center text-sm font-semibold">
+                                  <span className={vencido ? 'text-red-600' : critico ? 'text-red-500' : proximo30 ? 'text-amber-600' : 'text-emerald-600'}>
+                                    {vencido ? `Hace ${Math.abs(dias)} días` : `${dias} días`}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {estadoBadge}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 

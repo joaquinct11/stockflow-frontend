@@ -15,7 +15,9 @@ export type Module =
   | 'CONFIGURACION'
   | 'FACTURACION'
   | 'COMPRAS'
-  | 'RECEPCIONES';
+  | 'RECEPCIONES'
+  | 'CLIENTES'
+  | 'GASTOS';
 
 type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 
@@ -100,6 +102,21 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
     ver_todas: 'VER_RECEPCIONES',
     crear: 'CREAR_RECEPCION',
     editar: 'CONFIRMAR_RECEPCION',
+  },
+  CLIENTES: {
+    ver: 'VER_CLIENTES',
+    ver_todas: 'VER_CLIENTES',
+    crear: 'CREAR_CLIENTE',
+    editar: 'EDITAR_CLIENTE',
+    eliminar: 'ELIMINAR_CLIENTE',
+    cambiarEstado: 'CAMBIAR_ESTADO_CLIENTE',
+  },
+  GASTOS: {
+    ver: 'VER_GASTOS',
+    ver_todas: 'VER_GASTOS',
+    crear: 'CREAR_GASTO',
+    editar: 'EDITAR_GASTO',
+    eliminar: 'ELIMINAR_GASTO',
   },
 };
 
@@ -194,6 +211,20 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     GERENTE: ['ver', 'editar'],
     VENDEDOR: ['ver'],
     GESTOR_INVENTARIO: ['ver'],
+  },
+
+  CLIENTES: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'cambiarEstado', 'ver'],
+    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
+    VENDEDOR: ['crear', 'editar', 'ver'],
+    GESTOR_INVENTARIO: [],
+  },
+
+  GASTOS: {
+    ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: [],
   },
 };
 

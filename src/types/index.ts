@@ -100,8 +100,6 @@ export interface ProductoDTO {
   id?: number;
   nombre: string;
   codigoBarras: string;
-  /** @deprecated Usar categoriaId en su lugar. Mantenido para backward compat. */
-  categoria?: string;
   categoriaId?: number;
   /** Solo lectura — nombre de la categoría devuelta por el backend. */
   categoriaNombre?: string;
@@ -134,6 +132,11 @@ export interface VentaDTO {
   tenantId: string;
   createdAt?: string;
   cajaId?: number;
+  notaCreditoCodigo?: string;
+  descuentoNotaCredito?: number;
+  notaCreditoId?: number;
+  clienteId?: number;
+  clienteNombre?: string;
   detalles: DetalleVentaDTO[];
 }
 
@@ -144,6 +147,77 @@ export interface DetalleVentaDTO {
   cantidad: number;
   precioUnitario: number;
   subtotal?: number;
+}
+
+// ========================================
+// DEVOLUCIONES
+// ========================================
+
+export interface DevolucionDetalleItemDTO {
+  productoId: number;
+  cantidadDevuelta: number;
+  precioUnitario: number;
+}
+
+export interface CrearDevolucionDTO {
+  ventaId: number;
+  motivo: string;
+  observaciones?: string;
+  reponerStock: boolean;
+  detalles: DevolucionDetalleItemDTO[];
+}
+
+export interface DevolucionDetalleRespDTO {
+  productoId: number;
+  productoNombre: string;
+  cantidadDevuelta: number;
+  precioUnitario: number;
+  subtotal: number;
+}
+
+export interface DevolucionDTO {
+  id: number;
+  ventaId: number;
+  tenantId: string;
+  usuarioNombre: string;
+  motivo: string;
+  observaciones?: string;
+  totalDevuelto: number;
+  reponerStock: boolean;
+  estado: string;
+  fechaDevolucion: string;
+  detalles: DevolucionDetalleRespDTO[];
+  // Nota de credito generada automaticamente
+  notaCreditoCodigo?: string;
+  montoNotaCredito?: number;
+  fechaVencimientoNc?: string;
+}
+
+// ========================================
+// NOTAS DE CREDITO
+// ========================================
+
+export interface NotaCreditoDTO {
+  id: number;
+  codigo: string;
+  devolucionId: number;
+  ventaOrigenId?: number;
+  montoTotal: number;
+  estado: 'PENDIENTE' | 'USADA' | 'ANULADA';
+  fechaEmision: string;
+  fechaVencimiento: string;
+  fechaUso?: string;
+  ventaUsoId?: number;
+  tenantId?: string;
+}
+
+export interface ValidarNotaCreditoResponseDTO {
+  codigo: string;
+  montoTotal: number;
+  estado: string;
+  fechaVencimiento: string;
+  valida: boolean;
+  mensaje: string;
 }
 
 // ========================================
@@ -189,6 +263,8 @@ export interface SuscripcionEstadoResponseDTO {
   preapprovalId?: string;
   mpPaymentId?: string;
   fechaProximoCobro?: string;
+  /** Precio mensual real del plan desde BD */
+  precioMensual?: number;
 }
 
 // ========================================
@@ -595,6 +671,21 @@ export interface InventarioSlowMoverDTO {
 // CAJA (Cuadre de caja)
 // ========================================
 
+export interface RetiroCajaDTO {
+  id: number;
+  cajaId: number;
+  usuarioId: number;
+  usuarioNombre: string;
+  monto: number;
+  motivo: string | null;
+  fecha: string;
+}
+
+export interface RegistrarRetiroDTO {
+  monto: number;
+  motivo?: string;
+}
+
 export interface CajaDTO {
   id: number;
   tenantId: string;
@@ -606,6 +697,8 @@ export interface CajaDTO {
   totalYapePlin: number | null;
   totalIngresos: number | null;
   cantidadVentas: number;
+  totalRetiros: number | null;
+  retiros: RetiroCajaDTO[];
   montoContado: number | null;
   diferencia: number | null;
   estado: 'ABIERTA' | 'CERRADA';
@@ -640,6 +733,64 @@ export interface ComprasPorProveedorDTO {
   recepcionesCount: number;    // ← campo real del backend
   unidadesRecibidas: number;   // ← campo real del backend
   montoEstimado: number | null;
+}
+
+// ── Financiero (P&L) ──────────────────────────────────────────────────────────
+export interface GastoCategoriaDTO {
+  categoria: string;
+  monto: number;
+  porcentaje: number;
+  count: number;
+}
+
+export interface FinancieroDTO {
+  desde: string;
+  hasta: string;
+  ingresosVentas: number;
+  ventasCount: number;
+  costoVentas: number;
+  utilidadBruta: number;
+  margenBruto: number | null;    // % sobre ingresos; null si ingresos=0
+  gastosTotales: number;
+  gastosCount: number;
+  gastosPorCategoria: GastoCategoriaDTO[];
+  utilidadNeta: number;
+  margenNeto: number | null;     // % sobre ingresos; null si ingresos=0
+}
+
+// ── Vencimientos en riesgo ────────────────────────────────────────────────────
+export interface LoteRiesgoDetalleDTO {
+  productoId: number;
+  productoNombre: string;
+  lote: string | null;
+  fechaVencimiento: string; // yyyy-MM-dd
+  diasRestantes: number;    // negativo = ya vencido
+  cantidad: number;
+  costoUnitario: number | null;
+  valorRiesgo: number | null;
+}
+
+export interface VencimientosRiesgoDTO {
+  capitalVencido: number;
+  lotesVencidos: number;
+  capitalRiesgo7d: number;
+  lotesRiesgo7d: number;
+  capitalRiesgo30d: number;
+  lotesRiesgo30d: number;
+  capitalRiesgo90d: number;
+  lotesRiesgo90d: number;
+  totalCapitalCritico: number;
+  lotesUrgentes: LoteRiesgoDetalleDTO[];
+}
+
+// ── Top clientes ──────────────────────────────────────────────────────────────
+export interface ClienteReporteDTO {
+  clienteId: number;
+  clienteNombre: string;
+  ventasCount: number;
+  totalComprado: number;
+  ticketPromedio: number;
+  ultimaCompra: string | null; // ISO datetime
 }
 
 // ========================================

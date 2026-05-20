@@ -36,7 +36,6 @@ import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 
-type EstadoProductoFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
 
 export function ProductosList() {
   const { canCreate, canEdit, canDelete, canView } = usePermissions();
@@ -60,7 +59,6 @@ export function ProductosList() {
   const [savingCategoria, setSavingCategoria] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [estadoFilter, setEstadoFilter] = useState<EstadoProductoFilter>('TODOS');
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -105,7 +103,7 @@ export function ProductosList() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, estadoFilter]);
+  }, [searchTerm]);
 
   const fetchUnidades = async () => {
     try {
@@ -297,20 +295,14 @@ export function ProductosList() {
     }
   };
 
-  // ✅ Filtrado: búsqueda + estado
+  // Filtrado por búsqueda
   const filteredProductos = productos.filter((p) => {
     const q = searchTerm.toLowerCase();
-    const matchesSearch =
+    return (
       p.nombre.toLowerCase().includes(q) ||
       p.codigoBarras?.toLowerCase().includes(q) ||
-      p.categoriaNombre?.toLowerCase().includes(q) ||
-      p.categoria?.toLowerCase().includes(q); // backward compat
-
-    if (!matchesSearch) return false;
-
-    if (estadoFilter === 'ACTIVOS') return p.activo;
-    if (estadoFilter === 'INACTIVOS') return !p.activo;
-    return true;
+      p.categoriaNombre?.toLowerCase().includes(q)
+    );
   });
 
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
@@ -425,71 +417,19 @@ export function ProductosList() {
             </Card>
           </div>
 
-          {/* Search + filtro estado */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por nombre, código de barras o categoría..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-
-                <div className="sm:w-[320px]">
-                  <div
-                    className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
-                    role="tablist"
-                    aria-label="Filtrar productos por estado"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setEstadoFilter('TODOS')}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition
-                        ${
-                          estadoFilter === 'TODOS'
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      aria-pressed={estadoFilter === 'TODOS'}
-                    >
-                      Todos
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEstadoFilter('ACTIVOS')}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition flex items-center justify-center gap-2
-                        ${
-                          estadoFilter === 'ACTIVOS'
-                            ? 'bg-green-600 text-white shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      aria-pressed={estadoFilter === 'ACTIVOS'}
-                      title="Mostrar solo productos activos"
-                    >
-                      <span className="h-2 w-2 rounded-full bg-green-500" />
-                      Activos
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEstadoFilter('INACTIVOS')}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition flex items-center justify-center gap-2
-                        ${
-                          estadoFilter === 'INACTIVOS'
-                            ? 'bg-red-600 text-white shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      aria-pressed={estadoFilter === 'INACTIVOS'}
-                      title="Mostrar solo productos inactivos"
-                    >
-                      <span className="h-2 w-2 rounded-full bg-red-500" />
-                      Inactivos
-                    </button>
+          {/* Búsqueda */}
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      placeholder="Buscar por nombre, código de barras o categoría..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-9 h-10"
+                    />
                   </div>
                 </div>
               </div>
@@ -497,7 +437,7 @@ export function ProductosList() {
           </Card>
 
           {/* Table */}
-          <Card>
+          <Card className="border-0 shadow-sm">
             <CardHeader>
               <CardTitle>Lista de Productos</CardTitle>
               <CardDescription>{filteredProductos.length} producto(s) encontrado(s)</CardDescription>
@@ -507,10 +447,10 @@ export function ProductosList() {
                 <EmptyState title="No hay productos" description="Comienza agregando tu primer producto al inventario" />
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border">
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
                           <TableHead>Producto</TableHead>
                           <TableHead>Código</TableHead>
                           <TableHead>Categoría</TableHead>
@@ -537,7 +477,7 @@ export function ProductosList() {
                               <TableCell className="font-mono text-sm">{producto.codigoBarras}</TableCell>
                               <TableCell>
                                 <Badge variant="outline">
-                                  {producto.categoriaNombre || producto.categoria || '-'}
+                                  {producto.categoriaNombre || '-'}
                                 </Badge>
                               </TableCell>
                               <TableCell>

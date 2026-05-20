@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ScanLine, X, Plus, Minus, Trash2, ShoppingCart,
   Banknote, CreditCard, Smartphone, CheckCircle2,
-  ArrowLeft, Package, RotateCcw, Loader2, Search, Wallet, Lock,
+  ArrowLeft, Package, RotateCcw, Loader2, Search, Wallet, Lock, Tag, User, UserPlus,
+  Camera, CameraOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productoService } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
 import { cajaService } from '../../services/caja.service';
+import { notaCreditoService } from '../../services/notaCredito.service';
+import { clienteService } from '../../services/cliente.service';
+import type { ClienteDTO } from '../../services/cliente.service';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
-import type { ProductoDTO, DetalleVentaDTO, CajaDTO } from '../../types';
+import type { ProductoDTO, DetalleVentaDTO, CajaDTO, ValidarNotaCreditoResponseDTO } from '../../types';
 
 // ── Tipos locales ──────────────────────────────────────────────────────────────
 
@@ -34,6 +38,7 @@ const METODOS: { id: MetodoPago; label: string; icon: React.ElementType }[] = [
 
 export function POSPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const { config: negocio } = useTenantConfigStore();
 
@@ -52,6 +57,22 @@ export function POSPage() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [mobileTab, setMobileTab] = useState<'productos' | 'carrito'>('productos');
 
+  // ── Estado de nota de credito ─────────────────────────────────────────
+  const [ncCodigo, setNcCodigo] = useState('');
+  const [ncInfo, setNcInfo] = useState<ValidarNotaCreditoResponseDTO | null>(null);
+  const [ncLoading, setNcLoading] = useState(false);
+
+  // ── Estado de cliente ─────────────────────────────────────────────────
+  const [clienteQuery, setClienteQuery] = useState('');
+  const [clienteResultados, setClienteResultados] = useState<ClienteDTO[]>([]);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteDTO | null>(null);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [showRegistrarCliente, setShowRegistrarCliente] = useState(false);
+  const [nuevoClienteForm, setNuevoClienteForm] = useState({
+    nombre: '', tipoDocumento: 'DNI', numeroDocumento: '',
+  });
+  const [guardandoCliente, setGuardandoCliente] = useState(false);
+
   // ── Estado de caja ────────────────────────────────────────────────────
   const [cajaActiva, setCajaActiva] = useState<CajaDTO | null>(null);
   const [checkingCaja, setCheckingCaja] = useState(true);
@@ -62,15 +83,67 @@ export function POSPage() {
   const [montoCierre, setMontoCierre] = useState('');
   const [cerrando, setCerrando] = useState(false);
 
+  // ── Estado de cámara ─────────────────────────────────────────────────
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const resultadosRef = useRef<HTMLDivElement>(null);
   const barcodeBuffer = useRef('');
   const barcodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cartPreloadedRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
   // ── Cargar todos los productos al montar ──────────────────────────────────
   useEffect(() => {
     productoService.getAll().then(setTodosProductos).catch(() => {});
   }, []);
+
+  // ── Precargar carrito desde venta anulada (via navigate state) ────────────
+  useEffect(() => {
+    const ventaOrigen = location.state?.cargarVenta;
+    if (cartPreloadedRef.current || !ventaOrigen || todosProductos.length === 0) return;
+    cartPreloadedRef.current = true;
+
+    const items: CartItem[] = [];
+    const sinStock: string[] = [];
+    const noEncontrados: string[] = [];
+
+    for (const detalle of ventaOrigen.detalles ?? []) {
+      const producto = todosProductos.find((p: ProductoDTO) => p.id === detalle.productoId);
+      if (!producto) {
+        noEncontrados.push(detalle.productoNombre || `#${detalle.productoId}`);
+        continue;
+      }
+      if ((producto.stockActual ?? 0) <= 0) {
+        sinStock.push(producto.nombre);
+        continue;
+      }
+      items.push({
+        producto,
+        cantidad: Math.min(detalle.cantidad, producto.stockActual ?? 1),
+        precioUnitario: detalle.precioUnitario,
+      });
+    }
+
+    if (items.length > 0) {
+      setCart(items);
+      toast.success(`Carrito precargado con ${items.length} producto(s) de la Venta #${ventaOrigen.id}`);
+    }
+    if (sinStock.length > 0) {
+      toast.error(`Sin stock: ${sinStock.join(', ')}`);
+    }
+    if (noEncontrados.length > 0) {
+      toast.error(`Productos no encontrados: ${noEncontrados.join(', ')}`);
+    }
+
+    // Limpiar el state para no recargar si el usuario vuelve
+    window.history.replaceState({}, '');
+  }, [todosProductos, location.state]);
 
   // ── Verificar caja activa al montar ───────────────────────────────────────
   useEffect(() => {
@@ -231,6 +304,74 @@ export function POSPage() {
     }
   }, [todosProductos]);
 
+  // ── Escáner de cámara ────────────────────────────────────────────────────
+  const stopCamera = useCallback(() => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setShowCameraScanner(false);
+    setCameraError(null);
+  }, []);
+
+  const openCamera = useCallback(async () => {
+    setCameraError(null);
+    setShowCameraScanner(true);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      if (!('BarcodeDetector' in window)) {
+        setCameraError('Tu navegador no soporta escaneo automático. Usa Chrome en Android o escribe el código manualmente.');
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detector = new (window as any).BarcodeDetector({
+        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'qr_code', 'upc_a', 'upc_e', 'itf'],
+      });
+
+      scanIntervalRef.current = setInterval(async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes.length > 0) {
+            const code: string = barcodes[0].rawValue;
+            stopCamera();
+            buscarPorCodigo(code);
+          }
+        } catch {
+          // ignore individual frame errors
+        }
+      }, 250);
+
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')) {
+        setCameraError('Permiso de cámara denegado. Habilítalo en la configuración del navegador.');
+      } else if (msg.toLowerCase().includes('notfound') || msg.toLowerCase().includes('devicenotfound')) {
+        setCameraError('No se encontró ninguna cámara en este dispositivo.');
+      } else {
+        setCameraError('No se pudo acceder a la cámara. Verifica los permisos.');
+      }
+    }
+  }, [stopCamera, buscarPorCodigo]);
+
+  // Limpiar cámara al desmontar
+  useEffect(() => () => stopCamera(), [stopCamera]);
+
   // ── Carrito ───────────────────────────────────────────────────────────────
   const agregarAlCarrito = (producto: ProductoDTO, switchToCart = false) => {
     if ((producto.stockActual ?? 0) <= 0) {
@@ -282,7 +423,9 @@ export function POSPage() {
   };
 
   // ── Totales ───────────────────────────────────────────────────────────────
-  const total = cart.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0);
+  const subtotalCarrito = cart.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0);
+  const descuentoNc = ncInfo?.valida ? Math.min(ncInfo.montoTotal, subtotalCarrito) : 0;
+  const total = Math.max(0, subtotalCarrito - descuentoNc);
   const moneda = negocio?.moneda ?? 'S/.';
   const fmt = (n: number) => `${moneda} ${n.toFixed(2)}`;
 
@@ -325,6 +468,93 @@ export function POSPage() {
     }
   };
 
+  // ── Nota de crédito ───────────────────────────────────────────────────────
+  const handleValidarNc = async () => {
+    if (!ncCodigo) return;
+    setNcLoading(true);
+    try {
+      const result = await notaCreditoService.validar(ncCodigo);
+      setNcInfo(result);
+      if (!result.valida) {
+        toast.error(result.mensaje);
+      } else {
+        toast.success(`Nota de crédito válida: ${moneda} ${result.montoTotal.toFixed(2)}`);
+      }
+    } catch {
+      toast.error('Error al validar la nota de crédito');
+    } finally {
+      setNcLoading(false);
+    }
+  };
+
+  const quitarNc = () => {
+    setNcCodigo('');
+    setNcInfo(null);
+  };
+
+  // ── Búsqueda de clientes (debounce 300 ms) ────────────────────────────────
+  useEffect(() => {
+    if (clienteSeleccionado) return; // ya hay uno seleccionado, no buscar
+    const q = clienteQuery.trim();
+    if (!q) { setClienteResultados([]); setShowRegistrarCliente(false); return; }
+    setBuscandoCliente(true);
+    const t = setTimeout(async () => {
+      try {
+        // Si parece DNI/RUC (sólo dígitos) usamos buscarPorDocumento, si no search por nombre
+        const resultados = /^\d+$/.test(q)
+          ? await clienteService.buscarPorDocumento(q)
+          : await clienteService.search(q);
+        setClienteResultados(resultados);
+        setShowRegistrarCliente(resultados.length === 0);
+        // Pre-llenar el formulario de registro con el query si parece documento
+        if (resultados.length === 0 && /^\d+$/.test(q)) {
+          setNuevoClienteForm(prev => ({ ...prev, numeroDocumento: q }));
+        }
+      } catch {
+        setClienteResultados([]);
+      } finally {
+        setBuscandoCliente(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [clienteQuery, clienteSeleccionado]);
+
+  const seleccionarCliente = (c: ClienteDTO) => {
+    setClienteSeleccionado(c);
+    setClienteQuery('');
+    setClienteResultados([]);
+    setShowRegistrarCliente(false);
+  };
+
+  const quitarCliente = () => {
+    setClienteSeleccionado(null);
+    setClienteQuery('');
+    setClienteResultados([]);
+    setShowRegistrarCliente(false);
+    setNuevoClienteForm({ nombre: '', tipoDocumento: 'DNI', numeroDocumento: '' });
+  };
+
+  const handleRegistrarCliente = async () => {
+    if (!nuevoClienteForm.nombre.trim()) {
+      toast.error('El nombre del cliente es requerido');
+      return;
+    }
+    setGuardandoCliente(true);
+    try {
+      const creado = await clienteService.create({
+        nombre: nuevoClienteForm.nombre.trim(),
+        tipoDocumento: nuevoClienteForm.tipoDocumento || undefined,
+        numeroDocumento: nuevoClienteForm.numeroDocumento.trim() || undefined,
+      });
+      seleccionarCliente(creado);
+      toast.success(`Cliente "${creado.nombre}" registrado`);
+    } catch {
+      toast.error('Error al registrar el cliente');
+    } finally {
+      setGuardandoCliente(false);
+    }
+  };
+
   // ── Cobrar ────────────────────────────────────────────────────────────────
   const cobrar = async () => {
     if (cart.length === 0) return;
@@ -346,14 +576,19 @@ export function POSPage() {
 
       const venta = await ventaService.create({
         vendedorId: user!.usuarioId,
-        total,
+        total: subtotalCarrito, // backend recalcula con NC
         metodoPago,
         estado: 'COMPLETADA',
         cajaId: cajaActiva?.id,
+        notaCreditoCodigo: ncInfo?.valida ? ncCodigo : undefined,
+        clienteId: clienteSeleccionado?.id,
         detalles,
       });
 
       setUltimaVentaId(venta.id ?? null);
+      // Reset NC state
+      setNcCodigo('');
+      setNcInfo(null);
       setStep('exito');
     } catch {
       toast.error('Error al registrar la venta');
@@ -369,6 +604,9 @@ export function POSPage() {
     setMontoPagado('');
     setMetodoPago('EFECTIVO');
     setUltimaVentaId(null);
+    setNcCodigo('');
+    setNcInfo(null);
+    quitarCliente();
     setStep('venta');
   };
 
@@ -554,8 +792,8 @@ export function POSPage() {
 
       {/* ── Pantalla de cobro ───────────────────────────────────────────── */}
       {step === 'cobro' && (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6 w-full max-w-md space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 flex justify-center">
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6 w-full max-w-md space-y-5 h-fit my-auto">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">Cobrar</h2>
               <button onClick={() => setStep('venta')} className="text-gray-500 hover:text-white">
@@ -606,6 +844,172 @@ export function POSPage() {
                 })}
               </div>
             </div>
+
+            {/* Cliente (opcional) */}
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                <User size={11} /> Cliente (opcional)
+              </p>
+
+              {/* Cliente ya seleccionado */}
+              {clienteSeleccionado ? (
+                <div className="flex items-center gap-2 bg-blue-900/30 border border-blue-700/50 rounded-lg px-3 py-2">
+                  <User size={14} className="text-blue-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{clienteSeleccionado.nombre}</p>
+                    {clienteSeleccionado.numeroDocumento && (
+                      <p className="text-xs text-blue-300">{clienteSeleccionado.tipoDocumento} {clienteSeleccionado.numeroDocumento}</p>
+                    )}
+                  </div>
+                  <button type="button" onClick={quitarCliente} className="text-gray-500 hover:text-white flex-shrink-0">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Input búsqueda cliente */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="DNI, RUC o nombre del cliente..."
+                      value={clienteQuery}
+                      onChange={e => { setClienteQuery(e.target.value); setShowRegistrarCliente(false); }}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600 pr-8"
+                    />
+                    {buscandoCliente && (
+                      <Loader2 size={13} className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    )}
+                  </div>
+
+                  {/* Resultados dropdown */}
+                  {clienteResultados.length > 0 && (
+                    <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-700/50">
+                      {clienteResultados.slice(0, 5).map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => seleccionarCliente(c)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-700 transition-colors text-left"
+                        >
+                          <User size={14} className="text-gray-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{c.nombre}</p>
+                            {c.numeroDocumento && (
+                              <p className="text-xs text-gray-500">{c.tipoDocumento} {c.numeroDocumento}</p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No encontrado → formulario de registro rápido */}
+                  {showRegistrarCliente && clienteQuery.trim() && (
+                    <div className="bg-gray-800 border border-dashed border-gray-600 rounded-lg p-3 space-y-2">
+                      <p className="text-xs text-amber-400 flex items-center gap-1.5">
+                        <UserPlus size={12} /> Cliente no encontrado — registrar
+                      </p>
+                      <input
+                        type="text"
+                        placeholder="Nombre completo *"
+                        value={nuevoClienteForm.nombre}
+                        onChange={e => setNuevoClienteForm(f => ({ ...f, nombre: e.target.value }))}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-500"
+                      />
+                      <div className="flex gap-2">
+                        <select
+                          value={nuevoClienteForm.tipoDocumento}
+                          onChange={e => setNuevoClienteForm(f => ({ ...f, tipoDocumento: e.target.value }))}
+                          className="bg-gray-700 border border-gray-600 rounded-md px-2 py-2 text-sm focus:outline-none focus:border-primary text-white w-24 flex-shrink-0"
+                        >
+                          <option value="DNI">DNI</option>
+                          <option value="RUC">RUC</option>
+                          <option value="CE">CE</option>
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Nro. documento"
+                          value={nuevoClienteForm.numeroDocumento}
+                          onChange={e => setNuevoClienteForm(f => ({ ...f, numeroDocumento: e.target.value }))}
+                          className="flex-1 bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-500"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRegistrarCliente}
+                        disabled={guardandoCliente || !nuevoClienteForm.nombre.trim()}
+                        className="w-full py-2 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+                      >
+                        {guardandoCliente ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                        Registrar y seleccionar
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Nota de Crédito (opcional) */}
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Tag size={11} /> Nota de Crédito (opcional)
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="NC-2026-00001"
+                  value={ncCodigo}
+                  onChange={e => { setNcCodigo(e.target.value.toUpperCase()); setNcInfo(null); }}
+                  onKeyDown={e => e.key === 'Enter' && handleValidarNc()}
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handleValidarNc}
+                  disabled={!ncCodigo || ncLoading}
+                  className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-sm font-medium transition-colors flex items-center gap-1.5"
+                >
+                  {ncLoading ? <Loader2 size={13} className="animate-spin" /> : 'Aplicar'}
+                </button>
+                {ncInfo && (
+                  <button
+                    type="button"
+                    onClick={quitarNc}
+                    className="px-2 py-2 rounded-lg border border-gray-700 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {ncInfo && ncInfo.valida && (
+                <div className="rounded-lg bg-green-900/30 border border-green-700/50 px-3 py-2 text-sm text-green-400">
+                  Nota válida — Descuento: {fmt(ncInfo.montoTotal)}
+                </div>
+              )}
+              {ncInfo && !ncInfo.valida && (
+                <div className="rounded-lg bg-red-900/30 border border-red-700/50 px-3 py-2 text-sm text-red-400">
+                  {ncInfo.mensaje}
+                </div>
+              )}
+            </div>
+
+            {/* Resumen con descuento NC */}
+            {ncInfo?.valida && (
+              <div className="bg-gray-800 rounded-xl px-4 py-3 space-y-1">
+                <div className="flex justify-between text-sm text-gray-400">
+                  <span>Subtotal</span>
+                  <span>{fmt(subtotalCarrito)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Descuento NC</span>
+                  <span>- {fmt(descuentoNc)}</span>
+                </div>
+                <div className="border-t border-gray-700 pt-1.5 flex justify-between items-baseline">
+                  <span className="text-gray-300 font-medium text-sm">Total a pagar</span>
+                  <span className="text-2xl font-bold text-white">{fmt(total)}</span>
+                </div>
+              </div>
+            )}
 
             {/* Monto pagado (solo efectivo) */}
             {metodoPago === 'EFECTIVO' && (
@@ -658,19 +1062,31 @@ export function POSPage() {
           <div className="hidden lg:flex flex-1 flex-col border-r border-gray-800 min-w-0">
             {/* Input búsqueda */}
             <div className="p-3 border-b border-gray-800">
-              <div className="relative">
-                <ScanLine size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  onKeyDown={handleInputKeyDown}
-                  placeholder="Escanea código de barras o escribe el nombre del producto..."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-primary placeholder-gray-600"
-                  autoComplete="off"
-                />
-                {buscando && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <ScanLine size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    onKeyDown={handleInputKeyDown}
+                    placeholder="Escanea código de barras o escribe el nombre del producto..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-primary placeholder-gray-600"
+                    autoComplete="off"
+                  />
+                  {buscando && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
+                </div>
+                {hasCamera && (
+                  <button
+                    type="button"
+                    onClick={openCamera}
+                    title="Escanear con cámara"
+                    className="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-800 border border-gray-700 hover:border-primary hover:text-primary text-gray-400 transition-colors flex-shrink-0"
+                  >
+                    <Camera size={16} />
+                  </button>
+                )}
               </div>
             </div>
             {/* Resultados */}
@@ -823,19 +1239,31 @@ export function POSPage() {
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Input búsqueda */}
                 <div className="p-3 border-b border-gray-800">
-                  <div className="relative">
-                    <ScanLine size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={query}
-                      onChange={e => setQuery(e.target.value)}
-                      onKeyDown={handleInputKeyDown}
-                      placeholder="Nombre o código de barras..."
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:border-primary placeholder-gray-600"
-                      autoComplete="off"
-                    />
-                    {buscando && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <ScanLine size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={query}
+                        onChange={e => setQuery(e.target.value)}
+                        onKeyDown={handleInputKeyDown}
+                        placeholder="Nombre o código de barras..."
+                        className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:border-primary placeholder-gray-600"
+                        autoComplete="off"
+                      />
+                      {buscando && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
+                    </div>
+                    {hasCamera && (
+                      <button
+                        type="button"
+                        onClick={openCamera}
+                        title="Escanear con cámara"
+                        className="flex items-center justify-center w-12 h-12 rounded-xl bg-gray-800 border border-gray-700 hover:border-primary hover:text-primary text-gray-400 active:bg-gray-700 transition-colors flex-shrink-0"
+                      >
+                        <Camera size={20} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 {/* Resultados búsqueda */}
@@ -978,6 +1406,104 @@ export function POSPage() {
             )}
           </div>
 
+        </div>
+      )}
+
+      {/* ── Modal: Escáner de cámara ───────────────────────────────────── */}
+      {showCameraScanner && (
+        <div className="fixed inset-0 z-[60] bg-black flex flex-col">
+          <style>{`
+            @keyframes scanline { 0%,100% { top: 15%; } 50% { top: 80%; } }
+            .animate-scanline { animation: scanline 2s ease-in-out infinite; }
+          `}</style>
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-black/90 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Camera size={18} className="text-primary" />
+              <span className="text-sm font-semibold">Escanear código de barras</span>
+            </div>
+            <button
+              type="button"
+              onClick={stopCamera}
+              className="p-2 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Visor de cámara */}
+          <div className="flex-1 relative overflow-hidden">
+            <video
+              ref={videoRef}
+              className="absolute inset-0 w-full h-full object-cover"
+              playsInline
+              muted
+              autoPlay
+            />
+
+            {!cameraError && (
+              <>
+                {/* Oscurecimiento lateral (4 franjas alrededor del recuadro) */}
+                <div className="absolute inset-0 flex flex-col pointer-events-none">
+                  <div className="flex-1 bg-black/55" />
+                  <div className="flex" style={{ height: 256 }}>
+                    <div className="flex-1 bg-black/55" />
+                    <div style={{ width: 256 }} />
+                    <div className="flex-1 bg-black/55" />
+                  </div>
+                  <div className="flex-1 bg-black/55" />
+                </div>
+
+                {/* Recuadro de escaneo */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="relative" style={{ width: 256, height: 256 }}>
+                    {/* Esquinas */}
+                    <div className="absolute top-0 left-0 w-9 h-9 border-t-[3px] border-l-[3px] border-primary rounded-tl" />
+                    <div className="absolute top-0 right-0 w-9 h-9 border-t-[3px] border-r-[3px] border-primary rounded-tr" />
+                    <div className="absolute bottom-0 left-0 w-9 h-9 border-b-[3px] border-l-[3px] border-primary rounded-bl" />
+                    <div className="absolute bottom-0 right-0 w-9 h-9 border-b-[3px] border-r-[3px] border-primary rounded-br" />
+                    {/* Línea de escaneo */}
+                    <div
+                      className="absolute left-3 right-3 h-0.5 bg-primary/80 animate-scanline shadow-[0_0_6px_theme(colors.primary)]"
+                      style={{ top: '15%' }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Error */}
+            {cameraError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-8">
+                <div className="text-center space-y-4 max-w-xs">
+                  <CameraOff size={44} className="mx-auto text-red-400" />
+                  <p className="text-sm text-gray-300 leading-relaxed">{cameraError}</p>
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="mt-2 px-6 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-sm font-medium transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {!cameraError && (
+            <div className="flex-shrink-0 bg-black/90 px-4 py-4 flex flex-col items-center gap-3">
+              <p className="text-xs text-gray-500">Apunta la cámara al código de barras del producto</p>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="px-10 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-sm font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -6,25 +6,29 @@ export function Breadcrumb() {
   const pathnames = location.pathname.split('/').filter((x) => x);
 
   const breadcrumbNameMap: Record<string, string> = {
-    dashboard:    'Dashboard',
-    productos:    'Productos',
-    ventas:       'Ventas',
-    usuarios:     'Usuarios',
-    suscripciones:'Suscripciones',
-    inventario:   'Inventario',
-    reportes:     'Reportes',
-    configuracion:'Configuración',
-    proveedores:  'Proveedores',
-    facturacion:  'Facturación',
-    compras:      'Compras',
-    ordenes:      'Órdenes de compra',
-    recepciones:  'Recepciones',
-    kardex:       'Kardex',
-    perfil:       'Mi Perfil',
-    admin:        'Administración',
-    permisos:     'Permisos',
-    caja:         'Caja',
+    dashboard:       'Dashboard',
+    productos:       'Productos',
+    ventas:          'Ventas',
+    usuarios:        'Usuarios',
+    suscripciones:   'Suscripciones',
+    inventario:      'Inventario',
+    reportes:        'Reportes',
+    configuracion:   'Configuración',
+    proveedores:     'Proveedores',
+    clientes:        'Clientes',
+    facturacion:     'Facturación',
+    ordenes:         'Órdenes de Compra',
+    recepciones:     'Recepciones',
+    kardex:          'Kardex',
+    perfil:          'Mi Perfil',
+    permisos:        'Gestión de Permisos',
+    caja:            'Caja',
+    'notas-credito': 'Notas de Crédito',
+    gastos:          'Gastos y Egresos',
   };
+
+  // Segmentos que son solo agrupadores de ruta y no deben aparecer en el breadcrumb
+  const hiddenSegments = new Set(['compras', 'admin']);
 
   return (
     <nav className="flex items-center space-x-1 text-sm text-muted-foreground mb-4 overflow-x-auto scrollbar-none min-w-0">
@@ -39,9 +43,9 @@ export function Breadcrumb() {
         const to = `/${pathnames.slice(0, index + 1).join('/')}`;
         const name = breadcrumbNameMap[value] || value;
 
-        // Solo salta 'dashboard' si hay más segmentos después (ej: /dashboard/productos)
-        // Si es la ruta final (/dashboard), sí lo muestra
+        // Ocultar dashboard cuando hay más segmentos, y ocultar segmentos agrupadores
         if (value === 'dashboard' && index === 0 && pathnames.length > 1) return null;
+        if (hiddenSegments.has(value)) return null;
 
         return (
           <div key={to} className="flex items-center">

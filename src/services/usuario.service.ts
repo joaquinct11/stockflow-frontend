@@ -89,4 +89,11 @@ export const usuarioService = {
   eliminarCuentaCompleta: async (id: number): Promise<void> => {
     await axiosInstance.delete(API_ENDPOINTS.USUARIOS.DELETE_CUENTA_COMPLETA(id));
   },
+
+  /**
+   * Reenviar email de activación (cuando el link de 48h expiró)
+   */
+  reenviarActivacion: async (id: number): Promise<void> => {
+    await axiosInstance.post(API_ENDPOINTS.USUARIOS.REENVIAR_ACTIVACION(id));
+  },
 };

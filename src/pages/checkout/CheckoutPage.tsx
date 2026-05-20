@@ -15,13 +15,13 @@ type PaidPlanId = PlanId;
 const PLAN_DETAILS: Record<PaidPlanId, { name: string; price: number; description: string }> = {
   BASICO: {
     name: 'Básico',
-    price: 49.99,
-    description: 'Hasta 5 usuarios, 500 productos y reportes avanzados.',
+    price: 150,
+    description: 'Todo incluido: POS, inventario, compras, facturación, roles y reportes sin límite.',
   },
   PRO: {
-    name: 'Pro',
-    price: 99.99,
-    description: 'Hasta 10 usuarios, productos ilimitados, facturación electrónica y RBAC completo.',
+    name: 'Básico',
+    price: 150,
+    description: 'Todo incluido: POS, inventario, compras, facturación, roles y reportes sin límite.',
   },
 };
 
@@ -66,7 +66,8 @@ export function CheckoutPage() {
   });
 
   const planParam = searchParams.get('plan');
-  const plan = (planParam === 'BASICO' || planParam === 'PRO' ? planParam : null) as PaidPlanId | null;
+  // Siempre usar BASICO — hay un solo plan
+  const plan = (planParam === 'BASICO' || planParam === 'PRO' ? 'BASICO' : null) as PaidPlanId | null;
 
   const returnStatus = useMemo<ReturnStatus | null>(() => {
     const status = searchParams.get('status');
