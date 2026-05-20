@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
@@ -28,12 +28,10 @@ const selectCls =
 export function Register() {
   const navigate = useNavigate();
   const { setUser } = useAuthStore();
-  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const planFromUrl = searchParams.get('plan');
-  // Un solo plan — siempre BASICO independientemente del parámetro
+  // Un solo plan — siempre BASICO
   const initialPlan: PlanId = 'BASICO';
 
   const [formData, setFormData] = useState<RegistrationRequestDTO>({
