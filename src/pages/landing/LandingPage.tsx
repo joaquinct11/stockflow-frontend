@@ -27,7 +27,7 @@ export function LandingPage() {
           <ul className="landing-nav-links">
             <li><a href="#features">Módulos</a></li>
             <li><a href="#para-quien">¿Para quién?</a></li>
-            <li><a href="#pricing">Precios</a></li>
+            <li><a href="#pricing">Precio</a></li>
           </ul>
 
           <div className="landing-nav-actions">
@@ -176,7 +176,7 @@ export function LandingPage() {
               <div className="landing-flow-number">4</div>
               <div className="landing-flow-content">
                 <h4>Factura a SUNAT</h4>
-                <p>Emite boleta o factura con validez tributaria. CDR oficial incluido en el plan Pro.</p>
+                <p>Emite boleta o factura con validez tributaria. CDR oficial incluido.</p>
               </div>
             </div>
           </div>
@@ -256,8 +256,8 @@ export function LandingPage() {
               <div className="landing-feature-icon">🧾</div>
               <h3 className="landing-feature-title">Facturación electrónica</h3>
               <p className="landing-feature-desc">
-                Emite boletas y facturas desde cada venta. El plan Pro incluye envío
-                automático a SUNAT via OSE con CDR oficial y descarga del XML.
+                Emite boletas y facturas desde cada venta con envío automático
+                a SUNAT via OSE, CDR oficial y descarga del XML y PDF.
               </p>
             </div>
 
@@ -320,76 +320,43 @@ export function LandingPage() {
       <section className="landing-section landing-pricing" id="pricing">
         <div className="landing-container">
           <div className="landing-section-header">
-            <span className="landing-section-label">Precios</span>
-            <h2 className="landing-section-title">Dos planes, sin letra chica</h2>
+            <span className="landing-section-label">Precio</span>
+            <h2 className="landing-section-title">Un solo plan, todo incluido</h2>
             <p className="landing-section-subtitle">
-              14 días de prueba incluidos en ambos planes. Sin tarjeta hasta que decidas quedarte.
+              Sin versión recortada. Sin sorpresas. Todo lo que necesita tu negocio desde el primer día.
             </p>
           </div>
 
-          <div className="landing-pricing-grid landing-pricing-grid-2">
-
-            {/* BÁSICO */}
-            <div className="landing-pricing-card">
-              <div className="landing-pricing-plan">Básico</div>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div className="landing-pricing-card featured" style={{ maxWidth: '480px', width: '100%' }}>
+              <div className="landing-pricing-badge">✅ Todo incluido</div>
+              <div className="landing-pricing-plan">Plan Básico</div>
               <div className="landing-pricing-price">
-                <span>S/</span>49.99<sub>/mes</sub>
+                <span>S/</span>150<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
-                Gestión completa de tu negocio: ventas, inventario, caja y comprobantes internos.
+                14 días de prueba gratuita. Sin tarjeta hasta que decidas quedarte. Cancela cuando quieras.
               </p>
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
-                <li><span className="check">✓</span> Hasta 500 productos</li>
-                <li><span className="check">✓</span> Hasta 3 usuarios</li>
-                <li><span className="check">✓</span> <strong>POS</strong> con caja integrada</li>
-                <li><span className="check">✓</span> Inventario + alertas de stock mínimo</li>
-                <li><span className="check">✓</span> Compras y recepciones</li>
-                <li><span className="check">✓</span> Ventas (efectivo, tarjeta, Yape/Plin)</li>
-                <li><span className="check">✓</span> Devoluciones y notas de crédito</li>
-                <li><span className="check">✓</span> Facturación — boletas y facturas <em>en el sistema</em></li>
-                <li><span className="check">✓</span> Reportes últimos 30 días</li>
-                <li><span className="check">✓</span> 2 roles (Admin + Vendedor)</li>
-                <li><span className="cross">✗</span> <strong>Envío a SUNAT</strong> (sin validez tributaria)</li>
-                <li><span className="cross">✗</span> Roles avanzados y permisos granulares</li>
-                <li><span className="cross">✗</span> Reportes históricos sin límite</li>
-                <li><span className="cross">✗</span> Control de lotes y vencimientos</li>
+                <li><span className="check">✓</span> <strong>POS</strong> con caja integrada (efectivo, tarjeta, Yape/Plin)</li>
+                <li><span className="check">✓</span> Inventario en tiempo real con alertas de stock mínimo</li>
+                <li><span className="check">✓</span> Control de lotes y fechas de vencimiento</li>
+                <li><span className="check">✓</span> Órdenes de compra y recepciones a proveedores</li>
+                <li><span className="check">✓</span> Devoluciones y notas de crédito aplicables en POS</li>
+                <li><span className="check">✓</span> Facturación electrónica: boletas y facturas</li>
+                <li><span className="check">✓</span> <strong>🏛 Envío a SUNAT via OSE</strong> con CDR oficial</li>
+                <li><span className="check">✓</span> Reportes históricos sin límite de fecha</li>
+                <li><span className="check">✓</span> Exportación a Excel y PDF</li>
+                <li><span className="check">✓</span> 4 roles: Admin, Gerente, Vendedor, Gestor Inventario</li>
+                <li><span className="check">✓</span> Permisos granulares por módulo y acción</li>
+                <li><span className="check">✓</span> Hasta 10 usuarios</li>
+                <li><span className="check">✓</span> Soporte por WhatsApp en español</li>
               </ul>
-              <Link to="/register?plan=BASICO" className="landing-pricing-cta outline">
+              <Link to="/register?plan=BASICO" className="landing-pricing-cta primary">
                 Probar 14 días gratis
               </Link>
             </div>
-
-            {/* PRO */}
-            <div className="landing-pricing-card featured">
-              <div className="landing-pricing-badge">⭐ Recomendado</div>
-              <div className="landing-pricing-plan">Pro</div>
-              <div className="landing-pricing-price">
-                <span>S/</span>99.99<sub>/mes</sub>
-              </div>
-              <p className="landing-pricing-description">
-                Todo el control del Básico más <strong>facturación con validez tributaria ante SUNAT</strong>.
-              </p>
-              <div className="landing-pricing-divider" />
-              <ul className="landing-pricing-features">
-                <li><span className="check">✓</span> Productos ilimitados</li>
-                <li><span className="check">✓</span> Hasta 10 usuarios</li>
-                <li><span className="check">✓</span> Todo lo del plan Básico</li>
-                <li><span className="check">✓</span> <strong>🏛 Envío a SUNAT via OSE</strong> (CDR oficial)</li>
-                <li><span className="check">✓</span> <strong>Descarga de XML y PDF oficial</strong></li>
-                <li><span className="check">✓</span> <strong>4 roles completos</strong>: Admin, Gerente, Vendedor, Gestor Inventario</li>
-                <li><span className="check">✓</span> <strong>Permisos granulares</strong> por módulo y acción</li>
-                <li><span className="check">✓</span> Reportes históricos sin límite de fecha</li>
-                <li><span className="check">✓</span> Control de lotes y fechas de vencimiento</li>
-                <li><span className="check">✓</span> Alertas de vencimiento próximo</li>
-                <li><span className="check">✓</span> Exportación Excel y PDF de reportes</li>
-                <li><span className="check">✓</span> Soporte prioritario por WhatsApp</li>
-              </ul>
-              <Link to="/register?plan=PRO" className="landing-pricing-cta primary">
-                Probar Pro 14 días gratis
-              </Link>
-            </div>
-
           </div>
 
           <p className="landing-pricing-note">
@@ -442,7 +409,7 @@ export function LandingPage() {
             <ul>
               <li><a href="#features">Módulos</a></li>
               <li><a href="#para-quien">¿Para quién?</a></li>
-              <li><a href="#pricing">Precios</a></li>
+              <li><a href="#pricing">Precio</a></li>
               <li><Link to="/register?plan=BASICO">Crear cuenta</Link></li>
             </ul>
           </div>

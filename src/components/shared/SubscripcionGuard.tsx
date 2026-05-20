@@ -15,23 +15,19 @@ export function SubscripcionGuard({ children }: SubscripcionGuardProps) {
   const navigate = useNavigate();
 
   const rol = user?.rol;
+  const esAdmin = rol === 'ADMIN';
   const estadoRaw = suscripcionEstado ?? user?.suscripcion?.estado ?? '';
   const trialEndDate = user?.suscripcion?.trialEndDate as string | undefined;
   const preapprovalId = user?.suscripcion?.preapprovalId;
   const trialVencidoClientSide = estadoRaw === 'TRIAL' && !!trialEndDate && new Date(trialEndDate) < new Date();
   const estado = trialVencidoClientSide ? 'PENDIENTE' : estadoRaw;
-  const planId = user?.suscripcion?.planId ?? '';
-  const puedeReintentar = planId === 'BASICO' || planId === 'PRO';
+  const planId = user?.suscripcion?.planId ?? 'BASICO';
+  const puedeReintentar = esAdmin;
 
   // Trial vencido: backend aún en TRIAL con fecha pasada, O ya cambió a PENDIENTE sin preapprovalId
   const esTrialVencido =
     trialVencidoClientSide ||
     (estadoRaw === 'PENDIENTE' && !preapprovalId && !!trialEndDate && new Date(trialEndDate) < new Date());
-
-  // Usuarios no-ADMIN nunca son bloqueados por suscripción
-  if (rol !== 'ADMIN') {
-    return <>{children}</>;
-  }
 
   // Trial activo — acceso completo + banner informativo pequeño
   if (estado === 'TRIAL') {
@@ -79,7 +75,9 @@ export function SubscripcionGuard({ children }: SubscripcionGuardProps) {
             <div className="space-y-2">
               <h2 className="text-xl font-semibold">Acceso restringido</h2>
               <p className="text-sm text-muted-foreground">
-                {estado === 'CANCELADA'
+                {!esAdmin
+                  ? 'La suscripción de tu empresa no está activa. Contacta al administrador para renovarla.'
+                  : estado === 'CANCELADA'
                   ? 'Tu suscripción fue cancelada. Reactívala para seguir usando este módulo.'
                   : estado === 'PENDIENTE' && esTrialVencido
                   ? 'Tu período de prueba venció. Activa tu suscripción para continuar usando el sistema.'

@@ -99,7 +99,7 @@ export const suscripcionService = {
   },
 
   /**
-   * Iniciar checkout de Mercado Pago para un plan pagado
+   * Iniciar checkout de Mercado Pago para el plan BASICO
    */
   checkout: async (
     planId: SuscripcionCheckoutRequestDTO['planId'],

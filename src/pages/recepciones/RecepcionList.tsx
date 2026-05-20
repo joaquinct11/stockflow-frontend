@@ -25,7 +25,7 @@ import {
   Plus, Inbox, Search, CheckCircle, Clock, Lock,
   PackagePlus, Save, Trash2, FileText, Building2,
   BadgeCheck, XCircle, Truck, AlertCircle, SlidersHorizontal, X,
-  Camera, CameraOff,
+  Camera, CameraOff, RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -151,11 +151,18 @@ export function RecepcionList() {
   const [selectedRecepId, setSelectedRecepId]     = useState<number | null>(null);
   const [selectedRecep, setSelectedRecep]         = useState<RecepcionDTO | null>(null);
 
-  // Add item
+  // Add item (formulario extra — solo para productos fuera de la OC)
   const [selectedProductoId, setSelectedProductoId] = useState<number | null>(null);
   const [itemQty, setItemQty]       = useState<number>(1);
   const [itemExpiry, setItemExpiry] = useState('');
   const [itemLote, setItemLote]     = useState('');
+  const [showAddProduct, setShowAddProduct] = useState(false);
+
+  // Edición inline de la tabla de productos
+  const [editQty, setEditQty]           = useState<Record<number, number>>({});
+  const [editVenc, setEditVenc]         = useState<Record<number, string>>({});
+  const [editLote, setEditLote]         = useState<Record<number, string>>({});
+  const [savingItemId, setSavingItemId] = useState<number | null>(null);
 
   // Comprobante
   const [compTipo, setCompTipo]   = useState<TipoComprobanteProveedor>('FACTURA');
@@ -371,9 +378,77 @@ export function RecepcionList() {
     setSelectedRecep(rec);
   };
 
+  // Sincronizar edición inline cuando cambian los items
+  useEffect(() => {
+    if (!selectedRecep) return;
+    const initQty: Record<number, number> = {};
+    const initVenc: Record<number, string> = {};
+    const initLote: Record<number, string> = {};
+    for (const it of selectedRecep.items ?? []) {
+      initQty[it.productoId]  = it.cantidadRecibida ?? 0;
+      initVenc[it.productoId] = it.fechaVencimiento ?? '';
+      initLote[it.productoId] = it.lote ?? '';
+    }
+    setEditQty(initQty);
+    setEditVenc(initVenc);
+    setEditLote(initLote);
+  }, [selectedRecep]);
+
   const closeDetail = () => {
     setIsDetailOpen(false); setSelectedRecepId(null); setSelectedRecep(null);
     setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote('');
+    setShowAddProduct(false); setEditQty({}); setEditVenc({}); setEditLote({});
+  };
+
+  // Guardar cantidad inline de una fila de la tabla
+  const handleInlineSave = async (item: RecepcionItemDTO) => {
+    if (!selectedRecep?.id) return;
+    const qty  = editQty[item.productoId]  ?? item.cantidadRecibida ?? 0;
+    const venc = editVenc[item.productoId] ?? item.fechaVencimiento ?? '';
+    const lote = editLote[item.productoId] ?? item.lote ?? '';
+    setSavingItemId(item.productoId);
+    try {
+      await recepcionService.upsertItem(selectedRecep.id, {
+        productoId: item.productoId,
+        cantidadRecibida: qty,
+        fechaVencimiento: venc || undefined,
+        lote: lote || undefined,
+      });
+      await refreshDetail();
+      toast.success('Producto actualizado');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.mensaje ?? 'Error al actualizar');
+    } finally { setSavingItemId(null); }
+  };
+
+  // Restablecer fila a cantidad 0 sin vencimiento ni lote (requiere guardar para persistir)
+  const handleInlineReset = (item: RecepcionItemDTO) => {
+    setEditQty(prev  => ({ ...prev,  [item.productoId]: 0 }));
+    setEditVenc(prev => ({ ...prev,  [item.productoId]: '' }));
+    setEditLote(prev => ({ ...prev,  [item.productoId]: '' }));
+  };
+
+  // Marcar todos los productos como completamente recibidos (qty = esperado)
+  const handleRecibirTodo = async () => {
+    if (!selectedRecep?.id) return;
+    const items = selectedRecep.items ?? [];
+    const conEsperado = items.filter(it => (it.cantidadEsperada ?? 0) > 0);
+    if (conEsperado.length === 0) return;
+    setDetailActionLoading(true);
+    try {
+      await Promise.all(conEsperado.map(it =>
+        recepcionService.upsertItem(selectedRecep.id!, {
+          productoId: it.productoId,
+          cantidadRecibida: it.cantidadEsperada!,
+          fechaVencimiento: it.fechaVencimiento || undefined,
+          lote: it.lote || undefined,
+        })
+      ));
+      await refreshDetail();
+      toast.success('✅ Todas las cantidades actualizadas al total esperado');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.mensaje ?? 'Error');
+    } finally { setDetailActionLoading(false); }
   };
 
   const isEditable = selectedRecep?.estado === 'BORRADOR';
@@ -480,17 +555,42 @@ export function RecepcionList() {
     setCameraError(null);
   }, []);
 
-  const buscarPorCodigoRecepcion = useCallback((codigo: string) => {
+  const buscarPorCodigoRecepcion = useCallback(async (codigo: string) => {
+    // 1. Si hay recepción abierta en BORRADOR, buscar el código entre sus items
+    const itemEnRecep = (selectedRecep?.items ?? []).find(
+      it => it.codigoBarras?.toLowerCase() === codigo.toLowerCase()
+    );
+    if (itemEnRecep && selectedRecep?.id) {
+      const nuevaQty = (itemEnRecep.cantidadRecibida ?? 0) + 1;
+      setSavingItemId(itemEnRecep.productoId);
+      try {
+        await recepcionService.upsertItem(selectedRecep.id, {
+          productoId: itemEnRecep.productoId,
+          cantidadRecibida: nuevaQty,
+          fechaVencimiento: itemEnRecep.fechaVencimiento || undefined,
+          lote: itemEnRecep.lote || undefined,
+        });
+        const updated = normalizeRecepcion(await recepcionService.getById(selectedRecep.id));
+        setSelectedRecep(updated);
+        toast.success(`+1 ${itemEnRecep.productoNombre} → ${nuevaQty} recibidos`);
+      } catch (e: any) {
+        toast.error(e?.response?.data?.mensaje ?? 'Error al actualizar');
+      } finally { setSavingItemId(null); }
+      return;
+    }
+
+    // 2. Buscar en catálogo (producto nuevo para esta recepción)
     const producto = productos.find(
       p => p.codigoBarras?.toLowerCase() === codigo.toLowerCase()
     );
     if (producto) {
       setSelectedProductoId(producto.id!);
-      toast.success(`Producto encontrado: ${producto.nombre}`);
+      setShowAddProduct(true);
+      toast.success(`${producto.nombre} — ajusta la cantidad y guarda`);
     } else {
-      toast.error(`Producto no encontrado: ${codigo}`);
+      toast.error(`Código no encontrado: ${codigo}`);
     }
-  }, [productos]);
+  }, [productos, selectedRecep]);
 
   const openCamera = useCallback(async () => {
     setCameraError(null);
@@ -996,9 +1096,36 @@ export function RecepcionList() {
 
             {/* ── Sección 1: Productos ── */}
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
-                <PackagePlus size={13} /> Productos recibidos
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <PackagePlus size={13} /> Productos recibidos
+                </p>
+                {isEditable && canEditRecep && (
+                  <div className="flex items-center gap-2">
+                    {hasCamera && (
+                      <button
+                        type="button"
+                        onClick={openCamera}
+                        title="Escanear código de barras"
+                        className="flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-input bg-background hover:border-primary hover:text-primary text-muted-foreground text-xs font-medium transition-colors"
+                      >
+                        <Camera size={13} /> Escanear
+                      </button>
+                    )}
+                    {itemsToShow.some(it => (it.cantidadEsperada ?? 0) > 0) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRecibirTodo}
+                        disabled={detailActionLoading}
+                        className="h-7 text-xs gap-1"
+                      >
+                        <CheckCircle size={12} /> Recibir todo
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -1007,6 +1134,7 @@ export function RecepcionList() {
                       <TableHead>Código</TableHead>
                       <TableHead className="text-center">Esperado</TableHead>
                       <TableHead className="text-center">Recibido</TableHead>
+                      <TableHead className="text-center">Estado</TableHead>
                       <TableHead>Vencimiento</TableHead>
                       <TableHead>Lote</TableHead>
                       {isEditable && canEditRecep && <TableHead />}
@@ -1015,42 +1143,177 @@ export function RecepcionList() {
                   <TableBody>
                     {itemsToShow.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                        <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-6">
                           Sin productos aún — agrega usando el formulario de abajo
                         </TableCell>
                       </TableRow>
-                    ) : itemsToShow.map((it, idx) => (
-                      <TableRow key={it.id ?? `${it.productoId}-${idx}`}>
-                        <TableCell className="font-medium">{it.productoNombre || `#${it.productoId}`}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{it.codigoBarras || '—'}</TableCell>
-                        <TableCell className="text-center text-muted-foreground">{it.cantidadEsperada ?? '—'}</TableCell>
-                        <TableCell className="text-center font-semibold text-green-600">{it.cantidadRecibida}</TableCell>
-                        <TableCell className="text-xs">{it.fechaVencimiento || '—'}</TableCell>
-                        <TableCell className="text-xs">{it.lote || '—'}</TableCell>
-                        {isEditable && canEditRecep && (
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost" size="sm"
-                              onClick={() => it.id && handleRemoveItem(it.id)}
-                              disabled={detailActionLoading || !it.id}
-                            >
-                              <Trash2 size={14} className="text-destructive" />
-                            </Button>
+                    ) : itemsToShow.map((it, idx) => {
+                      const esperado   = it.cantidadEsperada ?? 0;
+                      const recibido   = it.cantidadRecibida ?? 0;
+                      const esDeOC     = esperado > 0;
+                      // Para el badge usamos editQty (valor local en edición) para que
+                      // reaccione en tiempo real al +/− y restablecer funcione correctamente
+                      const qtyBadge = (isEditable && canEditRecep)
+                        ? (editQty[it.productoId] ?? recibido)
+                        : recibido;
+                      // Badge de estado
+                      let badge: { label: string; cls: string } | null = null;
+                      if (esDeOC) {
+                        if (qtyBadge === 0)            badge = { label: 'Sin recibir', cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' };
+                        else if (qtyBadge < esperado)  badge = { label: 'Parcial',     cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' };
+                        else if (qtyBadge === esperado) badge = { label: 'Completo',   cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' };
+                        else                            badge = { label: 'Extra',       cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' };
+                      }
+                      return (
+                        <TableRow key={it.id ?? `${it.productoId}-${idx}`}
+                          className={qtyBadge === 0 && esDeOC ? 'bg-red-50/40 dark:bg-red-950/10' : ''}>
+                          <TableCell className="font-medium">
+                            {it.productoNombre || `#${it.productoId}`}
+                            {esDeOC && (
+                              <span className="ml-1.5 text-[10px] text-blue-500 font-normal">OC</span>
+                            )}
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
+                          <TableCell className="text-xs text-muted-foreground">{it.codigoBarras || '—'}</TableCell>
+                          <TableCell className="text-center text-muted-foreground">{it.cantidadEsperada ?? '—'}</TableCell>
+                          <TableCell className="text-center">
+                            {isEditable && canEditRecep ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditQty(prev => ({ ...prev, [it.productoId]: Math.max(0, (prev[it.productoId] ?? 0) - 1) }))}
+                                  className="w-6 h-6 rounded border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary transition-colors font-bold leading-none"
+                                >−</button>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={editQty[it.productoId] ?? 0}
+                                  onChange={(e) => setEditQty(prev => ({ ...prev, [it.productoId]: Math.max(0, Number(e.target.value)) }))}
+                                  className="w-14 text-center text-sm font-semibold border rounded px-1 py-0.5 bg-background focus:outline-none focus:border-primary"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setEditQty(prev => ({ ...prev, [it.productoId]: (prev[it.productoId] ?? 0) + 1 }))}
+                                  className="w-6 h-6 rounded border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary transition-colors font-bold leading-none"
+                                >+</button>
+                              </div>
+                            ) : (
+                              <span className={`font-semibold ${recibido > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                                {recibido}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {badge ? (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>
+                                {badge.label}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditable && canEditRecep ? (
+                              <input
+                                type="date"
+                                value={editVenc[it.productoId] ?? ''}
+                                onChange={(e) => setEditVenc(prev => ({ ...prev, [it.productoId]: e.target.value }))}
+                                className="w-32 text-xs border rounded px-1.5 py-1 bg-background focus:outline-none focus:border-primary"
+                              />
+                            ) : (
+                              <span className="text-xs">{it.fechaVencimiento || '—'}</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditable && canEditRecep ? (
+                              <input
+                                type="text"
+                                value={editLote[it.productoId] ?? ''}
+                                onChange={(e) => setEditLote(prev => ({ ...prev, [it.productoId]: e.target.value }))}
+                                placeholder="Opc."
+                                className="w-20 text-xs border rounded px-1.5 py-1 bg-background focus:outline-none focus:border-primary"
+                              />
+                            ) : (
+                              <span className="text-xs">{it.lote || '—'}</span>
+                            )}
+                          </TableCell>
+                          {isEditable && canEditRecep && (
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost" size="sm"
+                                  onClick={() => handleInlineSave(it)}
+                                  disabled={savingItemId === it.productoId}
+                                  title="Guardar cambios"
+                                >
+                                  <Save size={14} className="text-primary" />
+                                </Button>
+                                <Button
+                                  variant="ghost" size="sm"
+                                  onClick={() => handleInlineReset(it)}
+                                  disabled={savingItemId === it.productoId}
+                                  title="Descartar cambios"
+                                >
+                                  <RotateCcw size={14} className="text-amber-500" />
+                                </Button>
+                                {/* Eliminar solo para productos agregados manualmente (no vienen de OC) */}
+                                {!esDeOC && (
+                                  <Button
+                                    variant="ghost" size="sm"
+                                    onClick={() => it.id && handleRemoveItem(it.id)}
+                                    disabled={detailActionLoading || !it.id}
+                                    title="Eliminar producto"
+                                  >
+                                    <Trash2 size={14} className="text-destructive" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Resumen de recepción */}
+              {itemsToShow.length > 0 && (() => {
+                const deOC = itemsToShow.filter(it => (it.cantidadEsperada ?? 0) > 0);
+                // En modo edición usar editQty para que el resumen refleje los cambios locales
+                const qty = (it: RecepcionItemDTO) =>
+                  (isEditable && canEditRecep)
+                    ? (editQty[it.productoId] ?? it.cantidadRecibida ?? 0)
+                    : (it.cantidadRecibida ?? 0);
+                const sinRecibir = deOC.filter(it => qty(it) === 0);
+                const parciales  = deOC.filter(it => qty(it) > 0 && qty(it) < (it.cantidadEsperada ?? 0));
+                const completos  = deOC.filter(it => qty(it) >= (it.cantidadEsperada ?? 0) && (it.cantidadEsperada ?? 0) > 0);
+                if (deOC.length === 0) return null;
+                return (
+                  <div className="flex flex-wrap items-center gap-3 px-1 pt-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{deOC.length} producto(s) de OC:</span>
+                    {completos.length > 0  && <span className="text-green-600 font-medium">✓ {completos.length} completo(s)</span>}
+                    {parciales.length > 0  && <span className="text-amber-600 font-medium">◑ {parciales.length} parcial(es)</span>}
+                    {sinRecibir.length > 0 && <span className="text-red-600 font-medium">✗ {sinRecibir.length} sin recibir</span>}
+                    {sinRecibir.length > 0 && isEditable && (
+                      <span className="text-muted-foreground italic">— deja en 0 si no llegaron, no los elimines</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* Agregar producto — solo BORRADOR */}
+            {/* Agregar producto adicional — solo BORRADOR */}
             {isEditable && canEditRecep && (
               <div className="rounded-lg border border-dashed p-3 space-y-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  + Registrar cantidad recibida
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowAddProduct(prev => !prev)}
+                  className="flex items-center gap-2 w-full text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors"
+                >
+                  <PackagePlus size={13} />
+                  {showAddProduct ? '▲ Ocultar formulario' : '▼ Agregar producto adicional'}
+                </button>
+                {showAddProduct && (
                 <div className="flex flex-wrap gap-2 items-end">
                   <div className="flex-1 min-w-[200px]">
                     <label className="text-xs text-muted-foreground mb-1 block">Producto</label>
@@ -1094,6 +1357,7 @@ export function RecepcionList() {
                     <PackagePlus size={14} className="mr-1" /> Guardar
                   </Button>
                 </div>
+                )}
               </div>
             )}
 

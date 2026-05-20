@@ -54,8 +54,9 @@ const CATEGORIA_COLORS: Record<CategoriaGasto, string> = {
   PUBLICIDAD:       'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20',
   TRANSPORTE:       'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
   IMPUESTOS:        'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
-  COMPRAS_INTERNAS: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20',
-  OTROS:            'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+  COMPRAS_INTERNAS:  'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20',
+  COMPRA_PROVEEDOR:  'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+  OTROS:             'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
 };
 
 const emptyForm: GastoDTO = {

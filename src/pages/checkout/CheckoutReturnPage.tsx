@@ -11,6 +11,10 @@ const MP_CHECKOUT_STATE_KEY = 'mp_checkout_state';
  * Captura las URLs /checkout/success, /checkout/failure y /checkout/pending,
  * llama a POST /suscripciones/sincronizar para consultar el estado real en MP,
  * actualiza el store ANTES de redirigir para evitar parpadeo de "acceso restringido".
+ *
+ * Flujos cubiertos:
+ *  1. Pago BÁSICO aprobado → ACTIVA → dashboard
+ *  2. Pago fallido → SUSPENDIDA/FALLIDA → dashboard con mensaje de error
  */
 export function CheckoutReturnPage() {
   const navigate = useNavigate();
@@ -36,8 +40,6 @@ export function CheckoutReturnPage() {
       localStorage.removeItem(MP_CHECKOUT_STATE_KEY);
 
       if (!cancelled) {
-        // Actualizar el store ANTES de navegar → el Dashboard y los Guards
-        // ya ven el estado correcto en el primer render, sin parpadeo de bloqueo.
         setSuscripcionEstado(billingEstado);
         navigate(`/dashboard?billing=${billingEstado}`, { replace: true });
       }

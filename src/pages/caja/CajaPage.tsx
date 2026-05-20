@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cajaService } from '../../services/caja.service';
-import type { CajaDTO, CerrarCajaDTO } from '../../types';
+import type { CajaDTO, CerrarCajaDTO, RegistrarRetiroDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -10,7 +10,7 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { Input } from '../../components/ui/Input';
 import {
   Wallet, TrendingUp, Banknote, CreditCard, Smartphone,
-  Lock, CheckCircle, Clock, Eye,
+  Lock, CheckCircle, Clock, Eye, ArrowDownLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -37,6 +37,11 @@ export function CajaPage() {
   const [cerrando, setCerrando] = useState(false);
   const [cerrarForm, setCerrarForm] = useState<CerrarCajaDTO>({ montoContado: 0, observaciones: '' });
 
+  // Retiro parcial
+  const [isRetiroOpen, setIsRetiroOpen] = useState(false);
+  const [retiroForm, setRetiroForm] = useState<RegistrarRetiroDTO>({ monto: 0, motivo: '' });
+  const [retirando, setRetirando] = useState(false);
+
   useEffect(() => {
     fetchCajas();
   }, []);
@@ -45,7 +50,6 @@ export function CajaPage() {
     try {
       setLoading(true);
       const data = await cajaService.getAll();
-      // Todos ven el historial completo del tenant (es la caja del negocio, no personal)
       setCajas(data);
     } catch {
       toast.error('Error al cargar el historial de caja');
@@ -65,6 +69,12 @@ export function CajaPage() {
     setIsCerrarOpen(true);
   };
 
+  const handleAbrirRetiro = (caja: CajaDTO) => {
+    setSelectedCaja(caja);
+    setRetiroForm({ monto: 0, motivo: '' });
+    setIsRetiroOpen(true);
+  };
+
   const handleCerrarCaja = async () => {
     if (!selectedCaja) return;
     if (cerrarForm.montoContado < 0) {
@@ -81,6 +91,25 @@ export function CajaPage() {
       toast.error(err?.response?.data?.mensaje || 'Error al cerrar la caja');
     } finally {
       setCerrando(false);
+    }
+  };
+
+  const handleRegistrarRetiro = async () => {
+    if (!selectedCaja) return;
+    if (!retiroForm.monto || retiroForm.monto <= 0) {
+      toast.error('El monto del retiro debe ser mayor a 0');
+      return;
+    }
+    try {
+      setRetirando(true);
+      await cajaService.registrarRetiro(selectedCaja.id, retiroForm);
+      toast.success(`Retiro de ${formatCurrency(retiroForm.monto)} registrado`);
+      setIsRetiroOpen(false);
+      await fetchCajas();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.mensaje || 'Error al registrar el retiro');
+    } finally {
+      setRetirando(false);
     }
   };
 
@@ -166,7 +195,7 @@ export function CajaPage() {
       {cajaActiva && metodosPago && (
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
                 <CardTitle className="text-base">Cuadre de sesión activa</CardTitle>
                 <CardDescription className="mt-0.5">
@@ -174,7 +203,18 @@ export function CajaPage() {
                   {' · '}Apertura: <span className="font-medium text-foreground">{formatDate(cajaActiva.fechaApertura)}</span>
                 </CardDescription>
               </div>
-              <Badge variant="warning"><Clock size={11} className="mr-1 inline" />ABIERTA</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="warning"><Clock size={11} className="mr-1 inline" />ABIERTA</Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-orange-600 border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                  onClick={() => handleAbrirRetiro(cajaActiva)}
+                >
+                  <ArrowDownLeft size={14} />
+                  Retiro parcial
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -195,7 +235,6 @@ export function CajaPage() {
                     <p className={`text-2xl font-bold font-mono ${color}`}>
                       {formatCurrency(monto)}
                     </p>
-                    {/* Progress bar */}
                     <div className="mt-3 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${bar}`}
@@ -207,14 +246,42 @@ export function CajaPage() {
               })}
             </div>
             {/* Total row */}
-            <div className="mt-4 flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
-              <span className="text-sm font-semibold flex items-center gap-2">
-                <Wallet size={15} className="text-muted-foreground" />
-                Total recaudado ({cajaActiva.cantidadVentas ?? 0} ventas)
-              </span>
-              <span className="font-mono font-bold text-lg text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(metodosPago.totalMonto)}
-              </span>
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
+                <span className="text-sm font-semibold flex items-center gap-2">
+                  <Wallet size={15} className="text-muted-foreground" />
+                  Total recaudado ({cajaActiva.cantidadVentas ?? 0} ventas)
+                </span>
+                <span className="font-mono font-bold text-lg text-emerald-600 dark:text-emerald-400">
+                  {formatCurrency(metodosPago.totalMonto)}
+                </span>
+              </div>
+              {/* Retiros */}
+              {(cajaActiva.totalRetiros ?? 0) > 0 && (
+                <div className="flex items-center justify-between rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 px-4 py-3">
+                  <span className="text-sm font-semibold flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                    <ArrowDownLeft size={15} />
+                    Retiros parciales ({cajaActiva.retiros?.length ?? 0})
+                  </span>
+                  <span className="font-mono font-bold text-lg text-orange-600 dark:text-orange-400">
+                    -{formatCurrency(cajaActiva.totalRetiros)}
+                  </span>
+                </div>
+              )}
+              {/* Efectivo esperado en caja */}
+              <div className="flex items-center justify-between rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 px-4 py-3">
+                <span className="text-sm font-semibold flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                  <Banknote size={15} />
+                  Efectivo esperado en caja
+                </span>
+                <span className="font-mono font-bold text-lg text-blue-600 dark:text-blue-400">
+                  {formatCurrency(
+                    (cajaActiva.montoApertura ?? 0) +
+                    (cajaActiva.totalEfectivo ?? 0) -
+                    (cajaActiva.totalRetiros ?? 0)
+                  )}
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -246,6 +313,7 @@ export function CajaPage() {
                     <TableHead className="text-right">Efectivo</TableHead>
                     <TableHead className="text-right">Tarjeta</TableHead>
                     <TableHead className="text-right">Yape/Plin</TableHead>
+                    <TableHead className="text-right">Retiros</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Diferencia</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
@@ -274,6 +342,9 @@ export function CajaPage() {
                         <TableCell className="text-right font-mono text-sm">{formatCurrency(caja.totalEfectivo)}</TableCell>
                         <TableCell className="text-right font-mono text-sm">{formatCurrency(caja.totalTarjeta)}</TableCell>
                         <TableCell className="text-right font-mono text-sm">{formatCurrency(caja.totalYapePlin)}</TableCell>
+                        <TableCell className="text-right font-mono text-sm text-orange-600">
+                          {(caja.totalRetiros ?? 0) > 0 ? `-${formatCurrency(caja.totalRetiros)}` : '-'}
+                        </TableCell>
                         <TableCell className="text-right font-mono text-sm font-semibold">{formatCurrency(caja.totalIngresos)}</TableCell>
                         <TableCell className={`text-right font-mono text-sm font-semibold ${diffColor}`}>
                           {diff == null ? '-' : (diff >= 0 ? '+' : '') + formatCurrency(diff)}
@@ -284,9 +355,19 @@ export function CajaPage() {
                               <Eye size={15} />
                             </Button>
                             {caja.estado === 'ABIERTA' && (
-                              <Button variant="ghost" size="icon" onClick={() => handleAbrirCerrar(caja)} title="Cerrar caja">
-                                <Lock size={15} className="text-destructive" />
-                              </Button>
+                              <>
+                                <Button
+                                  variant="ghost" size="icon"
+                                  onClick={() => handleAbrirRetiro(caja)}
+                                  title="Retiro parcial"
+                                  className="text-orange-500 hover:text-orange-700"
+                                >
+                                  <ArrowDownLeft size={15} />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleAbrirCerrar(caja)} title="Cerrar caja">
+                                  <Lock size={15} className="text-destructive" />
+                                </Button>
+                              </>
                             )}
                           </div>
                         </TableCell>
@@ -351,13 +432,47 @@ export function CajaPage() {
               </div>
             </div>
 
+            {/* Retiros parciales */}
+            {selectedCaja.retiros && selectedCaja.retiros.length > 0 && (
+              <div className="rounded-lg border border-orange-200 dark:border-orange-800 p-4 space-y-3 bg-orange-50/50 dark:bg-orange-950/10">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                    <ArrowDownLeft size={15} />
+                    Retiros parciales
+                  </p>
+                  <span className="text-sm font-mono font-bold text-orange-600">
+                    -{formatCurrency(selectedCaja.totalRetiros)}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {selectedCaja.retiros.map((r) => (
+                    <div key={r.id} className="flex items-start justify-between text-sm">
+                      <div>
+                        <p className="text-muted-foreground">{formatDate(r.fecha)}</p>
+                        {r.motivo && <p className="text-xs text-muted-foreground italic">{r.motivo}</p>}
+                      </div>
+                      <span className="font-mono font-medium text-orange-600 flex-shrink-0 ml-2">
+                        -{formatCurrency(r.monto)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {selectedCaja.estado === 'CERRADA' && (
               <div className="rounded-lg border p-4 space-y-3">
                 <p className="text-sm font-semibold">Cierre de caja</p>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Esperado en caja (apertura + efectivo)</span>
-                    <span className="font-mono">{formatCurrency((selectedCaja.montoApertura ?? 0) + (selectedCaja.totalEfectivo ?? 0))}</span>
+                    <span className="text-muted-foreground">Esperado en caja (apertura + efectivo - retiros)</span>
+                    <span className="font-mono">
+                      {formatCurrency(
+                        (selectedCaja.montoApertura ?? 0) +
+                        (selectedCaja.totalEfectivo ?? 0) -
+                        (selectedCaja.totalRetiros ?? 0)
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Contado físicamente</span>
@@ -391,6 +506,79 @@ export function CajaPage() {
         )}
       </Dialog>
 
+      {/* Dialog: Retiro Parcial */}
+      <Dialog
+        isOpen={isRetiroOpen}
+        onClose={() => setIsRetiroOpen(false)}
+        title="Retiro Parcial de Efectivo"
+        description="Registra una salida de efectivo sin cerrar la caja (depósito en caja fuerte, pago urgente, etc.)."
+      >
+        {selectedCaja && (
+          <div className="space-y-5">
+            {/* Info actual */}
+            <div className="rounded-lg bg-muted/50 p-4 text-sm space-y-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground flex items-center gap-1"><Banknote size={13} /> Efectivo ventas</span>
+                <span className="font-mono">{formatCurrency(selectedCaja.totalEfectivo)}</span>
+              </div>
+              {(selectedCaja.totalRetiros ?? 0) > 0 && (
+                <div className="flex justify-between text-orange-600">
+                  <span className="flex items-center gap-1"><ArrowDownLeft size={13} /> Retiros anteriores</span>
+                  <span className="font-mono">-{formatCurrency(selectedCaja.totalRetiros)}</span>
+                </div>
+              )}
+              <div className="border-t pt-2 flex justify-between font-semibold">
+                <span>Efectivo esperado en caja ahora</span>
+                <span className="font-mono text-blue-600">
+                  {formatCurrency(
+                    (selectedCaja.montoApertura ?? 0) +
+                    (selectedCaja.totalEfectivo ?? 0) -
+                    (selectedCaja.totalRetiros ?? 0)
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Monto a retirar <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-muted-foreground text-sm font-medium">S/.</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={retiroForm.monto || ''}
+                  onChange={e => setRetiroForm(prev => ({ ...prev, monto: parseFloat(e.target.value) || 0 }))}
+                  className="pl-10"
+                  placeholder="0.00"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Motivo (opcional)</label>
+              <Input
+                value={retiroForm.motivo || ''}
+                onChange={e => setRetiroForm(prev => ({ ...prev, motivo: e.target.value }))}
+                placeholder="Ej: Depósito caja fuerte, pago proveedor…"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2 border-t">
+              <Button variant="outline" onClick={() => setIsRetiroOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={handleRegistrarRetiro}
+                disabled={retirando || !retiroForm.monto || retiroForm.monto <= 0}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                {retirando ? 'Registrando...' : 'Confirmar retiro'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+
       {/* Dialog: Cerrar Caja */}
       <Dialog
         isOpen={isCerrarOpen}
@@ -419,13 +607,25 @@ export function CajaPage() {
                 <span className="text-muted-foreground flex items-center gap-1"><Smartphone size={13} /> Yape/Plin</span>
                 <span className="font-mono">{formatCurrency(selectedCaja.totalYapePlin)}</span>
               </div>
+              {(selectedCaja.totalRetiros ?? 0) > 0 && (
+                <div className="flex justify-between text-orange-600">
+                  <span className="flex items-center gap-1"><ArrowDownLeft size={13} /> Retiros parciales ({selectedCaja.retiros?.length ?? 0})</span>
+                  <span className="font-mono">-{formatCurrency(selectedCaja.totalRetiros)}</span>
+                </div>
+              )}
               <div className="border-t pt-2 flex justify-between font-semibold">
                 <span>Total ingresos ({selectedCaja.cantidadVentas} ventas)</span>
                 <span className="font-mono text-emerald-600">{formatCurrency(selectedCaja.totalIngresos)}</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Esperado en caja efectiva</span>
-                <span className="font-mono font-medium">{formatCurrency((selectedCaja.montoApertura ?? 0) + (selectedCaja.totalEfectivo ?? 0))}</span>
+                <span className="font-mono font-medium">
+                  {formatCurrency(
+                    (selectedCaja.montoApertura ?? 0) +
+                    (selectedCaja.totalEfectivo ?? 0) -
+                    (selectedCaja.totalRetiros ?? 0)
+                  )}
+                </span>
               </div>
             </div>
 
@@ -446,11 +646,12 @@ export function CajaPage() {
               </div>
               {cerrarForm.montoContado > 0 && (
                 <div className={`text-sm font-semibold ${
-                  cerrarForm.montoContado - (selectedCaja.montoApertura + (selectedCaja.totalEfectivo ?? 0)) >= 0
+                  cerrarForm.montoContado - ((selectedCaja.montoApertura ?? 0) + (selectedCaja.totalEfectivo ?? 0) - (selectedCaja.totalRetiros ?? 0)) >= 0
                     ? 'text-emerald-600' : 'text-red-600'
                 }`}>
                   {(() => {
-                    const diff = cerrarForm.montoContado - (selectedCaja.montoApertura + (selectedCaja.totalEfectivo ?? 0));
+                    const esperado = (selectedCaja.montoApertura ?? 0) + (selectedCaja.totalEfectivo ?? 0) - (selectedCaja.totalRetiros ?? 0);
+                    const diff = cerrarForm.montoContado - esperado;
                     return `Diferencia: ${diff >= 0 ? '+' : ''}S/. ${diff.toFixed(2)} ${diff > 0 ? '(sobrante)' : diff < 0 ? '(faltante)' : '(cuadra exacto)'}`;
                   })()}
                 </div>

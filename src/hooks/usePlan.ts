@@ -6,24 +6,25 @@ export interface PlanInfo {
   planId: PlanId;
   isBasico: boolean;
   isPro: boolean;
-  /** Límites del plan BÁSICO */
+  /** Límites del plan (plan único con todo incluido) */
   limites: {
-    usuarios: number;   // 3
-    productos: number;  // 500
+    usuarios: number;
+    productos: number;
   };
 }
 
-const LIMITES_BASICO = { usuarios: 3, productos: 500 };
+// Plan único — sin límites restrictivos
+const LIMITES_BASICO = { usuarios: 9999, productos: 9999 };
 
 export function usePlan(): PlanInfo {
-  const { user } = useAuthStore();
-  const raw = user?.suscripcion?.planId?.toUpperCase() ?? 'BASICO';
-  const planId = (raw === 'PRO' ? 'PRO' : 'BASICO') as PlanId;
+  // Ignorar el planId del JWT — hay un solo plan con todo incluido.
+  // isPro siempre true para que PlanGuard no bloquee ninguna funcionalidad.
+  void useAuthStore(); // mantener la dependencia para compatibilidad futura
 
   return {
-    planId,
-    isBasico: planId === 'BASICO',
-    isPro:    planId === 'PRO',
+    planId:   'BASICO',
+    isBasico: false,
+    isPro:    true,
     limites:  LIMITES_BASICO,
   };
 }

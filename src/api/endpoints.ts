@@ -87,6 +87,7 @@ export const API_ENDPOINTS = {
     GET_BY_PRODUCTO: (productoId: number) => `/movimientos-inventario/producto/${productoId}`,
     GET_BY_TIPO: (tipo: string) => `/movimientos-inventario/tipo/${tipo}`,
     GET_KARDEX: (productoId: number) => `/movimientos-inventario/kardex/${productoId}`,
+    LOTES: '/movimientos-inventario/lotes',
     CREATE: '/movimientos-inventario',
     UPDATE: (id: number) => `/movimientos-inventario/${id}`,
     DELETE: (id: number) => `/movimientos-inventario/${id}`,
@@ -163,6 +164,7 @@ export const API_ENDPOINTS = {
     GET: (id: number) => `/cajas/${id}`,
     ABRIR: '/cajas/abrir',
     CERRAR: (id: number) => `/cajas/${id}/cerrar`,
+    RETIRO: (id: number) => `/cajas/${id}/retiro`,
   },
 
   NOTAS_CREDITO: {
@@ -233,9 +235,18 @@ export const API_ENDPOINTS = {
       `/reportes/inventario/slow-movers?diasSinSalida=${diasSinSalida}&limit=${limit}`,
     INVENTARIO_COBERTURA: (desde: string, hasta: string, limit = 20) =>
       `/reportes/inventario/cobertura?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
+    INVENTARIO_VENCIMIENTOS: '/reportes/inventario/vencimientos',
 
     // Compras
     COMPRAS_POR_PROVEEDOR: (desde: string, hasta: string, limit = 20) =>
       `/reportes/compras/por-proveedor?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
+
+    // Financiero (P&L)
+    FINANCIERO: (desde: string, hasta: string) =>
+      `/reportes/financiero?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+
+    // Clientes
+    CLIENTES: (desde: string, hasta: string, limit = 20) =>
+      `/reportes/clientes?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
   },
 };

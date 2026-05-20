@@ -10,6 +10,7 @@ export type CategoriaGasto =
   | 'TRANSPORTE'
   | 'IMPUESTOS'
   | 'COMPRAS_INTERNAS'
+  | 'COMPRA_PROVEEDOR'
   | 'OTROS';
 
 export type MetodoPagoGasto = 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'YAPE' | 'PLIN' | 'CHEQUE' | 'OTRO';
@@ -37,8 +38,9 @@ export const CATEGORIAS_GASTO: { value: CategoriaGasto; label: string; icon: str
   { value: 'PUBLICIDAD',       label: 'Publicidad',         icon: '📢' },
   { value: 'TRANSPORTE',       label: 'Transporte',         icon: '🚚' },
   { value: 'IMPUESTOS',        label: 'Impuestos/Tributos', icon: '📋' },
-  { value: 'COMPRAS_INTERNAS', label: 'Compras internas',   icon: '🛒' },
-  { value: 'OTROS',            label: 'Otros',              icon: '📦' },
+  { value: 'COMPRAS_INTERNAS',  label: 'Compras internas',    icon: '🛒' },
+  { value: 'COMPRA_PROVEEDOR', label: 'Compra a proveedor',  icon: '📦' },
+  { value: 'OTROS',            label: 'Otros',               icon: '🗂️' },
 ];
 
 export const METODOS_PAGO_GASTO: { value: MetodoPagoGasto; label: string }[] = [
