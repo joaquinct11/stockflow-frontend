@@ -100,6 +100,14 @@ export function CajaPage() {
       toast.error('El monto del retiro debe ser mayor a 0');
       return;
     }
+    const efectivoDisponible =
+      (selectedCaja.montoApertura ?? 0) +
+      (selectedCaja.totalEfectivo ?? 0) -
+      (selectedCaja.totalRetiros ?? 0);
+    if (retiroForm.monto > efectivoDisponible) {
+      toast.error(`El retiro (${formatCurrency(retiroForm.monto)}) supera el efectivo disponible (${formatCurrency(efectivoDisponible)})`);
+      return;
+    }
     try {
       setRetirando(true);
       await cajaService.registrarRetiro(selectedCaja.id, retiroForm);
@@ -513,7 +521,13 @@ export function CajaPage() {
         title="Retiro Parcial de Efectivo"
         description="Registra una salida de efectivo sin cerrar la caja (depósito en caja fuerte, pago urgente, etc.)."
       >
-        {selectedCaja && (
+        {selectedCaja && (() => {
+          const efectivoDisponible =
+            (selectedCaja.montoApertura ?? 0) +
+            (selectedCaja.totalEfectivo ?? 0) -
+            (selectedCaja.totalRetiros ?? 0);
+          const excede = !!retiroForm.monto && retiroForm.monto > efectivoDisponible;
+          return (
           <div className="space-y-5">
             {/* Info actual */}
             <div className="rounded-lg bg-muted/50 p-4 text-sm space-y-2">
@@ -528,14 +542,8 @@ export function CajaPage() {
                 </div>
               )}
               <div className="border-t pt-2 flex justify-between font-semibold">
-                <span>Efectivo esperado en caja ahora</span>
-                <span className="font-mono text-blue-600">
-                  {formatCurrency(
-                    (selectedCaja.montoApertura ?? 0) +
-                    (selectedCaja.totalEfectivo ?? 0) -
-                    (selectedCaja.totalRetiros ?? 0)
-                  )}
-                </span>
+                <span>Efectivo disponible para retiro</span>
+                <span className="font-mono text-blue-600">{formatCurrency(efectivoDisponible)}</span>
               </div>
             </div>
 
@@ -547,13 +555,17 @@ export function CajaPage() {
                   type="number"
                   step="0.01"
                   min="0.01"
+                  max={efectivoDisponible}
                   value={retiroForm.monto || ''}
                   onChange={e => setRetiroForm(prev => ({ ...prev, monto: parseFloat(e.target.value) || 0 }))}
-                  className="pl-10"
+                  className={`pl-10 ${excede ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                   placeholder="0.00"
                   autoFocus
                 />
               </div>
+              {excede && (
+                <p className="text-xs text-red-500">El monto supera el efectivo disponible ({formatCurrency(efectivoDisponible)})</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -569,14 +581,15 @@ export function CajaPage() {
               <Button variant="outline" onClick={() => setIsRetiroOpen(false)}>Cancelar</Button>
               <Button
                 onClick={handleRegistrarRetiro}
-                disabled={retirando || !retiroForm.monto || retiroForm.monto <= 0}
+                disabled={retirando || !retiroForm.monto || retiroForm.monto <= 0 || excede}
                 className="bg-orange-500 hover:bg-orange-600 text-white"
               >
                 {retirando ? 'Registrando...' : 'Confirmar retiro'}
               </Button>
             </div>
           </div>
-        )}
+          );
+        })()}
       </Dialog>
 
       {/* Dialog: Cerrar Caja */}

@@ -14,11 +14,13 @@ import { Pagination } from '../../components/ui/Pagination';
 import { Plus, Trash2, Edit, Search, Building2, User, Phone, Mail, CheckCircle, XCircle, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 type EstadoProveedorFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
 
 export function ProveedoresList() {
   const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
+  const { tenantId } = useCurrentUser();
   const hasViewPermission = canView('PROVEEDORES');
 
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
@@ -51,7 +53,7 @@ export function ProveedoresList() {
     email: '',
     direccion: '',
     activo: true,
-    tenantId: 'farmacia-001',
+    tenantId: tenantId,
   });
 
   useEffect(() => {
@@ -183,7 +185,7 @@ export function ProveedoresList() {
       email: '',
       direccion: '',
       activo: true,
-      tenantId: 'farmacia-001',
+      tenantId: tenantId,
     });
     setEditingProveedor(null);
     setIsDialogOpen(false);

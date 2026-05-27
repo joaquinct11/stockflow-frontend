@@ -50,14 +50,15 @@ export function LandingPage() {
             </div>
 
             <h1 className="landing-hero-title">
-              Del pedido al{' '}
-              <span className="landing-hero-title-highlight">comprobante SUNAT</span>
+              Del pedido a la{' '}
+              <span className="landing-hero-title-highlight">factura electrónica</span>
               {', '}todo en un solo sistema
             </h1>
 
             <p className="landing-hero-subtitle">
               POS con caja integrada, inventario en tiempo real, compras, devoluciones,
-              notas de crédito y facturación electrónica. Sin apps separadas, sin Excel.
+              notas de crédito y facturación electrónica compatible con tu OSE (Nubefact, Alegra, Efact y más).
+              Sin apps separadas, sin Excel.
             </p>
 
             <div className="landing-hero-actions">
@@ -141,7 +142,7 @@ export function LandingPage() {
         <div className="landing-container">
           <div className="landing-section-header">
             <span className="landing-section-label">Cómo funciona</span>
-            <h2 className="landing-section-title">Del pedido al comprobante, todo conectado</h2>
+            <h2 className="landing-section-title">Del pedido a la factura electrónica, todo conectado</h2>
             <p className="landing-section-subtitle">
               Un flujo unificado que elimina el trabajo doble y los errores en Excel.
             </p>
@@ -175,8 +176,8 @@ export function LandingPage() {
             <div className="landing-flow-step">
               <div className="landing-flow-number">4</div>
               <div className="landing-flow-content">
-                <h4>Factura a SUNAT</h4>
-                <p>Emite boleta o factura con validez tributaria. CDR oficial incluido.</p>
+                <h4>Facturación electrónica</h4>
+                <p>Emite boletas y facturas desde la venta. Fluxus las envía a SUNAT a través de tu OSE (Nubefact, Alegra, Efact, etc.).</p>
               </div>
             </div>
           </div>
@@ -248,7 +249,7 @@ export function LandingPage() {
               <h3 className="landing-feature-title">Ventas con IGV</h3>
               <p className="landing-feature-desc">
                 Registra ventas en efectivo, tarjeta o Yape/Plin. Calcula subtotal,
-                IGV 18% y vuelto. Historial completo por vendedor y período.
+                IGV configurable y vuelto automático. Historial completo por vendedor y período.
               </p>
             </div>
 
@@ -256,8 +257,9 @@ export function LandingPage() {
               <div className="landing-feature-icon">🧾</div>
               <h3 className="landing-feature-title">Facturación electrónica</h3>
               <p className="landing-feature-desc">
-                Emite boletas y facturas desde cada venta con envío automático
-                a SUNAT via OSE, CDR oficial y descarga del XML y PDF.
+                Emite boletas y facturas desde cada venta. Fluxus se conecta a tu cuenta OSE
+                (Nubefact, Alegra, Efact u otro compatible) para el envío a SUNAT, CDR oficial
+                y descarga del XML y PDF.
               </p>
             </div>
 
@@ -265,8 +267,8 @@ export function LandingPage() {
               <div className="landing-feature-icon">👥</div>
               <h3 className="landing-feature-title">Roles y permisos</h3>
               <p className="landing-feature-desc">
-                Cuatro roles predefinidos: Admin, Gerente, Vendedor y Gestor de Inventario.
-                Permisos granulares por módulo para control total de accesos.
+                Tres roles simples: Administrador, Vendedor y Almacenero.
+                Cada rol tiene acceso exactamente a lo que necesita, sin configuraciones complicadas.
               </p>
             </div>
 
@@ -332,7 +334,7 @@ export function LandingPage() {
               <div className="landing-pricing-badge">✅ Todo incluido</div>
               <div className="landing-pricing-plan">Plan Básico</div>
               <div className="landing-pricing-price">
-                <span>S/</span>150<sub>/mes</sub>
+                <span>S/</span>129<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
                 14 días de prueba gratuita. Sin tarjeta hasta que decidas quedarte. Cancela cuando quieras.
@@ -345,15 +347,19 @@ export function LandingPage() {
                 <li><span className="check">✓</span> Órdenes de compra y recepciones a proveedores</li>
                 <li><span className="check">✓</span> Devoluciones y notas de crédito aplicables en POS</li>
                 <li><span className="check">✓</span> Facturación electrónica: boletas y facturas</li>
-                <li><span className="check">✓</span> <strong>🏛 Envío a SUNAT via OSE</strong> con CDR oficial</li>
+                <li><span className="check">✓</span> <strong>🏛 Facturación electrónica</strong> compatible con Nubefact, Alegra, Efact y más <span style={{ fontSize: '11px', opacity: 0.7 }}>(requiere cuenta OSE propia)</span></li>
                 <li><span className="check">✓</span> Reportes históricos sin límite de fecha</li>
                 <li><span className="check">✓</span> Exportación a Excel y PDF</li>
-                <li><span className="check">✓</span> 4 roles: Admin, Gerente, Vendedor, Gestor Inventario</li>
-                <li><span className="check">✓</span> Permisos granulares por módulo y acción</li>
+                <li><span className="check">✓</span> 3 roles: Administrador, Vendedor y Almacenero</li>
+                <li><span className="check">✓</span> Permisos por módulo configurables por usuario</li>
                 <li><span className="check">✓</span> Hasta 10 usuarios</li>
                 <li><span className="check">✓</span> Soporte por WhatsApp en español</li>
               </ul>
-              <Link to="/register?plan=BASICO" className="landing-pricing-cta primary">
+              {/* CTA principal → página de compra (carrito) */}
+              <Link to="/plan" className="landing-pricing-cta primary">
+                Contratar Plan Básico — S/ 129/mes
+              </Link>
+              <Link to="/register?plan=BASICO" className="landing-pricing-cta" style={{ marginTop: '10px', background: 'transparent', border: '1px solid currentColor', opacity: 0.75 }}>
                 Probar 14 días gratis
               </Link>
             </div>
@@ -399,8 +405,14 @@ export function LandingPage() {
               <span className="landing-logo-text">Fluxus</span>
             </Link>
             <p>
-              Mini‑ERP para negocios peruanos. POS, inventario, compras,
-              devoluciones y facturación electrónica en una sola plataforma.
+              Mini‑ERP para negocios peruanos. POS, inventario, compras, devoluciones
+              y facturación electrónica compatible con tu OSE en una sola plataforma.
+            </p>
+            {/* Datos legales de la empresa */}
+            <p style={{ fontSize: '11px', marginTop: '8px', opacity: 0.6, lineHeight: 1.6 }}>
+              Joaquin Castillo Tello · RUC: 10769109566<br />
+              Jr. Libertad 455, Magdalena del Mar, Lima<br />
+              Nombre comercial: Fluxus
             </p>
           </div>
 
@@ -410,6 +422,7 @@ export function LandingPage() {
               <li><a href="#features">Módulos</a></li>
               <li><a href="#para-quien">¿Para quién?</a></li>
               <li><a href="#pricing">Precio</a></li>
+              <li><Link to="/plan">Contratar ahora</Link></li>
               <li><Link to="/register?plan=BASICO">Crear cuenta</Link></li>
             </ul>
           </div>
@@ -418,27 +431,29 @@ export function LandingPage() {
             <h4>Empresa</h4>
             <ul>
               <li><a href="mailto:contacto@fluxus.pe">Contacto</a></li>
-              <li><a href="mailto:soporte@fluxus.pe">Soporte</a></li>
+              <li><a href="mailto:contacto@fluxus.pe">Soporte técnico</a></li>
+              <li><a href="https://wa.me/51999999999" target="_blank" rel="noopener noreferrer">WhatsApp</a></li>
             </ul>
           </div>
 
           <div className="landing-footer-col">
             <h4>Legal</h4>
             <ul>
-              <li><a href="#">Términos de Uso</a></li>
-              <li><a href="#">Política de Privacidad</a></li>
-              <li><a href="#">Cookies</a></li>
+              <li><Link to="/terminos">Términos y Condiciones</Link></li>
+              <li><Link to="/privacidad">Política de Privacidad</Link></li>
+              <li><Link to="/reclamaciones">Libro de Reclamaciones</Link></li>
             </ul>
           </div>
         </div>
 
         <div className="landing-footer-bottom">
           <span className="landing-footer-copy">
-            © {new Date().getFullYear()} Fluxus. Todos los derechos reservados.
+            © {new Date().getFullYear()} Joaquin Castillo Tello (Fluxus) · RUC 10769109566 · Magdalena del Mar, Lima
           </span>
           <div className="landing-footer-links">
-            <a href="#">Términos</a>
-            <a href="#">Privacidad</a>
+            <Link to="/terminos">Términos</Link>
+            <Link to="/privacidad">Privacidad</Link>
+            <Link to="/reclamaciones">Reclamaciones</Link>
             <a href="mailto:contacto@fluxus.pe">Contacto</a>
           </div>
         </div>

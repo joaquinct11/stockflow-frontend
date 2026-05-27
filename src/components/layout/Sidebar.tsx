@@ -56,7 +56,6 @@ type MenuEntry = LeafItem | GroupItem;
 
 const ROL_BADGE: Record<string, string> = {
   ADMIN:             'bg-rose-500/20 text-rose-300 border border-rose-500/30',
-  GERENTE:           'bg-blue-500/20 text-blue-300 border border-blue-500/30',
   VENDEDOR:          'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
   GESTOR_INVENTARIO: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
 };
@@ -97,7 +96,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         key: 'ventas',
         title: 'Ventas',
         icon: ShoppingCart,
-        show: canAccess('VENTAS') || canAccess('FACTURACION') || canAccess('POS') || isAdmin || user?.rol === 'GERENTE',
+        show: canAccess('VENTAS') || canAccess('FACTURACION') || canAccess('POS') || isAdmin,
         items: [
           {
             title: 'Punto de Venta',
@@ -127,7 +126,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             title: 'Notas de Crédito',
             href: '/dashboard/notas-credito',
             icon: Receipt,
-            show: isAdmin || user?.rol === 'GERENTE',
+            show: isAdmin,
           },
         ],
       },

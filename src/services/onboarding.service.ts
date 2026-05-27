@@ -7,6 +7,7 @@ export interface PasoOnboarding {
   descripcion: string;
   completado: boolean;
   url: string | null;
+  opcional: boolean;
 }
 
 export interface OnboardingProgreso {

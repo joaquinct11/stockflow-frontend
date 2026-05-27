@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ScanLine, X, Plus, Minus, Trash2, ShoppingCart,
   Banknote, CreditCard, Smartphone, CheckCircle2,
-  ArrowLeft, Package, RotateCcw, Loader2, Search, Wallet, Lock, Tag, User, UserPlus,
+  ArrowLeft, RotateCcw, Loader2, Search, Wallet, Lock, Tag, User, UserPlus,
   Camera, CameraOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -586,6 +586,14 @@ export function POSPage() {
       });
 
       setUltimaVentaId(venta.id ?? null);
+
+      // Actualizar stock local inmediatamente (sin recargar del servidor)
+      setTodosProductos(prev => prev.map(p => {
+        const item = cart.find(i => i.producto.id === p.id);
+        if (!item) return p;
+        return { ...p, stockActual: Math.max(0, (p.stockActual ?? 0) - item.cantidad) };
+      }));
+
       // Reset NC state
       setNcCodigo('');
       setNcInfo(null);
@@ -1099,8 +1107,11 @@ export function POSPage() {
                       onClick={() => { agregarAlCarrito(p); setQuery(''); setResultados([]); setSelectedIndex(-1); }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors group ${isActive ? 'bg-primary/20 border border-primary/40' : 'hover:bg-gray-800 border border-transparent'}`}
                     >
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isActive ? 'bg-primary/30' : 'bg-gray-800 group-hover:bg-gray-700'}`}>
-                        <Package size={16} className={isActive ? 'text-primary' : 'text-gray-500'} />
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${isActive ? 'bg-primary/30' : 'bg-gray-800 group-hover:bg-gray-700'}`}>
+                        {p.imagenUrl
+                          ? <img src={p.imagenUrl} alt={p.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display=''); }} />
+                          : null}
+                        <span className={`text-sm font-bold ${isActive ? 'text-primary' : 'text-gray-500'} ${p.imagenUrl ? 'hidden' : ''}`}>{p.nombre.charAt(0).toUpperCase()}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium truncate ${isActive ? 'text-white' : ''}`}>{p.nombre}</p>
@@ -1119,14 +1130,24 @@ export function POSPage() {
             {resultados.length === 0 && query === '' && (
               <div className="flex-1 overflow-y-auto p-3">
                 <p className="text-xs text-gray-600 uppercase tracking-wider mb-2 px-1">Productos disponibles</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {todosProductos.filter(p => p.activo !== false && (p.stockActual ?? 0) > 0).slice(0, 12).map(p => (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {todosProductos.filter(p => p.activo !== false && (p.stockActual ?? 0) > 0).slice(0, 16).map(p => (
                     <button key={p.id} onClick={() => agregarAlCarrito(p)}
-                      className="flex flex-col items-start p-3 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-left transition-all"
+                      className="flex flex-col rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-primary/40 text-left transition-all overflow-hidden group"
                     >
-                      <p className="text-xs font-medium leading-snug line-clamp-2 mb-2">{p.nombre}</p>
-                      <p className="text-sm font-bold text-primary mt-auto">{fmt(p.precioVenta ?? 0)}</p>
-                      <p className="text-[10px] text-gray-600 mt-0.5">Stock: {p.stockActual}</p>
+                      {/* Imagen grande */}
+                      <div className="w-full h-28 bg-gray-800 flex items-center justify-center overflow-hidden group-hover:brightness-110 transition-all flex-shrink-0">
+                        {p.imagenUrl
+                          ? <img src={p.imagenUrl} alt={p.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display='flex'); }} />
+                          : null}
+                        <span className={`text-4xl font-bold text-gray-700 ${p.imagenUrl ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}>{p.nombre.charAt(0).toUpperCase()}</span>
+                      </div>
+                      {/* Info */}
+                      <div className="p-2.5">
+                        <p className="text-xs font-medium leading-snug line-clamp-2 mb-1">{p.nombre}</p>
+                        <p className="text-sm font-bold text-primary">{fmt(p.precioVenta ?? 0)}</p>
+                        <p className="text-[10px] text-gray-600 mt-0.5">Stock: {p.stockActual}</p>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -1167,6 +1188,13 @@ export function POSPage() {
               ) : (
                 cart.map(item => (
                   <div key={item.producto.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-800 group">
+                    {/* Thumbnail */}
+                    <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-700 flex items-center justify-center flex-shrink-0">
+                      {item.producto.imagenUrl
+                        ? <img src={item.producto.imagenUrl} alt={item.producto.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display=''); }} />
+                        : null}
+                      <span className={`text-xs font-bold text-gray-500 ${item.producto.imagenUrl ? 'hidden' : ''}`}>{item.producto.nombre.charAt(0).toUpperCase()}</span>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium leading-tight truncate">{item.producto.nombre}</p>
                       <p className="text-xs text-gray-500 mt-0.5">{fmt(item.precioUnitario)} c/u</p>
@@ -1276,8 +1304,11 @@ export function POSPage() {
                           onClick={() => { agregarAlCarrito(p); setQuery(''); setResultados([]); setSelectedIndex(-1); }}
                           className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-colors ${isActive ? 'bg-primary/20 border border-primary/40' : 'hover:bg-gray-800 border border-transparent'}`}
                         >
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isActive ? 'bg-primary/30' : 'bg-gray-800'}`}>
-                            <Package size={18} className={isActive ? 'text-primary' : 'text-gray-500'} />
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${isActive ? 'bg-primary/30' : 'bg-gray-800'}`}>
+                            {p.imagenUrl
+                              ? <img src={p.imagenUrl} alt={p.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display=''); }} />
+                              : null}
+                            <span className={`text-base font-bold ${isActive ? 'text-primary' : 'text-gray-500'} ${p.imagenUrl ? 'hidden' : ''}`}>{p.nombre.charAt(0).toUpperCase()}</span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{p.nombre}</p>
@@ -1302,11 +1333,21 @@ export function POSPage() {
                       {todosProductos.filter(p => p.activo !== false && (p.stockActual ?? 0) > 0).slice(0, 16).map(p => (
                         <button key={p.id}
                           onClick={() => agregarAlCarrito(p)}
-                          className="flex flex-col items-start p-3 rounded-xl bg-gray-900 active:bg-gray-700 border border-gray-800 text-left transition-all"
+                          className="flex flex-col rounded-xl bg-gray-900 active:bg-gray-700 border border-gray-800 text-left transition-all overflow-hidden"
                         >
-                          <p className="text-xs font-medium leading-snug line-clamp-2 mb-2">{p.nombre}</p>
-                          <p className="text-base font-bold text-primary mt-auto">{fmt(p.precioVenta ?? 0)}</p>
-                          <p className="text-[10px] text-gray-600 mt-0.5">Stock: {p.stockActual}</p>
+                          {/* Imagen grande */}
+                          <div className="w-full h-28 bg-gray-800 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {p.imagenUrl
+                              ? <img src={p.imagenUrl} alt={p.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display='flex'); }} />
+                              : null}
+                            <span className={`text-4xl font-bold text-gray-700 ${p.imagenUrl ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}>{p.nombre.charAt(0).toUpperCase()}</span>
+                          </div>
+                          {/* Info */}
+                          <div className="p-2.5">
+                            <p className="text-xs font-medium leading-snug line-clamp-2 mb-1">{p.nombre}</p>
+                            <p className="text-base font-bold text-primary">{fmt(p.precioVenta ?? 0)}</p>
+                            <p className="text-[10px] text-gray-600 mt-0.5">Stock: {p.stockActual}</p>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -1362,6 +1403,13 @@ export function POSPage() {
                   ) : (
                     cart.map(item => (
                       <div key={item.producto.id} className="flex items-center gap-3 px-3 py-3 rounded-xl bg-gray-900 border border-gray-800">
+                        {/* Thumbnail móvil */}
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center flex-shrink-0">
+                          {item.producto.imagenUrl
+                            ? <img src={item.producto.imagenUrl} alt={item.producto.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display=''); }} />
+                            : null}
+                          <span className={`text-sm font-bold text-gray-500 ${item.producto.imagenUrl ? 'hidden' : ''}`}>{item.producto.nombre.charAt(0).toUpperCase()}</span>
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium leading-tight truncate">{item.producto.nombre}</p>
                           <p className="text-xs text-gray-500 mt-0.5">{fmt(item.precioUnitario)} c/u</p>

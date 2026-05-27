@@ -8,7 +8,7 @@ export type ConfirmDialogType = 'warning' | 'danger' | 'success' | 'info';
 interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
-  description: string;
+  description: string | ReactNode;
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void;
@@ -71,7 +71,7 @@ export function ConfirmDialog({
         </div>
 
         {/* Message */}
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-muted-foreground whitespace-pre-line">
           {description}
         </p>
 
