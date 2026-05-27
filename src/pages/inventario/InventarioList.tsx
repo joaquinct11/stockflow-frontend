@@ -909,7 +909,7 @@ export function InventarioList() {
                         })()}
                         onChange={(option) => {
                           setSelectedProveedorMov(option);
-                          setFormData({ ...formData, proveedorId: option?.id ?? undefined });
+                          setFormData({ ...formData, proveedorId: option?.id ? Number(option.id) : undefined });
                         }}
                         placeholder="Seleccionar proveedor (opcional)"
                         emptyMessage="No se encontró el proveedor"

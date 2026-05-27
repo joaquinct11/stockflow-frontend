@@ -91,7 +91,7 @@ interface ProductoConVencimiento {
 }
 
 export function Dashboard() {
-  const { user, suscripcionEstado, setSuscripcionEstado } = useAuthStore();
+  const { user, suscripcionEstado } = useAuthStore();
   const { userId } = useCurrentUser();
   const navigate = useNavigate();
   const rol = safeRol(user?.rol);
@@ -106,7 +106,7 @@ export function Dashboard() {
   const [totalGastosPeriodo, setTotalGastosPeriodo] = useState<number>(0);
 
   // Estado de suscripción
-  const [suscripcion, setSuscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
+  const [suscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
 
   // const ventasScopeLabel = useMemo(() => {
   //   if (rol === 'ADMIN') return 'globales';

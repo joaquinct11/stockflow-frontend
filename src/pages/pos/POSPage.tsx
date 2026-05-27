@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ScanLine, X, Plus, Minus, Trash2, ShoppingCart,
   Banknote, CreditCard, Smartphone, CheckCircle2,
-  ArrowLeft, Package, RotateCcw, Loader2, Search, Wallet, Lock, Tag, User, UserPlus,
+  ArrowLeft, RotateCcw, Loader2, Search, Wallet, Lock, Tag, User, UserPlus,
   Camera, CameraOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';

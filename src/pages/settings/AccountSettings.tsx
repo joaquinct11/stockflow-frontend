@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -18,7 +18,6 @@ import type { DeleteAccountValidationDTO, TenantConfigDTO } from '../../types';
 export function AccountSettings() {
   const { user } = useAuthStore();
   const { setConfig } = useTenantConfigStore();
-  const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef   = useRef<HTMLInputElement>(null);
   const facturacionRef = useRef<HTMLDivElement>(null);

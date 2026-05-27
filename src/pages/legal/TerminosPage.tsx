@@ -9,7 +9,6 @@ const CORREO         = 'contacto@fluxus.pe';
 const FECHA_VIGENCIA = '21 de mayo de 2026';
 
 const p: React.CSSProperties = { marginBottom: '12px' };
-const ul: React.CSSProperties = { paddingLeft: '20px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '6px' };
 const strong: React.CSSProperties = { color: '#c8c8e0', fontWeight: 600 };
 
 export function TerminosPage() {
