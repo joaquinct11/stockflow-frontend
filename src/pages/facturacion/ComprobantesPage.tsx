@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { facturacionService } from '../../services/facturacion.service';
 import { ventaService } from '../../services/venta.service';
+import { clienteService } from '../../services/cliente.service';
 import type { ComprobanteDTO, EmitirComprobanteForm, EmitirComprobanteRequest, TipoComprobante, VentaDTO, ItemComprobanteDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -13,12 +14,12 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, Printer, X, Send, Crown, ArrowRight, SlidersHorizontal } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, Printer, X, Send, Download, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
-import { usePlan } from '../../hooks/usePlan';
-import { useNavigate } from 'react-router-dom';
+import { printTicket } from '../../utils/printTicket';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 const TIPO_OPTIONS: TipoComprobante[] = ['BOLETA', 'FACTURA'];
 // const ESTADO_OPTIONS = ['EMITIDO', 'ANULADO'];
@@ -49,8 +50,7 @@ const emptyForm = (): EmitirComprobanteForm => ({
 export function ComprobantesPage() {
   const { canAccess, puede, canCreate, canDelete, isVendedor } = usePermissions();
   const { user } = useAuthStore();
-  const { isBasico } = usePlan();
-  const navigate = useNavigate();
+  const { config: tenantConfig } = useTenantConfigStore();
 
   const canView = canAccess('FACTURACION');
   const canEmitir = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
@@ -79,13 +79,13 @@ export function ComprobantesPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // Anular confirm
-  const [confirmAnular, setConfirmAnular] = useState<{ isOpen: boolean; id: number | null }>({
+  const [confirmAnular, setConfirmAnular] = useState<{ isOpen: boolean; id: number | null; sunatEstado?: string }>({
     isOpen: false,
     id: null,
   });
 
-  // SUNAT upgrade banner (para plan BÁSICO)
-  const [showSunatBanner, setShowSunatBanner] = useState(false);
+  const [downloadingPdf, setDownloadingPdf]     = useState<number | null>(null);
+  const [enviandoSunat, setEnviandoSunat]       = useState<number | null>(null);
 
   useEffect(() => {
     if (canView) {
@@ -191,6 +191,90 @@ export function ComprobantesPage() {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
   }
 
+  const handleEnviarSunat = async (comprobante: ComprobanteDTO) => {
+    if (!comprobante.id) return;
+    try {
+      setEnviandoSunat(comprobante.id);
+      const updated = await facturacionService.enviarASunat(comprobante.id);
+      if (updated.sunatEstado === 'ACEPTADO') {
+        const msg = updated.sunatMensaje ?? `Aceptado por SUNAT: ${updated.numero}`;
+        toast.success(`✅ ${msg}`);
+      } else if (updated.sunatEstado === 'RECHAZADO') {
+        const msg = updated.sunatMensaje ?? 'Revisa los datos del comprobante.';
+        toast.error(`❌ SUNAT rechazó ${updated.numero}: ${msg}`, { duration: 8000 });
+      } else {
+        const msg = updated.sunatMensaje ?? 'Verificando con SUNAT…';
+        toast(`🏛️ ${msg}`, { duration: 5000 });
+      }
+      // Si el detalle está abierto para este comprobante, actualizarlo en tiempo real
+      if (selectedComprobante?.id === updated.id) {
+        setSelectedComprobante(updated);
+      }
+      fetchComprobantes();
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { mensaje?: string; message?: string } } };
+      const msg = err?.response?.data?.mensaje
+               ?? err?.response?.data?.message
+               ?? 'Error enviando a SUNAT';
+      toast.error(msg);
+    } finally {
+      setEnviandoSunat(null);
+    }
+  };
+
+  const handleDownloadPdf = async (comprobante: ComprobanteDTO) => {
+    if (!comprobante.id) return;
+    try {
+      setDownloadingPdf(comprobante.id);
+      const blob = await facturacionService.downloadPdf(comprobante.id);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `${comprobante.numero ?? `comprobante-${comprobante.id}`}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('No se pudo descargar el PDF');
+    } finally {
+      setDownloadingPdf(null);
+    }
+  };
+
+  const handleVentaSelect = async (opt: { id: number } | null) => {
+    const ventaId = opt?.id ? Number(opt.id) : 0;
+    setEmitirForm((prev) => ({ ...prev, ventaId }));
+
+    if (!ventaId) return;
+
+    const venta = ventas.find((v) => v.id === ventaId);
+    if (!venta?.clienteId) return;
+
+    try {
+      const cliente = await clienteService.getById(venta.clienteId);
+      const docNumero = cliente.numeroDocumento ?? '';
+      const tipoDoc: 'DNI' | 'RUC' =
+        docNumero.length === 11 ? 'RUC' :
+        docNumero.length === 8  ? 'DNI' :
+        (cliente.tipoDocumento === 'RUC' ? 'RUC' : 'DNI'); // fallback al campo guardado
+      const esRuc = tipoDoc === 'RUC';
+      setEmitirForm((prev) => ({
+        ...prev,
+        ventaId,
+        tipo: esRuc ? 'FACTURA' : prev.tipo,
+        receptor: {
+          tipoDocumento: tipoDoc,
+          numeroDocumento: docNumero,
+          razonSocial: cliente.nombre ?? '',
+          direccion: cliente.direccion ?? '',
+        },
+      }));
+    } catch {
+      // Si falla la búsqueda del cliente, no interrumpir el flujo
+    }
+  };
+
   const handleEmitir = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -285,6 +369,14 @@ export function ComprobantesPage() {
       label: `Venta #${v.id} · S/.${v.total.toFixed(2)}`,
       subtitle: `${v.vendedorNombre ?? ''} · ${v.metodoPago}${v.createdAt ? ' · ' + new Date(v.createdAt).toLocaleDateString('es-PE') : ''}`,
     }));
+
+  const oseNombre = (() => {
+    const url = (tenantConfig?.oseUrl ?? '').toLowerCase();
+    if (url.includes('nubefact')) return 'Nubefact';
+    if (url.includes('efact'))   return 'Efact';
+    if (url.includes('sunat'))   return 'SUNAT SOL';
+    return 'tu proveedor OSE';
+  })();
 
   if (!canView) {
     return (
@@ -603,10 +695,40 @@ export function ComprobantesPage() {
                           {c.total != null ? `S/.${c.total.toFixed(2)}` : '—'}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={estadoBadgeVariant(c.estado)}>
-                            {estadoIcon(c.estado)}
-                            {c.estado}
-                          </Badge>
+                          {c.estado === 'ANULADO' ? (
+                            <Badge variant="destructive" className="gap-1">
+                              <XCircle size={12} /> Anulado
+                            </Badge>
+                          ) : c.sunatEstado === 'ACEPTADO' ? (
+                            <Badge variant="success" className="gap-1 text-xs" title={c.sunatMensaje ?? undefined}>
+                              <CheckCircle size={12} /> SUNAT Aceptado
+                            </Badge>
+                          ) : c.sunatEstado === 'RECHAZADO' ? (
+                            <div className="flex flex-col gap-1">
+                              <Badge variant="destructive" className="gap-1 text-xs" title={c.sunatMensaje ?? undefined}>
+                                <XCircle size={12} /> SUNAT Rechazado
+                              </Badge>
+                            </div>
+                          ) : c.sunatEstado === 'ERROR' ? (
+                            <div className="flex flex-col gap-1">
+                              <Badge variant="destructive" className="gap-1 text-xs opacity-80" title={c.sunatMensaje ?? undefined}>
+                                <AlertTriangle size={12} /> Error SUNAT
+                              </Badge>
+                            </div>
+                          ) : c.sunatEstado === 'PENDIENTE' ? (
+                            <Badge variant="warning" className="gap-1 text-xs" title={c.sunatMensaje ?? undefined}>
+                              <Clock size={12} /> Pendiente SUNAT
+                            </Badge>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              <Badge variant="success" className="gap-1 text-xs">
+                                <CheckCircle size={12} /> Emitido
+                              </Badge>
+                              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-400 w-fit">
+                                <Clock size={9} /> Sin enviar a SUNAT
+                              </span>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {c.createdAt ? new Date(c.createdAt).toLocaleDateString('es-PE') : '—'}
@@ -624,22 +746,37 @@ export function ComprobantesPage() {
                             >
                               <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
-                            {c.estado === 'EMITIDO' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={downloadingPdf === c.id}
+                              title="Descargar PDF A4"
+                              onClick={() => handleDownloadPdf(c)}
+                            >
+                              {downloadingPdf === c.id
+                                ? <span className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin inline-block" />
+                                : <Download className="h-4 w-4 text-slate-500" />
+                              }
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Imprimir ticket"
+                              onClick={() => printTicket(c, tenantConfig)}
+                            >
+                              <Printer className="h-4 w-4 text-slate-500" />
+                            </Button>
+                            {c.estado === 'EMITIDO' && c.sunatEstado !== 'ACEPTADO' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                title={isBasico ? 'Enviar a SUNAT (requiere Plan Pro)' : 'Enviar a SUNAT'}
-                                onClick={() => {
-                                  if (isBasico) {
-                                    setShowSunatBanner(true);
-                                  } else {
-                                    toast('Integración SUNAT próximamente disponible.', { icon: '🏛️' });
-                                  }
-                                }}
+                                disabled={enviandoSunat === c.id}
+                                title={c.sunatEstado === 'RECHAZADO' ? 'Reenviar a SUNAT' : 'Enviar a SUNAT'}
+                                onClick={() => handleEnviarSunat(c)}
                               >
-                                {isBasico
-                                  ? <Crown className="h-4 w-4 text-amber-500" />
-                                  : <Send className="h-4 w-4 text-indigo-500" />
+                                {enviandoSunat === c.id
+                                  ? <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin inline-block" />
+                                  : <Send className={`h-4 w-4 ${c.sunatEstado === 'RECHAZADO' ? 'text-red-500' : 'text-indigo-500'}`} />
                                 }
                               </Button>
                             )}
@@ -648,7 +785,7 @@ export function ComprobantesPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
-                                onClick={() => setConfirmAnular({ isOpen: true, id: c.id! })}
+                                onClick={() => setConfirmAnular({ isOpen: true, id: c.id!, sunatEstado: c.sunatEstado })}
                               >
                                 Anular
                               </Button>
@@ -696,7 +833,7 @@ export function ComprobantesPage() {
             <Autocomplete
               options={ventasOptions}
               value={ventasOptions.find((o) => o.id === emitirForm.ventaId) ?? null}
-              onChange={(opt) => setEmitirForm((prev) => ({ ...prev, ventaId: opt?.id ? Number(opt.id) : 0 }))}
+              onChange={(opt) => handleVentaSelect(opt ? { id: Number(opt.id) } : null)}
               placeholder="Buscar venta por ID, vendedor..."
               emptyMessage="No se encontraron ventas"
             />
@@ -733,12 +870,9 @@ export function ComprobantesPage() {
                     }
                   />
                   {tipo}
-                  {tipo === 'BOLETA' && (
-                    <span className="text-xs text-muted-foreground font-normal">(B001)</span>
-                  )}
-                  {tipo === 'FACTURA' && (
-                    <span className="text-xs text-muted-foreground font-normal">(F001)</span>
-                  )}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    {tipo === 'BOLETA' ? 'con DNI opcional' : 'requiere RUC'}
+                  </span>
                 </label>
               ))}
             </div>
@@ -982,7 +1116,7 @@ export function ComprobantesPage() {
                 </span>
               </div>
               <div className="flex justify-between px-4 py-2 border-b bg-muted/30">
-                <span className="text-sm text-muted-foreground">IGV (18%)</span>
+                <span className="text-sm text-muted-foreground">IGV ({tenantConfig?.igvPorcentaje ?? 18}%)</span>
                 <span className="text-sm font-medium">
                   S/.{selectedComprobante.igv != null ? Number(selectedComprobante.igv).toFixed(2) : '—'}
                 </span>
@@ -995,31 +1129,89 @@ export function ComprobantesPage() {
               </div>
             </div>
 
+            {/* ── Estado SUNAT ── */}
+            {(selectedComprobante.sunatEstado || selectedComprobante.estado === 'EMITIDO') && (
+              <div className={[
+                'rounded-lg px-4 py-3 mb-4 text-sm',
+                selectedComprobante.sunatEstado === 'ACEPTADO'  ? 'bg-emerald-500/10 border border-emerald-500/30' :
+                selectedComprobante.sunatEstado === 'RECHAZADO' ? 'bg-red-500/10 border border-red-500/30' :
+                selectedComprobante.sunatEstado === 'ERROR'     ? 'bg-red-500/10 border border-red-500/30' :
+                selectedComprobante.sunatEstado === 'PENDIENTE' ? 'bg-amber-500/10 border border-amber-500/30' :
+                'bg-muted/40 border border-border',
+              ].join(' ')}>
+                <div className="flex items-center justify-between">
+                  <span className={[
+                    'font-semibold text-xs uppercase tracking-wide',
+                    selectedComprobante.sunatEstado === 'ACEPTADO'  ? 'text-emerald-600 dark:text-emerald-400' :
+                    selectedComprobante.sunatEstado === 'RECHAZADO' ? 'text-red-600 dark:text-red-400' :
+                    selectedComprobante.sunatEstado === 'ERROR'     ? 'text-red-600 dark:text-red-400' :
+                    selectedComprobante.sunatEstado === 'PENDIENTE' ? 'text-amber-600 dark:text-amber-400' :
+                    'text-muted-foreground',
+                  ].join(' ')}>
+                    🏛️ SUNAT:{' '}
+                    {selectedComprobante.sunatEstado === 'ACEPTADO'  ? '✓ ACEPTADO' :
+                     selectedComprobante.sunatEstado === 'RECHAZADO' ? '✗ RECHAZADO' :
+                     selectedComprobante.sunatEstado === 'PENDIENTE' ? '⏳ PENDIENTE' :
+                     selectedComprobante.sunatEstado === 'ERROR'     ? '⚠ ERROR' :
+                     'Sin enviar'}
+                  </span>
+                </div>
+                {selectedComprobante.sunatMensaje && (
+                  <p className="text-xs text-muted-foreground mt-1">{selectedComprobante.sunatMensaje}</p>
+                )}
+                {!selectedComprobante.sunatEstado && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Aún no se ha enviado a SUNAT. Usa el botón para enviarlo.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* ── Footer info ── */}
-            <div className="text-center text-xs text-muted-foreground space-y-1 border-t pt-3 mb-4">
+            <div className="text-center text-xs text-muted-foreground border-t pt-3 mb-4">
               <p>Venta #{selectedComprobante.ventaId}</p>
-              {selectedComprobante.sunatEstado && (
-                <p>Estado SUNAT: <span className="font-medium">{selectedComprobante.sunatEstado}</span></p>
-              )}
               {selectedComprobante.estado === 'ANULADO' && selectedComprobante.updatedAt && (
-                <p className="text-destructive font-medium">
+                <p className="text-destructive font-medium mt-1">
                   Anulado: {new Date(selectedComprobante.updatedAt).toLocaleString('es-PE')}
                 </p>
               )}
             </div>
 
             {/* ── Acciones ── */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                className="flex-1 gap-2"
-                onClick={() => window.print()}
+                className="flex-1 gap-2 min-w-[130px]"
+                disabled={downloadingPdf === selectedComprobante.id}
+                onClick={() => handleDownloadPdf(selectedComprobante)}
               >
-                <Printer size={15} />
-                Imprimir
+                <Download size={15} />
+                {downloadingPdf === selectedComprobante.id ? 'Generando...' : 'Descargar PDF'}
               </Button>
               <Button
-                className="flex-1"
+                variant="outline"
+                className="gap-2"
+                onClick={() => printTicket(selectedComprobante, tenantConfig)}
+                title="Imprimir ticket"
+              >
+                <Printer size={15} />
+              </Button>
+              {selectedComprobante.estado === 'EMITIDO' && selectedComprobante.sunatEstado !== 'ACEPTADO' && (
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2 min-w-[130px] border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
+                  disabled={enviandoSunat === selectedComprobante.id}
+                  onClick={() => handleEnviarSunat(selectedComprobante)}
+                >
+                  {enviandoSunat === selectedComprobante.id
+                    ? <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin inline-block" />
+                    : <Send size={15} />
+                  }
+                  {selectedComprobante.sunatEstado === 'RECHAZADO' ? 'Reenviar a SUNAT' : 'Enviar a SUNAT'}
+                </Button>
+              )}
+              <Button
+                className="flex-1 min-w-[80px]"
                 onClick={() => {
                   setIsDetailOpen(false);
                   setSelectedComprobante(null);
@@ -1037,68 +1229,16 @@ export function ComprobantesPage() {
         isOpen={confirmAnular.isOpen}
         type="danger"
         title="Anular Comprobante"
-        description="¿Estás seguro de que deseas anular este comprobante? Esta acción no se puede deshacer."
+        description={
+          (confirmAnular.sunatEstado === 'ACEPTADO' || confirmAnular.sunatEstado === 'PENDIENTE')
+            ? `⚠️ Este comprobante ya fue enviado a SUNAT (${confirmAnular.sunatEstado}). La anulación solo se aplica localmente.\n\nPara la baja electrónica ante SUNAT deberás ingresar manualmente a tu panel de ${oseNombre} y registrar la comunicación de baja.`
+            : '¿Estás seguro de que deseas anular este comprobante? Esta acción no se puede deshacer.'
+        }
         confirmText="Anular Comprobante"
         onConfirm={handleAnular}
         onCancel={() => setConfirmAnular({ isOpen: false, id: null })}
       />
 
-      {/* SUNAT Upgrade Banner Dialog */}
-      <Dialog
-        isOpen={showSunatBanner}
-        onClose={() => setShowSunatBanner(false)}
-        title=""
-        description=""
-        size="sm"
-      >
-        <div className="space-y-5 text-center py-2">
-          <div className="flex justify-center">
-            <div className="rounded-full bg-amber-100 dark:bg-amber-900/40 p-4">
-              <Crown className="h-8 w-8 text-amber-600 dark:text-amber-400" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-semibold">Función exclusiva del plan Pro</h2>
-            <p className="text-sm text-muted-foreground">
-              El envío de comprobantes a SUNAT a través de un OSE está disponible únicamente en el plan Pro.
-              Actualiza para emitir comprobantes con validez tributaria oficial.
-            </p>
-          </div>
-          <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 text-left space-y-2">
-            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
-              Plan Pro incluye
-            </p>
-            <ul className="text-sm text-amber-900 dark:text-amber-200 space-y-1">
-              <li className="flex items-center gap-2">
-                <span className="text-amber-600">✓</span> Envío a SUNAT con CDR oficial (OSE)
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-amber-600">✓</span> Boletas y facturas electrónicas válidas
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-amber-600">✓</span> Reportes históricos sin límite
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-amber-600">✓</span> Hasta 10 usuarios y productos ilimitados
-              </li>
-            </ul>
-          </div>
-          <button
-            onClick={() => { setShowSunatBanner(false); navigate('/checkout?plan=PRO'); }}
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 px-4 transition-colors"
-          >
-            <Crown className="h-4 w-4" />
-            Actualizar a Pro
-            <ArrowRight className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setShowSunatBanner(false)}
-            className="w-full rounded-lg border border-input py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            Cerrar
-          </button>
-        </div>
-      </Dialog>
     </div>
   );
 }

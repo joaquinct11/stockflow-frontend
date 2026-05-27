@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Calendar, CreditCard } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, Info } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -23,6 +23,8 @@ export function SubscripcionGuard({ children }: SubscripcionGuardProps) {
   const estado = trialVencidoClientSide ? 'PENDIENTE' : estadoRaw;
   const planId = user?.suscripcion?.planId ?? 'BASICO';
   const puedeReintentar = esAdmin;
+  // currentPeriodEnd para cancelación pendiente (viene del store o del DTO de estado)
+  const currentPeriodEnd = (user?.suscripcion as any)?.currentPeriodEnd as string | undefined;
 
   // Trial vencido: backend aún en TRIAL con fecha pasada, O ya cambió a PENDIENTE sin preapprovalId
   const esTrialVencido =
@@ -49,9 +51,41 @@ export function SubscripcionGuard({ children }: SubscripcionGuardProps) {
               </p>
             </div>
             {puedeReintentar && (
-              <Button size="sm" variant="outline" className="shrink-0 text-blue-800 border-blue-400 hover:bg-blue-100" onClick={() => navigate(`/checkout?plan=${planId}`)}>
+              <Button size="sm" variant="outline" className="shrink-0 text-blue-800 border-blue-400 hover:bg-blue-100" onClick={() => navigate(`/checkout/culqi?plan=${planId}`)}>
                 <CreditCard className="mr-1 h-3 w-3" />
                 Activar ahora
+              </Button>
+            )}
+          </div>
+        </div>
+        {children}
+      </div>
+    );
+  }
+
+  // Cancelación pendiente — acceso completo hasta currentPeriodEnd, banner informativo
+  if (estado === 'CANCELACION_PENDIENTE') {
+    const fechaCorte = currentPeriodEnd
+      ? new Date(currentPeriodEnd).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })
+      : null;
+
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Info className="h-4 w-4 shrink-0" />
+              <p className="text-sm">
+                <span className="font-semibold">Suscripción cancelada</span>
+                {fechaCorte
+                  ? ` — acceso activo hasta el ${fechaCorte}`
+                  : '. Tu acceso se mantendrá hasta el final del período pagado.'}
+              </p>
+            </div>
+            {puedeReintentar && (
+              <Button size="sm" variant="outline" className="shrink-0 text-amber-800 border-amber-400 hover:bg-amber-100" onClick={() => navigate(`/checkout/culqi?plan=${planId}`)}>
+                <CreditCard className="mr-1 h-3 w-3" />
+                Renovar
               </Button>
             )}
           </div>
@@ -82,12 +116,12 @@ export function SubscripcionGuard({ children }: SubscripcionGuardProps) {
                   : estado === 'PENDIENTE' && esTrialVencido
                   ? 'Tu período de prueba venció. Activa tu suscripción para continuar usando el sistema.'
                   : estado === 'PENDIENTE'
-                  ? 'Tu pago está siendo procesado. Espera la confirmación de Mercado Pago o reintenta.'
+                  ? 'Tu pago está siendo procesado. Espera la confirmación o reintenta.'
                   : 'Tu suscripción está suspendida por un pago fallido. Actualiza tu método de pago para continuar.'}
               </p>
             </div>
             {puedeReintentar && (
-              <Button className="w-full" onClick={() => navigate(`/checkout?plan=${planId}`)}>
+              <Button className="w-full" onClick={() => navigate(`/checkout/culqi?plan=${planId}`)}>
                 <CreditCard className="mr-2 h-4 w-4" />
                 Activar suscripción
               </Button>

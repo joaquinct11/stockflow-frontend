@@ -109,6 +109,25 @@ function startOfYear(): string {
   return toDateString(d);
 }
 
+function startOfMonth(): string {
+  const d = new Date();
+  d.setDate(1);
+  return toDateString(d);
+}
+
+function startOfPrevMonth(): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return toDateString(d);
+}
+
+function endOfPrevMonth(): string {
+  const d = new Date();
+  d.setDate(0);
+  return toDateString(d);
+}
+
 function formatSoles(value: number | null | undefined): string {
   if (value == null) return '—';
   return `S/ ${value.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -165,28 +184,6 @@ function formatYAxisNum(v: number): string {
   return String(Math.round(v));
 }
 
-// ─── Comparativa período anterior ────────────────────────────────────────────
-
-/** Calcula el período anterior de igual duración, justo antes del período actual */
-function calcPrevPeriod(desde: string, hasta: string): { prevDesde: string; prevHasta: string } {
-  const d1 = new Date(desde);
-  const d2 = new Date(hasta);
-  const duracionMs = d2.getTime() - d1.getTime();
-  const prevHastaDate = new Date(d1.getTime() - 86_400_000);          // desde − 1 día
-  const prevDesdeDate = new Date(prevHastaDate.getTime() - duracionMs);
-  return { prevDesde: toDateString(prevDesdeDate), prevHasta: toDateString(prevHastaDate) };
-}
-
-/** Retorna el delta % entre valor actual y anterior, o null si no aplica */
-function delta(current: number | null | undefined, prev: number | null | undefined): number | null {
-  if (current == null || prev == null || prev === 0) return null;
-  return ((current - prev) / Math.abs(prev)) * 100;
-}
-
-function trendLabel(prevDesde: string, prevHasta: string): string {
-  return `vs ${prevDesde} → ${prevHasta}`;
-}
-
 // ─── Stat card ────────────────────────────────────────────────────────────────
 
 interface StatCardProps {
@@ -195,10 +192,9 @@ interface StatCardProps {
   value: string;
   description?: string;
   colorClass?: string;
-  trend?: { value: number; label: string };
 }
 
-function StatCard({ icon, title, value, description, colorClass = 'text-foreground', trend }: StatCardProps) {
+function StatCard({ icon, title, value, description, colorClass = 'text-foreground' }: StatCardProps) {
   return (
     <Card className="relative overflow-hidden border-0 shadow-sm">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
@@ -210,13 +206,7 @@ function StatCard({ icon, title, value, description, colorClass = 'text-foregrou
       </CardHeader>
       <CardContent className="pt-0">
         <p className={`text-3xl font-bold tracking-tight ${colorClass}`}>{value}</p>
-        {trend && (
-          <p className={`text-xs flex items-center gap-1 mt-1 ${trend.value >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-            {trend.value >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {trend.value >= 0 ? '+' : ''}{trend.value.toFixed(1)}% {trend.label}
-          </p>
-        )}
-        {description && !trend && (
+        {description && (
           <p className="text-xs text-muted-foreground mt-1">{description}</p>
         )}
       </CardContent>
@@ -299,11 +289,9 @@ function TabEmpty() {
 
 // ─── Resumen tab ──────────────────────────────────────────────────────────────
 
-function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRetry }: {
+function ResumenTab({ loading, error, data, onRetry }: {
   loading: boolean; error: string | null;
   data: ReportesResumenDTO | null;
-  prevData: ReportesResumenDTO | null;
-  prevDesde: string; prevHasta: string;
   onRetry: () => void;
 }) {
   if (loading) return <TabLoading />;
@@ -314,13 +302,6 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
   const mov    = data.movimientos;
   const comp   = data.comprasRecepciones;
   const ventas = data.ventas;
-
-  const prevInv    = prevData?.inventario;
-  const prevMov    = prevData?.movimientos;
-  const prevComp   = prevData?.comprasRecepciones;
-  const prevVentas = prevData?.ventas;
-
-  const tl = trendLabel(prevDesde, prevHasta);
 
   const margenPct = ventas?.ingresosTotal && ventas.margenEstimado != null
     ? (ventas.margenEstimado / ventas.ingresosTotal) * 100
@@ -345,25 +326,19 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
               title="Ingresos totales"
               value={formatSoles(ventas.ingresosTotal)}
               colorClass="text-green-600"
-              trend={delta(ventas.ingresosTotal, prevVentas?.ingresosTotal) != null
-                ? { value: delta(ventas.ingresosTotal, prevVentas?.ingresosTotal)!, label: tl }
-                : undefined}
             />
             <StatCard
               icon={<ShoppingCart className="h-5 w-5" />}
               title="Nº de ventas"
               value={formatNum(ventas.ventasCount)}
-              trend={delta(ventas.ventasCount, prevVentas?.ventasCount) != null
-                ? { value: delta(ventas.ventasCount, prevVentas?.ventasCount)!, label: tl }
+              description={ventas.ventasCount != null && ventas.ingresosTotal
+                ? `Ticket prom. ${formatSoles(ventas.ticketPromedio)}`
                 : undefined}
             />
             <StatCard
               icon={<Target className="h-5 w-5" />}
               title="Ticket promedio"
               value={formatSoles(ventas.ticketPromedio)}
-              trend={delta(ventas.ticketPromedio, prevVentas?.ticketPromedio) != null
-                ? { value: delta(ventas.ticketPromedio, prevVentas?.ticketPromedio)!, label: tl }
-                : undefined}
             />
             <StatCard
               icon={<TrendingUp className="h-5 w-5" />}
@@ -371,9 +346,6 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
               value={margenPct != null ? formatPct(margenPct) : formatSoles(ventas.margenEstimado)}
               colorClass={margenColor}
               description={margenPct != null ? formatSoles(ventas.margenEstimado) : undefined}
-              trend={delta(ventas.margenEstimado, prevVentas?.margenEstimado) != null
-                ? { value: delta(ventas.margenEstimado, prevVentas?.margenEstimado)!, label: tl }
-                : undefined}
             />
           </div>
         </section>
@@ -384,16 +356,8 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inventario</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={<Package className="h-5 w-5" />} title="Total productos" value={formatNum(inv?.totalProductos)} />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización" value={formatSoles(inv?.valorizacionStock)} colorClass="text-green-600"
-            trend={delta(inv?.valorizacionStock, prevInv?.valorizacionStock) != null
-              ? { value: delta(inv?.valorizacionStock, prevInv?.valorizacionStock)!, label: tl }
-              : undefined}
-          />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas período" value={formatNum(mov?.entradasCantidad)} colorClass="text-blue-600"
-            trend={delta(mov?.entradasCantidad, prevMov?.entradasCantidad) != null
-              ? { value: delta(mov?.entradasCantidad, prevMov?.entradasCantidad)!, label: tl }
-              : undefined}
-          />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización stock" value={formatSoles(inv?.valorizacionStock)} colorClass="text-green-600" />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas período" value={formatNum(mov?.entradasCantidad)} colorClass="text-blue-600" />
           <StatCard
             icon={<AlertTriangle className="h-5 w-5" />}
             title="Bajo stock"
@@ -408,21 +372,9 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recepciones del período</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 [&>*:last-child]:col-span-2 [&>*:last-child]:mx-auto [&>*:last-child]:max-w-[calc(50%-0.5rem)] sm:[&>*:last-child]:col-auto sm:[&>*:last-child]:max-w-none sm:[&>*:last-child]:mx-0">
-          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(comp?.recepcionesConfirmadasCount)}
-            trend={delta(comp?.recepcionesConfirmadasCount, prevComp?.recepcionesConfirmadasCount) != null
-              ? { value: delta(comp?.recepcionesConfirmadasCount, prevComp?.recepcionesConfirmadasCount)!, label: tl }
-              : undefined}
-          />
-          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(comp?.unidadesRecibidas)}
-            trend={delta(comp?.unidadesRecibidas, prevComp?.unidadesRecibidas) != null
-              ? { value: delta(comp?.unidadesRecibidas, prevComp?.unidadesRecibidas)!, label: tl }
-              : undefined}
-          />
-          <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto compras est." value={formatSoles(comp?.montoComprasEstimado)} colorClass="text-amber-600"
-            trend={delta(comp?.montoComprasEstimado, prevComp?.montoComprasEstimado) != null
-              ? { value: delta(comp?.montoComprasEstimado, prevComp?.montoComprasEstimado)!, label: tl }
-              : undefined}
-          />
+          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(comp?.recepcionesConfirmadasCount)} />
+          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(comp?.unidadesRecibidas)} />
+          <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto compras est." value={formatSoles(comp?.montoComprasEstimado)} colorClass="text-amber-600" />
         </div>
       </section>
 
@@ -1168,18 +1120,14 @@ function PLRow({
   );
 }
 
-function FinancieroTab({ loading, error, data, prevData, prevDesde, prevHasta, onRetry }: {
+function FinancieroTab({ loading, error, data, onRetry }: {
   loading: boolean; error: string | null;
   data: FinancieroDTO | null;
-  prevData: FinancieroDTO | null;
-  prevDesde: string; prevHasta: string;
   onRetry: () => void;
 }) {
   if (loading) return <TabLoading />;
   if (error)   return <TabError message={error} onRetry={onRetry} />;
   if (!data)   return <TabEmpty />;
-
-  const tl = trendLabel(prevDesde, prevHasta);
 
   const margenBrutoColor  = (data.margenBruto ?? 0) >= 30 ? 'text-green-600' : (data.margenBruto ?? 0) >= 15 ? 'text-yellow-600' : 'text-red-600';
   const margenNetoColor   = (data.margenNeto  ?? 0) >= 15 ? 'text-green-600' : (data.margenNeto  ?? 0) >= 5  ? 'text-yellow-600' : 'text-red-600';
@@ -1204,16 +1152,14 @@ function FinancieroTab({ loading, error, data, prevData, prevDesde, prevHasta, o
           title="Ingresos de ventas"
           value={formatSoles(data.ingresosVentas)}
           colorClass="text-green-600"
-          trend={delta(data.ingresosVentas, prevData?.ingresosVentas) != null
-            ? { value: delta(data.ingresosVentas, prevData?.ingresosVentas)!, label: tl } : undefined}
+          description={data.ventasCount != null ? `${data.ventasCount} venta(s)` : undefined}
         />
         <StatCard
           icon={<TrendingDown className="h-5 w-5" />}
           title="Gastos operativos"
           value={formatSoles(data.gastosTotales)}
           colorClass="text-red-500"
-          trend={delta(data.gastosTotales, prevData?.gastosTotales) != null
-            ? { value: delta(data.gastosTotales, prevData?.gastosTotales)!, label: tl } : undefined}
+          description={data.gastosCount != null ? `${data.gastosCount} gasto(s)` : undefined}
         />
         <StatCard
           icon={<TrendingUp className="h-5 w-5" />}
@@ -1450,10 +1396,12 @@ function ClientesTab({ loading, error, data, onRetry }: {
 // ─── Quick range buttons ──────────────────────────────────────────────────────
 
 const QUICK_RANGES = [
-  { label: '7d',    desde: () => daysAgo(7),   hasta: () => toDateString(new Date()) },
-  { label: '30d',   desde: () => daysAgo(30),  hasta: () => toDateString(new Date()) },
-  { label: '90d',   desde: () => daysAgo(90),  hasta: () => toDateString(new Date()) },
-  { label: 'Este año', desde: startOfYear,     hasta: () => toDateString(new Date()) },
+  { label: '7d',           desde: () => daysAgo(7),      hasta: () => toDateString(new Date()) },
+  { label: '30d',          desde: () => daysAgo(30),     hasta: () => toDateString(new Date()) },
+  { label: 'Este mes',     desde: startOfMonth,           hasta: () => toDateString(new Date()) },
+  { label: 'Mes anterior', desde: startOfPrevMonth,       hasta: endOfPrevMonth },
+  { label: '90d',          desde: () => daysAgo(90),     hasta: () => toDateString(new Date()) },
+  { label: 'Este año',     desde: startOfYear,            hasta: () => toDateString(new Date()) },
 ];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -1475,9 +1423,6 @@ export function ReportesPage() {
   const [resumenLoading, setResumenLoading] = useState(false);
   const [resumenError, setResumenError] = useState<string | null>(null);
   const [resumenData, setResumenData] = useState<ReportesResumenDTO | null>(null);
-  const [resumenPrevData, setResumenPrevData] = useState<ReportesResumenDTO | null>(null);
-  const [prevDesde, setPrevDesde] = useState('');
-  const [prevHasta, setPrevHasta] = useState('');
 
   const [ventasLoading, setVentasLoading] = useState(false);
   const [ventasError, setVentasError] = useState<string | null>(null);
@@ -1496,7 +1441,6 @@ export function ReportesPage() {
   const [financieroLoading, setFinancieroLoading] = useState(false);
   const [financieroError, setFinancieroError] = useState<string | null>(null);
   const [financieroData, setFinancieroData] = useState<FinancieroDTO | null>(null);
-  const [financieroPrevData, setFinancieroPrevData] = useState<FinancieroDTO | null>(null);
 
   const [clientesLoading, setClientesLoading] = useState(false);
   const [clientesError, setClientesError] = useState<string | null>(null);
@@ -1507,14 +1451,7 @@ export function ReportesPage() {
   const fetchResumen = async (d = desde, h = hasta) => {
     try {
       setResumenLoading(true); setResumenError(null);
-      const { prevDesde: pd, prevHasta: ph } = calcPrevPeriod(d, h);
-      setPrevDesde(pd); setPrevHasta(ph);
-      const [current, prev] = await Promise.all([
-        reportesService.getResumen(d, h),
-        reportesService.getResumen(pd, ph).catch(() => null),
-      ]);
-      setResumenData(current);
-      setResumenPrevData(prev);
+      setResumenData(await reportesService.getResumen(d, h));
     } catch { setResumenError('Error al cargar el resumen.'); toast.error('Error al cargar el resumen.');
     } finally { setResumenLoading(false); }
   };
@@ -1556,13 +1493,7 @@ export function ReportesPage() {
 
   const fetchFinanciero = async (d = desde, h = hasta) => {
     try { setFinancieroLoading(true); setFinancieroError(null);
-      const { prevDesde: pd, prevHasta: ph } = calcPrevPeriod(d, h);
-      const [current, prev] = await Promise.all([
-        reportesService.getFinanciero(d, h),
-        reportesService.getFinanciero(pd, ph).catch(() => null),
-      ]);
-      setFinancieroData(current);
-      setFinancieroPrevData(prev);
+      setFinancieroData(await reportesService.getFinanciero(d, h));
     } catch { setFinancieroError('Error al cargar datos financieros.'); toast.error('Error al cargar datos financieros.');
     } finally { setFinancieroLoading(false); }
   };
@@ -1676,7 +1607,7 @@ export function ReportesPage() {
 
   // Para BÁSICO, solo mostrar rangos de ≤30 días
   const visibleRanges = isBasico
-    ? QUICK_RANGES.filter((r) => r.label === '7d' || r.label === '30d')
+    ? QUICK_RANGES.filter((r) => r.label === '7d' || r.label === '30d' || r.label === 'Este mes' || r.label === 'Mes anterior')
     : QUICK_RANGES;
 
   return (
@@ -1814,7 +1745,6 @@ export function ReportesPage() {
         {activeTab === 'resumen' && (
           <ResumenTab
             loading={resumenLoading} error={resumenError} data={resumenData}
-            prevData={resumenPrevData} prevDesde={prevDesde} prevHasta={prevHasta}
             onRetry={fetchResumen}
           />
         )}
@@ -1835,8 +1765,7 @@ export function ReportesPage() {
         {activeTab === 'financiero' && (
           <FinancieroTab
             loading={financieroLoading} error={financieroError}
-            data={financieroData} prevData={financieroPrevData}
-            prevDesde={prevDesde} prevHasta={prevHasta}
+            data={financieroData}
             onRetry={() => fetchFinanciero()}
           />
         )}

@@ -25,42 +25,47 @@ import {
   User as UserIcon,
   Lock,
   Shield,
-  Briefcase,
+  Crown,
   ShoppingBag,
   Boxes,
   Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 
-function roleBadgeVariant(role: Role): 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'destructive' {
-  switch (role) {
-    case 'ADMIN':
-      return 'default';
-    case 'GERENTE':
-      return 'secondary';
-    case 'GESTOR_INVENTARIO':
-      return 'warning';
-    case 'VENDEDOR':
-    default:
-      return 'outline';
-  }
+/** Etiquetas en español para cada rol */
+const ROL_LABELS: Record<string, string> = {
+  ADMIN:             'Administrador',
+  VENDEDOR:          'Vendedor',
+  GESTOR_INVENTARIO: 'Almacenero',
+};
+
+const ROL_STYLE: Record<string, { icon: React.ReactNode; badge: string }> = {
+  ADMIN: {
+    icon:  <Crown       className="h-3.5 w-3.5 text-rose-600" />,
+    badge: 'bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-900/40 dark:text-rose-200 dark:border-rose-800',
+  },
+  VENDEDOR: {
+    icon:  <ShoppingBag className="h-3.5 w-3.5 text-emerald-600" />,
+    badge: 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-800',
+  },
+  GESTOR_INVENTARIO: {
+    icon:  <Boxes       className="h-3.5 w-3.5 text-amber-600" />,
+    badge: 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-800',
+  },
+};
+
+function RolBadge({ role }: { role: string }) {
+  const style = ROL_STYLE[role] ?? ROL_STYLE['VENDEDOR'];
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${style.badge}`}>
+      {style.icon}
+      {ROL_LABELS[role] ?? role}
+    </span>
+  );
 }
 
-function roleIcon(role: Role) {
-  switch (role) {
-    case 'ADMIN':
-      return <Shield className="h-4 w-4 text-white" />;
-    case 'GERENTE':
-      return <Briefcase className="h-4 w-4 text-blue-600" />;
-    case 'GESTOR_INVENTARIO':
-      return <Boxes className="h-4 w-4 text-orange-600" />;
-    case 'VENDEDOR':
-    default:
-      return <ShoppingBag className="h-4 w-4 text-muted-foreground" />;
-  }
-}
 
 type EstadoFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
 
@@ -75,13 +80,8 @@ export function UsuariosList() {
   const allowedRoleOptions = useMemo(() => {
     const map: Record<Role, Array<{ value: Role; label: string }>> = {
       ADMIN: [
-        { value: 'GERENTE', label: 'Gerente' },
-        { value: 'VENDEDOR', label: 'Vendedor' },
-        { value: 'GESTOR_INVENTARIO', label: 'Gestor de Inventario' },
-      ],
-      GERENTE: [
-        { value: 'VENDEDOR', label: 'Vendedor' },
-        { value: 'GESTOR_INVENTARIO', label: 'Gestor de Inventario' },
+        { value: 'VENDEDOR',          label: 'Vendedor'   },
+        { value: 'GESTOR_INVENTARIO', label: 'Almacenero' },
       ],
       VENDEDOR: [],
       GESTOR_INVENTARIO: [],
@@ -523,12 +523,7 @@ export function UsuariosList() {
                             <TableCell>{usuario.email}</TableCell>
 
                             <TableCell>
-                              <Badge variant={roleBadgeVariant(usuario.rolNombre as Role)}>
-                                <span className="inline-flex items-center gap-2">
-                                  {roleIcon(usuario.rolNombre as Role)}
-                                  {usuario.rolNombre}
-                                </span>
-                              </Badge>
+                              <RolBadge role={usuario.rolNombre} />
                             </TableCell>
 
                             <TableCell>
@@ -727,7 +722,7 @@ export function UsuariosList() {
 
                 {!canCreate('USUARIOS') && (
                   <p className="text-xs text-muted-foreground">
-                    Tu rol (<span className="font-medium">{currentUserRole}</span>) no puede crear usuarios.
+                    Tu rol (<span className="font-medium">{ROL_LABELS[currentUserRole] ?? currentUserRole}</span>) no puede crear usuarios.
                   </p>
                 )}
               </div>

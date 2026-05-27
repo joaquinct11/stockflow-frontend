@@ -41,7 +41,7 @@ import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { ImportarProductosModal } from '../../components/inventario/ImportarProductosModal';
 
 export function InventarioList() {
-  const { userId } = useCurrentUser();
+  const { userId, tenantId } = useCurrentUser();
   const { canCreate, canView } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
   const hasViewPermission = canView('INVENTARIO');
@@ -85,7 +85,7 @@ export function InventarioList() {
     descripcion: '',
     referencia: '',
     usuarioId: 0,
-    tenantId: 'farmacia-001',
+    tenantId: '',
     proveedorId: undefined,
     costoUnitario: undefined,
     lote: '',
@@ -93,8 +93,12 @@ export function InventarioList() {
   });
 
   useEffect(() => {
-    if (userId) setFormData((prev) => ({ ...prev, usuarioId: userId }));
-  }, [userId]);
+    setFormData((prev) => ({
+      ...prev,
+      ...(userId ? { usuarioId: userId } : {}),
+      ...(tenantId ? { tenantId } : {}),
+    }));
+  }, [userId, tenantId]);
 
   useEffect(() => {
     if (hasViewPermission) {
@@ -274,7 +278,7 @@ export function InventarioList() {
       descripcion: '',
       referencia: '',
       usuarioId: userId || 0,
-      tenantId: 'farmacia-001',
+      tenantId,
       proveedorId: undefined,
       costoUnitario: undefined,
       lote: '',
@@ -749,7 +753,7 @@ export function InventarioList() {
         isOpen={isDialogOpen}
         onClose={resetForm}
         title="Nuevo Movimiento de Inventario"
-        description="Registra un movimiento de ajuste o devolución"
+        description="Registra una entrada de stock, ajuste o devolución"
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -790,15 +794,21 @@ export function InventarioList() {
                 </p>
               </div>
 
-              {/* 2) Tipo Movimiento (solo Ajuste y Devolución) */}
+              {/* 2) Tipo Movimiento */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Tipo de Movimiento <span className="text-red-500">*</span>
                 </label>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {(
                     [
+                      {
+                        key: 'ENTRADA',
+                        title: 'Entrada',
+                        subtitle: 'Stock / Compra',
+                        icon: <TrendingUp className="h-4 w-4 text-green-600" />,
+                      },
                       {
                         key: 'AJUSTE',
                         title: 'Ajuste',
@@ -823,7 +833,6 @@ export function InventarioList() {
                           setFormData({
                             ...formData,
                             tipo: nuevoTipo,
-                            // por si en algún momento se habilita ENTRADA, limpiamos campos extra
                             ...(nuevoTipo !== 'ENTRADA' && {
                               proveedorId: undefined,
                               costoUnitario: undefined,
@@ -853,7 +862,7 @@ export function InventarioList() {
                   })}
                 </div>
 
-                {/* input hidden para mantener "required" de forma estándar */}
+                {/* input hidden para mantener "required" */}
                 <select
                   value={formData.tipo}
                   onChange={(e) => {
@@ -873,10 +882,76 @@ export function InventarioList() {
                   className="hidden"
                   required
                 >
+                  <option value="ENTRADA">ENTRADA</option>
                   <option value="AJUSTE">AJUSTE</option>
                   <option value="DEVOLUCION">DEVOLUCION</option>
                 </select>
               </div>
+
+              {/* Campos adicionales para ENTRADA */}
+              {formData.tipo === 'ENTRADA' && (
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 p-4 space-y-4">
+                  <p className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider">Datos de entrada de stock</p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Proveedor */}
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium">Proveedor</label>
+                      <Autocomplete
+                        options={proveedores.filter(p => p.activo !== false).map(p => ({
+                          id: p.id!,
+                          label: p.nombre,
+                          subtitle: p.ruc ? `RUC: ${p.ruc}` : undefined,
+                        }))}
+                        value={(() => {
+                          const p = proveedores.find(p => p.id === formData.proveedorId);
+                          return p ? { id: p.id!, label: p.nombre } : null;
+                        })()}
+                        onChange={(option) => {
+                          setSelectedProveedorMov(option);
+                          setFormData({ ...formData, proveedorId: option?.id ?? undefined });
+                        }}
+                        placeholder="Seleccionar proveedor (opcional)"
+                        emptyMessage="No se encontró el proveedor"
+                      />
+                    </div>
+
+                    {/* Costo unitario */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Costo unitario</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.costoUnitario ?? ''}
+                        onChange={(e) => setFormData({ ...formData, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    {/* Lote */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Lote</label>
+                      <Input
+                        type="text"
+                        value={formData.lote ?? ''}
+                        onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
+                        placeholder="Ej: LOT-2025-001"
+                      />
+                    </div>
+
+                    {/* Fecha de vencimiento */}
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium">Fecha de vencimiento</label>
+                      <Input
+                        type="date"
+                        value={formData.fechaVencimiento ?? ''}
+                        onChange={(e) => setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 3) Cantidad y Referencia */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

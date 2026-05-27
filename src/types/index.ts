@@ -59,15 +59,19 @@ export interface LoginDTO {
 
 export type PlanId = 'BASICO' | 'PRO';
 
+export type TipoDocumento = 'DNI' | 'CE' | 'RUC' | 'PASAPORTE';
+
 // ✅ NUEVO: Para registro de nueva farmacia
 export interface RegistrationRequestDTO {
   email: string;
   contraseña: string;
   nombre: string;
+  apellido?: string;
   nombreFarmacia: string;
   planId: PlanId;
   tipoDocumento?: string;
   numeroDocumento?: string;
+  numeroCelular?: string;
 }
 
 // ========================================
@@ -116,6 +120,8 @@ export interface ProductoDTO {
   tenantId: string;
   unidadMedidaId: number;
   unidadMedidaNombre?: string;
+  /** URL de imagen del producto (opcional). Null → fallback con letra del nombre. */
+  imagenUrl?: string;
 }
 
 // ========================================
@@ -230,7 +236,6 @@ export interface SuscripcionDTO {
   planId: string;
   precioMensual: number;
   preapprovalId?: string;
-  intentosFallidos?: number;
   estado: string;
   metodoPago?: string;
   ultimos4Digitos?: string;
@@ -240,31 +245,17 @@ export interface SuscripcionDTO {
   fechaCancelacion?: string;
   deletedAt?: string;
   trialEndDate?: string;
-  enPeriodoPrueba?: boolean;
-}
-
-export type TipoDocumento = 'DNI' | 'CE' | 'RUC' | 'PASAPORTE';
-
-export interface SuscripcionCheckoutRequestDTO {
-  planId: PlanId;
-  tipoDocumento?: TipoDocumento;
-  numeroDocumento?: string;
-}
-
-export interface SuscripcionCheckoutResponseDTO {
-  initPoint: string;
-  preferenceId: string;
-  preapprovalId?: string;
 }
 
 export interface SuscripcionEstadoResponseDTO {
   estado: string;
   planId: string;
   preapprovalId?: string;
-  mpPaymentId?: string;
   fechaProximoCobro?: string;
   /** Precio mensual real del plan desde BD */
   precioMensual?: number;
+  /** Fin del período pagado — presente en CANCELACION_PENDIENTE para mostrar fecha de corte */
+  currentPeriodEnd?: string;
 }
 
 // ========================================
@@ -286,6 +277,14 @@ export interface TenantConfigDTO {
   piePaginaPdf?: string;
   serieBoleta?: string;
   serieFactura?: string;
+  /** URL base del OSE (Nubefact / Efact). Ej: https://api.nubefact.com/api/v1/{slug} */
+  oseUrl?: string;
+  /**
+   * Token API del OSE.
+   * El backend devuelve el valor enmascarado (••••••últimos6chars) en GET.
+   * Enviar vacío = mantener el existente; enviar nuevo valor = actualizarlo.
+   */
+  oseToken?: string;
 }
 
 // ✅ NUEVO
@@ -429,6 +428,12 @@ export interface ComprobanteDTO {
   receptorDireccion?: string;
   // Estado de envío a SUNAT
   sunatEstado?: string;
+  /** Mensaje descriptivo de SUNAT/Nubefact (ej: "La Factura FFF1-1 ha sido ACEPTADA"). */
+  sunatMensaje?: string;
+  sunatTicket?: string;
+  pdfUrl?: string;
+  xmlUrl?: string;
+  qr?: string;
 }
 
 export interface EmitirComprobanteForm {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronUp,
   Rocket,
-  Package,
   ClipboardList,
   ArrowRight,
   FileSpreadsheet,
@@ -101,18 +100,62 @@ function StockModal({ onClose }: { onClose: () => void }) {
 
 // ── Checklist principal ────────────────────────────────────────────────────
 
-const DISMISSED_KEY = 'onboarding_dismissed';
-
 export function OnboardingChecklist() {
   const { user } = useAuthStore();
   const navigate  = useNavigate();
   const location  = useLocation();
 
+  // Clave por tenant para que no persista entre cuentas distintas
+  const dismissedKey = `onboarding_dismissed_${user?.tenantId ?? 'default'}`;
+
   const [progreso, setProgreso]       = useState<OnboardingProgreso | null>(null);
   const [collapsed, setCollapsed]     = useState(false);
-  const [dismissed, setDismissed]     = useState(() => localStorage.getItem(DISMISSED_KEY) === 'true');
+  const [dismissed, setDismissed]     = useState(() => localStorage.getItem(dismissedKey) === 'true');
   const [showStockModal, setShowStockModal] = useState(false);
   const [loading, setLoading]         = useState(true);
+
+  // ── Drag ──────────────────────────────────────────────────────────────────
+  const WIDGET_W = 320;
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const widgetRef   = useRef<HTMLDivElement>(null);
+  const dragging    = useRef(false);
+  const dragOffset  = useRef({ x: 0, y: 0 });
+
+  // Inicializa la posición en la esquina inferior-derecha la primera vez
+  useEffect(() => {
+    setPos({
+      x: window.innerWidth  - WIDGET_W - 24,
+      y: window.innerHeight - 320,
+    });
+  }, []);
+
+  const handleDragStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // No iniciar arrastre si el clic fue en un botón (minimizar / cerrar)
+    if ((e.target as HTMLElement).closest('button')) return;
+    dragging.current = true;
+    const rect = widgetRef.current?.getBoundingClientRect();
+    if (rect) {
+      dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+    e.preventDefault();
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      setPos({
+        x: Math.max(0, Math.min(window.innerWidth  - WIDGET_W,   e.clientX - dragOffset.current.x)),
+        y: Math.max(0, Math.min(window.innerHeight - 48,          e.clientY - dragOffset.current.y)),
+      });
+    };
+    const onUp = () => { dragging.current = false; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+    };
+  }, []);
 
   // Solo el ADMIN ve el checklist
   const esAdmin = user?.rol === 'ADMIN';
@@ -145,7 +188,7 @@ export function OnboardingChecklist() {
   }, [esAdmin, dismissed]);
 
   const handleDismiss = () => {
-    localStorage.setItem(DISMISSED_KEY, 'true');
+    localStorage.setItem(dismissedKey, 'true');
     setDismissed(true);
   };
 
@@ -166,15 +209,23 @@ export function OnboardingChecklist() {
     <>
       {showStockModal && <StockModal onClose={() => setShowStockModal(false)} />}
 
-      <div className="fixed bottom-6 right-6 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-500 p-4 text-white">
+      <div
+        ref={widgetRef}
+        className="fixed w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden"
+        style={pos ? { left: pos.x, top: pos.y } : { bottom: 24, right: 24 }}
+      >
+        {/* Header — arrastrable */}
+        <div
+          className="bg-gradient-to-r from-blue-600 to-blue-500 p-4 text-white select-none"
+          onMouseDown={handleDragStart}
+          style={{ cursor: 'grab' }}
+        >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pointer-events-none">
               <Rocket size={18} />
               <span className="font-bold text-sm">Configura tu negocio</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 pointer-events-auto">
               <button
                 onClick={() => setCollapsed(c => !c)}
                 className="p-1 hover:bg-white/20 rounded transition-colors"
@@ -193,7 +244,7 @@ export function OnboardingChecklist() {
           </div>
 
           {/* Barra de progreso */}
-          <div className="mt-3">
+          <div className="mt-3 pointer-events-none">
             <div className="flex justify-between text-xs mb-1 opacity-90">
               <span>{porcentaje}% completado</span>
               <span>{pendientes} paso{pendientes !== 1 ? 's' : ''} restante{pendientes !== 1 ? 's' : ''}</span>
@@ -223,19 +274,24 @@ export function OnboardingChecklist() {
                 {/* Icono */}
                 {paso.completado ? (
                   <CheckCircle2 size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
-                ) : paso.id === 'stock' ? (
-                  <Package size={18} className="text-blue-400 flex-shrink-0 mt-0.5 group-hover:text-blue-600 transition-colors" />
                 ) : (
                   <Circle size={18} className="text-gray-300 flex-shrink-0 mt-0.5 group-hover:text-blue-400 transition-colors" />
                 )}
 
                 {/* Texto */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium leading-tight ${
-                    paso.completado ? 'line-through text-gray-400' : 'text-gray-700 group-hover:text-blue-700'
-                  }`}>
-                    {paso.titulo}
-                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className={`text-sm font-medium leading-tight ${
+                      paso.completado ? 'line-through text-gray-400' : 'text-gray-700 group-hover:text-blue-700'
+                    }`}>
+                      {paso.titulo}
+                    </p>
+                    {paso.opcional && !paso.completado && (
+                      <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full leading-none shrink-0">
+                        Opcional
+                      </span>
+                    )}
+                  </div>
                   {!paso.completado && (
                     <p className="text-xs text-gray-400 mt-0.5 leading-tight">
                       {paso.descripcion}

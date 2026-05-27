@@ -75,4 +75,26 @@ export const facturacionService = {
     const response = await axiosInstance.post<ComprobanteApiDTO>(API_ENDPOINTS.FACTURACION.ANULAR(id));
     return mapApiToComprobanteDTO(response.data);
   },
+
+  /**
+   * Envía el comprobante al OSE (Nubefact) configurado por el tenant.
+   * El backend actualiza sunat_estado, pdf_url y xml_url con la respuesta.
+   */
+  enviarASunat: async (id: number): Promise<ComprobanteDTO> => {
+    const response = await axiosInstance.post<ComprobanteApiDTO>(
+      API_ENDPOINTS.FACTURACION.ENVIAR_SUNAT(id)
+    );
+    return mapApiToComprobanteDTO(response.data);
+  },
+
+  /**
+   * Descarga el PDF de un comprobante como Blob.
+   * Uso: const blob = await downloadPdf(id); triggerDownload(blob, filename);
+   */
+  downloadPdf: async (id: number): Promise<Blob> => {
+    const response = await axiosInstance.get<Blob>(API_ENDPOINTS.FACTURACION.PDF(id), {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };

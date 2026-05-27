@@ -174,9 +174,13 @@ export function RecepcionList() {
   // ── Cámara ────────────────────────────────────────────────────────────────
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [cameraError, setCameraError]             = useState<string | null>(null);
-  const videoRef      = useRef<HTMLVideoElement>(null);
-  const streamRef     = useRef<MediaStream | null>(null);
+  const [manualCode, setManualCode]               = useState('');
+  const videoRef        = useRef<HTMLVideoElement>(null);
+  const streamRef       = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Lector USB/Bluetooth: captura teclado cuando el lector escribe muy rápido y pulsa Enter
+  const barcodeBuffer = useRef('');
+  const barcodeTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
   const [confirmDialog, setConfirmDialog] = useState({
@@ -553,6 +557,7 @@ export function RecepcionList() {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     setShowCameraScanner(false);
     setCameraError(null);
+    setManualCode('');
   }, []);
 
   const buscarPorCodigoRecepcion = useCallback(async (codigo: string) => {
@@ -634,6 +639,45 @@ export function RecepcionList() {
   }, [stopCamera, buscarPorCodigoRecepcion]);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
+
+  // ── Lector USB/Bluetooth de códigos de barras ──────────────────────────────
+  // Detecta cuando un lector físico escribe muy rápido (< 80 ms entre chars) y
+  // envía Enter: lo diferencia del tipeo humano y dispara la búsqueda automáticamente.
+  useEffect(() => {
+    // Solo activo cuando el detalle de una recepción en BORRADOR está abierto
+    // y la cámara NO está en uso (evita doble disparo)
+    if (!isDetailOpen || selectedRecep?.estado !== 'BORRADOR' || showCameraScanner) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Si el foco está en un input/textarea/select, dejar que el usuario escriba normal
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.current.length >= 3) {
+          buscarPorCodigoRecepcion(barcodeBuffer.current.trim());
+        }
+        barcodeBuffer.current = '';
+        if (barcodeTimer.current) clearTimeout(barcodeTimer.current);
+        return;
+      }
+
+      if (e.key.length === 1) {
+        barcodeBuffer.current += e.key;
+        if (barcodeTimer.current) clearTimeout(barcodeTimer.current);
+        barcodeTimer.current = setTimeout(() => {
+          // Si pasan 100ms sin más teclas → no fue el lector, resetear
+          barcodeBuffer.current = '';
+        }, 100);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      if (barcodeTimer.current) clearTimeout(barcodeTimer.current);
+    };
+  }, [isDetailOpen, selectedRecep?.estado, showCameraScanner, buscarPorCodigoRecepcion]);
 
   if (loading) return <LoadingSpinner />;
   if (!hasViewPermission)
@@ -1106,7 +1150,7 @@ export function RecepcionList() {
                       <button
                         type="button"
                         onClick={openCamera}
-                        title="Escanear código de barras"
+                        title="Escanear código de barras con la cámara (también funciona con lector USB/Bluetooth)"
                         className="flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-input bg-background hover:border-primary hover:text-primary text-muted-foreground text-xs font-medium transition-colors"
                       >
                         <Camera size={13} /> Escanear
@@ -1512,9 +1556,43 @@ export function RecepcionList() {
             {/* Error */}
             {cameraError && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-8">
-                <div className="text-center space-y-4 max-w-xs">
+                <div className="text-center space-y-4 max-w-sm w-full">
                   <CameraOff size={44} className="mx-auto text-red-400" />
                   <p className="text-sm text-gray-300 leading-relaxed">{cameraError}</p>
+                  {/* Fallback: entrada manual */}
+                  <div className="mt-2 space-y-2">
+                    <p className="text-xs text-gray-400">Escribe o pega el código del producto:</p>
+                    <div className="flex gap-2">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={manualCode}
+                        onChange={e => setManualCode(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && manualCode.trim()) {
+                            const code = manualCode.trim();
+                            stopCamera();
+                            buscarPorCodigoRecepcion(code);
+                          }
+                        }}
+                        placeholder="Ej: 7501055300241"
+                        className="flex-1 h-10 rounded-lg border border-gray-600 bg-gray-800 px-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const code = manualCode.trim();
+                          if (!code) return;
+                          stopCamera();
+                          buscarPorCodigoRecepcion(code);
+                        }}
+                        disabled={!manualCode.trim()}
+                        className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors"
+                      >
+                        Buscar
+                      </button>
+                    </div>
+                  </div>
                   <button type="button" onClick={stopCamera}
                     className="px-6 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-sm font-medium transition-colors">
                     Cerrar
@@ -1528,6 +1606,36 @@ export function RecepcionList() {
           {!cameraError && (
             <div className="flex-shrink-0 bg-black/90 px-4 py-4 flex flex-col items-center gap-3">
               <p className="text-xs text-gray-500">Apunta la cámara al código de barras del producto</p>
+              {/* Entrada manual alternativa */}
+              <div className="flex gap-2 w-full max-w-xs">
+                <input
+                  type="text"
+                  value={manualCode}
+                  onChange={e => setManualCode(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && manualCode.trim()) {
+                      const code = manualCode.trim();
+                      stopCamera();
+                      buscarPorCodigoRecepcion(code);
+                    }
+                  }}
+                  placeholder="O escribe el código..."
+                  className="flex-1 h-9 rounded-lg border border-gray-600 bg-gray-800 px-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const code = manualCode.trim();
+                    if (!code) return;
+                    stopCamera();
+                    buscarPorCodigoRecepcion(code);
+                  }}
+                  disabled={!manualCode.trim()}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors"
+                >
+                  OK
+                </button>
+              </div>
               <button type="button" onClick={stopCamera}
                 className="px-10 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-sm font-medium transition-colors">
                 Cancelar

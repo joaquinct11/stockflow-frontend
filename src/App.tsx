@@ -16,15 +16,21 @@ import { PlanGuard } from './components/shared/PlanGuard';
 // Landing Page
 import { LandingPage } from './pages/landing/LandingPage';
 
+// Legal Pages (públicas)
+import { TerminosPage }      from './pages/legal/TerminosPage';
+import { PrivacidadPage }    from './pages/legal/PrivacidadPage';
+import { ReclamacionesPage } from './pages/legal/ReclamacionesPage';
+
+// Plan / Compra (público — carrito)
+import { PlanPage } from './pages/suscripcion/PlanPage';
+
 // Auth Pages
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword } from './pages/auth/ResetPassword';
 import { ActivatePage } from './pages/auth/ActivatePage'
-import { CheckoutPage } from './pages/checkout/CheckoutPage';
-import { CheckoutRedirectPage } from './pages/checkout/CheckoutRedirectPage';
-import { CheckoutReturnPage } from './pages/checkout/CheckoutReturnPage';
+import { CheckoutCulqiPage } from './pages/checkout/CheckoutCulqiPage';
 
 // Main Pages
 import { Dashboard } from './pages/dashboard/Dashboard';
@@ -82,6 +88,14 @@ function App() {
           {/* Landing Page - Pública */}
           <Route path="/" element={<LandingPage />} />
 
+          {/* Páginas legales - Públicas */}
+          <Route path="/terminos"      element={<TerminosPage />} />
+          <Route path="/privacidad"    element={<PrivacidadPage />} />
+          <Route path="/reclamaciones" element={<ReclamacionesPage />} />
+
+          {/* Página de plan / compra (carrito) - Pública */}
+          <Route path="/plan" element={<PlanPage />} />
+
           {/* Auth Routes - Públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -89,42 +103,10 @@ function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/activate" element={<ActivatePage />} />
           <Route
-            path="/checkout"
+            path="/checkout/culqi"
             element={
               <ProtectedRoute>
-                <CheckoutPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/checkout/redirect"
-            element={
-              <ProtectedRoute>
-                <CheckoutRedirectPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/checkout/success"
-            element={
-              <ProtectedRoute>
-                <CheckoutReturnPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/checkout/failure"
-            element={
-              <ProtectedRoute>
-                <CheckoutReturnPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/checkout/pending"
-            element={
-              <ProtectedRoute>
-                <CheckoutReturnPage />
+                <CheckoutCulqiPage />
               </ProtectedRoute>
             }
           />
@@ -334,7 +316,7 @@ function App() {
               path="notas-credito"
               element={
                 <SubscripcionGuard>
-                  <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE']}>
+                  <RoleProtectedRoute allowedRoles={['ADMIN']}>
                     <NotasCreditoPage />
                   </RoleProtectedRoute>
                 </SubscripcionGuard>

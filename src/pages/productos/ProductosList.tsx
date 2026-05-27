@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { categoriaService } from '../../services/categoria.service';
@@ -31,6 +31,7 @@ import {
   Timer,
   X,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -62,6 +63,39 @@ export function ProductosList() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Imagen del producto
+  const imgInputRef = useRef<HTMLInputElement>(null);
+  const [imgPreview, setImgPreview] = useState<string | null>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error('La imagen no puede superar 10 MB'); return; }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const originalDataUrl = ev.target?.result as string;
+      // Comprimir con Canvas: máx 400×400px, JPEG 80%
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 400;
+        let w = img.width;
+        let h = img.height;
+        if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+        else       { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL('image/jpeg', 0.80);
+        setImgPreview(compressed);
+        setFormData(p => ({ ...p, imagenUrl: compressed }));
+      };
+      img.src = originalDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -163,7 +197,7 @@ export function ProductosList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (import.meta.env.DEV) console.log('📤 Datos que se envían:', JSON.stringify(formData, null, 2));
+    console.log('🖼️ imagenUrl al guardar:', formData.imagenUrl ? `SÍ (${formData.imagenUrl.length} chars)` : 'NO / undefined');
 
     try {
       if (editingId) {
@@ -235,7 +269,9 @@ export function ProductosList() {
       activo: producto.activo,
       tenantId: producto.tenantId,
       unidadMedidaId: producto.unidadMedidaId || 0,
+      imagenUrl: producto.imagenUrl,
     });
+    setImgPreview(producto.imagenUrl ?? null);
 
     setEditingId(producto.id!);
     setIsDialogOpen(true);
@@ -257,6 +293,8 @@ export function ProductosList() {
     });
     setEditingId(null);
     setIsDialogOpen(false);
+    setImgPreview(null);
+    if (imgInputRef.current) imgInputRef.current.value = '';
   };
 
   // Crear nueva unidad de medida inline
@@ -850,6 +888,38 @@ export function ProductosList() {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Sección: Imagen */}
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Imagen del producto</p>
+              <p className="text-xs text-muted-foreground">Opcional. Se mostrará en el POS para facilitar la identificación.</p>
+            </div>
+            <div className="flex gap-4 items-center">
+              {/* Vista previa */}
+              <div className="w-20 h-20 rounded-xl bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 border">
+                {imgPreview
+                  ? <img src={imgPreview} alt="Preview" className="w-full h-full object-cover" />
+                  : <span className="text-3xl font-bold text-muted-foreground">{formData.nombre?.charAt(0)?.toUpperCase() || '?'}</span>
+                }
+              </div>
+              {/* Controles */}
+              <div className="flex flex-col gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => imgInputRef.current?.click()}>
+                  <Upload size={13} className="mr-2" />
+                  {imgPreview ? 'Cambiar foto' : 'Subir foto'}
+                </Button>
+                {imgPreview && (
+                  <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive"
+                    onClick={() => { setImgPreview(null); setFormData(p => ({ ...p, imagenUrl: undefined })); if (imgInputRef.current) imgInputRef.current.value = ''; }}>
+                    <X size={13} className="mr-2" /> Quitar imagen
+                  </Button>
+                )}
+                <p className="text-xs text-muted-foreground">JPG, PNG o WebP · máx. 2.5 MB</p>
+              </div>
+            </div>
+            <input ref={imgInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleImageChange} />
           </div>
 
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">

@@ -38,7 +38,9 @@ import {
   RotateCcw,
   RefreshCw,
   SlidersHorizontal,
+  Printer,
 } from 'lucide-react';
+import { printTicket } from '../../utils/printTicket';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -741,7 +743,7 @@ export function VentasList() {
                       <TableHead>Método de Pago</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead>Productos</TableHead>
+                      <TableHead>Comprobante</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -809,7 +811,28 @@ export function VentasList() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">{venta.detalles.length} producto(s)</Badge>
+                          {(() => {
+                            const comp = comprobantes.find(c => c.ventaId === venta.id);
+                            if (!comp) return <span className="text-xs text-muted-foreground">—</span>;
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs font-mono font-medium">{comp.numero ?? '—'}</span>
+                                {comp.sunatEstado ? (
+                                  <Badge
+                                    variant={comp.sunatEstado === 'ACEPTADO' ? 'success' : comp.sunatEstado === 'RECHAZADO' ? 'destructive' : 'warning'}
+                                    className="text-[10px] px-1.5 w-fit"
+                                    title={comp.sunatMensaje ?? undefined}
+                                  >
+                                    {comp.sunatEstado}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="text-[10px] px-1.5 w-fit opacity-60">
+                                    Sin enviar
+                                  </Badge>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -1042,6 +1065,21 @@ export function VentasList() {
                   );
                 })()}
 
+                {(() => {
+                  const comp = comprobantes.find(c => c.ventaId === selectedVenta.id);
+                  if (!comp) return null;
+                  return (
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center gap-2"
+                      onClick={() => printTicket(comp, negocioConfig)}
+                    >
+                      <Printer size={16} />
+                      Imprimir Ticket
+                    </Button>
+                  );
+                })()}
+
                 <Button onClick={closeDetailDialog} className="w-full">
                   Cerrar
                 </Button>
@@ -1115,7 +1153,7 @@ export function VentasList() {
                   />
                   {tipo}
                   <span className="text-xs text-muted-foreground font-normal">
-                    {tipo === 'BOLETA' ? '(B001)' : '(F001)'}
+                    {tipo === 'BOLETA' ? 'con DNI opcional' : 'requiere RUC'}
                   </span>
                 </label>
               ))}

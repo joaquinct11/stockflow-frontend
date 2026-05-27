@@ -71,8 +71,6 @@ export const API_ENDPOINTS = {
     GET_BY_USER: (usuarioId: number) => `/suscripciones/usuario/${usuarioId}`,
     GET_BY_STATE: (estado: string) => `/suscripciones/estado/${estado}`,
     ESTADO: '/suscripciones/estado',
-    SINCRONIZAR: '/suscripciones/sincronizar',
-    CHECKOUT: '/suscripciones/checkout',
     CREATE: '/suscripciones',
     UPDATE: (id: number) => `/suscripciones/${id}`,
     CANCEL: (id: number) => `/suscripciones/${id}/cancelar`,
@@ -125,6 +123,8 @@ export const API_ENDPOINTS = {
     GET: (id: number) => `/facturacion/comprobantes/${id}`,
     CREATE: '/facturacion/comprobantes',
     ANULAR: (id: number) => `/facturacion/comprobantes/${id}/anular`,
+    PDF: (id: number) => `/facturacion/comprobantes/${id}/pdf`,
+    ENVIAR_SUNAT: (id: number) => `/facturacion/comprobantes/${id}/enviar-sunat`,
     GET_BY_VENTA: (ventaId: number) => `/ventas/${ventaId}/comprobante`,
   },
 
@@ -201,6 +201,12 @@ export const API_ENDPOINTS = {
     CREATE: '/gastos',
     UPDATE: (id: number) => `/gastos/${id}`,
     DELETE: (id: number) => `/gastos/${id}`,
+  },
+
+  CULQI: {
+    CONFIG:       '/culqi/config',
+    SUSCRIBIR:    '/culqi/suscribir',
+    CREAR_PLAN:   '/culqi/admin/crear-plan',
   },
 
   NOTIFICACIONES: {
