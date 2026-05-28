@@ -280,7 +280,18 @@ function TabLoading() {
 }
 
 function TabError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <EmptyState icon={AlertTriangle} title="Error al cargar datos" description={message} action={{ label: 'Reintentar', onClick: onRetry }} />;
+  return (
+    <div className="flex flex-col items-center gap-3 py-16 text-center">
+      <EmptyState icon={AlertTriangle} title="Error al cargar datos" description={message} />
+      <button
+        type="button"
+        onClick={onRetry}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium hover:bg-accent transition-colors"
+      >
+        <RefreshCw size={14} /> Reintentar
+      </button>
+    </div>
+  );
 }
 
 function TabEmpty() {
