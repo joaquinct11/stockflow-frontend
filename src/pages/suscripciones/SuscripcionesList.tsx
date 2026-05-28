@@ -114,7 +114,7 @@ export function SuscripcionesList() {
         return;
       }
       setSuscripcionEstado(estado.estado);
-      const precioReal = estado.precioMensual ?? 150;
+      const precioReal = estado.precioMensual ?? 129;
       setSuscripcion({
         planId: estado.planId,
         precioMensual: precioReal,
@@ -172,11 +172,7 @@ export function SuscripcionesList() {
         <EmptyState
           icon={CreditCard}
           title="Sin suscripción activa"
-          description="No tienes ninguna suscripción registrada. Elige un plan para empezar."
-          action={{
-            label: 'Ver planes',
-            onClick: () => navigate('/checkout/culqi?plan=BASICO'),
-          }}
+          description="No tienes ninguna suscripción registrada. Usa el botón «Activar suscripción» del banner superior para elegir un plan y continuar usando Fluxus."
         />
       </div>
     );
@@ -222,7 +218,7 @@ export function SuscripcionesList() {
               </div>
               <div>
                 <CardTitle>Plan Básico</CardTitle>
-                <CardDescription>S/. {(suscripcion.precioMensual ?? 150).toFixed(2)} / mes</CardDescription>
+                <CardDescription>S/. {(suscripcion.precioMensual ?? 129).toFixed(2)} / mes</CardDescription>
               </div>
             </div>
             {estadoBadge(suscripcion.estado ?? '', suscripcion.preapprovalId)}

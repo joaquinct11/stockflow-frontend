@@ -544,16 +544,11 @@ export function GastosList() {
             <div className="py-4">
               <EmptyState
                 icon={TrendingDown}
-                title="Sin gastos registrados"
+                title={searchTerm || categoriaFilter !== 'TODAS' ? 'Sin resultados' : 'Todavía no hay gastos registrados'}
                 description={
                   searchTerm || categoriaFilter !== 'TODAS'
-                    ? 'No hay gastos que coincidan con los filtros.'
-                    : 'Registra el primer gasto para llevar el control de egresos.'
-                }
-                action={
-                  canCreate('GASTOS') && !searchTerm && categoriaFilter === 'TODAS'
-                    ? { label: 'Registrar gasto', onClick: openCreate }
-                    : undefined
+                    ? 'No hay gastos que coincidan con los filtros aplicados.'
+                    : 'Registra tus egresos para tener visibilidad completa de los costos operativos de tu negocio.'
                 }
               />
             </div>

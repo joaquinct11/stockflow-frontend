@@ -358,7 +358,7 @@ export function ProveedoresList() {
 
             <CardContent>
               {filteredProveedores.length === 0 ? (
-                <EmptyState title="No hay proveedores" description="Comienza registrando tu primer proveedor" />
+                <EmptyState icon={Building2} title="Todavía no hay proveedores" description="Agrega tus proveedores para crear órdenes de compra, recepciones y controlar tus costos." />
               ) : (
                 <>
                   <div className="overflow-x-auto rounded-lg border">

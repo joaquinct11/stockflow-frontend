@@ -6,7 +6,6 @@ import { Breadcrumb } from './Breadcrumb';
 import { tenantConfigService } from '../../services/tenantConfig.service';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useAuthStore } from '../../store/authStore';
-import { OnboardingChecklist } from '../shared/OnboardingChecklist';
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen]     = useState(false);   // móvil
@@ -46,8 +45,7 @@ export function AppLayout() {
         </main>
       </div>
 
-      {/* Checklist de onboarding — flotante, solo visible para ADMIN hasta completar setup */}
-      <OnboardingChecklist />
+
     </div>
   );
 }

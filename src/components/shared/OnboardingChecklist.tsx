@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   CheckCircle2,
   Circle,
   X,
-  ChevronDown,
-  ChevronUp,
+  ChevronRight,
+  ChevronLeft,
   Rocket,
   ClipboardList,
   ArrowRight,
@@ -49,11 +49,8 @@ function StockModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-
-      {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-fade-in">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-bold text-gray-800">
@@ -67,7 +64,6 @@ function StockModal({ onClose }: { onClose: () => void }) {
             <X size={20} />
           </button>
         </div>
-
         <div className="space-y-3">
           {opciones.map((op) => (
             <div
@@ -86,7 +82,6 @@ function StockModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-
         <button
           onClick={onClose}
           className="mt-4 w-full text-sm text-gray-400 hover:text-gray-600 transition-colors"
@@ -98,73 +93,27 @@ function StockModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Checklist principal ────────────────────────────────────────────────────
+// ── Panel lateral de onboarding ────────────────────────────────────────────
 
 export function OnboardingChecklist() {
   const { user } = useAuthStore();
   const navigate  = useNavigate();
   const location  = useLocation();
 
-  // Clave por tenant para que no persista entre cuentas distintas
   const dismissedKey = `onboarding_dismissed_${user?.tenantId ?? 'default'}`;
 
-  const [progreso, setProgreso]       = useState<OnboardingProgreso | null>(null);
-  const [collapsed, setCollapsed]     = useState(false);
-  const [dismissed, setDismissed]     = useState(() => localStorage.getItem(dismissedKey) === 'true');
+  const [progreso, setProgreso]             = useState<OnboardingProgreso | null>(null);
+  const [open, setOpen]                     = useState(true);
+  const [dismissed, setDismissed]           = useState(() => localStorage.getItem(dismissedKey) === 'true');
   const [showStockModal, setShowStockModal] = useState(false);
-  const [loading, setLoading]         = useState(true);
+  const [loading, setLoading]               = useState(true);
 
-  // ── Drag ──────────────────────────────────────────────────────────────────
-  const WIDGET_W = 320;
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const widgetRef   = useRef<HTMLDivElement>(null);
-  const dragging    = useRef(false);
-  const dragOffset  = useRef({ x: 0, y: 0 });
-
-  // Inicializa la posición en la esquina inferior-derecha la primera vez
-  useEffect(() => {
-    setPos({
-      x: window.innerWidth  - WIDGET_W - 24,
-      y: window.innerHeight - 320,
-    });
-  }, []);
-
-  const handleDragStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // No iniciar arrastre si el clic fue en un botón (minimizar / cerrar)
-    if ((e.target as HTMLElement).closest('button')) return;
-    dragging.current = true;
-    const rect = widgetRef.current?.getBoundingClientRect();
-    if (rect) {
-      dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    }
-    e.preventDefault();
-  }, []);
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!dragging.current) return;
-      setPos({
-        x: Math.max(0, Math.min(window.innerWidth  - WIDGET_W,   e.clientX - dragOffset.current.x)),
-        y: Math.max(0, Math.min(window.innerHeight - 48,          e.clientY - dragOffset.current.y)),
-      });
-    };
-    const onUp = () => { dragging.current = false; };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup',   onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup',   onUp);
-    };
-  }, []);
-
-  // Solo el ADMIN ve el checklist
   const esAdmin = user?.rol === 'ADMIN';
 
   const fetchProgreso = () => {
     onboardingService.getProgreso().then(setProgreso).catch(() => {});
   };
 
-  // Carga inicial
   useEffect(() => {
     if (!esAdmin || dismissed) { setLoading(false); return; }
     onboardingService.getProgreso()
@@ -173,14 +122,12 @@ export function OnboardingChecklist() {
       .finally(() => setLoading(false));
   }, [esAdmin, dismissed]);
 
-  // Recargar al cambiar de ruta — el usuario completó un paso y volvió
   useEffect(() => {
     if (!esAdmin || dismissed) return;
     fetchProgreso();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  // Recargar también al volver a la ventana (tab switching)
   useEffect(() => {
     if (!esAdmin || dismissed) return;
     window.addEventListener('focus', fetchProgreso);
@@ -209,30 +156,46 @@ export function OnboardingChecklist() {
     <>
       {showStockModal && <StockModal onClose={() => setShowStockModal(false)} />}
 
-      <div
-        ref={widgetRef}
-        className="fixed w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden"
-        style={pos ? { left: pos.x, top: pos.y } : { bottom: 24, right: 24 }}
-      >
-        {/* Header — arrastrable */}
-        <div
-          className="bg-gradient-to-r from-blue-600 to-blue-500 p-4 text-white select-none"
-          onMouseDown={handleDragStart}
-          style={{ cursor: 'grab' }}
+      {/* Contenedor fijo — sólo sirve de ancla, no tiene ancho propio */}
+      <div className="fixed top-16 right-0 z-40 h-[calc(100vh-64px)] pointer-events-none">
+
+        {/* Pestaña toggle — se mueve junto con el panel */}
+        <button
+          onClick={() => setOpen(o => !o)}
+          className={[
+            'pointer-events-auto absolute top-24 flex flex-col items-center gap-1.5',
+            'bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-3 rounded-l-lg shadow-md',
+            'transition-transform duration-300 ease-in-out',
+            open ? '-translate-x-72' : 'translate-x-0',
+          ].join(' ')}
+          title={open ? 'Cerrar panel' : 'Ver progreso de configuración'}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 pointer-events-none">
-              <Rocket size={18} />
-              <span className="font-bold text-sm">Configura tu negocio</span>
-            </div>
-            <div className="flex items-center gap-1 pointer-events-auto">
-              <button
-                onClick={() => setCollapsed(c => !c)}
-                className="p-1 hover:bg-white/20 rounded transition-colors"
-                title={collapsed ? 'Expandir' : 'Minimizar'}
-              >
-                {collapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-              </button>
+          {open ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          <span
+            className="text-[10px] font-bold tracking-wide"
+            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+          >
+            Setup {porcentaje}%
+          </span>
+        </button>
+
+        {/* Panel principal — sólo éste se desliza */}
+        <div
+          className={[
+            'pointer-events-auto absolute top-0 right-0 w-72 h-full',
+            'bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-xl flex flex-col overflow-hidden',
+            'transition-transform duration-300 ease-in-out',
+            open ? 'translate-x-0' : 'translate-x-full',
+          ].join(' ')}
+        >
+
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-3 text-white flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Rocket size={16} />
+                <span className="font-bold text-sm">Configura tu negocio</span>
+              </div>
               <button
                 onClick={handleDismiss}
                 className="p-1 hover:bg-white/20 rounded transition-colors"
@@ -241,26 +204,24 @@ export function OnboardingChecklist() {
                 <X size={15} />
               </button>
             </div>
+
+            {/* Barra de progreso */}
+            <div className="mt-2.5">
+              <div className="flex justify-between text-xs mb-1 opacity-90">
+                <span>{porcentaje}% completado</span>
+                <span>{pendientes} paso{pendientes !== 1 ? 's' : ''} restante{pendientes !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="w-full bg-blue-700/50 rounded-full h-1.5">
+                <div
+                  className="bg-white h-1.5 rounded-full transition-all duration-700"
+                  style={{ width: `${porcentaje}%` }}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Barra de progreso */}
-          <div className="mt-3 pointer-events-none">
-            <div className="flex justify-between text-xs mb-1 opacity-90">
-              <span>{porcentaje}% completado</span>
-              <span>{pendientes} paso{pendientes !== 1 ? 's' : ''} restante{pendientes !== 1 ? 's' : ''}</span>
-            </div>
-            <div className="w-full bg-blue-700/50 rounded-full h-2">
-              <div
-                className="bg-white h-2 rounded-full transition-all duration-700"
-                style={{ width: `${porcentaje}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Pasos */}
-        {!collapsed && (
-          <div className="p-3 space-y-1 max-h-72 overflow-y-auto">
+          {/* Pasos */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-1">
             {pasos.map((paso) => (
               <div
                 key={paso.id}
@@ -268,21 +229,18 @@ export function OnboardingChecklist() {
                 className={`flex items-start gap-3 p-2.5 rounded-lg transition-all duration-150 ${
                   paso.completado
                     ? 'opacity-50 cursor-default'
-                    : 'cursor-pointer hover:bg-gray-50 group'
+                    : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 group'
                 }`}
               >
-                {/* Icono */}
                 {paso.completado ? (
                   <CheckCircle2 size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
                 ) : (
                   <Circle size={18} className="text-gray-300 flex-shrink-0 mt-0.5 group-hover:text-blue-400 transition-colors" />
                 )}
-
-                {/* Texto */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <p className={`text-sm font-medium leading-tight ${
-                      paso.completado ? 'line-through text-gray-400' : 'text-gray-700 group-hover:text-blue-700'
+                      paso.completado ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-400'
                     }`}>
                       {paso.titulo}
                     </p>
@@ -298,15 +256,14 @@ export function OnboardingChecklist() {
                     </p>
                   )}
                 </div>
-
-                {/* Flecha */}
                 {!paso.completado && (
                   <ArrowRight size={14} className="text-gray-300 group-hover:text-blue-500 flex-shrink-0 mt-0.5 transition-colors" />
                 )}
               </div>
             ))}
           </div>
-        )}
+        </div>
+
       </div>
     </>
   );

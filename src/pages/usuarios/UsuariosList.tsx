@@ -494,7 +494,10 @@ export function UsuariosList() {
             </CardHeader>
             <CardContent>
               {filteredUsuarios.length === 0 ? (
-                <EmptyState title="No hay usuarios" description="No se encontraron usuarios con ese criterio" />
+                <EmptyState
+                  title={usuarios.length === 0 ? 'Todavía no hay usuarios' : 'Sin resultados'}
+                  description={usuarios.length === 0 ? 'Agrega colaboradores y asígnales un rol para que puedan acceder al sistema con los permisos correctos.' : 'No se encontraron usuarios que coincidan con la búsqueda.'}
+                />
               ) : (
                 <>
                   <div className="overflow-x-auto rounded-lg border">

@@ -655,8 +655,10 @@ export function ComprobantesPage() {
           ) : sortedComprobantes.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title="Sin comprobantes"
-              description="No se encontraron comprobantes con los filtros aplicados."
+              title={comprobantes.length === 0 ? 'Todavía no hay comprobantes' : 'Sin resultados'}
+              description={comprobantes.length === 0
+                ? 'Los comprobantes electrónicos (boletas y facturas) se generan desde el módulo de Ventas al emitirlos hacia SUNAT a través de tu OSE.'
+                : 'No se encontraron comprobantes con los filtros aplicados.'}
             />
           ) : (
             <>

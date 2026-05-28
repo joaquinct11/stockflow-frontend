@@ -7,7 +7,6 @@ import { authService } from '../../services/auth.service';
 import { notificacionService, type NotificacionDTO } from '../../services/notificacion.service';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { GlobalSearch } from './GlobalSearch';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -200,8 +199,8 @@ export function Header({ onMenuClick }: HeaderProps) {
         <Menu size={20} />
       </Button>
 
-      {/* Búsqueda global */}
-      <GlobalSearch />
+      {/* Spacer */}
+      <div className="flex-1" />
 
       {/* Controles derechos */}
       <div className="flex items-center gap-1">

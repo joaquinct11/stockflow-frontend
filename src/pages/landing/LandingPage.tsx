@@ -432,7 +432,7 @@ export function LandingPage() {
             <ul>
               <li><a href="mailto:contacto@fluxus.pe">Contacto</a></li>
               <li><a href="mailto:contacto@fluxus.pe">Soporte técnico</a></li>
-              <li><a href="https://wa.me/51999999999" target="_blank" rel="noopener noreferrer">WhatsApp</a></li>
+              <li><a href="https://wa.me/51994198710?text=Hola%2C%20me%20interesa%20Fluxus.%20%C2%BFMe%20pueden%20dar%20m%C3%A1s%20informaci%C3%B3n%3F" target="_blank" rel="noopener noreferrer">WhatsApp</a></li>
             </ul>
           </div>
 
