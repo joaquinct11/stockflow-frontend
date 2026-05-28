@@ -729,7 +729,7 @@ export function VentasList() {
           {!canViewAll('VENTAS') && !canViewOwn('VENTAS') ? (
             <EmptyState title="Sin permisos" description="No tienes permisos para ver ventas" />
           ) : filteredVentas.length === 0 ? (
-            <EmptyState title="No hay ventas" description="Comienza registrando tu primera venta" />
+            <EmptyState icon={ShoppingCart} title="Todavía no hay ventas" description="Cuando registres tu primera venta desde el POS aparecerá aquí con todos sus detalles." />
           ) : (
             <>
               <div className="overflow-x-auto rounded-lg border">

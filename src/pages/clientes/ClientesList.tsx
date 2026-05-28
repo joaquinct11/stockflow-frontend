@@ -294,7 +294,7 @@ export function ClientesList() {
             </CardHeader>
             <CardContent>
               {filtered.length === 0 ? (
-                <EmptyState title="No hay clientes" description="Comienza registrando tu primer cliente" />
+                <EmptyState icon={Users} title="Todavía no hay clientes" description="Registra clientes para asociarlos a tus ventas, llevar un historial y personalizar la atención." />
               ) : (
                 <>
                   <div className="overflow-x-auto rounded-lg border">

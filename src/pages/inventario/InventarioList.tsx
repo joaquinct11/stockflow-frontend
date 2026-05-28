@@ -18,6 +18,7 @@ import { Pagination } from '../../components/ui/Pagination';
 import {
   Plus,
   Package,
+  PackageOpen,
   Search,
   TrendingUp,
   TrendingDown,
@@ -523,7 +524,13 @@ export function InventarioList() {
                 </CardHeader>
                 <CardContent>
                   {filteredProductos.length === 0 ? (
-                    <EmptyState title="Sin productos" description="No se encontraron productos con ese criterio de búsqueda" />
+                    <EmptyState
+                      icon={PackageOpen}
+                      title={productos.length === 0 ? 'Todavía no hay productos en el inventario' : 'Sin resultados'}
+                      description={productos.length === 0
+                        ? 'Agrega productos desde el módulo de Productos para empezar a controlar el stock, ver movimientos y recibir alertas de reposición.'
+                        : 'No se encontraron productos que coincidan con la búsqueda.'}
+                    />
                   ) : (
                     <>
                       <div className="overflow-x-auto">

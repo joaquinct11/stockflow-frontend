@@ -115,7 +115,7 @@ export function Register() {
             <Input
               id="nombreFarmacia"
               type="text"
-              placeholder="Ej: Botica San Juan S.A.C."
+              placeholder="Ej: Distribuidora Norte S.A.C."
               value={formData.nombreFarmacia}
               onChange={(e) => setFormData({ ...formData, nombreFarmacia: e.target.value })}
               required

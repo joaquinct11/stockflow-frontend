@@ -907,8 +907,8 @@ export function RecepcionList() {
           {filtered.length === 0 ? (
             <EmptyState
               icon={Inbox}
-              title="Sin recepciones"
-              description={searchTerm ? 'Sin resultados para ese criterio' : 'Crea la primera recepción'}
+              title={searchTerm ? 'Sin resultados' : 'Todavía no hay recepciones'}
+              description={searchTerm ? 'No se encontraron recepciones que coincidan con la búsqueda.' : 'Cuando recibas mercadería de una orden de compra, el ingreso al inventario quedará registrado aquí.'}
             />
           ) : (
             <>

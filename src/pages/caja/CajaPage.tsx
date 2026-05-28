@@ -7,6 +7,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { Dialog } from '../../components/ui/Dialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
+import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import {
   Wallet, TrendingUp, Banknote, CreditCard, Smartphone,
@@ -303,11 +304,11 @@ export function CajaPage() {
         </CardHeader>
         <CardContent>
           {cajas.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Wallet className="mx-auto mb-3 h-12 w-12 opacity-30" />
-              <p>No hay cajas registradas</p>
-              <p className="text-sm">Las cajas se crean al abrir el Punto de Venta</p>
-            </div>
+            <EmptyState
+              icon={Wallet}
+              title="Todavía no hay sesiones de caja"
+              description="Cada vez que abras el Punto de Venta se creará una sesión de caja automáticamente. Aquí podrás ver el historial, los totales por método de pago y los cuadres."
+            />
           ) : (
             <div className="overflow-x-auto">
               <Table>

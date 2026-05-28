@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { FileText, Download, RefreshCw, Tag, CheckCircle2, Clock, XCircle, Banknote, Search, SlidersHorizontal, X } from 'lucide-react';
+import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import toast from 'react-hot-toast';
@@ -331,10 +332,13 @@ export function NotasCreditoPage() {
             <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Cargando...
           </div>
         ) : notasFiltradas.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground space-y-2">
-            <FileText className="w-10 h-10 opacity-30" />
-            <p className="text-sm">No hay notas de crédito {filtro !== 'TODOS' ? `en estado "${filtro}"` : ''}</p>
-          </div>
+          <EmptyState
+            icon={FileText}
+            title={notas.length === 0 ? 'Todavía no hay notas de crédito' : 'Sin resultados'}
+            description={notas.length === 0
+              ? 'Las notas de crédito se generan cuando se anula o devuelve una venta. Aparecerán aquí con su estado y montos disponibles.'
+              : 'No hay notas de crédito que coincidan con los filtros aplicados.'}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

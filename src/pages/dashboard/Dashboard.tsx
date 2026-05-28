@@ -108,6 +108,7 @@ export function Dashboard() {
   // Estado de suscripción
   const [suscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
 
+
   // const ventasScopeLabel = useMemo(() => {
   //   if (rol === 'ADMIN') return 'globales';
   //   if (rol === 'VENDEDOR') return 'tuyas';
@@ -535,7 +536,7 @@ export function Dashboard() {
         )}
       </div>
 
-      {/* ── Acciones rápidas ─────────────────────────────────────────────────── */}
+{/* ── Acciones rápidas ─────────────────────────────────────────────────── */}
       <div className="animate-fade-in-up-delay-1">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
           <Zap size={12} /> Acceso rápido

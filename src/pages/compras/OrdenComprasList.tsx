@@ -742,8 +742,8 @@ export function OrdenComprasList() {
           {filteredOrdenes.length === 0 ? (
             <EmptyState
               icon={ShoppingBag}
-              title="No hay órdenes de compra"
-              description={searchTerm ? 'No se encontraron órdenes con ese criterio' : 'Crea la primera orden de compra'}
+              title={searchTerm ? 'Sin resultados' : 'Todavía no hay órdenes de compra'}
+              description={searchTerm ? 'No se encontraron órdenes que coincidan con la búsqueda.' : 'Crea tu primera OC para solicitar productos a un proveedor y llevar trazabilidad de cada compra.'}
             />
           ) : (
             <>

@@ -482,7 +482,7 @@ export function ProductosList() {
             </CardHeader>
             <CardContent>
               {filteredProductos.length === 0 ? (
-                <EmptyState title="No hay productos" description="Comienza agregando tu primer producto al inventario" />
+                <EmptyState icon={Package} title="Todavía no hay productos" description="Agrega productos con precio, stock y categoría para empezar a vender y controlar tu inventario en tiempo real." />
               ) : (
                 <>
                   <div className="overflow-x-auto rounded-lg border">
