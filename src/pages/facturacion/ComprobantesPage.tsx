@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { facturacionService } from '../../services/facturacion.service';
 import { ventaService } from '../../services/venta.service';
+import { clienteService } from '../../services/cliente.service';
 import type { ComprobanteDTO, EmitirComprobanteForm, EmitirComprobanteRequest, TipoComprobante, VentaDTO, ItemComprobanteDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -13,10 +14,12 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, Calendar, DollarSign, Printer } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, Printer, X, Send, Download, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
+import { printTicket } from '../../utils/printTicket';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 const TIPO_OPTIONS: TipoComprobante[] = ['BOLETA', 'FACTURA'];
 // const ESTADO_OPTIONS = ['EMITIDO', 'ANULADO'];
@@ -47,6 +50,7 @@ const emptyForm = (): EmitirComprobanteForm => ({
 export function ComprobantesPage() {
   const { canAccess, puede, canCreate, canDelete, isVendedor } = usePermissions();
   const { user } = useAuthStore();
+  const { config: tenantConfig } = useTenantConfigStore();
 
   const canView = canAccess('FACTURACION');
   const canEmitir = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
@@ -60,6 +64,7 @@ export function ComprobantesPage() {
   const [filterEstado, setFilterEstado] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -74,10 +79,13 @@ export function ComprobantesPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // Anular confirm
-  const [confirmAnular, setConfirmAnular] = useState<{ isOpen: boolean; id: number | null }>({
+  const [confirmAnular, setConfirmAnular] = useState<{ isOpen: boolean; id: number | null; sunatEstado?: string }>({
     isOpen: false,
     id: null,
   });
+
+  const [downloadingPdf, setDownloadingPdf]     = useState<number | null>(null);
+  const [enviandoSunat, setEnviandoSunat]       = useState<number | null>(null);
 
   useEffect(() => {
     if (canView) {
@@ -183,6 +191,90 @@ export function ComprobantesPage() {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
   }
 
+  const handleEnviarSunat = async (comprobante: ComprobanteDTO) => {
+    if (!comprobante.id) return;
+    try {
+      setEnviandoSunat(comprobante.id);
+      const updated = await facturacionService.enviarASunat(comprobante.id);
+      if (updated.sunatEstado === 'ACEPTADO') {
+        const msg = updated.sunatMensaje ?? `Aceptado por SUNAT: ${updated.numero}`;
+        toast.success(`✅ ${msg}`);
+      } else if (updated.sunatEstado === 'RECHAZADO') {
+        const msg = updated.sunatMensaje ?? 'Revisa los datos del comprobante.';
+        toast.error(`❌ SUNAT rechazó ${updated.numero}: ${msg}`, { duration: 8000 });
+      } else {
+        const msg = updated.sunatMensaje ?? 'Verificando con SUNAT…';
+        toast(`🏛️ ${msg}`, { duration: 5000 });
+      }
+      // Si el detalle está abierto para este comprobante, actualizarlo en tiempo real
+      if (selectedComprobante?.id === updated.id) {
+        setSelectedComprobante(updated);
+      }
+      fetchComprobantes();
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { mensaje?: string; message?: string } } };
+      const msg = err?.response?.data?.mensaje
+               ?? err?.response?.data?.message
+               ?? 'Error enviando a SUNAT';
+      toast.error(msg);
+    } finally {
+      setEnviandoSunat(null);
+    }
+  };
+
+  const handleDownloadPdf = async (comprobante: ComprobanteDTO) => {
+    if (!comprobante.id) return;
+    try {
+      setDownloadingPdf(comprobante.id);
+      const blob = await facturacionService.downloadPdf(comprobante.id);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `${comprobante.numero ?? `comprobante-${comprobante.id}`}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('No se pudo descargar el PDF');
+    } finally {
+      setDownloadingPdf(null);
+    }
+  };
+
+  const handleVentaSelect = async (opt: { id: number } | null) => {
+    const ventaId = opt?.id ? Number(opt.id) : 0;
+    setEmitirForm((prev) => ({ ...prev, ventaId }));
+
+    if (!ventaId) return;
+
+    const venta = ventas.find((v) => v.id === ventaId);
+    if (!venta?.clienteId) return;
+
+    try {
+      const cliente = await clienteService.getById(venta.clienteId);
+      const docNumero = cliente.numeroDocumento ?? '';
+      const tipoDoc: 'DNI' | 'RUC' =
+        docNumero.length === 11 ? 'RUC' :
+        docNumero.length === 8  ? 'DNI' :
+        (cliente.tipoDocumento === 'RUC' ? 'RUC' : 'DNI'); // fallback al campo guardado
+      const esRuc = tipoDoc === 'RUC';
+      setEmitirForm((prev) => ({
+        ...prev,
+        ventaId,
+        tipo: esRuc ? 'FACTURA' : prev.tipo,
+        receptor: {
+          tipoDocumento: tipoDoc,
+          numeroDocumento: docNumero,
+          razonSocial: cliente.nombre ?? '',
+          direccion: cliente.direccion ?? '',
+        },
+      }));
+    } catch {
+      // Si falla la búsqueda del cliente, no interrumpir el flujo
+    }
+  };
+
   const handleEmitir = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -261,6 +353,15 @@ export function ComprobantesPage() {
 
   const ventaById = new Map(ventas.map(v => [v.id, v]));
 
+  const activeFiltersCount = [filterTipo, filterEstado, fechaDesde, fechaHasta].filter(Boolean).length;
+
+  const limpiarFiltros = () => {
+    setFilterTipo('');
+    setFilterEstado('');
+    setFechaDesde('');
+    setFechaHasta('');
+  };
+
   const ventasOptions = ventas
     .filter((v) => !ventasYaFacturadas.has(v.id!))
     .map((v) => ({
@@ -268,6 +369,14 @@ export function ComprobantesPage() {
       label: `Venta #${v.id} · S/.${v.total.toFixed(2)}`,
       subtitle: `${v.vendedorNombre ?? ''} · ${v.metodoPago}${v.createdAt ? ' · ' + new Date(v.createdAt).toLocaleDateString('es-PE') : ''}`,
     }));
+
+  const oseNombre = (() => {
+    const url = (tenantConfig?.oseUrl ?? '').toLowerCase();
+    if (url.includes('nubefact')) return 'Nubefact';
+    if (url.includes('efact'))   return 'Efact';
+    if (url.includes('sunat'))   return 'SUNAT SOL';
+    return 'tu proveedor OSE';
+  })();
 
   if (!canView) {
     return (
@@ -366,144 +475,173 @@ export function ComprobantesPage() {
         </Card>
       </div>
 
-      {/* Filtros (layout igual a Ventas: Buscar + fechas arriba, tabs abajo) */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            {/* Row 1: Buscar + Desde/Hasta + Limpiar */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-              {/* Search */}
-              <div className="lg:col-span-7">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar número, venta, receptor..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
+      {/* Search + Filtros */}
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Buscar número, venta, receptor..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-10"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilterDrawer(true)}
+            className={[
+              'flex items-center gap-2 h-10 px-4 rounded-lg border text-sm font-semibold transition-all shrink-0',
+              activeFiltersCount > 0
+                ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                : 'border-input bg-background text-muted-foreground hover:text-foreground hover:border-primary/40',
+            ].join(' ')}
+          >
+            <SlidersHorizontal size={15} />
+            Filtros
+            {activeFiltersCount > 0 && (
+              <span className="h-5 w-5 rounded-full bg-blue-500 text-white text-[11px] font-bold flex items-center justify-center">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+        </div>
 
-              {/* Desde */}
-              <div className="lg:col-span-2">
-                <label className="text-xs text-muted-foreground font-medium">Desde</label>
-                <div className="relative mt-1">
-                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type="date"
-                    value={fechaDesde}
-                    onChange={(e) => setFechaDesde(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
+        {/* Active filter chips */}
+        {activeFiltersCount > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {filterTipo && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Tipo: {filterTipo}
+                <button onClick={() => setFilterTipo('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            {filterEstado && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                {filterEstado}
+                <button onClick={() => setFilterEstado('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            {fechaDesde && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Desde {fechaDesde}
+                <button onClick={() => setFechaDesde('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            {fechaHasta && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Hasta {fechaHasta}
+                <button onClick={() => setFechaHasta('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            <button onClick={limpiarFiltros} className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors px-1">
+              Limpiar todo
+            </button>
+          </div>
+        )}
+      </div>
 
-              {/* Hasta */}
-              <div className="lg:col-span-2">
-                <label className="text-xs text-muted-foreground font-medium">Hasta</label>
-                <div className="relative mt-1">
-                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type="date"
-                    value={fechaHasta}
-                    onChange={(e) => setFechaHasta(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
+      {/* Filter drawer backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/50 z-[35] transition-opacity duration-300 ${showFilterDrawer ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setShowFilterDrawer(false)}
+      />
 
-              {/* Limpiar */}
-              <div className="lg:col-span-1">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setFechaDesde('');
-                    setFechaHasta('');
-                    setFilterTipo('');
-                    setFilterEstado('');
-                  }}
-                  className="w-full"
-                >
-                  Limpiar
-                </Button>
-              </div>
+      {/* Filter drawer panel */}
+      <div
+        className={`fixed right-0 top-16 w-80 z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out rounded-l-2xl overflow-hidden bg-slate-900 border-l border-t border-b border-slate-700/50 ${showFilterDrawer ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{ height: 'calc(100vh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 shrink-0 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700/50">
+          <div className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-blue-400" />
             </div>
+            <h2 className="font-semibold text-sm text-white">Filtros</h2>
+            {activeFiltersCount > 0 && (
+              <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{activeFiltersCount}</span>
+            )}
+          </div>
+          <button onClick={() => setShowFilterDrawer(false)} className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
-            {/* Row 2: Tipo (debajo) */}
-            <div className="w-full rounded-lg border border-input bg-muted p-1">
-              <div className="flex gap-1 overflow-x-auto scrollbar-hide" role="tablist" aria-label="Filtrar por tipo">
-                {(
-                  [
-                    { key: '', label: 'Todos' },
-                    { key: 'BOLETA', label: '🧾 Boleta' },
-                    { key: 'FACTURA', label: '🏢 Factura' },
-                  ] as Array<{ key: '' | TipoComprobante; label: string }>
-                ).map((t) => {
-                  const active = filterTipo === t.key;
-                  return (
-                    <button
-                      key={t.key || 'ALL'}
-                      type="button"
-                      onClick={() => setFilterTipo(t.key)}
-                      className={[
-                        'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
-                        'min-w-[140px] sm:min-w-0 flex-1',
-                        active
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                      ].join(' ')}
-                      aria-pressed={active}
-                    >
-                      {t.label}
-                    </button>
-                  );
-                })}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+          {/* Rango de fechas */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Rango de fechas</p>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Desde</label>
+                <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 text-sm px-3 focus:outline-none focus:border-blue-500" />
               </div>
-            </div>
-
-            {/* Row 3: Estado (debajo) */}
-            <div className="w-full rounded-lg border border-input bg-muted p-1">
-              <div className="flex gap-1 overflow-x-auto scrollbar-hide" role="tablist" aria-label="Filtrar por estado">
-                {(
-                  [
-                    { key: '', label: 'Todos' },
-                    { key: 'EMITIDO', label: '✅ Emitido' },
-                    { key: 'ANULADO', label: '⛔ Anulado' },
-                  ] as Array<{ key: '' | 'EMITIDO' | 'ANULADO'; label: string }>
-                ).map((t) => {
-                  const active = filterEstado === t.key;
-                  return (
-                    <button
-                      key={t.key || 'ALL'}
-                      type="button"
-                      onClick={() => setFilterEstado(t.key)}
-                      className={[
-                        'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
-                        'min-w-[140px] sm:min-w-0 flex-1',
-                        active
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                      ].join(' ')}
-                      aria-pressed={active}
-                    >
-                      {/* Icono con color (igual idea que en Ventas) */}
-                      {t.key === 'EMITIDO' && <span className="mr-2 text-green-600"></span>}
-                      {t.key === 'ANULADO' && <span className="mr-2 text-red-600"></span>}
-                      {t.key === '' && <span className="mr-2 text-muted-foreground"></span>}
-                      {t.label}
-                    </button>
-                  );
-                })}
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Hasta</label>
+                <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 text-sm px-3 focus:outline-none focus:border-blue-500" />
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Tipo */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tipo</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['', 'BOLETA', 'FACTURA'] as const).map((key) => (
+                <button
+                  key={key || 'ALL'}
+                  onClick={() => setFilterTipo(key)}
+                  className={[
+                    'px-3 py-2 rounded-lg text-xs font-semibold border transition-all',
+                    filterTipo === key
+                      ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500',
+                  ].join(' ')}
+                >
+                  {key === '' ? 'Todos' : key === 'BOLETA' ? 'Boleta' : 'Factura'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Estado */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Estado</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['', 'EMITIDO', 'ANULADO'] as const).map((key) => (
+                <button
+                  key={key || 'ALL'}
+                  onClick={() => setFilterEstado(key)}
+                  className={[
+                    'px-3 py-2 rounded-lg text-xs font-semibold border transition-all',
+                    filterEstado === key
+                      ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500',
+                  ].join(' ')}
+                >
+                  {key === '' ? 'Todos' : key === 'EMITIDO' ? 'Emitido' : 'Anulado'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex gap-2">
+          <button onClick={limpiarFiltros} className="flex-1 h-9 rounded-xl border border-slate-600 text-xs font-semibold text-slate-400 hover:text-white hover:border-slate-500 transition-all">
+            Limpiar todo
+          </button>
+          <button onClick={() => setShowFilterDrawer(false)} className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all">
+            Ver {sortedComprobantes.length} resultado{sortedComprobantes.length !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
 
       {/* Table */}
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Comprobantes</CardTitle>
           <CardDescription>
@@ -517,15 +655,17 @@ export function ComprobantesPage() {
           ) : sortedComprobantes.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title="Sin comprobantes"
-              description="No se encontraron comprobantes con los filtros aplicados."
+              title={comprobantes.length === 0 ? 'Todavía no hay comprobantes' : 'Sin resultados'}
+              description={comprobantes.length === 0
+                ? 'Los comprobantes electrónicos (boletas y facturas) se generan desde el módulo de Ventas al emitirlos hacia SUNAT a través de tu OSE.'
+                : 'No se encontraron comprobantes con los filtros aplicados.'}
             />
           ) : (
             <>
-              <div className="rounded-md border overflow-hidden">
+              <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted">
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead>Número</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Venta</TableHead>
@@ -557,10 +697,40 @@ export function ComprobantesPage() {
                           {c.total != null ? `S/.${c.total.toFixed(2)}` : '—'}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={estadoBadgeVariant(c.estado)}>
-                            {estadoIcon(c.estado)}
-                            {c.estado}
-                          </Badge>
+                          {c.estado === 'ANULADO' ? (
+                            <Badge variant="destructive" className="gap-1">
+                              <XCircle size={12} /> Anulado
+                            </Badge>
+                          ) : c.sunatEstado === 'ACEPTADO' ? (
+                            <Badge variant="success" className="gap-1 text-xs" title={c.sunatMensaje ?? undefined}>
+                              <CheckCircle size={12} /> SUNAT Aceptado
+                            </Badge>
+                          ) : c.sunatEstado === 'RECHAZADO' ? (
+                            <div className="flex flex-col gap-1">
+                              <Badge variant="destructive" className="gap-1 text-xs" title={c.sunatMensaje ?? undefined}>
+                                <XCircle size={12} /> SUNAT Rechazado
+                              </Badge>
+                            </div>
+                          ) : c.sunatEstado === 'ERROR' ? (
+                            <div className="flex flex-col gap-1">
+                              <Badge variant="destructive" className="gap-1 text-xs opacity-80" title={c.sunatMensaje ?? undefined}>
+                                <AlertTriangle size={12} /> Error SUNAT
+                              </Badge>
+                            </div>
+                          ) : c.sunatEstado === 'PENDIENTE' ? (
+                            <Badge variant="warning" className="gap-1 text-xs" title={c.sunatMensaje ?? undefined}>
+                              <Clock size={12} /> Pendiente SUNAT
+                            </Badge>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              <Badge variant="success" className="gap-1 text-xs">
+                                <CheckCircle size={12} /> Emitido
+                              </Badge>
+                              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-400 w-fit">
+                                <Clock size={9} /> Sin enviar a SUNAT
+                              </span>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {c.createdAt ? new Date(c.createdAt).toLocaleDateString('es-PE') : '—'}
@@ -578,12 +748,46 @@ export function ComprobantesPage() {
                             >
                               <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={downloadingPdf === c.id}
+                              title="Descargar PDF A4"
+                              onClick={() => handleDownloadPdf(c)}
+                            >
+                              {downloadingPdf === c.id
+                                ? <span className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin inline-block" />
+                                : <Download className="h-4 w-4 text-slate-500" />
+                              }
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Imprimir ticket"
+                              onClick={() => printTicket(c, tenantConfig)}
+                            >
+                              <Printer className="h-4 w-4 text-slate-500" />
+                            </Button>
+                            {c.estado === 'EMITIDO' && c.sunatEstado !== 'ACEPTADO' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={enviandoSunat === c.id}
+                                title={c.sunatEstado === 'RECHAZADO' ? 'Reenviar a SUNAT' : 'Enviar a SUNAT'}
+                                onClick={() => handleEnviarSunat(c)}
+                              >
+                                {enviandoSunat === c.id
+                                  ? <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin inline-block" />
+                                  : <Send className={`h-4 w-4 ${c.sunatEstado === 'RECHAZADO' ? 'text-red-500' : 'text-indigo-500'}`} />
+                                }
+                              </Button>
+                            )}
                             {canAnular && c.estado === 'EMITIDO' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
-                                onClick={() => setConfirmAnular({ isOpen: true, id: c.id! })}
+                                onClick={() => setConfirmAnular({ isOpen: true, id: c.id!, sunatEstado: c.sunatEstado })}
                               >
                                 Anular
                               </Button>
@@ -631,7 +835,7 @@ export function ComprobantesPage() {
             <Autocomplete
               options={ventasOptions}
               value={ventasOptions.find((o) => o.id === emitirForm.ventaId) ?? null}
-              onChange={(opt) => setEmitirForm((prev) => ({ ...prev, ventaId: opt?.id ? Number(opt.id) : 0 }))}
+              onChange={(opt) => handleVentaSelect(opt ? { id: Number(opt.id) } : null)}
               placeholder="Buscar venta por ID, vendedor..."
               emptyMessage="No se encontraron ventas"
             />
@@ -668,12 +872,9 @@ export function ComprobantesPage() {
                     }
                   />
                   {tipo}
-                  {tipo === 'BOLETA' && (
-                    <span className="text-xs text-muted-foreground font-normal">(B001)</span>
-                  )}
-                  {tipo === 'FACTURA' && (
-                    <span className="text-xs text-muted-foreground font-normal">(F001)</span>
-                  )}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    {tipo === 'BOLETA' ? 'con DNI opcional' : 'requiere RUC'}
+                  </span>
                 </label>
               ))}
             </div>
@@ -917,7 +1118,7 @@ export function ComprobantesPage() {
                 </span>
               </div>
               <div className="flex justify-between px-4 py-2 border-b bg-muted/30">
-                <span className="text-sm text-muted-foreground">IGV (18%)</span>
+                <span className="text-sm text-muted-foreground">IGV ({tenantConfig?.igvPorcentaje ?? 18}%)</span>
                 <span className="text-sm font-medium">
                   S/.{selectedComprobante.igv != null ? Number(selectedComprobante.igv).toFixed(2) : '—'}
                 </span>
@@ -930,31 +1131,89 @@ export function ComprobantesPage() {
               </div>
             </div>
 
+            {/* ── Estado SUNAT ── */}
+            {(selectedComprobante.sunatEstado || selectedComprobante.estado === 'EMITIDO') && (
+              <div className={[
+                'rounded-lg px-4 py-3 mb-4 text-sm',
+                selectedComprobante.sunatEstado === 'ACEPTADO'  ? 'bg-emerald-500/10 border border-emerald-500/30' :
+                selectedComprobante.sunatEstado === 'RECHAZADO' ? 'bg-red-500/10 border border-red-500/30' :
+                selectedComprobante.sunatEstado === 'ERROR'     ? 'bg-red-500/10 border border-red-500/30' :
+                selectedComprobante.sunatEstado === 'PENDIENTE' ? 'bg-amber-500/10 border border-amber-500/30' :
+                'bg-muted/40 border border-border',
+              ].join(' ')}>
+                <div className="flex items-center justify-between">
+                  <span className={[
+                    'font-semibold text-xs uppercase tracking-wide',
+                    selectedComprobante.sunatEstado === 'ACEPTADO'  ? 'text-emerald-600 dark:text-emerald-400' :
+                    selectedComprobante.sunatEstado === 'RECHAZADO' ? 'text-red-600 dark:text-red-400' :
+                    selectedComprobante.sunatEstado === 'ERROR'     ? 'text-red-600 dark:text-red-400' :
+                    selectedComprobante.sunatEstado === 'PENDIENTE' ? 'text-amber-600 dark:text-amber-400' :
+                    'text-muted-foreground',
+                  ].join(' ')}>
+                    🏛️ SUNAT:{' '}
+                    {selectedComprobante.sunatEstado === 'ACEPTADO'  ? '✓ ACEPTADO' :
+                     selectedComprobante.sunatEstado === 'RECHAZADO' ? '✗ RECHAZADO' :
+                     selectedComprobante.sunatEstado === 'PENDIENTE' ? '⏳ PENDIENTE' :
+                     selectedComprobante.sunatEstado === 'ERROR'     ? '⚠ ERROR' :
+                     'Sin enviar'}
+                  </span>
+                </div>
+                {selectedComprobante.sunatMensaje && (
+                  <p className="text-xs text-muted-foreground mt-1">{selectedComprobante.sunatMensaje}</p>
+                )}
+                {!selectedComprobante.sunatEstado && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Aún no se ha enviado a SUNAT. Usa el botón para enviarlo.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* ── Footer info ── */}
-            <div className="text-center text-xs text-muted-foreground space-y-1 border-t pt-3 mb-4">
+            <div className="text-center text-xs text-muted-foreground border-t pt-3 mb-4">
               <p>Venta #{selectedComprobante.ventaId}</p>
-              {selectedComprobante.sunatEstado && (
-                <p>Estado SUNAT: <span className="font-medium">{selectedComprobante.sunatEstado}</span></p>
-              )}
               {selectedComprobante.estado === 'ANULADO' && selectedComprobante.updatedAt && (
-                <p className="text-destructive font-medium">
+                <p className="text-destructive font-medium mt-1">
                   Anulado: {new Date(selectedComprobante.updatedAt).toLocaleString('es-PE')}
                 </p>
               )}
             </div>
 
             {/* ── Acciones ── */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                className="flex-1 gap-2"
-                onClick={() => window.print()}
+                className="flex-1 gap-2 min-w-[130px]"
+                disabled={downloadingPdf === selectedComprobante.id}
+                onClick={() => handleDownloadPdf(selectedComprobante)}
               >
-                <Printer size={15} />
-                Imprimir
+                <Download size={15} />
+                {downloadingPdf === selectedComprobante.id ? 'Generando...' : 'Descargar PDF'}
               </Button>
               <Button
-                className="flex-1"
+                variant="outline"
+                className="gap-2"
+                onClick={() => printTicket(selectedComprobante, tenantConfig)}
+                title="Imprimir ticket"
+              >
+                <Printer size={15} />
+              </Button>
+              {selectedComprobante.estado === 'EMITIDO' && selectedComprobante.sunatEstado !== 'ACEPTADO' && (
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2 min-w-[130px] border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
+                  disabled={enviandoSunat === selectedComprobante.id}
+                  onClick={() => handleEnviarSunat(selectedComprobante)}
+                >
+                  {enviandoSunat === selectedComprobante.id
+                    ? <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin inline-block" />
+                    : <Send size={15} />
+                  }
+                  {selectedComprobante.sunatEstado === 'RECHAZADO' ? 'Reenviar a SUNAT' : 'Enviar a SUNAT'}
+                </Button>
+              )}
+              <Button
+                className="flex-1 min-w-[80px]"
                 onClick={() => {
                   setIsDetailOpen(false);
                   setSelectedComprobante(null);
@@ -972,11 +1231,16 @@ export function ComprobantesPage() {
         isOpen={confirmAnular.isOpen}
         type="danger"
         title="Anular Comprobante"
-        description="¿Estás seguro de que deseas anular este comprobante? Esta acción no se puede deshacer."
+        description={
+          (confirmAnular.sunatEstado === 'ACEPTADO' || confirmAnular.sunatEstado === 'PENDIENTE')
+            ? `⚠️ Este comprobante ya fue enviado a SUNAT (${confirmAnular.sunatEstado}). La anulación solo se aplica localmente.\n\nPara la baja electrónica ante SUNAT deberás ingresar manualmente a tu panel de ${oseNombre} y registrar la comunicación de baja.`
+            : '¿Estás seguro de que deseas anular este comprobante? Esta acción no se puede deshacer.'
+        }
         confirmText="Anular Comprobante"
         onConfirm={handleAnular}
         onCancel={() => setConfirmAnular({ isOpen: false, id: null })}
       />
+
     </div>
   );
 }

@@ -15,6 +15,11 @@ import {
   Target,
   FileSpreadsheet,
   FileDown,
+  Wallet,
+  Users,
+  FlaskConical,
+  ArrowRight,
+  Minus,
 } from 'lucide-react';
 import { exportarExcel, exportarPDF } from '../../utils/reportes-export';
 import {
@@ -46,6 +51,9 @@ import type {
   InventarioCoberturaDTO,
   ComprasPorProveedorDTO,
   ProductoBajoStockDTO,
+  FinancieroDTO,
+  VencimientosRiesgoDTO,
+  ClienteReporteDTO,
 } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -55,7 +63,25 @@ import { Badge } from '../../components/ui/Badge';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { usePermissions } from '../../hooks/usePermissions';
+import { usePlan } from '../../hooks/usePlan';
+import { useNavigate } from 'react-router-dom';
+import { Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+// ─── Labels de categorías de gasto ───────────────────────────────────────────
+
+const GASTO_LABELS: Record<string, string> = {
+  ALQUILER:          'Alquiler',
+  SERVICIOS:         'Servicios básicos',
+  SUELDOS:           'Sueldos y salarios',
+  MANTENIMIENTO:     'Mantenimiento',
+  PUBLICIDAD:        'Publicidad',
+  TRANSPORTE:        'Transporte',
+  IMPUESTOS:         'Impuestos',
+  COMPRAS_INTERNAS:  'Compras internas',
+  COMPRA_PROVEEDOR:  'Compra a proveedor',
+  OTROS:             'Otros',
+};
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
@@ -80,6 +106,25 @@ function daysAgo(n: number): string {
 function startOfYear(): string {
   const d = new Date();
   d.setMonth(0, 1);
+  return toDateString(d);
+}
+
+function startOfMonth(): string {
+  const d = new Date();
+  d.setDate(1);
+  return toDateString(d);
+}
+
+function startOfPrevMonth(): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return toDateString(d);
+}
+
+function endOfPrevMonth(): string {
+  const d = new Date();
+  d.setDate(0);
   return toDateString(d);
 }
 
@@ -139,28 +184,6 @@ function formatYAxisNum(v: number): string {
   return String(Math.round(v));
 }
 
-// ─── Comparativa período anterior ────────────────────────────────────────────
-
-/** Calcula el período anterior de igual duración, justo antes del período actual */
-function calcPrevPeriod(desde: string, hasta: string): { prevDesde: string; prevHasta: string } {
-  const d1 = new Date(desde);
-  const d2 = new Date(hasta);
-  const duracionMs = d2.getTime() - d1.getTime();
-  const prevHastaDate = new Date(d1.getTime() - 86_400_000);          // desde − 1 día
-  const prevDesdeDate = new Date(prevHastaDate.getTime() - duracionMs);
-  return { prevDesde: toDateString(prevDesdeDate), prevHasta: toDateString(prevHastaDate) };
-}
-
-/** Retorna el delta % entre valor actual y anterior, o null si no aplica */
-function delta(current: number | null | undefined, prev: number | null | undefined): number | null {
-  if (current == null || prev == null || prev === 0) return null;
-  return ((current - prev) / Math.abs(prev)) * 100;
-}
-
-function trendLabel(prevDesde: string, prevHasta: string): string {
-  return `vs ${prevDesde} → ${prevHasta}`;
-}
-
 // ─── Stat card ────────────────────────────────────────────────────────────────
 
 interface StatCardProps {
@@ -169,10 +192,9 @@ interface StatCardProps {
   value: string;
   description?: string;
   colorClass?: string;
-  trend?: { value: number; label: string };
 }
 
-function StatCard({ icon, title, value, description, colorClass = 'text-foreground', trend }: StatCardProps) {
+function StatCard({ icon, title, value, description, colorClass = 'text-foreground' }: StatCardProps) {
   return (
     <Card className="relative overflow-hidden border-0 shadow-sm">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
@@ -184,13 +206,7 @@ function StatCard({ icon, title, value, description, colorClass = 'text-foregrou
       </CardHeader>
       <CardContent className="pt-0">
         <p className={`text-3xl font-bold tracking-tight ${colorClass}`}>{value}</p>
-        {trend && (
-          <p className={`text-xs flex items-center gap-1 mt-1 ${trend.value >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-            {trend.value >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {trend.value >= 0 ? '+' : ''}{trend.value.toFixed(1)}% {trend.label}
-          </p>
-        )}
-        {description && !trend && (
+        {description && (
           <p className="text-xs text-muted-foreground mt-1">{description}</p>
         )}
       </CardContent>
@@ -227,12 +243,14 @@ function ChartTooltip({ active, payload, label, isSoles = true }: {
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-type TabId = 'resumen' | 'ventas' | 'inventario' | 'compras';
+type TabId = 'resumen' | 'ventas' | 'inventario' | 'compras' | 'financiero' | 'clientes';
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: 'resumen',    label: 'Resumen',    icon: <BarChart3 className="h-4 w-4" /> },
-  { id: 'ventas',     label: 'Ventas',     icon: <ShoppingCart className="h-4 w-4" /> },
-  { id: 'inventario', label: 'Inventario', icon: <Boxes className="h-4 w-4" /> },
-  { id: 'compras',    label: 'Compras',    icon: <Truck className="h-4 w-4" /> },
+  { id: 'resumen',     label: 'Resumen',     icon: <BarChart3 className="h-4 w-4" /> },
+  { id: 'ventas',      label: 'Ventas',      icon: <ShoppingCart className="h-4 w-4" /> },
+  { id: 'inventario',  label: 'Inventario',  icon: <Boxes className="h-4 w-4" /> },
+  { id: 'compras',     label: 'Compras',     icon: <Truck className="h-4 w-4" /> },
+  { id: 'financiero',  label: 'Financiero',  icon: <Wallet className="h-4 w-4" /> },
+  { id: 'clientes',    label: 'Clientes',    icon: <Users className="h-4 w-4" /> },
 ];
 
 function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => void }) {
@@ -262,7 +280,18 @@ function TabLoading() {
 }
 
 function TabError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <EmptyState icon={AlertTriangle} title="Error al cargar datos" description={message} action={{ label: 'Reintentar', onClick: onRetry }} />;
+  return (
+    <div className="flex flex-col items-center gap-3 py-16 text-center">
+      <EmptyState icon={AlertTriangle} title="Error al cargar datos" description={message} />
+      <button
+        type="button"
+        onClick={onRetry}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium hover:bg-accent transition-colors"
+      >
+        <RefreshCw size={14} /> Reintentar
+      </button>
+    </div>
+  );
 }
 
 function TabEmpty() {
@@ -271,11 +300,9 @@ function TabEmpty() {
 
 // ─── Resumen tab ──────────────────────────────────────────────────────────────
 
-function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRetry }: {
+function ResumenTab({ loading, error, data, onRetry }: {
   loading: boolean; error: string | null;
   data: ReportesResumenDTO | null;
-  prevData: ReportesResumenDTO | null;
-  prevDesde: string; prevHasta: string;
   onRetry: () => void;
 }) {
   if (loading) return <TabLoading />;
@@ -286,13 +313,6 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
   const mov    = data.movimientos;
   const comp   = data.comprasRecepciones;
   const ventas = data.ventas;
-
-  const prevInv    = prevData?.inventario;
-  const prevMov    = prevData?.movimientos;
-  const prevComp   = prevData?.comprasRecepciones;
-  const prevVentas = prevData?.ventas;
-
-  const tl = trendLabel(prevDesde, prevHasta);
 
   const margenPct = ventas?.ingresosTotal && ventas.margenEstimado != null
     ? (ventas.margenEstimado / ventas.ingresosTotal) * 100
@@ -317,25 +337,19 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
               title="Ingresos totales"
               value={formatSoles(ventas.ingresosTotal)}
               colorClass="text-green-600"
-              trend={delta(ventas.ingresosTotal, prevVentas?.ingresosTotal) != null
-                ? { value: delta(ventas.ingresosTotal, prevVentas?.ingresosTotal)!, label: tl }
-                : undefined}
             />
             <StatCard
               icon={<ShoppingCart className="h-5 w-5" />}
               title="Nº de ventas"
               value={formatNum(ventas.ventasCount)}
-              trend={delta(ventas.ventasCount, prevVentas?.ventasCount) != null
-                ? { value: delta(ventas.ventasCount, prevVentas?.ventasCount)!, label: tl }
+              description={ventas.ventasCount != null && ventas.ingresosTotal
+                ? `Ticket prom. ${formatSoles(ventas.ticketPromedio)}`
                 : undefined}
             />
             <StatCard
               icon={<Target className="h-5 w-5" />}
               title="Ticket promedio"
               value={formatSoles(ventas.ticketPromedio)}
-              trend={delta(ventas.ticketPromedio, prevVentas?.ticketPromedio) != null
-                ? { value: delta(ventas.ticketPromedio, prevVentas?.ticketPromedio)!, label: tl }
-                : undefined}
             />
             <StatCard
               icon={<TrendingUp className="h-5 w-5" />}
@@ -343,9 +357,6 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
               value={margenPct != null ? formatPct(margenPct) : formatSoles(ventas.margenEstimado)}
               colorClass={margenColor}
               description={margenPct != null ? formatSoles(ventas.margenEstimado) : undefined}
-              trend={delta(ventas.margenEstimado, prevVentas?.margenEstimado) != null
-                ? { value: delta(ventas.margenEstimado, prevVentas?.margenEstimado)!, label: tl }
-                : undefined}
             />
           </div>
         </section>
@@ -356,16 +367,8 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inventario</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={<Package className="h-5 w-5" />} title="Total productos" value={formatNum(inv?.totalProductos)} />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización" value={formatSoles(inv?.valorizacionStock)} colorClass="text-green-600"
-            trend={delta(inv?.valorizacionStock, prevInv?.valorizacionStock) != null
-              ? { value: delta(inv?.valorizacionStock, prevInv?.valorizacionStock)!, label: tl }
-              : undefined}
-          />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas período" value={formatNum(mov?.entradasCantidad)} colorClass="text-blue-600"
-            trend={delta(mov?.entradasCantidad, prevMov?.entradasCantidad) != null
-              ? { value: delta(mov?.entradasCantidad, prevMov?.entradasCantidad)!, label: tl }
-              : undefined}
-          />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización stock" value={formatSoles(inv?.valorizacionStock)} colorClass="text-green-600" />
+          <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Entradas período" value={formatNum(mov?.entradasCantidad)} colorClass="text-blue-600" />
           <StatCard
             icon={<AlertTriangle className="h-5 w-5" />}
             title="Bajo stock"
@@ -380,21 +383,9 @@ function ResumenTab({ loading, error, data, prevData, prevDesde, prevHasta, onRe
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recepciones del período</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 [&>*:last-child]:col-span-2 [&>*:last-child]:mx-auto [&>*:last-child]:max-w-[calc(50%-0.5rem)] sm:[&>*:last-child]:col-auto sm:[&>*:last-child]:max-w-none sm:[&>*:last-child]:mx-0">
-          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(comp?.recepcionesConfirmadasCount)}
-            trend={delta(comp?.recepcionesConfirmadasCount, prevComp?.recepcionesConfirmadasCount) != null
-              ? { value: delta(comp?.recepcionesConfirmadasCount, prevComp?.recepcionesConfirmadasCount)!, label: tl }
-              : undefined}
-          />
-          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(comp?.unidadesRecibidas)}
-            trend={delta(comp?.unidadesRecibidas, prevComp?.unidadesRecibidas) != null
-              ? { value: delta(comp?.unidadesRecibidas, prevComp?.unidadesRecibidas)!, label: tl }
-              : undefined}
-          />
-          <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto compras est." value={formatSoles(comp?.montoComprasEstimado)} colorClass="text-amber-600"
-            trend={delta(comp?.montoComprasEstimado, prevComp?.montoComprasEstimado) != null
-              ? { value: delta(comp?.montoComprasEstimado, prevComp?.montoComprasEstimado)!, label: tl }
-              : undefined}
-          />
+          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(comp?.recepcionesConfirmadasCount)} />
+          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(comp?.unidadesRecibidas)} />
+          <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto compras est." value={formatSoles(comp?.montoComprasEstimado)} colorClass="text-amber-600" />
         </div>
       </section>
 
@@ -740,6 +731,7 @@ interface InventarioData {
   abc: InventarioABCDTO[];
   slowMovers: InventarioSlowMoverDTO[];
   cobertura: InventarioCoberturaDTO[];
+  vencimientos: VencimientosRiesgoDTO | null;
 }
 
 function abcVariant(c: string): 'success' | 'warning' | 'destructive' | 'default' {
@@ -769,6 +761,8 @@ function InventarioTab({ loading, error, data, onRetry }: {
   if (error) return <TabError message={error} onRetry={onRetry} />;
   if (!data) return <TabEmpty />;
 
+  const venc = data.vencimientos;
+
   // Datos para gráfico ABC (barras apiladas por clase)
   const abcGroups = data.abc.reduce<Record<string, { clase: string; totalIngresos: number; count: number }>>(
     (acc, p) => {
@@ -785,6 +779,99 @@ function InventarioTab({ loading, error, data, onRetry }: {
 
   return (
     <div className="space-y-6">
+
+      {/* ── Capital en riesgo de vencimiento ── */}
+      {venc && (venc.lotesVencidos > 0 || venc.lotesRiesgo7d > 0 || venc.lotesRiesgo30d > 0 || venc.lotesRiesgo90d > 0) && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+            <FlaskConical className="h-4 w-4 text-red-500" />
+            Capital en riesgo de vencimiento
+          </h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="border-red-200 dark:border-red-900">
+              <CardHeader className="pb-2"><p className="text-xs font-semibold uppercase tracking-wider text-red-500">Ya vencido</p></CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-2xl font-bold text-red-600">{formatSoles(venc.capitalVencido)}</p>
+                <p className="text-xs text-muted-foreground">{venc.lotesVencidos} lote(s)</p>
+              </CardContent>
+            </Card>
+            <Card className="border-orange-200 dark:border-orange-900">
+              <CardHeader className="pb-2"><p className="text-xs font-semibold uppercase tracking-wider text-orange-500">Crítico &lt;7 días</p></CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-2xl font-bold text-orange-600">{formatSoles(venc.capitalRiesgo7d)}</p>
+                <p className="text-xs text-muted-foreground">{venc.lotesRiesgo7d} lote(s)</p>
+              </CardContent>
+            </Card>
+            <Card className="border-amber-200 dark:border-amber-900">
+              <CardHeader className="pb-2"><p className="text-xs font-semibold uppercase tracking-wider text-amber-600">Próx. 30 días</p></CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-2xl font-bold text-amber-600">{formatSoles(venc.capitalRiesgo30d)}</p>
+                <p className="text-xs text-muted-foreground">{venc.lotesRiesgo30d} lote(s)</p>
+              </CardContent>
+            </Card>
+            <Card className="border-yellow-200 dark:border-yellow-900">
+              <CardHeader className="pb-2"><p className="text-xs font-semibold uppercase tracking-wider text-yellow-600">Próx. 90 días</p></CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-2xl font-bold text-yellow-600">{formatSoles(venc.capitalRiesgo90d)}</p>
+                <p className="text-xs text-muted-foreground">{venc.lotesRiesgo90d} lote(s)</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {venc.lotesUrgentes.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  Lotes más urgentes
+                </CardTitle>
+                <CardDescription>Capital crítico: {formatSoles(venc.totalCapitalCritico)} (vencido + próx. 30d)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>Lote</TableHead>
+                        <TableHead className="text-center">Vence</TableHead>
+                        <TableHead className="text-center">Días</TableHead>
+                        <TableHead className="text-center">Cant.</TableHead>
+                        <TableHead className="text-right">Valor en riesgo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {venc.lotesUrgentes.map((l, i) => {
+                        const vencido  = l.diasRestantes < 0;
+                        const critico  = !vencido && l.diasRestantes <= 7;
+                        const proximo  = !vencido && l.diasRestantes <= 30;
+                        const rowBg    = vencido ? 'bg-red-500/5' : critico ? 'bg-orange-500/5' : proximo ? 'bg-amber-500/5' : '';
+                        const daysText = vencido ? `Hace ${Math.abs(l.diasRestantes)}d` : `${l.diasRestantes}d`;
+                        const daysColor = vencido ? 'text-red-600 font-bold' : critico ? 'text-orange-600 font-semibold' : 'text-amber-600';
+                        return (
+                          <TableRow key={i} className={rowBg}>
+                            <TableCell className="font-medium text-sm">{l.productoNombre}</TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground">{l.lote ?? '—'}</TableCell>
+                            <TableCell className="text-center text-sm">
+                              {new Date(l.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-PE', { day:'2-digit', month:'short', year:'numeric' })}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className={`text-sm ${daysColor}`}>{daysText}</span>
+                            </TableCell>
+                            <TableCell className="text-center text-muted-foreground">{l.cantidad}</TableCell>
+                            <TableCell className="text-right font-semibold text-red-500">{formatSoles(l.valorRiesgo)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
       {/* ABC — gráfico de barras + tabla */}
       <Card>
         <CardHeader>
@@ -1012,20 +1099,333 @@ function ComprasTab({ loading, error, data, onRetry }: {
   );
 }
 
+// ─── Financiero tab (P&L) ─────────────────────────────────────────────────────
+
+/** Fila del estado de resultados con barra visual */
+function PLRow({
+  label, value, sub, colorClass = 'text-foreground', bold = false,
+  indent = false, separator = false, bg = false,
+}: {
+  label: string; value: number | null; sub?: string;
+  colorClass?: string; bold?: boolean;
+  indent?: boolean; separator?: boolean; bg?: boolean;
+}) {
+  return (
+    <div className={[
+      'flex items-center justify-between py-2 px-3 rounded-lg',
+      separator ? 'border-t mt-1' : '',
+      bg ? 'bg-muted/50' : '',
+    ].join(' ')}>
+      <span className={`text-sm flex items-center gap-2 ${indent ? 'ml-4 text-muted-foreground' : ''} ${bold ? 'font-semibold' : ''}`}>
+        {indent && <Minus className="h-3 w-3 text-muted-foreground" />}
+        {!indent && separator && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
+        {label}
+      </span>
+      <div className="text-right">
+        <span className={`text-sm font-mono ${bold ? 'font-bold text-base' : ''} ${colorClass}`}>
+          {value != null ? formatSoles(value) : '—'}
+        </span>
+        {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function FinancieroTab({ loading, error, data, onRetry }: {
+  loading: boolean; error: string | null;
+  data: FinancieroDTO | null;
+  onRetry: () => void;
+}) {
+  if (loading) return <TabLoading />;
+  if (error)   return <TabError message={error} onRetry={onRetry} />;
+  if (!data)   return <TabEmpty />;
+
+  const margenBrutoColor  = (data.margenBruto ?? 0) >= 30 ? 'text-green-600' : (data.margenBruto ?? 0) >= 15 ? 'text-yellow-600' : 'text-red-600';
+  const margenNetoColor   = (data.margenNeto  ?? 0) >= 15 ? 'text-green-600' : (data.margenNeto  ?? 0) >= 5  ? 'text-yellow-600' : 'text-red-600';
+  const utilidadNetaColor = (data.utilidadNeta ?? 0) >= 0  ? 'text-green-600' : 'text-red-600';
+
+  const catChart = data.gastosPorCategoria.slice(0, 8).map(g => ({
+    name: GASTO_LABELS[g.categoria] ?? g.categoria,
+    value: g.monto ?? 0,
+  }));
+
+  const gastosChartData = data.gastosPorCategoria.map(g => ({
+    nombre: (GASTO_LABELS[g.categoria] ?? g.categoria).slice(0, 18),
+    monto: g.monto ?? 0,
+  }));
+
+  return (
+    <div className="space-y-6">
+      {/* KPI rápidos */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          icon={<DollarSign className="h-5 w-5" />}
+          title="Ingresos de ventas"
+          value={formatSoles(data.ingresosVentas)}
+          colorClass="text-green-600"
+          description={data.ventasCount != null ? `${data.ventasCount} venta(s)` : undefined}
+        />
+        <StatCard
+          icon={<TrendingDown className="h-5 w-5" />}
+          title="Gastos operativos"
+          value={formatSoles(data.gastosTotales)}
+          colorClass="text-red-500"
+          description={data.gastosCount != null ? `${data.gastosCount} gasto(s)` : undefined}
+        />
+        <StatCard
+          icon={<TrendingUp className="h-5 w-5" />}
+          title="Margen bruto"
+          value={data.margenBruto != null ? formatPct(data.margenBruto) : '—'}
+          colorClass={margenBrutoColor}
+          description={formatSoles(data.utilidadBruta)}
+        />
+        <StatCard
+          icon={<Wallet className="h-5 w-5" />}
+          title="Utilidad neta"
+          value={data.margenNeto != null ? formatPct(data.margenNeto) : '—'}
+          colorClass={margenNetoColor}
+          description={formatSoles(data.utilidadNeta)}
+        />
+      </div>
+
+      {/* Estado de Resultados (cascada) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-primary" />
+            Estado de Resultados
+          </CardTitle>
+          <CardDescription>
+            {data.ventasCount} venta(s) · período {data.desde} → {data.hasta}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-1">
+            <PLRow label="Ingresos por ventas" value={data.ingresosVentas} colorClass="text-green-600" bold />
+            <PLRow label="Costo de ventas" value={data.costoVentas} colorClass="text-red-400" indent
+              sub={data.ingresosVentas > 0 ? `${((data.costoVentas / data.ingresosVentas) * 100).toFixed(1)}% de ingresos` : undefined} />
+            <PLRow label="Utilidad bruta" value={data.utilidadBruta}
+              sub={data.margenBruto != null ? `Margen ${formatPct(data.margenBruto)}` : undefined}
+              colorClass={margenBrutoColor} bold separator />
+            <PLRow label={`Gastos operativos (${data.gastosCount} registros)`} value={data.gastosTotales}
+              colorClass="text-red-400" indent
+              sub={data.ingresosVentas > 0 ? `${((data.gastosTotales / data.ingresosVentas) * 100).toFixed(1)}% de ingresos` : undefined} />
+            <PLRow label="Utilidad neta" value={data.utilidadNeta}
+              sub={data.margenNeto != null ? `Margen ${formatPct(data.margenNeto)}` : undefined}
+              colorClass={utilidadNetaColor} bold separator bg />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Gastos por categoría */}
+      {data.gastosPorCategoria.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Donut */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Gastos por categoría</CardTitle>
+              <CardDescription>Distribución de {formatSoles(data.gastosTotales)} en gastos</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={catChart} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
+                    dataKey="value" nameKey="name" paddingAngle={2}>
+                    {catChart.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => formatSoles(v as number)} />
+                  <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs">{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Barras horizontales */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Detalle de gastos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={gastosChartData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="currentColor" strokeOpacity={0.1} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={formatYAxisSoles} />
+                  <YAxis type="category" dataKey="nombre" tick={{ fontSize: 10 }} width={110} />
+                  <Tooltip content={<ChartTooltip isSoles />} />
+                  <Bar dataKey="monto" name="Monto" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Tabla detalle gastos */}
+      {data.gastosPorCategoria.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Desglose por categoría</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead className="text-center">Registros</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right">% del total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.gastosPorCategoria.map((g) => (
+                    <TableRow key={g.categoria}>
+                      <TableCell className="font-medium">{GASTO_LABELS[g.categoria] ?? g.categoria}</TableCell>
+                      <TableCell className="text-center text-muted-foreground">{g.count}</TableCell>
+                      <TableCell className="text-right font-semibold text-red-500">{formatSoles(g.monto)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-red-400" style={{ width: `${g.porcentaje ?? 0}%` }} />
+                          </div>
+                          <span className="text-xs text-muted-foreground w-10">{(g.porcentaje ?? 0).toFixed(0)}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── Clientes tab ─────────────────────────────────────────────────────────────
+
+function ClientesTab({ loading, error, data, onRetry }: {
+  loading: boolean; error: string | null;
+  data: ClienteReporteDTO[] | null;
+  onRetry: () => void;
+}) {
+  if (loading) return <TabLoading />;
+  if (error)   return <TabError message={error} onRetry={onRetry} />;
+  if (!data || data.length === 0) return (
+    <EmptyState icon={Users} title="Sin datos de clientes"
+      description="No hay ventas asociadas a clientes identificados en el período seleccionado." />
+  );
+
+  const totalComprado  = data.reduce((s, c) => s + (c.totalComprado ?? 0), 0);
+  const totalVentas    = data.reduce((s, c) => s + (c.ventasCount ?? 0), 0);
+  const ticketPromGral = totalVentas > 0 ? totalComprado / totalVentas : 0;
+
+  const chartData = data.slice(0, 8).map(c => ({
+    nombre: c.clienteNombre.split(' ')[0],  // sólo primer nombre para el eje
+    total: c.totalComprado ?? 0,
+  }));
+
+  return (
+    <div className="space-y-6">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard icon={<Users className="h-5 w-5" />} title="Clientes únicos" value={formatNum(data.length)} />
+        <StatCard icon={<DollarSign className="h-5 w-5" />} title="Compra total" value={formatSoles(totalComprado)} colorClass="text-green-600" />
+        <StatCard icon={<Target className="h-5 w-5" />} title="Ticket promedio" value={formatSoles(ticketPromGral)} />
+      </div>
+
+      {/* Gráfico top 8 clientes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Top clientes por monto comprado</CardTitle>
+          <CardDescription>Los 8 mejores compradores del período</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="currentColor" strokeOpacity={0.1} />
+              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={formatYAxisSoles} />
+              <YAxis type="category" dataKey="nombre" tick={{ fontSize: 11 }} width={80} />
+              <Tooltip content={<ChartTooltip isSoles />} />
+              <Bar dataKey="total" name="Total comprado" fill={COLOR_PRIMARY} radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Tabla detalle */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Detalle de clientes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="text-center">Compras</TableHead>
+                  <TableHead className="text-right">Total gastado</TableHead>
+                  <TableHead className="text-right">Ticket prom.</TableHead>
+                  <TableHead className="text-right">Última compra</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.map((c, i) => {
+                  const pct = totalComprado > 0 ? ((c.totalComprado ?? 0) / totalComprado) * 100 : 0;
+                  return (
+                    <TableRow key={c.clienteId}>
+                      <TableCell className="text-muted-foreground text-sm">{i + 1}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-sm">{c.clienteNombre}</p>
+                          <div className="h-1 w-full rounded-full bg-muted overflow-hidden mt-1">
+                            <div className="h-full rounded-full bg-primary/60" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">{formatNum(c.ventasCount)}</TableCell>
+                      <TableCell className="text-right font-semibold text-green-600">{formatSoles(c.totalComprado)}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{formatSoles(c.ticketPromedio)}</TableCell>
+                      <TableCell className="text-right text-muted-foreground text-xs">
+                        {c.ultimaCompra ? new Date(c.ultimaCompra).toLocaleDateString('es-PE') : '—'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Quick range buttons ──────────────────────────────────────────────────────
 
 const QUICK_RANGES = [
-  { label: '7d',    desde: () => daysAgo(7),   hasta: () => toDateString(new Date()) },
-  { label: '30d',   desde: () => daysAgo(30),  hasta: () => toDateString(new Date()) },
-  { label: '90d',   desde: () => daysAgo(90),  hasta: () => toDateString(new Date()) },
-  { label: 'Este año', desde: startOfYear,     hasta: () => toDateString(new Date()) },
+  { label: '7d',           desde: () => daysAgo(7),      hasta: () => toDateString(new Date()) },
+  { label: '30d',          desde: () => daysAgo(30),     hasta: () => toDateString(new Date()) },
+  { label: 'Este mes',     desde: startOfMonth,           hasta: () => toDateString(new Date()) },
+  { label: 'Mes anterior', desde: startOfPrevMonth,       hasta: endOfPrevMonth },
+  { label: '90d',          desde: () => daysAgo(90),     hasta: () => toDateString(new Date()) },
+  { label: 'Este año',     desde: startOfYear,            hasta: () => toDateString(new Date()) },
 ];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+const MAX_DIAS_BASICO = 30;
+
 export function ReportesPage() {
   const { canView } = usePermissions();
+  const { isBasico } = usePlan();
+  const navigate = useNavigate();
   const hasAccess = canView('REPORTES');
+
+  const minimoFechaBasico = daysAgo(MAX_DIAS_BASICO);
 
   const [desde, setDesde] = useState<string>(daysAgo(30));
   const [hasta, setHasta] = useState<string>(toDateString(new Date()));
@@ -1034,9 +1434,6 @@ export function ReportesPage() {
   const [resumenLoading, setResumenLoading] = useState(false);
   const [resumenError, setResumenError] = useState<string | null>(null);
   const [resumenData, setResumenData] = useState<ReportesResumenDTO | null>(null);
-  const [resumenPrevData, setResumenPrevData] = useState<ReportesResumenDTO | null>(null);
-  const [prevDesde, setPrevDesde] = useState('');
-  const [prevHasta, setPrevHasta] = useState('');
 
   const [ventasLoading, setVentasLoading] = useState(false);
   const [ventasError, setVentasError] = useState<string | null>(null);
@@ -1052,19 +1449,20 @@ export function ReportesPage() {
   const [comprasError, setComprasError] = useState<string | null>(null);
   const [comprasData, setComprasData] = useState<ComprasPorProveedorDTO[] | null>(null);
 
+  const [financieroLoading, setFinancieroLoading] = useState(false);
+  const [financieroError, setFinancieroError] = useState<string | null>(null);
+  const [financieroData, setFinancieroData] = useState<FinancieroDTO | null>(null);
+
+  const [clientesLoading, setClientesLoading] = useState(false);
+  const [clientesError, setClientesError] = useState<string | null>(null);
+  const [clientesData, setClientesData] = useState<ClienteReporteDTO[] | null>(null);
+
   const [exporting, setExporting] = useState(false);
 
   const fetchResumen = async (d = desde, h = hasta) => {
     try {
       setResumenLoading(true); setResumenError(null);
-      const { prevDesde: pd, prevHasta: ph } = calcPrevPeriod(d, h);
-      setPrevDesde(pd); setPrevHasta(ph);
-      const [current, prev] = await Promise.all([
-        reportesService.getResumen(d, h),
-        reportesService.getResumen(pd, ph).catch(() => null),
-      ]);
-      setResumenData(current);
-      setResumenPrevData(prev);
+      setResumenData(await reportesService.getResumen(d, h));
     } catch { setResumenError('Error al cargar el resumen.'); toast.error('Error al cargar el resumen.');
     } finally { setResumenLoading(false); }
   };
@@ -1086,12 +1484,13 @@ export function ReportesPage() {
 
   const fetchInventario = async () => {
     try { setInventarioLoading(true); setInventarioError(null);
-      const [abc, slowMovers, cobertura] = await Promise.all([
+      const [abc, slowMovers, cobertura, vencimientos] = await Promise.all([
         reportesService.getInventarioABC(desde, hasta),
         reportesService.getInventarioSlowMovers(30),
         reportesService.getInventarioCobertura(desde, hasta),
+        reportesService.getVencimientosRiesgo().catch(() => null),
       ]);
-      setInventarioData({ abc, slowMovers, cobertura });
+      setInventarioData({ abc, slowMovers, cobertura, vencimientos });
     } catch { setInventarioError('Error al cargar datos de inventario.'); toast.error('Error al cargar datos de inventario.');
     } finally { setInventarioLoading(false); }
   };
@@ -1103,13 +1502,38 @@ export function ReportesPage() {
     } finally { setComprasLoading(false); }
   };
 
+  const fetchFinanciero = async (d = desde, h = hasta) => {
+    try { setFinancieroLoading(true); setFinancieroError(null);
+      setFinancieroData(await reportesService.getFinanciero(d, h));
+    } catch { setFinancieroError('Error al cargar datos financieros.'); toast.error('Error al cargar datos financieros.');
+    } finally { setFinancieroLoading(false); }
+  };
+
+  const fetchClientes = async (d = desde, h = hasta) => {
+    try { setClientesLoading(true); setClientesError(null);
+      setClientesData(await reportesService.getTopClientes(d, h, 30));
+    } catch { setClientesError('Error al cargar datos de clientes.'); toast.error('Error al cargar datos de clientes.');
+    } finally { setClientesLoading(false); }
+  };
+
   const handleActualizar = (d = desde, h = hasta) => {
     if (!d || !h) { toast.error('Selecciona un rango de fechas'); return; }
     if (d > h) { toast.error('La fecha "Desde" no puede ser mayor a "Hasta"'); return; }
+    // Clamp para plan BÁSICO: no se puede ir más atrás de 30 días
+    if (isBasico && d < minimoFechaBasico) {
+      toast('Plan Básico: el rango máximo es 30 días. Actualiza a Pro para ver historial completo.', {
+        icon: '👑',
+        style: { background: '#fffbeb', color: '#92400e', border: '1px solid #fcd34d' },
+      });
+      d = minimoFechaBasico;
+      setDesde(d);
+    }
     fetchResumen(d, h);
     fetchVentas(d, h, agrupacion, metrica);
     fetchInventario();
     fetchCompras();
+    fetchFinanciero(d, h);
+    fetchClientes(d, h);
   };
 
   // Auto-carga al montar con el rango por defecto (últimos 30 días)
@@ -1186,14 +1610,35 @@ export function ReportesPage() {
     } finally { setExporting(false); }
   };
 
-  const isAnyLoading = resumenLoading || ventasLoading || inventarioLoading || comprasLoading;
+  const isAnyLoading = resumenLoading || ventasLoading || inventarioLoading || comprasLoading || financieroLoading || clientesLoading;
 
   if (!hasAccess) {
     return <EmptyState icon={Lock} title="Sin acceso" description="No tienes permisos para ver el módulo de Reportes." />;
   }
 
+  // Para BÁSICO, solo mostrar rangos de ≤30 días
+  const visibleRanges = isBasico
+    ? QUICK_RANGES.filter((r) => r.label === '7d' || r.label === '30d' || r.label === 'Este mes' || r.label === 'Mes anterior')
+    : QUICK_RANGES;
+
   return (
     <div className="space-y-6">
+      {/* Banner plan BÁSICO */}
+      {isBasico && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3">
+          <Crown className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <p className="text-sm text-amber-800 dark:text-amber-200 flex-1">
+            <span className="font-semibold">Plan Básico</span> — los reportes están limitados a los últimos 30 días.
+          </p>
+          <button
+            onClick={() => navigate('/checkout?plan=PRO')}
+            className="text-xs font-semibold text-amber-700 dark:text-amber-300 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100 shrink-0"
+          >
+            Actualizar a Pro
+          </button>
+        </div>
+      )}
+
       {/* Header + filtros integrados */}
       <div className="flex flex-col gap-4">
         {/* Título */}
@@ -1226,7 +1671,7 @@ export function ReportesPage() {
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-1 hidden sm:inline">
               Período
             </span>
-            {QUICK_RANGES.map((r) => {
+            {visibleRanges.map((r) => {
               const isActive = desde === r.desde() && hasta === r.hasta();
               return (
                 <button
@@ -1243,6 +1688,15 @@ export function ReportesPage() {
                 </button>
               );
             })}
+            {isBasico && (
+              <button
+                onClick={() => navigate('/checkout?plan=PRO')}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all"
+              >
+                <Crown className="h-3 w-3" />
+                90d / Año
+              </button>
+            )}
           </div>
 
           {/* Separador vertical */}
@@ -1258,6 +1712,7 @@ export function ReportesPage() {
                 id="rpt-desde"
                 type="date"
                 value={desde}
+                min={isBasico ? minimoFechaBasico : undefined}
                 onChange={(e) => setDesde(e.target.value)}
                 className="h-9 w-full sm:w-36 text-sm"
               />
@@ -1301,7 +1756,6 @@ export function ReportesPage() {
         {activeTab === 'resumen' && (
           <ResumenTab
             loading={resumenLoading} error={resumenError} data={resumenData}
-            prevData={resumenPrevData} prevDesde={prevDesde} prevHasta={prevHasta}
             onRetry={fetchResumen}
           />
         )}
@@ -1318,6 +1772,19 @@ export function ReportesPage() {
         )}
         {activeTab === 'compras' && (
           <ComprasTab loading={comprasLoading} error={comprasError} data={comprasData} onRetry={fetchCompras} />
+        )}
+        {activeTab === 'financiero' && (
+          <FinancieroTab
+            loading={financieroLoading} error={financieroError}
+            data={financieroData}
+            onRetry={() => fetchFinanciero()}
+          />
+        )}
+        {activeTab === 'clientes' && (
+          <ClientesTab
+            loading={clientesLoading} error={clientesError}
+            data={clientesData} onRetry={() => fetchClientes()}
+          />
         )}
       </div>
     </div>

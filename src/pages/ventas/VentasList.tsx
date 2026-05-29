@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ventaService } from '../../services/venta.service';
 import { productoService } from '../../services/producto.service';
 import { facturacionService } from '../../services/facturacion.service';
+import { clienteService } from '../../services/cliente.service';
+import type { ClienteDTO } from '../../services/cliente.service';
 import type {
   VentaDTO,
   ProductoDTO,
@@ -32,24 +35,23 @@ import {
   X,
   FileSpreadsheet,
   FileDown,
+  RotateCcw,
+  RefreshCw,
+  SlidersHorizontal,
+  Printer,
 } from 'lucide-react';
+import { printTicket } from '../../utils/printTicket';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
 import { exportarVentasExcel, exportarVentasPDF } from '../../utils/reportes-export';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { DevolucionModal } from '../../components/ventas/DevolucionModal';
 
 const IGV_RATE = 0.18;
 type MetodoPagoFilter = 'TODOS' | 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
-type RangoFecha = 'HOY' | 'AYER' | '7_DIAS' | '30_DIAS' | 'PERSONALIZADO';
-
-function toYyyyMmDdLocal(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
+type EstadoVentaFilter = 'TODOS' | 'COMPLETADA' | 'ANULADA' | 'DEVUELTA' | 'DEVUELTA_PARCIAL';
 
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -61,12 +63,14 @@ function endOfDay(d: Date) {
 
 export function VentasList() {
   const { userId } = useCurrentUser();
+  const navigate = useNavigate();
   const { canDelete, canViewAll, canViewOwn, canCreate, rol, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
 
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [comprobantes, setComprobantes] = useState<ComprobanteDTO[]>([]);
+  const [clientes, setClientes] = useState<ClienteDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -77,10 +81,13 @@ export function VentasList() {
 
   // ✅ filtros
   const [metodoPagoFilter, setMetodoPagoFilter] = useState<MetodoPagoFilter>('TODOS');
+  const [estadoVentaFilter, setEstadoVentaFilter] = useState<EstadoVentaFilter>('TODOS');
 
-  const [rangoFecha, setRangoFecha] = useState<RangoFecha>('HOY');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+
+  const [devolucionVenta, setDevolucionVenta] = useState<VentaDTO | null>(null);
+  const [showDevolucion, setShowDevolucion] = useState(false);
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -115,47 +122,9 @@ export function VentasList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, rol]);
 
-  // ✅ aplicar rango rápido a fechas
-  useEffect(() => {
-    const now = new Date();
-    const todayStart = startOfDay(now);
-
-    if (rangoFecha === 'HOY') {
-      setFechaDesde(toYyyyMmDdLocal(todayStart));
-      setFechaHasta(toYyyyMmDdLocal(todayStart));
-      return;
-    }
-
-    if (rangoFecha === 'AYER') {
-      const y = new Date(todayStart);
-      y.setDate(y.getDate() - 1);
-      setFechaDesde(toYyyyMmDdLocal(y));
-      setFechaHasta(toYyyyMmDdLocal(y));
-      return;
-    }
-
-    if (rangoFecha === '7_DIAS') {
-      const from = new Date(todayStart);
-      from.setDate(from.getDate() - 6);
-      setFechaDesde(toYyyyMmDdLocal(from));
-      setFechaHasta(toYyyyMmDdLocal(todayStart));
-      return;
-    }
-
-    if (rangoFecha === '30_DIAS') {
-      const from = new Date(todayStart);
-      from.setDate(from.getDate() - 29);
-      setFechaDesde(toYyyyMmDdLocal(from));
-      setFechaHasta(toYyyyMmDdLocal(todayStart));
-      return;
-    }
-
-    // PERSONALIZADO: no tocar
-  }, [rangoFecha]);
-
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, fechaDesde, fechaHasta, metodoPagoFilter]);
+  }, [searchTerm, fechaDesde, fechaHasta, metodoPagoFilter, estadoVentaFilter]);
 
   const fetchData = async () => {
     try {
@@ -173,16 +142,19 @@ export function VentasList() {
         hasViewPermission ? productoService.getAll() : Promise.resolve([] as ProductoDTO[]);
 
       const comprobantesPromise = facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[]);
+      const clientesPromise = clienteService.getAll().catch(() => [] as ClienteDTO[]);
 
-      const [ventasData, productosData, comprobantesData] = await Promise.all([
+      const [ventasData, productosData, comprobantesData, clientesData] = await Promise.all([
         ventasPromise,
         productosPromise,
         comprobantesPromise,
+        clientesPromise,
       ]);
 
       setVentas(ventasData);
       setProductos(productosData);
       setComprobantes(comprobantesData);
+      setClientes(clientesData);
     } catch (error) {
       toast.error('Error al cargar datos');
       if (import.meta.env.DEV) console.error(error);
@@ -203,10 +175,17 @@ export function VentasList() {
   };
 
   const handleOpenEmitirComprobante = (venta: VentaDTO) => {
+    // Si la venta tiene cliente registrado, pre-llenar los datos del receptor
+    const cliente = venta.clienteId ? clienteById.get(venta.clienteId) : null;
     setEmitirForm({
       ventaId: venta.id!,
       tipo: 'BOLETA',
-      receptor: { tipoDocumento: undefined, numeroDocumento: '', razonSocial: '', direccion: '' },
+      receptor: {
+        tipoDocumento: (cliente?.tipoDocumento as 'DNI' | 'RUC' | undefined) ?? 'DNI',
+        numeroDocumento: cliente?.numeroDocumento ?? '',
+        razonSocial: cliente?.nombre ?? '',
+        direccion: cliente?.direccion ?? '',
+      },
     });
     setIsEmitirComprobanteOpen(true);
   };
@@ -242,36 +221,49 @@ export function VentasList() {
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleAnular = (venta: VentaDTO) => {
     setConfirmDialog({
       isOpen: true,
       type: 'danger',
-      title: 'Eliminar Venta',
-      description: '⚠️ Estás a punto de eliminar esta venta de forma permanente. Esta acción no se puede deshacer.',
-      confirmText: 'Eliminar Permanentemente',
+      title: 'Anular Venta',
+      description: `¿Seguro que deseas anular la Venta #${venta.id}? El registro se conserva pero quedará marcado como ANULADA.`,
+      confirmText: 'Sí, anular',
       action: async () => {
         try {
-          await ventaService.delete(id);
-          toast.success('Venta eliminada');
+          await ventaService.anular(venta.id!);
+          toast.success(`Venta #${venta.id} anulada`);
           await fetchData();
           setConfirmDialog({ ...confirmDialog, isOpen: false });
-        } catch {
-          toast.error('Error al eliminar venta');
+        } catch (err: any) {
+          toast.error(err?.response?.data?.mensaje || 'Error al anular la venta');
         }
       },
     });
   };
 
+  // Mapa clienteId → ClienteDTO para lookup rápido — debe ir ANTES de filteredVentas
+  const clienteById = useMemo<Map<number, ClienteDTO>>(() => {
+    const m = new Map<number, ClienteDTO>();
+    for (const c of clientes) {
+      if (c.id != null) m.set(Number(c.id), c);
+    }
+    return m;
+  }, [clientes]);
+
   const filteredVentas = ventas.filter((v) => {
+    const cliente = v.clienteId ? clienteById.get(v.clienteId) : null;
     const matchesSearch =
       String(v.id).includes(searchTerm) ||
       v.metodoPago?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.estado?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.vendedorNombre?.toLowerCase().includes(searchTerm.toLowerCase());
+      v.vendedorNombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cliente?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cliente?.numeroDocumento?.includes(searchTerm);
 
     if (!matchesSearch) return false;
 
     if (metodoPagoFilter !== 'TODOS' && v.metodoPago !== metodoPagoFilter) return false;
+    if (estadoVentaFilter !== 'TODOS' && v.estado !== estadoVentaFilter) return false;
 
     if (fechaDesde || fechaHasta) {
       const created = v.createdAt ? new Date(v.createdAt) : null;
@@ -306,8 +298,11 @@ export function VentasList() {
 
   // ✅ Cards solicitados
   const totalVentas = ventas.length;
-  const ingresosFiltrads = filteredVentas.reduce((s, v) => s + v.total, 0);
-  const ticketPromedio = filteredVentas.length > 0 ? ingresosFiltrads / filteredVentas.length : 0;
+
+  // Solo ventas activas (excluye ANULADAS) para el resumen financiero
+  const ventasActivas = filteredVentas.filter(v => v.estado !== 'ANULADA');
+  const ingresosFiltrads = ventasActivas.reduce((s, v) => s + v.total, 0);
+  const ticketPromedio = ventasActivas.length > 0 ? ingresosFiltrads / ventasActivas.length : 0;
 
   const hoy = new Date();
   const ventasHoy = ventas.filter((v) => {
@@ -359,14 +354,27 @@ export function VentasList() {
   }, [ventas, productoById]);
 
   const etiquetaFiltro =
-    rangoFecha === 'HOY'    ? 'Hoy' :
-    rangoFecha === 'AYER'   ? 'Ayer' :
-    rangoFecha === '7_DIAS' ? 'Últimos 7 días' :
-    rangoFecha === '30_DIAS'? 'Últimos 30 días' :
     fechaDesde && fechaHasta ? `${fechaDesde} al ${fechaHasta}` :
-    fechaDesde ? `Desde ${fechaDesde}` : 'Período personalizado';
+    fechaDesde ? `Desde ${fechaDesde}` :
+    fechaHasta ? `Hasta ${fechaHasta}` : 'Todas las fechas';
 
   const [exporting, setExporting] = useState(false);
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+
+  // Cuenta de filtros activos (excluye search — ese va en barra principal)
+  const activeFiltersCount = [
+    metodoPagoFilter !== 'TODOS',
+    estadoVentaFilter !== 'TODOS',
+    !!fechaDesde,
+    !!fechaHasta,
+  ].filter(Boolean).length;
+
+  const limpiarFiltros = () => {
+    setMetodoPagoFilter('TODOS');
+    setEstadoVentaFilter('TODOS');
+    setFechaDesde('');
+    setFechaHasta('');
+  };
 
   const handleExportExcel = () => {
     try {
@@ -486,144 +494,233 @@ export function VentasList() {
         </Card>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="space-y-3">
+      {/* Barra de búsqueda + botón filtros */}
+      <div className="flex gap-2 items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Buscar por ID, vendedor, cliente, método..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 h-10 pr-9"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
 
-            {/* Rangos rápidos — tab bar scrollable (sin wrap) */}
-            <div className="rounded-lg border border-input bg-muted p-1">
-              <div className="flex gap-1 overflow-x-auto scrollbar-hide" role="tablist">
-                {(
-                  [
-                    { key: 'HOY',          label: 'Hoy' },
-                    { key: '7_DIAS',       label: '7 días' },
-                    { key: '30_DIAS',      label: '30 días' },
-                    { key: 'PERSONALIZADO', label: 'Personalizado' },
-                  ] as Array<{ key: RangoFecha; label: string }>
-                ).map((r) => (
-                  <button
-                    key={r.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={rangoFecha === r.key}
-                    onClick={() => setRangoFecha(r.key)}
-                    className={[
-                      'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition flex-1',
-                      rangoFecha === r.key
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                    ].join(' ')}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
+        {/* Botón Filtros */}
+        <button
+          type="button"
+          onClick={() => setShowFilterDrawer(true)}
+          className="relative flex items-center gap-2 h-10 px-4 rounded-lg border border-input bg-background hover:bg-muted transition-colors text-sm font-medium shrink-0"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          <span className="hidden sm:inline">Filtros</span>
+          {activeFiltersCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
+              {activeFiltersCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Chips de filtros activos */}
+      {activeFiltersCount > 0 && (
+        <div className="flex flex-wrap gap-2 items-center -mt-2">
+          {metodoPagoFilter !== 'TODOS' && (
+            <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1 font-medium">
+              Pago: {metodoPagoFilter === 'YAPE_PLIN' ? 'Yape/Plin' : metodoPagoFilter.charAt(0) + metodoPagoFilter.slice(1).toLowerCase()}
+              <button type="button" onClick={() => setMetodoPagoFilter('TODOS')} className="hover:text-primary/70"><X className="h-3 w-3" /></button>
+            </span>
+          )}
+          {estadoVentaFilter !== 'TODOS' && (
+            <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1 font-medium">
+              Estado: {estadoVentaFilter === 'DEVUELTA_PARCIAL' ? 'Dev. parcial' : estadoVentaFilter.charAt(0) + estadoVentaFilter.slice(1).toLowerCase()}
+              <button type="button" onClick={() => setEstadoVentaFilter('TODOS')} className="hover:text-primary/70"><X className="h-3 w-3" /></button>
+            </span>
+          )}
+          {fechaDesde && (
+            <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1 font-medium">
+              Desde: {fechaDesde}
+              <button type="button" onClick={() => setFechaDesde('')} className="hover:text-primary/70"><X className="h-3 w-3" /></button>
+            </span>
+          )}
+          {fechaHasta && (
+            <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1 font-medium">
+              Hasta: {fechaHasta}
+              <button type="button" onClick={() => setFechaHasta('')} className="hover:text-primary/70"><X className="h-3 w-3" /></button>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+          >
+            Limpiar todo
+          </button>
+        </div>
+      )}
+
+      {/* ── Filter Drawer ─────────────────────────────────────────────────── */}
+      {/* Backdrop — cubre desde inset-0; header (z-45) y sidebar (z-40) quedan encima */}
+      <div
+        className={`fixed inset-0 bg-black/50 z-[35] transition-opacity duration-300 ${showFilterDrawer ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setShowFilterDrawer(false)}
+      />
+      {/* Panel — arranca en top-16 (bajo el header), oscuro, bordes redondeados a la izq */}
+      <div
+        className={`fixed right-0 top-16 w-80 z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out rounded-l-2xl overflow-hidden
+          bg-slate-900 border-l border-t border-b border-slate-700/50
+          ${showFilterDrawer ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{ height: 'calc(100vh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }}
+      >
+        {/* Drawer header */}
+        <div className="flex items-center justify-between px-5 py-4 shrink-0 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700/50">
+          <div className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-blue-400" />
             </div>
+            <h2 className="font-semibold text-sm text-white">Filtros</h2>
+            {activeFiltersCount > 0 && (
+              <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
+                {activeFiltersCount}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilterDrawer(false)}
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
-            {/* Buscar */}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por ID, vendedor, método de pago..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 pr-8"
-              />
-              {searchTerm && (
+        {/* Drawer content */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+
+          {/* Rango de fechas */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+              <Calendar className="h-3.5 w-3.5 text-blue-400" /> Rango de fechas
+            </p>
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <label className="text-[11px] text-slate-500 font-medium">Desde</label>
+                <input
+                  type="date"
+                  value={fechaDesde}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                  className="w-full h-9 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm px-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-slate-500 font-medium">Hasta</label>
+                <input
+                  type="date"
+                  value={fechaHasta}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                  className="w-full h-9 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm px-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                />
+              </div>
+              {(fechaDesde || fechaHasta) && (
                 <button
                   type="button"
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => { setFechaDesde(''); setFechaHasta(''); }}
+                  className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3 w-3" /> Limpiar fechas
                 </button>
               )}
             </div>
-
-            {/* Desde / Hasta / Limpiar */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rango de fechas</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setFechaDesde('');
-                    setFechaHasta('');
-                    setMetodoPagoFilter('TODOS');
-                    setRangoFecha('PERSONALIZADO');
-                  }}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                  Limpiar
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Desde</label>
-                  <Input
-                    type="date"
-                    value={fechaDesde}
-                    onChange={(e) => { setFechaDesde(e.target.value); setRangoFecha('PERSONALIZADO'); }}
-                    className="h-9 text-sm w-full"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Hasta</label>
-                  <Input
-                    type="date"
-                    value={fechaHasta}
-                    onChange={(e) => { setFechaHasta(e.target.value); setRangoFecha('PERSONALIZADO'); }}
-                    className="h-9 text-sm w-full"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Método de pago — tab bar scrollable */}
-            <div className="rounded-lg border border-input bg-muted p-1">
-              <div
-                className="flex gap-1 overflow-x-auto scrollbar-hide"
-                role="tablist"
-                aria-label="Filtrar por método de pago"
-              >
-                {(
-                  [
-                    { key: 'TODOS',     label: 'Todos' },
-                    { key: 'EFECTIVO',  label: '💵 Efectivo' },
-                    { key: 'TARJETA',   label: '💳 Tarjeta' },
-                    { key: 'YAPE_PLIN', label: '📱 Yape/Plin' },
-                  ] as Array<{ key: MetodoPagoFilter; label: string }>
-                ).map((t) => {
-                  const active = metodoPagoFilter === t.key;
-                  return (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setMetodoPagoFilter(t.key)}
-                      className={[
-                        'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition flex-1',
-                        active
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                      ].join(' ')}
-                      aria-pressed={active}
-                    >
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Método de pago */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Método de pago</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { key: 'TODOS',     label: 'Todos' },
+                  { key: 'EFECTIVO',  label: 'Efectivo' },
+                  { key: 'TARJETA',   label: 'Tarjeta' },
+                  { key: 'YAPE_PLIN', label: 'Yape/Plin' },
+                ] as Array<{ key: MetodoPagoFilter; label: string }>
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setMetodoPagoFilter(t.key)}
+                  className={`rounded-lg border py-2 text-xs font-semibold transition-all text-center ${
+                    metodoPagoFilter === t.key
+                      ? 'border-blue-500 bg-blue-500/20 text-blue-300 shadow-sm shadow-blue-500/10'
+                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Estado */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Estado</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { key: 'TODOS',            label: 'Todos' },
+                  { key: 'COMPLETADA',       label: 'Completada' },
+                  { key: 'DEVUELTA_PARCIAL', label: 'Dev. parcial' },
+                  { key: 'DEVUELTA',         label: 'Devuelta' },
+                  { key: 'ANULADA',          label: 'Anulada' },
+                ] as Array<{ key: EstadoVentaFilter; label: string }>
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setEstadoVentaFilter(t.key)}
+                  className={`rounded-lg border py-2 text-xs font-semibold transition-all text-center ${
+                    estadoVentaFilter === t.key
+                      ? 'border-blue-500 bg-blue-500/20 text-blue-300 shadow-sm shadow-blue-500/10'
+                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Drawer footer */}
+        <div className="px-4 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex gap-2">
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            className="flex-1 h-9 rounded-xl border border-slate-600 text-xs font-semibold text-slate-400 hover:text-white hover:border-slate-400 transition-all"
+          >
+            Limpiar todo
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowFilterDrawer(false)}
+            className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-lg shadow-blue-500/20"
+          >
+            Ver {filteredVentas.length} resultado{filteredVentas.length !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
 
       {/* Table */}
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Lista de Ventas</CardTitle>
           <CardDescription>{filteredVentas.length} venta(s) — {etiquetaFiltro}</CardDescription>
@@ -632,20 +729,21 @@ export function VentasList() {
           {!canViewAll('VENTAS') && !canViewOwn('VENTAS') ? (
             <EmptyState title="Sin permisos" description="No tienes permisos para ver ventas" />
           ) : filteredVentas.length === 0 ? (
-            <EmptyState title="No hay ventas" description="Comienza registrando tu primera venta" />
+            <EmptyState icon={ShoppingCart} title="Todavía no hay ventas" description="Cuando registres tu primera venta desde el POS aparecerá aquí con todos sus detalles." />
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead>ID</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Vendedor</TableHead>
+                      <TableHead>Cliente</TableHead>
                       <TableHead>Método de Pago</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead>Productos</TableHead>
+                      <TableHead>Comprobante</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -674,10 +772,22 @@ export function VentasList() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground" />
-                            <div>
-                              <p className="font-medium text-sm">{venta.vendedorNombre || 'Sin nombre'}</p>
-                            </div>
+                            <p className="font-medium text-sm">{venta.vendedorNombre || 'Sin nombre'}</p>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {venta.clienteId && clienteById.get(venta.clienteId) ? (
+                            <div>
+                              <p className="text-sm font-medium">{clienteById.get(venta.clienteId)!.nombre}</p>
+                              {clienteById.get(venta.clienteId)!.numeroDocumento && (
+                                <p className="text-xs text-muted-foreground">
+                                  {clienteById.get(venta.clienteId)!.tipoDocumento} {clienteById.get(venta.clienteId)!.numeroDocumento}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{venta.metodoPago}</Badge>
@@ -688,16 +798,41 @@ export function VentasList() {
                             variant={
                               venta.estado === 'COMPLETADA'
                                 ? 'success'
-                                : venta.estado === 'PENDIENTE'
+                                : venta.estado === 'DEVUELTA_PARCIAL'
                                   ? 'warning'
-                                  : 'destructive'
+                                  : venta.estado === 'DEVUELTA'
+                                    ? 'secondary'
+                                    : venta.estado === 'PENDIENTE'
+                                      ? 'warning'
+                                      : 'destructive'
                             }
                           >
                             {venta.estado}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">{venta.detalles.length} producto(s)</Badge>
+                          {(() => {
+                            const comp = comprobantes.find(c => c.ventaId === venta.id);
+                            if (!comp) return <span className="text-xs text-muted-foreground">—</span>;
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs font-mono font-medium">{comp.numero ?? '—'}</span>
+                                {comp.sunatEstado ? (
+                                  <Badge
+                                    variant={comp.sunatEstado === 'ACEPTADO' ? 'success' : comp.sunatEstado === 'RECHAZADO' ? 'destructive' : 'warning'}
+                                    className="text-[10px] px-1.5 w-fit"
+                                    title={comp.sunatMensaje ?? undefined}
+                                  >
+                                    {comp.sunatEstado}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="text-[10px] px-1.5 w-fit opacity-60">
+                                    Sin enviar
+                                  </Badge>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -709,14 +844,37 @@ export function VentasList() {
                             >
                               <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
-                            {canDelete('VENTAS') && (
+                            {(venta.estado === 'COMPLETADA' || venta.estado === 'DEVUELTA_PARCIAL') && (
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleDelete(venta.id!)}
-                                title="Eliminar"
+                                onClick={() => {
+                                  setDevolucionVenta(venta);
+                                  setShowDevolucion(true);
+                                }}
+                                title="Registrar devolución"
+                              >
+                                <RotateCcw className="h-4 w-4 text-amber-600" />
+                              </Button>
+                            )}
+                            {canDelete('VENTAS') && venta.estado !== 'ANULADA' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleAnular(venta)}
+                                title="Anular venta"
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
+                            {venta.estado === 'ANULADA' && canCreate('VENTAS') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => navigate('/pos', { state: { cargarVenta: venta } })}
+                                title="Rehacer en POS"
+                              >
+                                <RefreshCw className="h-4 w-4 text-emerald-600" />
                               </Button>
                             )}
                           </div>
@@ -750,10 +908,11 @@ export function VentasList() {
         {selectedVenta &&
           (() => {
             const subtotalVenta = selectedVenta.detalles.reduce((acc, d) => acc + d.cantidad * d.precioUnitario, 0);
-            // subtotalVenta = total (precio ya incluye IGV)
-            const igvVenta = subtotalVenta * IGV_RATE / (1 + IGV_RATE);
-            const baseImponible = subtotalVenta / (1 + IGV_RATE);
-            const totalCalculado = subtotalVenta;
+            const descuentoNc = selectedVenta.descuentoNotaCredito ?? 0;
+            const totalConDescuento = Math.max(0, subtotalVenta - descuentoNc);
+            const igvVenta = totalConDescuento * IGV_RATE / (1 + IGV_RATE);
+            const baseImponible = totalConDescuento / (1 + IGV_RATE);
+            const totalCalculado = totalConDescuento;
 
             return (
               <div className="space-y-4">
@@ -769,9 +928,13 @@ export function VentasList() {
                       variant={
                         selectedVenta.estado === 'COMPLETADA'
                           ? 'success'
-                          : selectedVenta.estado === 'PENDIENTE'
+                          : selectedVenta.estado === 'DEVUELTA_PARCIAL'
                             ? 'warning'
-                            : 'destructive'
+                            : selectedVenta.estado === 'DEVUELTA'
+                              ? 'secondary'
+                              : selectedVenta.estado === 'PENDIENTE'
+                                ? 'warning'
+                                : 'destructive'
                       }
                       className="w-fit"
                     >
@@ -784,6 +947,29 @@ export function VentasList() {
                     <p className="font-semibold text-sm">{selectedVenta.vendedorNombre || 'Sin nombre'}</p>
                   </div>
                 </div>
+
+                {/* Cliente asociado */}
+                {(() => {
+                  const cliente = selectedVenta.clienteId ? clienteById.get(selectedVenta.clienteId) : null;
+                  return (
+                    <div className={`flex items-center gap-3 p-3 rounded-lg border ${cliente ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' : 'bg-muted border-border'}`}>
+                      <User className={`h-4 w-4 flex-shrink-0 ${cliente ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`} />
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium">Cliente</p>
+                        {cliente ? (
+                          <>
+                            <p className="font-semibold text-sm">{cliente.nombre}</p>
+                            {cliente.numeroDocumento && (
+                              <p className="text-xs text-muted-foreground">{cliente.tipoDocumento} {cliente.numeroDocumento}</p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="font-semibold text-sm text-muted-foreground">Consumidor final</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
@@ -819,6 +1005,29 @@ export function VentasList() {
                 </div>
 
                 <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-3">
+                  {descuentoNc > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground font-medium">Subtotal productos:</span>
+                      <span className="font-semibold">S/.{subtotalVenta.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {descuentoNc > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                        🎟 Descuento Nota de Crédito
+                        {selectedVenta.notaCreditoId && (
+                          <span className="font-mono text-xs text-muted-foreground ml-1">
+                            #{selectedVenta.notaCreditoId}
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-semibold text-green-600 dark:text-green-400">
+                        - S/.{descuentoNc.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground font-medium">Base imponible:</span>
                     <span className="font-semibold">S/.{baseImponible.toFixed(2)}</span>
@@ -856,6 +1065,21 @@ export function VentasList() {
                   );
                 })()}
 
+                {(() => {
+                  const comp = comprobantes.find(c => c.ventaId === selectedVenta.id);
+                  if (!comp) return null;
+                  return (
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center gap-2"
+                      onClick={() => printTicket(comp, negocioConfig)}
+                    >
+                      <Printer size={16} />
+                      Imprimir Ticket
+                    </Button>
+                  );
+                })()}
+
                 <Button onClick={closeDetailDialog} className="w-full">
                   Cerrar
                 </Button>
@@ -863,6 +1087,18 @@ export function VentasList() {
             );
           })()}
       </Dialog>
+
+      {/* Devolucion Modal */}
+      {showDevolucion && devolucionVenta && (
+        <DevolucionModal
+          venta={devolucionVenta}
+          onSuccess={fetchData}
+          onClose={() => {
+            setShowDevolucion(false);
+            setDevolucionVenta(null);
+          }}
+        />
+      )}
 
       {/* Confirm Dialog */}
       <ConfirmDialog
@@ -917,7 +1153,7 @@ export function VentasList() {
                   />
                   {tipo}
                   <span className="text-xs text-muted-foreground font-normal">
-                    {tipo === 'BOLETA' ? '(B001)' : '(F001)'}
+                    {tipo === 'BOLETA' ? 'con DNI opcional' : 'requiere RUC'}
                   </span>
                 </label>
               ))}

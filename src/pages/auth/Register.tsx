@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
@@ -28,12 +28,11 @@ const selectCls =
 export function Register() {
   const navigate = useNavigate();
   const { setUser } = useAuthStore();
-  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const planFromUrl = searchParams.get('plan');
-  const initialPlan: PlanId = planFromUrl === 'PRO' ? 'PRO' : 'BASICO';
+  // Un solo plan — siempre BASICO
+  const initialPlan: PlanId = 'BASICO';
 
   const [formData, setFormData] = useState<RegistrationRequestDTO>({
     email:         '',
@@ -44,6 +43,7 @@ export function Register() {
   });
   const [tipoDocumento, setTipoDocumento]     = useState<TipoDocumento>('DNI');
   const [numeroDocumento, setNumeroDocumento] = useState('');
+  const [numeroCelular, setNumeroCelular]     = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,10 +77,11 @@ export function Register() {
         ...formData,
         tipoDocumento,
         numeroDocumento: doc || undefined,
+        numeroCelular:   numeroCelular.trim() || undefined,
       });
       setUser(response);
       toast.success(`¡Bienvenido! Tu prueba de 14 días del plan ${response.suscripcion?.planId} ha comenzado.`);
-      sessionStorage.setItem('mp_checkout_doc', JSON.stringify({ tipoDocumento, numeroDocumento: doc }));
+      sessionStorage.setItem('checkout_doc', JSON.stringify({ tipoDocumento, numeroDocumento: doc }));
       navigate('/dashboard');
     } catch (error: unknown) {
       const typedError = error as ApiErrorShape;
@@ -109,40 +110,52 @@ export function Register() {
         </div>
         <form onSubmit={handleSubmit} className="space-y-3.5">
 
-          {/* Fila 1: empresa + admin */}
+          {/* Fila 1: empresa */}
+          <Field label="Nombre de tu empresa" htmlFor="nombreFarmacia" hint="Razón social o nombre comercial">
+            <Input
+              id="nombreFarmacia"
+              type="text"
+              placeholder="Ej: Distribuidora Norte S.A.C."
+              value={formData.nombreFarmacia}
+              onChange={(e) => setFormData({ ...formData, nombreFarmacia: e.target.value })}
+              required
+              minLength={3}
+              className="h-11"
+            />
+          </Field>
+
+          {/* Fila 2: nombre + apellido */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Empresa" htmlFor="nombreFarmacia">
-              <Input
-                id="nombreFarmacia"
-                type="text"
-                placeholder="Mi Empresa S.A.C."
-                value={formData.nombreFarmacia}
-                onChange={(e) => setFormData({ ...formData, nombreFarmacia: e.target.value })}
-                required
-                minLength={3}
-                className="h-11"
-              />
-            </Field>
-            <Field label="Tu nombre" htmlFor="nombre">
+            <Field label="Nombre(s)" htmlFor="nombre">
               <Input
                 id="nombre"
                 type="text"
-                placeholder="Juan Pérez"
+                placeholder="Ej: Juan Carlos"
                 value={formData.nombre}
                 onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                 required
-                minLength={3}
+                minLength={2}
+                className="h-11"
+              />
+            </Field>
+            <Field label="Apellido(s)" htmlFor="apellido" hint="Opcional">
+              <Input
+                id="apellido"
+                type="text"
+                placeholder="Ej: Pérez García"
+                value={formData.apellido ?? ''}
+                onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
                 className="h-11"
               />
             </Field>
           </div>
 
           {/* Email */}
-          <Field label="Correo electrónico" htmlFor="email">
+          <Field label="Correo electrónico" htmlFor="email" hint="Recibirás notificaciones y facturas aquí">
             <Input
               id="email"
               type="email"
-              placeholder="tu@email.com"
+              placeholder="Ej: juan@miempresa.com"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
@@ -151,7 +164,7 @@ export function Register() {
           </Field>
 
           {/* Contraseña */}
-          <Field label="Contraseña" htmlFor="password" hint="Mínimo 8 caracteres">
+          <Field label="Contraseña" htmlFor="password" hint="Al menos 8 caracteres. Combina letras y números.">
             <PasswordInput
               id="password"
               value={formData.contraseña}
@@ -169,23 +182,16 @@ export function Register() {
             <div className="flex-1 h-px bg-border/60" />
           </div>
 
-          {/* Plan */}
-          <Field label="Plan de suscripción" htmlFor="plan">
-            <select
-              id="plan"
-              value={formData.planId}
-              onChange={(e) => setFormData({ ...formData, planId: e.target.value as PlanId })}
-              className={selectCls}
-            >
-              <option value="BASICO">Básico — S/ 49.99/mes</option>
-              <option value="PRO">Pro — S/ 99.99/mes</option>
-            </select>
-            <p className="text-xs text-muted-foreground mt-1">
-              {formData.planId === 'BASICO'
-                ? '✓ Hasta 5 usuarios · 500 productos · OC, Recepciones, Ventas'
-                : '✓ Hasta 10 usuarios · Productos ilimitados · Facturación · RBAC completo'}
-            </p>
-          </Field>
+          {/* Plan — único */}
+          <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Plan Básico</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Todo incluido · POS, inventario, compras, facturación, reportes y más
+              </p>
+            </div>
+            <p className="text-sm font-bold text-primary shrink-0">S/ 129<span className="font-normal text-muted-foreground">/mes</span></p>
+          </div>
 
           {/* Separador */}
           <div className="flex items-center gap-2 pt-1">
@@ -208,11 +214,11 @@ export function Register() {
                 ))}
               </select>
             </Field>
-            <Field label="Número de documento" htmlFor="numeroDocumento">
+            <Field label="Número de documento" htmlFor="numeroDocumento" hint="Requerido para la facturación">
               <Input
                 id="numeroDocumento"
                 type="text"
-                placeholder="12345678"
+                placeholder={tipoDocumento === 'DNI' ? '8 dígitos' : tipoDocumento === 'RUC' ? '11 dígitos' : tipoDocumento === 'CE' ? '9 dígitos' : 'Nº de documento'}
                 value={numeroDocumento}
                 onChange={(e) => setNumeroDocumento(e.target.value)}
                 required
@@ -222,9 +228,19 @@ export function Register() {
               />
             </Field>
           </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            Requerido por Mercado Pago para procesar tu suscripción
-          </p>
+
+          {/* Celular */}
+          <Field label="Número de celular" htmlFor="numeroCelular" hint="Opcional — para alertas y soporte por WhatsApp">
+            <Input
+              id="numeroCelular"
+              type="tel"
+              placeholder="Ej: 999 888 777"
+              value={numeroCelular}
+              onChange={(e) => setNumeroCelular(e.target.value)}
+              maxLength={15}
+              className="h-11"
+            />
+          </Field>
 
           <Button
             type="submit"
@@ -237,9 +253,9 @@ export function Register() {
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
           Al registrarte aceptas nuestros{' '}
-          <a href="#" className="underline hover:text-primary">Términos</a>
+          <Link to="/terminos" className="underline hover:text-primary">Términos y Condiciones</Link>
           {' y '}
-          <a href="#" className="underline hover:text-primary">Política de Privacidad</a>
+          <Link to="/privacidad" className="underline hover:text-primary">Política de Privacidad</Link>
         </p>
 
         <AuthFooter>

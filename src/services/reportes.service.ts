@@ -11,6 +11,9 @@ import type {
   InventarioSlowMoverDTO,
   InventarioCoberturaDTO,
   ComprasPorProveedorDTO,
+  FinancieroDTO,
+  VencimientosRiesgoDTO,
+  ClienteReporteDTO,
 } from '../types';
 
 export type AgrupacionTendencia = 'DIA' | 'SEMANA' | 'MES';
@@ -126,6 +129,37 @@ export const reportesService = {
   ): Promise<ComprasPorProveedorDTO[]> => {
     const { data } = await axiosInstance.get<ComprasPorProveedorDTO[]>(
       API_ENDPOINTS.REPORTES.COMPRAS_POR_PROVEEDOR(desde, hasta, limit)
+    );
+    return data ?? [];
+  },
+
+  // ── Financiero (P&L) ─────────────────────────────────────────────────────
+
+  getFinanciero: async (desde: string, hasta: string): Promise<FinancieroDTO> => {
+    const { data } = await axiosInstance.get<FinancieroDTO>(
+      API_ENDPOINTS.REPORTES.FINANCIERO(desde, hasta)
+    );
+    return data;
+  },
+
+  // ── Vencimientos en riesgo ────────────────────────────────────────────────
+
+  getVencimientosRiesgo: async (): Promise<VencimientosRiesgoDTO> => {
+    const { data } = await axiosInstance.get<VencimientosRiesgoDTO>(
+      API_ENDPOINTS.REPORTES.INVENTARIO_VENCIMIENTOS
+    );
+    return data;
+  },
+
+  // ── Top clientes ──────────────────────────────────────────────────────────
+
+  getTopClientes: async (
+    desde: string,
+    hasta: string,
+    limit = 20
+  ): Promise<ClienteReporteDTO[]> => {
+    const { data } = await axiosInstance.get<ClienteReporteDTO[]>(
+      API_ENDPOINTS.REPORTES.CLIENTES(desde, hasta, limit)
     );
     return data ?? [];
   },

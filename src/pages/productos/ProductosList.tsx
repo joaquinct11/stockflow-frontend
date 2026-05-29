@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { categoriaService } from '../../services/categoria.service';
@@ -31,12 +31,12 @@ import {
   Timer,
   X,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 
-type EstadoProductoFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
 
 export function ProductosList() {
   const { canCreate, canEdit, canDelete, canView } = usePermissions();
@@ -60,10 +60,42 @@ export function ProductosList() {
   const [savingCategoria, setSavingCategoria] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [estadoFilter, setEstadoFilter] = useState<EstadoProductoFilter>('TODOS');
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Imagen del producto
+  const imgInputRef = useRef<HTMLInputElement>(null);
+  const [imgPreview, setImgPreview] = useState<string | null>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error('La imagen no puede superar 10 MB'); return; }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const originalDataUrl = ev.target?.result as string;
+      // Comprimir con Canvas: máx 400×400px, JPEG 80%
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 400;
+        let w = img.width;
+        let h = img.height;
+        if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+        else       { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL('image/jpeg', 0.80);
+        setImgPreview(compressed);
+        setFormData(p => ({ ...p, imagenUrl: compressed }));
+      };
+      img.src = originalDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -105,7 +137,7 @@ export function ProductosList() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, estadoFilter]);
+  }, [searchTerm]);
 
   const fetchUnidades = async () => {
     try {
@@ -165,7 +197,7 @@ export function ProductosList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (import.meta.env.DEV) console.log('📤 Datos que se envían:', JSON.stringify(formData, null, 2));
+    console.log('🖼️ imagenUrl al guardar:', formData.imagenUrl ? `SÍ (${formData.imagenUrl.length} chars)` : 'NO / undefined');
 
     try {
       if (editingId) {
@@ -237,7 +269,9 @@ export function ProductosList() {
       activo: producto.activo,
       tenantId: producto.tenantId,
       unidadMedidaId: producto.unidadMedidaId || 0,
+      imagenUrl: producto.imagenUrl,
     });
+    setImgPreview(producto.imagenUrl ?? null);
 
     setEditingId(producto.id!);
     setIsDialogOpen(true);
@@ -259,6 +293,8 @@ export function ProductosList() {
     });
     setEditingId(null);
     setIsDialogOpen(false);
+    setImgPreview(null);
+    if (imgInputRef.current) imgInputRef.current.value = '';
   };
 
   // Crear nueva unidad de medida inline
@@ -297,20 +333,14 @@ export function ProductosList() {
     }
   };
 
-  // ✅ Filtrado: búsqueda + estado
+  // Filtrado por búsqueda
   const filteredProductos = productos.filter((p) => {
     const q = searchTerm.toLowerCase();
-    const matchesSearch =
+    return (
       p.nombre.toLowerCase().includes(q) ||
       p.codigoBarras?.toLowerCase().includes(q) ||
-      p.categoriaNombre?.toLowerCase().includes(q) ||
-      p.categoria?.toLowerCase().includes(q); // backward compat
-
-    if (!matchesSearch) return false;
-
-    if (estadoFilter === 'ACTIVOS') return p.activo;
-    if (estadoFilter === 'INACTIVOS') return !p.activo;
-    return true;
+      p.categoriaNombre?.toLowerCase().includes(q)
+    );
   });
 
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
@@ -425,71 +455,19 @@ export function ProductosList() {
             </Card>
           </div>
 
-          {/* Search + filtro estado */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por nombre, código de barras o categoría..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-
-                <div className="sm:w-[320px]">
-                  <div
-                    className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
-                    role="tablist"
-                    aria-label="Filtrar productos por estado"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setEstadoFilter('TODOS')}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition
-                        ${
-                          estadoFilter === 'TODOS'
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      aria-pressed={estadoFilter === 'TODOS'}
-                    >
-                      Todos
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEstadoFilter('ACTIVOS')}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition flex items-center justify-center gap-2
-                        ${
-                          estadoFilter === 'ACTIVOS'
-                            ? 'bg-green-600 text-white shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      aria-pressed={estadoFilter === 'ACTIVOS'}
-                      title="Mostrar solo productos activos"
-                    >
-                      <span className="h-2 w-2 rounded-full bg-green-500" />
-                      Activos
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEstadoFilter('INACTIVOS')}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition flex items-center justify-center gap-2
-                        ${
-                          estadoFilter === 'INACTIVOS'
-                            ? 'bg-red-600 text-white shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      aria-pressed={estadoFilter === 'INACTIVOS'}
-                      title="Mostrar solo productos inactivos"
-                    >
-                      <span className="h-2 w-2 rounded-full bg-red-500" />
-                      Inactivos
-                    </button>
+          {/* Búsqueda */}
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      placeholder="Buscar por nombre, código de barras o categoría..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-9 h-10"
+                    />
                   </div>
                 </div>
               </div>
@@ -497,20 +475,20 @@ export function ProductosList() {
           </Card>
 
           {/* Table */}
-          <Card>
+          <Card className="border-0 shadow-sm">
             <CardHeader>
               <CardTitle>Lista de Productos</CardTitle>
               <CardDescription>{filteredProductos.length} producto(s) encontrado(s)</CardDescription>
             </CardHeader>
             <CardContent>
               {filteredProductos.length === 0 ? (
-                <EmptyState title="No hay productos" description="Comienza agregando tu primer producto al inventario" />
+                <EmptyState icon={Package} title="Todavía no hay productos" description="Agrega productos con precio, stock y categoría para empezar a vender y controlar tu inventario en tiempo real." />
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border">
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
                           <TableHead>Producto</TableHead>
                           <TableHead>Código</TableHead>
                           <TableHead>Categoría</TableHead>
@@ -537,7 +515,7 @@ export function ProductosList() {
                               <TableCell className="font-mono text-sm">{producto.codigoBarras}</TableCell>
                               <TableCell>
                                 <Badge variant="outline">
-                                  {producto.categoriaNombre || producto.categoria || '-'}
+                                  {producto.categoriaNombre || '-'}
                                 </Badge>
                               </TableCell>
                               <TableCell>
@@ -910,6 +888,38 @@ export function ProductosList() {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Sección: Imagen */}
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Imagen del producto</p>
+              <p className="text-xs text-muted-foreground">Opcional. Se mostrará en el POS para facilitar la identificación.</p>
+            </div>
+            <div className="flex gap-4 items-center">
+              {/* Vista previa */}
+              <div className="w-20 h-20 rounded-xl bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 border">
+                {imgPreview
+                  ? <img src={imgPreview} alt="Preview" className="w-full h-full object-cover" />
+                  : <span className="text-3xl font-bold text-muted-foreground">{formData.nombre?.charAt(0)?.toUpperCase() || '?'}</span>
+                }
+              </div>
+              {/* Controles */}
+              <div className="flex flex-col gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => imgInputRef.current?.click()}>
+                  <Upload size={13} className="mr-2" />
+                  {imgPreview ? 'Cambiar foto' : 'Subir foto'}
+                </Button>
+                {imgPreview && (
+                  <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive"
+                    onClick={() => { setImgPreview(null); setFormData(p => ({ ...p, imagenUrl: undefined })); if (imgInputRef.current) imgInputRef.current.value = ''; }}>
+                    <X size={13} className="mr-2" /> Quitar imagen
+                  </Button>
+                )}
+                <p className="text-xs text-muted-foreground">JPG, PNG o WebP · máx. 2.5 MB</p>
+              </div>
+            </div>
+            <input ref={imgInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleImageChange} />
           </div>
 
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">

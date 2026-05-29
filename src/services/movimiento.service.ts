@@ -2,6 +2,17 @@ import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
 import type { MovimientoInventarioDTO } from '../types';
 
+export interface LoteVencimientoDTO {
+  movimientoId: number;
+  productoId: number;
+  productoNombre: string;
+  codigoBarras?: string;
+  lote?: string;
+  fechaVencimiento: string; // yyyy-MM-dd
+  cantidad: number;
+  diasRestantes: number; // negativo = ya vencido
+}
+
 export const movimientoService = {
   /**
    * Obtener todos los movimientos del tenant actual
@@ -80,5 +91,14 @@ export const movimientoService = {
    */
   delete: async (id: number): Promise<void> => {
     await axiosInstance.delete(API_ENDPOINTS.MOVIMIENTOS.DELETE(id));
+  },
+
+  /**
+   * Obtener todos los lotes con fecha de vencimiento del tenant,
+   * ordenados de más próximo a vencer al más lejano.
+   */
+  getLotes: async (): Promise<LoteVencimientoDTO[]> => {
+    const { data } = await axiosInstance.get<LoteVencimientoDTO[]>(API_ENDPOINTS.MOVIMIENTOS.LOTES);
+    return data;
   },
 };

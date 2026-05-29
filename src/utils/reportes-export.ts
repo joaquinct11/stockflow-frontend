@@ -687,7 +687,7 @@ export function exportarStockExcel(
     ...productos.map((p) => [
       p.codigoBarras ?? '',
       p.nombre,
-      p.categoria ?? '',
+      p.categoriaNombre ?? '',
       nombreUnidad(p.unidadMedidaId),
       p.stockActual ?? 0,
       p.stockMinimo ?? 0,
@@ -731,7 +731,7 @@ export function exportarStockPDF(
     body: productos.map((p) => [
       p.codigoBarras ?? '—',
       p.nombre,
-      p.categoria ?? '—',
+      p.categoriaNombre ?? '—',
       nombreUnidad(p.unidadMedidaId),
       String(p.stockActual ?? 0),
       String(p.stockMinimo ?? 0),

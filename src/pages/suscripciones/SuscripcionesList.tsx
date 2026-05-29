@@ -14,7 +14,6 @@ import {
   XCircle,
   CheckCircle,
   Clock,
-  RefreshCw,
   Lock,
   Calendar,
   AlertTriangle,
@@ -29,6 +28,13 @@ function estadoBadge(estado: string, preapprovalId?: string | null) {
         <Badge variant="success">
           <CheckCircle className="h-3.5 w-3.5 mr-1" />
           Activa
+        </Badge>
+      );
+    case 'CANCELACION_PENDIENTE':
+      return (
+        <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
+          <Clock className="h-3.5 w-3.5 mr-1" />
+          Cancela al periodo
         </Badge>
       );
     case 'CANCELADA':
@@ -88,7 +94,6 @@ export function SuscripcionesList() {
 
   const [suscripcion, setSuscripcion] = useState<SuscripcionDTO | null>(null);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -108,36 +113,23 @@ export function SuscripcionesList() {
         setSuscripcion(null);
         return;
       }
-      // Sincronizar el store global para que Dashboard y Guards reflejen el estado real
       setSuscripcionEstado(estado.estado);
-      // Construir un SuscripcionDTO parcial con los datos disponibles
+      const precioReal = estado.precioMensual ?? 129;
       setSuscripcion({
         planId: estado.planId,
-        precioMensual: estado.planId === 'PRO' ? 99.99 : 49.99,
+        precioMensual: precioReal,
         estado: estado.estado,
         preapprovalId: estado.preapprovalId,
         fechaProximoCobro: estado.fechaProximoCobro,
         usuarioPrincipalId: user?.usuarioId ?? 0,
         tenantId: user?.tenantId,
-      });
+        // Guardamos currentPeriodEnd para mostrarlo en el banner de cancelación pendiente
+        currentPeriodEnd: estado.currentPeriodEnd,
+      } as SuscripcionDTO & { currentPeriodEnd?: string });
     } catch {
       toast.error('Error al cargar la suscripción');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSincronizar = async () => {
-    setSyncing(true);
-    try {
-      const resultado = await suscripcionService.sincronizar();
-      setSuscripcion((prev) => prev ? { ...prev, estado: resultado.estado, fechaProximoCobro: resultado.fechaProximoCobro } : prev);
-      setSuscripcionEstado(resultado.estado);
-      toast.success('Estado sincronizado con Mercado Pago');
-    } catch {
-      toast.error('Error al sincronizar con Mercado Pago');
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -147,8 +139,7 @@ export function SuscripcionesList() {
       action: async () => {
         try {
           await suscripcionService.cancelarMiSuscripcion();
-          setSuscripcionEstado('CANCELADA');
-          toast.success('Suscripción cancelada');
+          toast.success('Suscripción cancelada — mantienes el acceso hasta el fin del período');
           await fetchSuscripcion();
         } catch {
           toast.error('Error al cancelar la suscripción');
@@ -181,21 +172,24 @@ export function SuscripcionesList() {
         <EmptyState
           icon={CreditCard}
           title="Sin suscripción activa"
-          description="No tienes ninguna suscripción registrada. Elige un plan para empezar."
-          action={{
-            label: 'Ver planes',
-            onClick: () => navigate('/checkout?plan=BASICO'),
-          }}
+          description="No tienes ninguna suscripción registrada. Usa el botón «Activar suscripción» del banner superior para elegir un plan y continuar usando Fluxus."
         />
       </div>
     );
   }
 
-  const esActiva  = suscripcion.estado === 'ACTIVA';
-  const esTrial   = suscripcion.estado === 'TRIAL';
-  const tieneMP   = !!suscripcion.preapprovalId;   // solo si ya pagó por MP
-  const esCancelableOReactivable = ['CANCELADA', 'SUSPENDIDA', 'PENDIENTE'].includes(suscripcion.estado ?? '');
-  const planLabel = suscripcion.planId === 'PRO' ? 'Pro' : suscripcion.planId === 'BASICO' ? 'Básico' : suscripcion.planId;
+  const esActiva                = suscripcion.estado === 'ACTIVA';
+  const esTrial                 = suscripcion.estado === 'TRIAL';
+  const esPendiente             = suscripcion.estado === 'PENDIENTE';
+  const esCancelacionPendiente  = suscripcion.estado === 'CANCELACION_PENDIENTE';
+  const esCancelableOReactivable = ['CANCELADA', 'SUSPENDIDA'].includes(suscripcion.estado ?? '')
+    || esPendiente;
+
+  // Fecha de corte formateada para CANCELACION_PENDIENTE
+  const currentPeriodEndRaw = (suscripcion as any).currentPeriodEnd as string | undefined;
+  const fechaCorte = currentPeriodEndRaw
+    ? new Date(currentPeriodEndRaw).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })
+    : null;
 
   // Días restantes de trial
   const diasRestantesTrial = (() => {
@@ -212,13 +206,6 @@ export function SuscripcionesList() {
           <h1 className="text-3xl font-bold tracking-tight">Mi Suscripción</h1>
           <p className="text-muted-foreground">Gestiona tu plan y facturación</p>
         </div>
-        {/* Sincronizar con MP solo cuando ya existe preapproval (usuario pagó) */}
-        {canToggleState('SUSCRIPCIONES') && tieneMP && (
-          <Button variant="outline" size="sm" onClick={handleSincronizar} disabled={syncing}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Sincronizando...' : 'Sincronizar con MP'}
-          </Button>
-        )}
       </div>
 
       {/* Tarjeta principal */}
@@ -230,8 +217,8 @@ export function SuscripcionesList() {
                 <CreditCard className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <CardTitle>Plan {planLabel}</CardTitle>
-                <CardDescription>S/. {(suscripcion.precioMensual ?? 0).toFixed(2)} / mes</CardDescription>
+                <CardTitle>Plan Básico</CardTitle>
+                <CardDescription>S/. {(suscripcion.precioMensual ?? 129).toFixed(2)} / mes</CardDescription>
               </div>
             </div>
             {estadoBadge(suscripcion.estado ?? '', suscripcion.preapprovalId)}
@@ -250,13 +237,13 @@ export function SuscripcionesList() {
               <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-muted-foreground">Método:</span>
               <span className="font-medium">
-                {suscripcion.metodoPago || 'Mercado Pago'}
+                {suscripcion.metodoPago || 'Culqi'}
                 {suscripcion.ultimos4Digitos && ` •••• ${suscripcion.ultimos4Digitos}`}
               </span>
             </div>
             {suscripcion.preapprovalId && (
               <div className="flex items-center gap-2 text-sm sm:col-span-2">
-                <span className="text-muted-foreground">Referencia MP:</span>
+                <span className="text-muted-foreground">Referencia:</span>
                 <span className="font-mono text-xs truncate">{suscripcion.preapprovalId}</span>
               </div>
             )}
@@ -284,7 +271,7 @@ export function SuscripcionesList() {
                     </p>
                   </div>
                 </div>
-                <Button size="sm" onClick={() => navigate(`/checkout?plan=${suscripcion.planId ?? 'BASICO'}`)}>
+                <Button size="sm" onClick={() => navigate('/checkout/culqi?plan=BASICO')}>
                   <CreditCard className="mr-2 h-4 w-4" />
                   Suscribirme ahora
                 </Button>
@@ -301,7 +288,7 @@ export function SuscripcionesList() {
             </div>
           )}
           {suscripcion.estado === 'PENDIENTE' && !suscripcion.preapprovalId && (
-            // Trial vencido sin pago — nunca hubo transacción con MP
+            // Trial vencido sin pago
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
               <div className="flex items-start gap-2">
                 <Calendar className="h-4 w-4 mt-0.5 shrink-0" />
@@ -310,11 +297,26 @@ export function SuscripcionesList() {
             </div>
           )}
           {suscripcion.estado === 'PENDIENTE' && !!suscripcion.preapprovalId && (
-            // Pago iniciado con MP pero aún no confirmado
+            // Checkout BÁSICO iniciado pero no confirmado aún
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
               <div className="flex items-start gap-2">
                 <Clock className="h-4 w-4 mt-0.5 shrink-0" />
-                <p>Tu pago está siendo procesado por Mercado Pago. Una vez confirmado, el acceso se habilitará automáticamente.</p>
+                <p>Tu pago está siendo procesado. Espera la confirmación para que tu suscripción se active.</p>
+              </div>
+            </div>
+          )}
+          {esCancelacionPendiente && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950 p-3 text-sm text-amber-800 dark:text-amber-200">
+              <div className="flex items-start gap-2">
+                <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold">Cancelación programada</p>
+                  <p className="mt-0.5">
+                    {fechaCorte
+                      ? `Mantienes acceso completo hasta el ${fechaCorte}. Después deberás renovar tu suscripción para seguir usando el sistema.`
+                      : 'Tu suscripción se cancelará al finalizar el período actual. Mantienes acceso hasta entonces.'}
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -329,14 +331,16 @@ export function SuscripcionesList() {
 
           {/* ── Acciones ── */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            {esCancelableOReactivable && canToggleState('SUSCRIPCIONES') && (
-              <Button className="sm:flex-1" onClick={() => navigate(`/checkout?plan=${suscripcion.planId}`)}>
+            {(esCancelableOReactivable || esCancelacionPendiente) && canToggleState('SUSCRIPCIONES') && (
+              <Button
+                className="sm:flex-1"
+                onClick={() => navigate('/checkout/culqi?plan=BASICO')}
+              >
                 <CreditCard className="mr-2 h-4 w-4" />
-                Reactivar suscripción
+                {esPendiente ? 'Completar pago' : esCancelacionPendiente ? 'Renovar suscripción' : 'Reactivar suscripción'}
               </Button>
             )}
-            {/* Cancelar solo cuando ACTIVA y tiene preapproval MP — no durante TRIAL */}
-            {esActiva && tieneMP && canToggleState('SUSCRIPCIONES') && (
+            {esActiva && canToggleState('SUSCRIPCIONES') && (
               <Button variant="destructive" className="sm:flex-1" onClick={handleCancelar}>
                 <XCircle className="mr-2 h-4 w-4" />
                 Cancelar suscripción
@@ -350,7 +354,7 @@ export function SuscripcionesList() {
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
         title="Cancelar suscripción"
-        description="¿Estás seguro? Tu suscripción se cancelará en Mercado Pago y perderás acceso a los módulos del sistema al finalizar el período."
+        description="Al cancelar no se realizarán más cobros. Mantendrás acceso completo al sistema hasta el final del período ya pagado."
         confirmText="Sí, cancelar"
         type="danger"
         onConfirm={async () => {

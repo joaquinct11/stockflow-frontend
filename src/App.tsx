@@ -11,18 +11,26 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { RoleProtectedRoute } from './components/shared/RoleProtectedRoute';
 import { SubscripcionGuard } from './components/shared/SubscripcionGuard';
+import { PlanGuard } from './components/shared/PlanGuard';
 
 // Landing Page
 import { LandingPage } from './pages/landing/LandingPage';
+
+// Legal Pages (públicas)
+import { TerminosPage }      from './pages/legal/TerminosPage';
+import { PrivacidadPage }    from './pages/legal/PrivacidadPage';
+import { ReclamacionesPage } from './pages/legal/ReclamacionesPage';
+
+// Plan / Compra (público — carrito)
+import { PlanPage } from './pages/suscripcion/PlanPage';
 
 // Auth Pages
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
-import { ResetPassword } from './pages/auth/ResetPassword'
-import { CheckoutPage } from './pages/checkout/CheckoutPage';
-import { CheckoutRedirectPage } from './pages/checkout/CheckoutRedirectPage';
-import { CheckoutReturnPage } from './pages/checkout/CheckoutReturnPage';
+import { ResetPassword } from './pages/auth/ResetPassword';
+import { ActivatePage } from './pages/auth/ActivatePage'
+import { CheckoutCulqiPage } from './pages/checkout/CheckoutCulqiPage';
 
 // Main Pages
 import { Dashboard } from './pages/dashboard/Dashboard';
@@ -32,6 +40,7 @@ import { UsuariosList } from './pages/usuarios/UsuariosList';
 import { SuscripcionesList } from './pages/suscripciones/SuscripcionesList';
 import { InventarioList } from './pages/inventario/InventarioList';
 import { ProveedoresList } from './pages/proveedores/ProveedoresList';
+import { ClientesList } from './pages/clientes/ClientesList';
 import { AccountSettings } from './pages/settings/AccountSettings';
 import { UserProfile } from './pages/settings/UserProfile';
 import { PermisosConfig } from './pages/admin/PermisosConfig';
@@ -42,6 +51,8 @@ import { RecepcionList } from './pages/recepciones/RecepcionList';
 import { ReportesPage } from './pages/reportes/ReportesPage';
 import { POSPage } from './pages/pos/POSPage';
 import { CajaPage } from './pages/caja/CajaPage';
+import { NotasCreditoPage } from './pages/notasCredito/NotasCreditoPage';
+import { GastosList } from './pages/gastos/GastosList';
 
 function App() {
   const { initialize, isAuthenticated, setSuscripcionEstado } = useAuthStore();
@@ -77,48 +88,25 @@ function App() {
           {/* Landing Page - Pública */}
           <Route path="/" element={<LandingPage />} />
 
+          {/* Páginas legales - Públicas */}
+          <Route path="/terminos"      element={<TerminosPage />} />
+          <Route path="/privacidad"    element={<PrivacidadPage />} />
+          <Route path="/reclamaciones" element={<ReclamacionesPage />} />
+
+          {/* Página de plan / compra (carrito) - Pública */}
+          <Route path="/plan" element={<PlanPage />} />
+
           {/* Auth Routes - Públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/activate" element={<ActivatePage />} />
           <Route
-            path="/checkout"
+            path="/checkout/culqi"
             element={
               <ProtectedRoute>
-                <CheckoutPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/checkout/redirect"
-            element={
-              <ProtectedRoute>
-                <CheckoutRedirectPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/checkout/success"
-            element={
-              <ProtectedRoute>
-                <CheckoutReturnPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/checkout/failure"
-            element={
-              <ProtectedRoute>
-                <CheckoutReturnPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/checkout/pending"
-            element={
-              <ProtectedRoute>
-                <CheckoutReturnPage />
+                <CheckoutCulqiPage />
               </ProtectedRoute>
             }
           />
@@ -152,6 +140,18 @@ function App() {
                 <SubscripcionGuard>
                   <RoleProtectedRoute module="PROVEEDORES">
                     <ProveedoresList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
+              }
+            />
+
+            {/* Clientes */}
+            <Route
+              path="clientes"
+              element={
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="CLIENTES">
+                    <ClientesList />
                   </RoleProtectedRoute>
                 </SubscripcionGuard>
               }
@@ -249,13 +249,15 @@ function App() {
               }
             />
 
-            {/* Gestión de Permisos - Solo ADMIN */}
+            {/* Gestión de Permisos - Solo ADMIN + Plan PRO */}
             <Route
               path="admin/permisos"
               element={
                 <SubscripcionGuard>
                   <RoleProtectedRoute allowedRoles={['ADMIN']}>
-                    <PermisosConfig />
+                    <PlanGuard requiredPlan="PRO" feature="Gestión de permisos granulares">
+                      <PermisosConfig />
+                    </PlanGuard>
                   </RoleProtectedRoute>
                 </SubscripcionGuard>
               }
@@ -304,6 +306,30 @@ function App() {
                 <SubscripcionGuard>
                   <RoleProtectedRoute module="RECEPCIONES">
                     <RecepcionList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
+              }
+            />
+
+            {/* Notas de Crédito */}
+            <Route
+              path="notas-credito"
+              element={
+                <SubscripcionGuard>
+                  <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                    <NotasCreditoPage />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
+              }
+            />
+
+            {/* Gastos / Egresos */}
+            <Route
+              path="gastos"
+              element={
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="GASTOS">
+                    <GastosList />
                   </RoleProtectedRoute>
                 </SubscripcionGuard>
               }

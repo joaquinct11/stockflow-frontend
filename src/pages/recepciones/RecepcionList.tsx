@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { recepcionService } from '../../services/recepcion.service';
 import { ordenCompraService } from '../../services/ordenCompra.service';
 import { proveedorService } from '../../services/proveedor.service';
@@ -24,7 +24,8 @@ import { Pagination } from '../../components/ui/Pagination';
 import {
   Plus, Inbox, Search, CheckCircle, Clock, Lock,
   PackagePlus, Save, Trash2, FileText, Building2,
-  BadgeCheck, XCircle, Truck, AlertCircle,
+  BadgeCheck, XCircle, Truck, AlertCircle, SlidersHorizontal, X,
+  Camera, CameraOff, RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -128,6 +129,9 @@ export function RecepcionList() {
   // List
   const [searchTerm, setSearchTerm]     = useState('');
   const [estadoFilter, setEstadoFilter] = useState<EstadoRecepFilter>('TODOS');
+  const [fechaDesde, setFechaDesde]     = useState('');
+  const [fechaHasta, setFechaHasta]     = useState('');
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   const [currentPage, setCurrentPage]   = useState(1);
   const itemsPerPage = 10;
 
@@ -147,11 +151,18 @@ export function RecepcionList() {
   const [selectedRecepId, setSelectedRecepId]     = useState<number | null>(null);
   const [selectedRecep, setSelectedRecep]         = useState<RecepcionDTO | null>(null);
 
-  // Add item
+  // Add item (formulario extra — solo para productos fuera de la OC)
   const [selectedProductoId, setSelectedProductoId] = useState<number | null>(null);
   const [itemQty, setItemQty]       = useState<number>(1);
   const [itemExpiry, setItemExpiry] = useState('');
   const [itemLote, setItemLote]     = useState('');
+  const [showAddProduct, setShowAddProduct] = useState(false);
+
+  // Edición inline de la tabla de productos
+  const [editQty, setEditQty]           = useState<Record<number, number>>({});
+  const [editVenc, setEditVenc]         = useState<Record<number, string>>({});
+  const [editLote, setEditLote]         = useState<Record<number, string>>({});
+  const [savingItemId, setSavingItemId] = useState<number | null>(null);
 
   // Comprobante
   const [compTipo, setCompTipo]   = useState<TipoComprobanteProveedor>('FACTURA');
@@ -159,6 +170,18 @@ export function RecepcionList() {
   const [compNumero, setCompNumero] = useState('');
   const [compUrl, setCompUrl]     = useState('');
   const [savingComp, setSavingComp] = useState(false);
+
+  // ── Cámara ────────────────────────────────────────────────────────────────
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
+  const [cameraError, setCameraError]             = useState<string | null>(null);
+  const [manualCode, setManualCode]               = useState('');
+  const videoRef        = useRef<HTMLVideoElement>(null);
+  const streamRef       = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Lector USB/Bluetooth: captura teclado cuando el lector escribe muy rápido y pulsa Enter
+  const barcodeBuffer = useRef('');
+  const barcodeTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -174,7 +197,7 @@ export function RecepcionList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasViewPermission]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, estadoFilter]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, estadoFilter, fechaDesde, fechaHasta]);
 
   const fetchFormData = async () => {
     try {
@@ -248,6 +271,20 @@ export function RecepcionList() {
     anulada:   recepciones.filter((r) => r.estado === 'ANULADA').length,
   }), [recepciones]);
 
+  const activeFiltersCount = useMemo(() => {
+    let n = 0;
+    if (estadoFilter !== 'TODOS') n++;
+    if (fechaDesde) n++;
+    if (fechaHasta) n++;
+    return n;
+  }, [estadoFilter, fechaDesde, fechaHasta]);
+
+  const limpiarFiltros = () => {
+    setEstadoFilter('TODOS');
+    setFechaDesde('');
+    setFechaHasta('');
+  };
+
   const filtered = useMemo(() => {
     const term = searchTerm.toLowerCase();
     return recepciones
@@ -258,15 +295,23 @@ export function RecepcionList() {
           r.estado.toLowerCase().includes(term) ||
           (r.ordenCompraId && String(r.ordenCompraId).includes(term));
         if (!match) return false;
-        if (estadoFilter === 'TODOS') return true;
-        return r.estado === estadoFilter;
+        if (estadoFilter !== 'TODOS' && r.estado !== estadoFilter) return false;
+        if (fechaDesde && r.createdAt) {
+          if (new Date(r.createdAt) < new Date(fechaDesde)) return false;
+        }
+        if (fechaHasta && r.createdAt) {
+          const to = new Date(fechaHasta);
+          to.setHours(23, 59, 59, 999);
+          if (new Date(r.createdAt) > to) return false;
+        }
+        return true;
       })
       .sort((a, b) => {
         const da = a.createdAt ? new Date(a.createdAt).getTime() : (a.id ?? 0);
         const db = b.createdAt ? new Date(b.createdAt).getTime() : (b.id ?? 0);
         return db - da;
       });
-  }, [recepciones, searchTerm, estadoFilter]);
+  }, [recepciones, searchTerm, estadoFilter, fechaDesde, fechaHasta]);
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const currentRecepciones = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -337,9 +382,77 @@ export function RecepcionList() {
     setSelectedRecep(rec);
   };
 
+  // Sincronizar edición inline cuando cambian los items
+  useEffect(() => {
+    if (!selectedRecep) return;
+    const initQty: Record<number, number> = {};
+    const initVenc: Record<number, string> = {};
+    const initLote: Record<number, string> = {};
+    for (const it of selectedRecep.items ?? []) {
+      initQty[it.productoId]  = it.cantidadRecibida ?? 0;
+      initVenc[it.productoId] = it.fechaVencimiento ?? '';
+      initLote[it.productoId] = it.lote ?? '';
+    }
+    setEditQty(initQty);
+    setEditVenc(initVenc);
+    setEditLote(initLote);
+  }, [selectedRecep]);
+
   const closeDetail = () => {
     setIsDetailOpen(false); setSelectedRecepId(null); setSelectedRecep(null);
     setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote('');
+    setShowAddProduct(false); setEditQty({}); setEditVenc({}); setEditLote({});
+  };
+
+  // Guardar cantidad inline de una fila de la tabla
+  const handleInlineSave = async (item: RecepcionItemDTO) => {
+    if (!selectedRecep?.id) return;
+    const qty  = editQty[item.productoId]  ?? item.cantidadRecibida ?? 0;
+    const venc = editVenc[item.productoId] ?? item.fechaVencimiento ?? '';
+    const lote = editLote[item.productoId] ?? item.lote ?? '';
+    setSavingItemId(item.productoId);
+    try {
+      await recepcionService.upsertItem(selectedRecep.id, {
+        productoId: item.productoId,
+        cantidadRecibida: qty,
+        fechaVencimiento: venc || undefined,
+        lote: lote || undefined,
+      });
+      await refreshDetail();
+      toast.success('Producto actualizado');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.mensaje ?? 'Error al actualizar');
+    } finally { setSavingItemId(null); }
+  };
+
+  // Restablecer fila a cantidad 0 sin vencimiento ni lote (requiere guardar para persistir)
+  const handleInlineReset = (item: RecepcionItemDTO) => {
+    setEditQty(prev  => ({ ...prev,  [item.productoId]: 0 }));
+    setEditVenc(prev => ({ ...prev,  [item.productoId]: '' }));
+    setEditLote(prev => ({ ...prev,  [item.productoId]: '' }));
+  };
+
+  // Marcar todos los productos como completamente recibidos (qty = esperado)
+  const handleRecibirTodo = async () => {
+    if (!selectedRecep?.id) return;
+    const items = selectedRecep.items ?? [];
+    const conEsperado = items.filter(it => (it.cantidadEsperada ?? 0) > 0);
+    if (conEsperado.length === 0) return;
+    setDetailActionLoading(true);
+    try {
+      await Promise.all(conEsperado.map(it =>
+        recepcionService.upsertItem(selectedRecep.id!, {
+          productoId: it.productoId,
+          cantidadRecibida: it.cantidadEsperada!,
+          fechaVencimiento: it.fechaVencimiento || undefined,
+          lote: it.lote || undefined,
+        })
+      ));
+      await refreshDetail();
+      toast.success('✅ Todas las cantidades actualizadas al total esperado');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.mensaje ?? 'Error');
+    } finally { setDetailActionLoading(false); }
   };
 
   const isEditable = selectedRecep?.estado === 'BORRADOR';
@@ -438,6 +551,134 @@ export function RecepcionList() {
     });
   };
 
+  // ── Funciones de cámara ──────────────────────────────────────────────────
+  const stopCamera = useCallback(() => {
+    if (scanIntervalRef.current) { clearInterval(scanIntervalRef.current); scanIntervalRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    setShowCameraScanner(false);
+    setCameraError(null);
+    setManualCode('');
+  }, []);
+
+  const buscarPorCodigoRecepcion = useCallback(async (codigo: string) => {
+    // 1. Si hay recepción abierta en BORRADOR, buscar el código entre sus items
+    const itemEnRecep = (selectedRecep?.items ?? []).find(
+      it => it.codigoBarras?.toLowerCase() === codigo.toLowerCase()
+    );
+    if (itemEnRecep && selectedRecep?.id) {
+      const nuevaQty = (itemEnRecep.cantidadRecibida ?? 0) + 1;
+      setSavingItemId(itemEnRecep.productoId);
+      try {
+        await recepcionService.upsertItem(selectedRecep.id, {
+          productoId: itemEnRecep.productoId,
+          cantidadRecibida: nuevaQty,
+          fechaVencimiento: itemEnRecep.fechaVencimiento || undefined,
+          lote: itemEnRecep.lote || undefined,
+        });
+        const updated = normalizeRecepcion(await recepcionService.getById(selectedRecep.id));
+        setSelectedRecep(updated);
+        toast.success(`+1 ${itemEnRecep.productoNombre} → ${nuevaQty} recibidos`);
+      } catch (e: any) {
+        toast.error(e?.response?.data?.mensaje ?? 'Error al actualizar');
+      } finally { setSavingItemId(null); }
+      return;
+    }
+
+    // 2. Buscar en catálogo (producto nuevo para esta recepción)
+    const producto = productos.find(
+      p => p.codigoBarras?.toLowerCase() === codigo.toLowerCase()
+    );
+    if (producto) {
+      setSelectedProductoId(producto.id!);
+      setShowAddProduct(true);
+      toast.success(`${producto.nombre} — ajusta la cantidad y guarda`);
+    } else {
+      toast.error(`Código no encontrado: ${codigo}`);
+    }
+  }, [productos, selectedRecep]);
+
+  const openCamera = useCallback(async () => {
+    setCameraError(null);
+    setShowCameraScanner(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }, audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+
+      if (!('BarcodeDetector' in window)) {
+        setCameraError('Tu navegador no soporta escaneo automático. Usa Chrome en Android o escribe el código manualmente.');
+        return;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detector = new (window as any).BarcodeDetector({
+        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'qr_code', 'upc_a', 'upc_e', 'itf'],
+      });
+      scanIntervalRef.current = setInterval(async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes.length > 0) {
+            const code: string = barcodes[0].rawValue;
+            stopCamera();
+            buscarPorCodigoRecepcion(code);
+          }
+        } catch { /* ignorar errores de frame */ }
+      }, 250);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')) {
+        setCameraError('Permiso de cámara denegado. Habilítalo en la configuración del navegador.');
+      } else if (msg.toLowerCase().includes('notfound')) {
+        setCameraError('No se encontró ninguna cámara en este dispositivo.');
+      } else {
+        setCameraError('No se pudo acceder a la cámara. Verifica los permisos.');
+      }
+    }
+  }, [stopCamera, buscarPorCodigoRecepcion]);
+
+  useEffect(() => () => stopCamera(), [stopCamera]);
+
+  // ── Lector USB/Bluetooth de códigos de barras ──────────────────────────────
+  // Detecta cuando un lector físico escribe muy rápido (< 80 ms entre chars) y
+  // envía Enter: lo diferencia del tipeo humano y dispara la búsqueda automáticamente.
+  useEffect(() => {
+    // Solo activo cuando el detalle de una recepción en BORRADOR está abierto
+    // y la cámara NO está en uso (evita doble disparo)
+    if (!isDetailOpen || selectedRecep?.estado !== 'BORRADOR' || showCameraScanner) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Si el foco está en un input/textarea/select, dejar que el usuario escriba normal
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.current.length >= 3) {
+          buscarPorCodigoRecepcion(barcodeBuffer.current.trim());
+        }
+        barcodeBuffer.current = '';
+        if (barcodeTimer.current) clearTimeout(barcodeTimer.current);
+        return;
+      }
+
+      if (e.key.length === 1) {
+        barcodeBuffer.current += e.key;
+        if (barcodeTimer.current) clearTimeout(barcodeTimer.current);
+        barcodeTimer.current = setTimeout(() => {
+          // Si pasan 100ms sin más teclas → no fue el lector, resetear
+          barcodeBuffer.current = '';
+        }, 100);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      if (barcodeTimer.current) clearTimeout(barcodeTimer.current);
+    };
+  }, [isDetailOpen, selectedRecep?.estado, showCameraScanner, buscarPorCodigoRecepcion]);
+
   if (loading) return <LoadingSpinner />;
   if (!hasViewPermission)
     return <EmptyState icon={Lock} title="Sin acceso" description="No tienes permisos para ver recepciones" />;
@@ -518,43 +759,146 @@ export function RecepcionList() {
         </Card>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por proveedor, ID, OC..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
+      {/* Search + Filtros */}
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Buscar por proveedor, ID, OC..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-10"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilterDrawer(true)}
+            className={[
+              'flex items-center gap-2 h-10 px-4 rounded-lg border text-sm font-semibold transition-all shrink-0',
+              activeFiltersCount > 0
+                ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                : 'border-input bg-background text-muted-foreground hover:text-foreground hover:border-primary/40',
+            ].join(' ')}
+          >
+            <SlidersHorizontal size={15} />
+            Filtros
+            {activeFiltersCount > 0 && (
+              <span className="h-5 w-5 rounded-full bg-blue-500 text-white text-[11px] font-bold flex items-center justify-center">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Active filter chips */}
+        {activeFiltersCount > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {estadoFilter !== 'TODOS' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                {estadoFilter.charAt(0) + estadoFilter.slice(1).toLowerCase()}
+                <button onClick={() => setEstadoFilter('TODOS')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            {fechaDesde && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Desde {fechaDesde}
+                <button onClick={() => setFechaDesde('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            {fechaHasta && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Hasta {fechaHasta}
+                <button onClick={() => setFechaHasta('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+              </span>
+            )}
+            <button onClick={limpiarFiltros} className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors px-1">
+              Limpiar todo
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Filter drawer backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/50 z-[35] transition-opacity duration-300 ${showFilterDrawer ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setShowFilterDrawer(false)}
+      />
+
+      {/* Filter drawer panel */}
+      <div
+        className={`fixed right-0 top-16 w-80 z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out rounded-l-2xl overflow-hidden bg-slate-900 border-l border-t border-b border-slate-700/50 ${showFilterDrawer ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{ height: 'calc(100vh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 shrink-0 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700/50">
+          <div className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-blue-400" />
             </div>
-            <div className="sm:w-[420px]">
-              <div className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1">
-                {(['TODOS', 'BORRADOR', 'CONFIRMADA', 'ANULADA'] as EstadoRecepFilter[]).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setEstadoFilter(k)}
-                    className={`flex-1 rounded-md px-3 py-2 text-xs sm:text-sm font-medium transition ${
-                      estadoFilter === k
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {k === 'TODOS' ? 'Todos' : k.charAt(0) + k.slice(1).toLowerCase()}
-                  </button>
-                ))}
+            <h2 className="font-semibold text-sm text-white">Filtros</h2>
+            {activeFiltersCount > 0 && (
+              <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{activeFiltersCount}</span>
+            )}
+          </div>
+          <button onClick={() => setShowFilterDrawer(false)} className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+          {/* Rango de fechas */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Rango de fechas</p>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Desde</label>
+                <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 text-sm px-3 focus:outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Hasta</label>
+                <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 text-sm px-3 focus:outline-none focus:border-blue-500" />
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Estado */}
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Estado</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(['TODOS', 'BORRADOR', 'CONFIRMADA', 'ANULADA'] as EstadoRecepFilter[]).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setEstadoFilter(k)}
+                  className={[
+                    'px-3 py-2 rounded-lg text-xs font-semibold border transition-all',
+                    estadoFilter === k
+                      ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500',
+                  ].join(' ')}
+                >
+                  {k === 'TODOS' ? 'Todos' : k.charAt(0) + k.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex gap-2">
+          <button onClick={limpiarFiltros} className="flex-1 h-9 rounded-xl border border-slate-600 text-xs font-semibold text-slate-400 hover:text-white hover:border-slate-500 transition-all">
+            Limpiar todo
+          </button>
+          <button onClick={() => setShowFilterDrawer(false)} className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all">
+            Ver {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
 
       {/* Lista */}
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Historial de recepciones</CardTitle>
           <CardDescription>{filtered.length} recepción(es) encontrada(s)</CardDescription>
@@ -563,15 +907,15 @@ export function RecepcionList() {
           {filtered.length === 0 ? (
             <EmptyState
               icon={Inbox}
-              title="Sin recepciones"
-              description={searchTerm ? 'Sin resultados para ese criterio' : 'Crea la primera recepción'}
+              title={searchTerm ? 'Sin resultados' : 'Todavía no hay recepciones'}
+              description={searchTerm ? 'No se encontraron recepciones que coincidan con la búsqueda.' : 'Cuando recibas mercadería de una orden de compra, el ingreso al inventario quedará registrado aquí.'}
             />
           ) : (
             <>
-              <div className="rounded-md border overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted">
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead>ID</TableHead>
                       <TableHead>Proveedor</TableHead>
                       <TableHead>OC vinculada</TableHead>
@@ -796,9 +1140,36 @@ export function RecepcionList() {
 
             {/* ── Sección 1: Productos ── */}
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
-                <PackagePlus size={13} /> Productos recibidos
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <PackagePlus size={13} /> Productos recibidos
+                </p>
+                {isEditable && canEditRecep && (
+                  <div className="flex items-center gap-2">
+                    {hasCamera && (
+                      <button
+                        type="button"
+                        onClick={openCamera}
+                        title="Escanear código de barras con la cámara (también funciona con lector USB/Bluetooth)"
+                        className="flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-input bg-background hover:border-primary hover:text-primary text-muted-foreground text-xs font-medium transition-colors"
+                      >
+                        <Camera size={13} /> Escanear
+                      </button>
+                    )}
+                    {itemsToShow.some(it => (it.cantidadEsperada ?? 0) > 0) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRecibirTodo}
+                        disabled={detailActionLoading}
+                        className="h-7 text-xs gap-1"
+                      >
+                        <CheckCircle size={12} /> Recibir todo
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -807,6 +1178,7 @@ export function RecepcionList() {
                       <TableHead>Código</TableHead>
                       <TableHead className="text-center">Esperado</TableHead>
                       <TableHead className="text-center">Recibido</TableHead>
+                      <TableHead className="text-center">Estado</TableHead>
                       <TableHead>Vencimiento</TableHead>
                       <TableHead>Lote</TableHead>
                       {isEditable && canEditRecep && <TableHead />}
@@ -815,51 +1187,200 @@ export function RecepcionList() {
                   <TableBody>
                     {itemsToShow.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                        <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-6">
                           Sin productos aún — agrega usando el formulario de abajo
                         </TableCell>
                       </TableRow>
-                    ) : itemsToShow.map((it, idx) => (
-                      <TableRow key={it.id ?? `${it.productoId}-${idx}`}>
-                        <TableCell className="font-medium">{it.productoNombre || `#${it.productoId}`}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{it.codigoBarras || '—'}</TableCell>
-                        <TableCell className="text-center text-muted-foreground">{it.cantidadEsperada ?? '—'}</TableCell>
-                        <TableCell className="text-center font-semibold text-green-600">{it.cantidadRecibida}</TableCell>
-                        <TableCell className="text-xs">{it.fechaVencimiento || '—'}</TableCell>
-                        <TableCell className="text-xs">{it.lote || '—'}</TableCell>
-                        {isEditable && canEditRecep && (
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost" size="sm"
-                              onClick={() => it.id && handleRemoveItem(it.id)}
-                              disabled={detailActionLoading || !it.id}
-                            >
-                              <Trash2 size={14} className="text-destructive" />
-                            </Button>
+                    ) : itemsToShow.map((it, idx) => {
+                      const esperado   = it.cantidadEsperada ?? 0;
+                      const recibido   = it.cantidadRecibida ?? 0;
+                      const esDeOC     = esperado > 0;
+                      // Para el badge usamos editQty (valor local en edición) para que
+                      // reaccione en tiempo real al +/− y restablecer funcione correctamente
+                      const qtyBadge = (isEditable && canEditRecep)
+                        ? (editQty[it.productoId] ?? recibido)
+                        : recibido;
+                      // Badge de estado
+                      let badge: { label: string; cls: string } | null = null;
+                      if (esDeOC) {
+                        if (qtyBadge === 0)            badge = { label: 'Sin recibir', cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' };
+                        else if (qtyBadge < esperado)  badge = { label: 'Parcial',     cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' };
+                        else if (qtyBadge === esperado) badge = { label: 'Completo',   cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' };
+                        else                            badge = { label: 'Extra',       cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' };
+                      }
+                      return (
+                        <TableRow key={it.id ?? `${it.productoId}-${idx}`}
+                          className={qtyBadge === 0 && esDeOC ? 'bg-red-50/40 dark:bg-red-950/10' : ''}>
+                          <TableCell className="font-medium">
+                            {it.productoNombre || `#${it.productoId}`}
+                            {esDeOC && (
+                              <span className="ml-1.5 text-[10px] text-blue-500 font-normal">OC</span>
+                            )}
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
+                          <TableCell className="text-xs text-muted-foreground">{it.codigoBarras || '—'}</TableCell>
+                          <TableCell className="text-center text-muted-foreground">{it.cantidadEsperada ?? '—'}</TableCell>
+                          <TableCell className="text-center">
+                            {isEditable && canEditRecep ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditQty(prev => ({ ...prev, [it.productoId]: Math.max(0, (prev[it.productoId] ?? 0) - 1) }))}
+                                  className="w-6 h-6 rounded border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary transition-colors font-bold leading-none"
+                                >−</button>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={editQty[it.productoId] ?? 0}
+                                  onChange={(e) => setEditQty(prev => ({ ...prev, [it.productoId]: Math.max(0, Number(e.target.value)) }))}
+                                  className="w-14 text-center text-sm font-semibold border rounded px-1 py-0.5 bg-background focus:outline-none focus:border-primary"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setEditQty(prev => ({ ...prev, [it.productoId]: (prev[it.productoId] ?? 0) + 1 }))}
+                                  className="w-6 h-6 rounded border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary transition-colors font-bold leading-none"
+                                >+</button>
+                              </div>
+                            ) : (
+                              <span className={`font-semibold ${recibido > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                                {recibido}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {badge ? (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>
+                                {badge.label}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditable && canEditRecep ? (
+                              <input
+                                type="date"
+                                value={editVenc[it.productoId] ?? ''}
+                                onChange={(e) => setEditVenc(prev => ({ ...prev, [it.productoId]: e.target.value }))}
+                                className="w-32 text-xs border rounded px-1.5 py-1 bg-background focus:outline-none focus:border-primary"
+                              />
+                            ) : (
+                              <span className="text-xs">{it.fechaVencimiento || '—'}</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditable && canEditRecep ? (
+                              <input
+                                type="text"
+                                value={editLote[it.productoId] ?? ''}
+                                onChange={(e) => setEditLote(prev => ({ ...prev, [it.productoId]: e.target.value }))}
+                                placeholder="Opc."
+                                className="w-20 text-xs border rounded px-1.5 py-1 bg-background focus:outline-none focus:border-primary"
+                              />
+                            ) : (
+                              <span className="text-xs">{it.lote || '—'}</span>
+                            )}
+                          </TableCell>
+                          {isEditable && canEditRecep && (
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost" size="sm"
+                                  onClick={() => handleInlineSave(it)}
+                                  disabled={savingItemId === it.productoId}
+                                  title="Guardar cambios"
+                                >
+                                  <Save size={14} className="text-primary" />
+                                </Button>
+                                <Button
+                                  variant="ghost" size="sm"
+                                  onClick={() => handleInlineReset(it)}
+                                  disabled={savingItemId === it.productoId}
+                                  title="Descartar cambios"
+                                >
+                                  <RotateCcw size={14} className="text-amber-500" />
+                                </Button>
+                                {/* Eliminar solo para productos agregados manualmente (no vienen de OC) */}
+                                {!esDeOC && (
+                                  <Button
+                                    variant="ghost" size="sm"
+                                    onClick={() => it.id && handleRemoveItem(it.id)}
+                                    disabled={detailActionLoading || !it.id}
+                                    title="Eliminar producto"
+                                  >
+                                    <Trash2 size={14} className="text-destructive" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Resumen de recepción */}
+              {itemsToShow.length > 0 && (() => {
+                const deOC = itemsToShow.filter(it => (it.cantidadEsperada ?? 0) > 0);
+                // En modo edición usar editQty para que el resumen refleje los cambios locales
+                const qty = (it: RecepcionItemDTO) =>
+                  (isEditable && canEditRecep)
+                    ? (editQty[it.productoId] ?? it.cantidadRecibida ?? 0)
+                    : (it.cantidadRecibida ?? 0);
+                const sinRecibir = deOC.filter(it => qty(it) === 0);
+                const parciales  = deOC.filter(it => qty(it) > 0 && qty(it) < (it.cantidadEsperada ?? 0));
+                const completos  = deOC.filter(it => qty(it) >= (it.cantidadEsperada ?? 0) && (it.cantidadEsperada ?? 0) > 0);
+                if (deOC.length === 0) return null;
+                return (
+                  <div className="flex flex-wrap items-center gap-3 px-1 pt-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{deOC.length} producto(s) de OC:</span>
+                    {completos.length > 0  && <span className="text-green-600 font-medium">✓ {completos.length} completo(s)</span>}
+                    {parciales.length > 0  && <span className="text-amber-600 font-medium">◑ {parciales.length} parcial(es)</span>}
+                    {sinRecibir.length > 0 && <span className="text-red-600 font-medium">✗ {sinRecibir.length} sin recibir</span>}
+                    {sinRecibir.length > 0 && isEditable && (
+                      <span className="text-muted-foreground italic">— deja en 0 si no llegaron, no los elimines</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* Agregar producto — solo BORRADOR */}
+            {/* Agregar producto adicional — solo BORRADOR */}
             {isEditable && canEditRecep && (
               <div className="rounded-lg border border-dashed p-3 space-y-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  + Registrar cantidad recibida
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowAddProduct(prev => !prev)}
+                  className="flex items-center gap-2 w-full text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors"
+                >
+                  <PackagePlus size={13} />
+                  {showAddProduct ? '▲ Ocultar formulario' : '▼ Agregar producto adicional'}
+                </button>
+                {showAddProduct && (
                 <div className="flex flex-wrap gap-2 items-end">
                   <div className="flex-1 min-w-[200px]">
                     <label className="text-xs text-muted-foreground mb-1 block">Producto</label>
-                    <Autocomplete
-                      options={productoOptions}
-                      value={selectedProducto ? { id: selectedProducto.id!, label: selectedProducto.nombre } : null}
-                      onChange={(opt) => setSelectedProductoId(opt ? Number(opt.id) : null)}
-                      placeholder="Buscar producto..."
-                    />
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Autocomplete
+                          options={productoOptions}
+                          value={selectedProducto ? { id: selectedProducto.id!, label: selectedProducto.nombre } : null}
+                          onChange={(opt) => setSelectedProductoId(opt ? Number(opt.id) : null)}
+                          placeholder="Buscar producto..."
+                        />
+                      </div>
+                      {hasCamera && (
+                        <button
+                          type="button"
+                          onClick={openCamera}
+                          title="Escanear código de barras con cámara"
+                          className="flex items-center justify-center w-9 h-9 rounded-md border border-input bg-background hover:border-primary hover:text-primary text-muted-foreground transition-colors flex-shrink-0"
+                        >
+                          <Camera size={15} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="w-24">
                     <label className="text-xs text-muted-foreground mb-1 block">Cantidad</label>
@@ -880,6 +1401,7 @@ export function RecepcionList() {
                     <PackagePlus size={14} className="mr-1" /> Guardar
                   </Button>
                 </div>
+                )}
               </div>
             )}
 
@@ -979,6 +1501,149 @@ export function RecepcionList() {
         onConfirm={async () => { if (confirmDialog.action) await confirmDialog.action(); }}
         onCancel={() => setConfirmDialog((p) => ({ ...p, isOpen: false }))}
       />
+
+      {/* ── Escáner de cámara ─────────────────────────────────────────────── */}
+      {showCameraScanner && (
+        <div className="fixed inset-0 z-[60] bg-black flex flex-col">
+          <style>{`
+            @keyframes scanline-r { 0%,100% { top: 15%; } 50% { top: 80%; } }
+            .animate-scanline-r { animation: scanline-r 2s ease-in-out infinite; }
+          `}</style>
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-black/90 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Camera size={18} className="text-primary" />
+              <span className="text-sm font-semibold">Escanear producto</span>
+            </div>
+            <button type="button" onClick={stopCamera}
+              className="p-2 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Visor */}
+          <div className="flex-1 relative overflow-hidden">
+            <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover"
+              playsInline muted autoPlay />
+
+            {!cameraError && (
+              <>
+                {/* Oscurecimiento alrededor del recuadro */}
+                <div className="absolute inset-0 flex flex-col pointer-events-none">
+                  <div className="flex-1 bg-black/55" />
+                  <div className="flex" style={{ height: 256 }}>
+                    <div className="flex-1 bg-black/55" />
+                    <div style={{ width: 256 }} />
+                    <div className="flex-1 bg-black/55" />
+                  </div>
+                  <div className="flex-1 bg-black/55" />
+                </div>
+                {/* Recuadro con esquinas */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="relative" style={{ width: 256, height: 256 }}>
+                    <div className="absolute top-0 left-0 w-9 h-9 border-t-[3px] border-l-[3px] border-primary rounded-tl" />
+                    <div className="absolute top-0 right-0 w-9 h-9 border-t-[3px] border-r-[3px] border-primary rounded-tr" />
+                    <div className="absolute bottom-0 left-0 w-9 h-9 border-b-[3px] border-l-[3px] border-primary rounded-bl" />
+                    <div className="absolute bottom-0 right-0 w-9 h-9 border-b-[3px] border-r-[3px] border-primary rounded-br" />
+                    <div className="absolute left-3 right-3 h-0.5 bg-primary/80 animate-scanline-r"
+                      style={{ top: '15%' }} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Error */}
+            {cameraError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-8">
+                <div className="text-center space-y-4 max-w-sm w-full">
+                  <CameraOff size={44} className="mx-auto text-red-400" />
+                  <p className="text-sm text-gray-300 leading-relaxed">{cameraError}</p>
+                  {/* Fallback: entrada manual */}
+                  <div className="mt-2 space-y-2">
+                    <p className="text-xs text-gray-400">Escribe o pega el código del producto:</p>
+                    <div className="flex gap-2">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={manualCode}
+                        onChange={e => setManualCode(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && manualCode.trim()) {
+                            const code = manualCode.trim();
+                            stopCamera();
+                            buscarPorCodigoRecepcion(code);
+                          }
+                        }}
+                        placeholder="Ej: 7501055300241"
+                        className="flex-1 h-10 rounded-lg border border-gray-600 bg-gray-800 px-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const code = manualCode.trim();
+                          if (!code) return;
+                          stopCamera();
+                          buscarPorCodigoRecepcion(code);
+                        }}
+                        disabled={!manualCode.trim()}
+                        className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors"
+                      >
+                        Buscar
+                      </button>
+                    </div>
+                  </div>
+                  <button type="button" onClick={stopCamera}
+                    className="px-6 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-sm font-medium transition-colors">
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {!cameraError && (
+            <div className="flex-shrink-0 bg-black/90 px-4 py-4 flex flex-col items-center gap-3">
+              <p className="text-xs text-gray-500">Apunta la cámara al código de barras del producto</p>
+              {/* Entrada manual alternativa */}
+              <div className="flex gap-2 w-full max-w-xs">
+                <input
+                  type="text"
+                  value={manualCode}
+                  onChange={e => setManualCode(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && manualCode.trim()) {
+                      const code = manualCode.trim();
+                      stopCamera();
+                      buscarPorCodigoRecepcion(code);
+                    }
+                  }}
+                  placeholder="O escribe el código..."
+                  className="flex-1 h-9 rounded-lg border border-gray-600 bg-gray-800 px-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const code = manualCode.trim();
+                    if (!code) return;
+                    stopCamera();
+                    buscarPorCodigoRecepcion(code);
+                  }}
+                  disabled={!manualCode.trim()}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors"
+                >
+                  OK
+                </button>
+              </div>
+              <button type="button" onClick={stopCamera}
+                className="px-10 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-sm font-medium transition-colors">
+                Cancelar
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

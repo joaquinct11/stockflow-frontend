@@ -14,11 +14,13 @@ import { Pagination } from '../../components/ui/Pagination';
 import { Plus, Trash2, Edit, Search, Building2, User, Phone, Mail, CheckCircle, XCircle, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 type EstadoProveedorFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
 
 export function ProveedoresList() {
   const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
+  const { tenantId } = useCurrentUser();
   const hasViewPermission = canView('PROVEEDORES');
 
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
@@ -51,7 +53,7 @@ export function ProveedoresList() {
     email: '',
     direccion: '',
     activo: true,
-    tenantId: 'farmacia-001',
+    tenantId: tenantId,
   });
 
   useEffect(() => {
@@ -183,7 +185,7 @@ export function ProveedoresList() {
       email: '',
       direccion: '',
       activo: true,
-      tenantId: 'farmacia-001',
+      tenantId: tenantId,
     });
     setEditingProveedor(null);
     setIsDialogOpen(false);
@@ -289,36 +291,31 @@ export function ProveedoresList() {
           </div>
 
           {/* Search + Filtro estado */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                {/* Search input */}
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por nombre, RUC o contacto..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap gap-3 items-center">
+                  {/* Search input */}
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      placeholder="Buscar por nombre, RUC o contacto..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-9 h-10"
+                    />
+                  </div>
 
-                {/* Estado filter */}
-                <div className="sm:w-[320px]">
-                  <div
-                    className="inline-flex w-full items-center rounded-lg border border-input bg-muted p-1"
-                    role="tablist"
-                    aria-label="Filtrar proveedores por estado"
-                  >
+                  {/* Estado filter */}
+                  <div className="flex w-full overflow-x-auto sm:inline-flex sm:w-auto sm:shrink-0 items-center rounded-lg border border-input bg-muted p-1 gap-0.5">
                     <button
                       type="button"
                       onClick={() => setEstadoFilter('TODOS')}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition
-                        ${estadoFilter === 'TODOS'
+                      className={`flex-1 sm:flex-none text-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        estadoFilter === 'TODOS'
                           ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      aria-pressed={estadoFilter === 'TODOS'}
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                      }`}
                     >
                       Todos
                     </button>
@@ -326,30 +323,24 @@ export function ProveedoresList() {
                     <button
                       type="button"
                       onClick={() => setEstadoFilter('ACTIVOS')}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition flex items-center justify-center gap-2
-                        ${estadoFilter === 'ACTIVOS'
-                          ? 'bg-green-600 text-white shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      aria-pressed={estadoFilter === 'ACTIVOS'}
-                      title="Mostrar solo proveedores activos"
+                      className={`flex-1 sm:flex-none text-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        estadoFilter === 'ACTIVOS'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                      }`}
                     >
-                      <span className="h-2 w-2 rounded-full bg-green-500" />
                       Activos
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setEstadoFilter('INACTIVOS')}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition flex items-center justify-center gap-2
-                        ${estadoFilter === 'INACTIVOS'
-                          ? 'bg-red-600 text-white shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      aria-pressed={estadoFilter === 'INACTIVOS'}
-                      title="Mostrar solo proveedores inactivos"
+                      className={`flex-1 sm:flex-none text-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        estadoFilter === 'INACTIVOS'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                      }`}
                     >
-                      <span className="h-2 w-2 rounded-full bg-red-500" />
                       Inactivos
                     </button>
                   </div>
@@ -359,7 +350,7 @@ export function ProveedoresList() {
           </Card>
 
           {/* Table */}
-          <Card>
+          <Card className="border-0 shadow-sm">
             <CardHeader>
               <CardTitle>Lista de Proveedores</CardTitle>
               <CardDescription>{filteredProveedores.length} proveedor(es) encontrado(s)</CardDescription>
@@ -367,13 +358,13 @@ export function ProveedoresList() {
 
             <CardContent>
               {filteredProveedores.length === 0 ? (
-                <EmptyState title="No hay proveedores" description="Comienza registrando tu primer proveedor" />
+                <EmptyState icon={Building2} title="Todavía no hay proveedores" description="Agrega tus proveedores para crear órdenes de compra, recepciones y controlar tus costos." />
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border">
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
                           <TableHead>Nombre</TableHead>
                           <TableHead>RUC</TableHead>
                           <TableHead>Contacto</TableHead>

@@ -13,6 +13,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
+import { usePlan } from '../../hooks/usePlan';
 import {
   Users,
   Plus,
@@ -24,41 +25,47 @@ import {
   User as UserIcon,
   Lock,
   Shield,
-  Briefcase,
+  Crown,
   ShoppingBag,
   Boxes,
+  Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 
-function roleBadgeVariant(role: Role): 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'destructive' {
-  switch (role) {
-    case 'ADMIN':
-      return 'default';
-    case 'GERENTE':
-      return 'secondary';
-    case 'GESTOR_INVENTARIO':
-      return 'warning';
-    case 'VENDEDOR':
-    default:
-      return 'outline';
-  }
+/** Etiquetas en español para cada rol */
+const ROL_LABELS: Record<string, string> = {
+  ADMIN:             'Administrador',
+  VENDEDOR:          'Vendedor',
+  GESTOR_INVENTARIO: 'Almacenero',
+};
+
+const ROL_STYLE: Record<string, { icon: React.ReactNode; badge: string }> = {
+  ADMIN: {
+    icon:  <Crown       className="h-3.5 w-3.5 text-rose-600" />,
+    badge: 'bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-900/40 dark:text-rose-200 dark:border-rose-800',
+  },
+  VENDEDOR: {
+    icon:  <ShoppingBag className="h-3.5 w-3.5 text-emerald-600" />,
+    badge: 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-800',
+  },
+  GESTOR_INVENTARIO: {
+    icon:  <Boxes       className="h-3.5 w-3.5 text-amber-600" />,
+    badge: 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-800',
+  },
+};
+
+function RolBadge({ role }: { role: string }) {
+  const style = ROL_STYLE[role] ?? ROL_STYLE['VENDEDOR'];
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${style.badge}`}>
+      {style.icon}
+      {ROL_LABELS[role] ?? role}
+    </span>
+  );
 }
 
-function roleIcon(role: Role) {
-  switch (role) {
-    case 'ADMIN':
-      return <Shield className="h-4 w-4 text-white" />;
-    case 'GERENTE':
-      return <Briefcase className="h-4 w-4 text-blue-600" />;
-    case 'GESTOR_INVENTARIO':
-      return <Boxes className="h-4 w-4 text-orange-600" />;
-    case 'VENDEDOR':
-    default:
-      return <ShoppingBag className="h-4 w-4 text-muted-foreground" />;
-  }
-}
 
 type EstadoFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
 
@@ -67,18 +74,14 @@ export function UsuariosList() {
   const currentUserRole = (useAuthStore((s) => s.user?.rol) || 'VENDEDOR') as Role;
 
   const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
+  const { isBasico, limites } = usePlan();
   const hasViewPermission = canView('USUARIOS');
 
   const allowedRoleOptions = useMemo(() => {
     const map: Record<Role, Array<{ value: Role; label: string }>> = {
       ADMIN: [
-        { value: 'GERENTE', label: 'Gerente' },
-        { value: 'VENDEDOR', label: 'Vendedor' },
-        { value: 'GESTOR_INVENTARIO', label: 'Gestor de Inventario' },
-      ],
-      GERENTE: [
-        { value: 'VENDEDOR', label: 'Vendedor' },
-        { value: 'GESTOR_INVENTARIO', label: 'Gestor de Inventario' },
+        { value: 'VENDEDOR',          label: 'Vendedor'   },
+        { value: 'GESTOR_INVENTARIO', label: 'Almacenero' },
       ],
       VENDEDOR: [],
       GESTOR_INVENTARIO: [],
@@ -263,11 +266,11 @@ export function UsuariosList() {
   const handleDelete = (id: number) => {
     setConfirmDialog({
       isOpen: true,
-      type: 'danger',
-      title: 'Eliminar Usuario',
+      type: 'warning',
+      title: 'Desactivar Usuario',
       description:
-        '⚠️ Estás a punto de eliminar este usuario de forma permanente. Esta acción no se puede deshacer. ¿Continuar?',
-      confirmText: 'Eliminar Permanentemente',
+        'El usuario será desactivado y no podrá iniciar sesión. Su historial de ventas y movimientos se conserva. Puedes reactivarlo desde el listado.',
+      confirmText: 'Desactivar',
       action: async () => {
         try {
           await usuarioService.delete(id);
@@ -279,6 +282,15 @@ export function UsuariosList() {
         }
       },
     });
+  };
+
+  const handleReenviarActivacion = async (id: number) => {
+    try {
+      await usuarioService.reenviarActivacion(id);
+      toast.success('📧 Email de activación reenviado exitosamente');
+    } catch {
+      toast.error('Error al reenviar el email de activación');
+    }
   };
 
   const filteredUsuarios = usuarios.filter((u) => {
@@ -305,22 +317,60 @@ export function UsuariosList() {
 
   if (loading) return <LoadingSpinner />;
 
+  const usuariosActuales = usuarios.length;
+  const limiteAlcanzado  = isBasico && usuariosActuales >= limites.usuarios;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Usuarios</h1>
-          <p className="text-muted-foreground">Gestiona los usuarios del sistema</p>
+          <p className="text-muted-foreground">
+            Gestiona los usuarios del sistema
+            {isBasico && (
+              <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                limiteAlcanzado
+                  ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+              }`}>
+                {usuariosActuales}/{limites.usuarios} usuarios — Plan Básico
+              </span>
+            )}
+          </p>
         </div>
 
         {canCreate('USUARIOS') && (
-          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+          <Button
+            onClick={() => setIsDialogOpen(true)}
+            className="w-full sm:w-auto"
+            disabled={limiteAlcanzado}
+            title={limiteAlcanzado ? `Límite de ${limites.usuarios} usuarios alcanzado. Actualiza al plan Pro.` : undefined}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Nuevo Usuario
           </Button>
         )}
       </div>
+
+      {/* Banner límite de plan */}
+      {isBasico && limiteAlcanzado && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+            <span className="text-lg">👑</span>
+            <p className="text-sm font-medium">
+              Alcanzaste el límite de {limites.usuarios} usuarios del plan Básico.
+              Actualiza al plan Pro para agregar más.
+            </p>
+          </div>
+          <a
+            href="/checkout?plan=PRO"
+            className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+          >
+            Actualizar a Pro
+          </a>
+        </div>
+      )}
 
       {!hasViewPermission ? (
         <EmptyState
@@ -390,55 +440,46 @@ export function UsuariosList() {
           </div>
 
           {/* Search + Estado filter */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
-                <div className="lg:col-span-7">
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <Input
                       placeholder="Buscar por nombre o email..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-8"
+                      className="pl-9 h-10"
                     />
                   </div>
-                </div>
 
-                <div className="lg:col-span-5">
-                  <div className="w-full rounded-lg border border-input bg-muted p-1">
-                    <div
-                      className="flex gap-1 overflow-x-auto scrollbar-hide"
-                      role="tablist"
-                      aria-label="Filtrar usuarios por estado"
-                    >
-                      {(
-                        [
-                          { key: 'TODOS', label: 'Todos' },
-                          { key: 'ACTIVOS', label: '✅ Activos' },
-                          { key: 'INACTIVOS', label: '⛔ Inactivos' },
-                        ] as Array<{ key: EstadoFilter; label: string }>
-                      ).map((t) => {
-                        const active = estadoFilter === t.key;
-                        return (
-                          <button
-                            key={t.key}
-                            type="button"
-                            onClick={() => setEstadoFilter(t.key)}
-                            className={[
-                              'whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition',
-                              'min-w-[140px] sm:min-w-0 flex-1',
-                              active
-                                ? 'bg-background text-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                            ].join(' ')}
-                            aria-pressed={active}
-                          >
-                            {t.label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div
+                    className="flex w-full overflow-x-auto sm:inline-flex sm:w-auto sm:shrink-0 items-center rounded-lg border border-input bg-muted p-1 gap-0.5"
+                    role="tablist"
+                    aria-label="Filtrar usuarios por estado"
+                  >
+                    {(
+                      [
+                        { key: 'TODOS',    label: 'Todos' },
+                        { key: 'ACTIVOS',  label: 'Activos' },
+                        { key: 'INACTIVOS', label: 'Inactivos' },
+                      ] as Array<{ key: EstadoFilter; label: string }>
+                    ).map((t) => (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setEstadoFilter(t.key)}
+                        className={`flex-1 sm:flex-none text-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                          estadoFilter === t.key
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                        }`}
+                        aria-pressed={estadoFilter === t.key}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -446,17 +487,20 @@ export function UsuariosList() {
           </Card>
 
           {/* Table */}
-          <Card>
+          <Card className="border-0 shadow-sm">
             <CardHeader>
               <CardTitle>Lista de Usuarios</CardTitle>
               <CardDescription>{filteredUsuarios.length} usuario(s) encontrado(s)</CardDescription>
             </CardHeader>
             <CardContent>
               {filteredUsuarios.length === 0 ? (
-                <EmptyState title="No hay usuarios" description="No se encontraron usuarios con ese criterio" />
+                <EmptyState
+                  title={usuarios.length === 0 ? 'Todavía no hay usuarios' : 'Sin resultados'}
+                  description={usuarios.length === 0 ? 'Agrega colaboradores y asígnales un rol para que puedan acceder al sistema con los permisos correctos.' : 'No se encontraron usuarios que coincidan con la búsqueda.'}
+                />
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -482,12 +526,7 @@ export function UsuariosList() {
                             <TableCell>{usuario.email}</TableCell>
 
                             <TableCell>
-                              <Badge variant={roleBadgeVariant(usuario.rolNombre as Role)}>
-                                <span className="inline-flex items-center gap-2">
-                                  {roleIcon(usuario.rolNombre as Role)}
-                                  {usuario.rolNombre}
-                                </span>
-                              </Badge>
+                              <RolBadge role={usuario.rolNombre} />
                             </TableCell>
 
                             <TableCell>
@@ -518,6 +557,18 @@ export function UsuariosList() {
                                       <UserCheck className="h-4 w-4 text-green-600" />
                                     </Button>
                                   ))}
+
+                                {/* Reenviar activación — solo para ADMINs, solo si el usuario es inactivo (nunca activó su cuenta) */}
+                                {currentUserRole === 'ADMIN' && !usuario.activo && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleReenviarActivacion(usuario.id!)}
+                                    title="Reenviar email de activación"
+                                  >
+                                    <Mail className="h-4 w-4 text-blue-500" />
+                                  </Button>
+                                )}
 
                                 {canEdit('USUARIOS') && (
                                   <Button variant="ghost" size="icon" onClick={() => handleEdit(usuario)} title="Editar">
@@ -604,18 +655,12 @@ export function UsuariosList() {
               </div>
 
               {!editingId && (
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium">
-                    Contraseña <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    type="password"
-                    placeholder="Mínimo 6 caracteres"
-                    value={formData.contraseña}
-                    onChange={(e) => setFormData({ ...formData, contraseña: e.target.value })}
-                    required
-                    minLength={6}
-                  />
+                <div className="md:col-span-2 flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 px-4 py-3">
+                  <span className="text-lg shrink-0">📧</span>
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    El usuario recibirá un <strong>email de bienvenida</strong> con un link para establecer su propia contraseña.
+                    El link expira en <strong>48 horas</strong>.
+                  </p>
                 </div>
               )}
 
@@ -680,7 +725,7 @@ export function UsuariosList() {
 
                 {!canCreate('USUARIOS') && (
                   <p className="text-xs text-muted-foreground">
-                    Tu rol (<span className="font-medium">{currentUserRole}</span>) no puede crear usuarios.
+                    Tu rol (<span className="font-medium">{ROL_LABELS[currentUserRole] ?? currentUserRole}</span>) no puede crear usuarios.
                   </p>
                 )}
               </div>
@@ -694,7 +739,7 @@ export function UsuariosList() {
             <Button
               type="submit"
               className="w-full sm:w-auto"
-              disabled={formData.nombre.length < 3 || (!editingId && !canCreate('USUARIOS'))}
+              disabled={formData.nombre.length < 3 || formData.email.length < 5 || (!editingId && !canCreate('USUARIOS'))}
             >
               {editingId ? 'Actualizar' : 'Crear'} Usuario
             </Button>

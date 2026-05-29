@@ -1,24 +1,25 @@
-import { useEffect, useRef, useMemo, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { productoService } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
 import { movimientoService } from '../../services/movimiento.service';
-import { suscripcionService } from '../../services/suscripcion.service';
 import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard, TrendingDown, TrendingUp, Zap, ClipboardList, BarChart2, Wallet } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
+import { gastoService } from '../../services/gasto.service';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
-type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 type TimeFilter = 'HOY' | 'SEMANA' | 'MES' | 'ANUAL';
 
 function safeRol(rol?: string): Role {
-  if (rol === 'ADMIN' || rol === 'GERENTE' || rol === 'VENDEDOR' || rol === 'GESTOR_INVENTARIO') return rol;
+  if (rol === 'ADMIN' || rol === 'VENDEDOR' || rol === 'GESTOR_INVENTARIO') return rol;
+  if (rol === 'GERENTE') return 'ADMIN'; // compatibilidad con cuentas viejas
   return 'VENDEDOR';
 }
 
@@ -90,10 +91,9 @@ interface ProductoConVencimiento {
 }
 
 export function Dashboard() {
-  const { user, suscripcionEstado, setSuscripcionEstado } = useAuthStore();
+  const { user, suscripcionEstado } = useAuthStore();
   const { userId } = useCurrentUser();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const rol = safeRol(user?.rol);
 
   const [loading, setLoading] = useState(true);
@@ -103,114 +103,21 @@ export function Dashboard() {
   const [canLoadVentas, setCanLoadVentas] = useState<boolean>(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('HOY');
 
-  // Estado de suscripción
-  const [suscripcion, setSuscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
-  const [suscripcionLoading, setSuscripcionLoading] = useState(false);
+  const [totalGastosPeriodo, setTotalGastosPeriodo] = useState<number>(0);
 
-  // Parámetro billing que viene de la página de retorno de Mercado Pago
-  const billingParam = searchParams.get('billing');
+  // Estado de suscripción
+  const [suscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
+
 
   // const ventasScopeLabel = useMemo(() => {
-  //   if (rol === 'ADMIN' || rol === 'GERENTE') return 'globales';
+  //   if (rol === 'ADMIN') return 'globales';
   //   if (rol === 'VENDEDOR') return 'tuyas';
   //   return '—';
   // }, [rol]);
 
-  // Al regresar de Mercado Pago: sincronizar estado real desde MP
-  useEffect(() => {
-    if (!billingParam) return;
-
-    setSearchParams((prev) => {
-      prev.delete('billing');
-      return prev;
-    }, { replace: true });
-
-    if (rol === 'ADMIN') {
-      // Aplicar inmediatamente el estado que ya viene del param (lo puso CheckoutReturnPage
-      // tras llamar a sincronizar). Esto evita el parpadeo de "acceso restringido".
-      setSuscripcionEstado(billingParam);
-      setSuscripcion((prev) => ({
-        ...(prev ?? { usuarioPrincipalId: 0, planId: '', precioMensual: 0, estado: '' }),
-        estado: billingParam,
-      }));
-
-      // Confirmación en segundo plano para traer datos completos (planId, fechas, etc.)
-      setSuscripcionLoading(true);
-      suscripcionService
-        .sincronizar()
-        .then((s) => {
-          setSuscripcionEstado(s.estado);
-          setSuscripcion((prev) => ({
-            ...(prev ?? { usuarioPrincipalId: 0, planId: s.planId ?? '', precioMensual: 0, estado: '' }),
-            estado: s.estado,
-            planId: s.planId,
-            preapprovalId: s.preapprovalId,
-            fechaProximoCobro: s.fechaProximoCobro,
-          }));
-        })
-        .catch(() => { /* ya aplicamos billingParam arriba */ })
-        .finally(() => setSuscripcionLoading(false));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [billingParam]);
-
   const estadoSuscripcionRaw = suscripcionEstado ?? suscripcion?.estado ?? user?.suscripcion?.estado ?? '';
   const trialEndDate = (suscripcion?.trialEndDate ?? user?.suscripcion?.trialEndDate) as string | undefined;
   const preapprovalId = suscripcion?.preapprovalId ?? user?.suscripcion?.preapprovalId;
-
-  // ── Auto-polling: cuando hay un pago real en proceso (PENDIENTE + preapprovalId),
-  //    consultar cada 8 s hasta que el webhook de MP active la suscripción o pasen 3 min.
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollingStartRef = useRef<number | null>(null);
-  const POLL_INTERVAL_MS = 8_000;
-  const POLL_TIMEOUT_MS  = 3 * 60 * 1_000; // 3 minutos
-
-  useEffect(() => {
-    const debePollear =
-      rol === 'ADMIN' &&
-      estadoSuscripcionRaw === 'PENDIENTE' &&
-      !!preapprovalId;
-
-    if (!debePollear) {
-      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
-      return;
-    }
-
-    // Arrancar polling solo si no estaba corriendo
-    if (pollingRef.current) return;
-    pollingStartRef.current = Date.now();
-
-    pollingRef.current = setInterval(async () => {
-      // Detener después de 3 minutos
-      if (Date.now() - (pollingStartRef.current ?? 0) > POLL_TIMEOUT_MS) {
-        clearInterval(pollingRef.current!);
-        pollingRef.current = null;
-        return;
-      }
-      try {
-        const s = await suscripcionService.sincronizar();
-        if (s.estado !== 'PENDIENTE') {
-          // ¡El webhook ya activó la suscripción!
-          setSuscripcionEstado(s.estado);
-          setSuscripcion((prev) => ({
-            ...(prev ?? { usuarioPrincipalId: 0, planId: s.planId ?? '', precioMensual: 0, estado: '' }),
-            estado: s.estado,
-            planId: s.planId,
-            preapprovalId: s.preapprovalId,
-            fechaProximoCobro: s.fechaProximoCobro,
-          }));
-          clearInterval(pollingRef.current!);
-          pollingRef.current = null;
-          if (s.estado === 'ACTIVA') toast.success('¡Suscripción activada correctamente!');
-        }
-      } catch { /* ignorar errores de red — reintentará en el siguiente tick */ }
-    }, POLL_INTERVAL_MS);
-
-    return () => {
-      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [estadoSuscripcionRaw, preapprovalId, rol]);
 
   // Si el backend aún dice TRIAL pero la fecha ya venció, tratarlo como PENDIENTE en el cliente
   const trialVencidoClientSide = estadoSuscripcionRaw === 'TRIAL' && !!trialEndDate && new Date(trialEndDate) < new Date();
@@ -224,9 +131,10 @@ export function Dashboard() {
     trialVencidoClientSide ||
     (estadoSuscripcionRaw === 'PENDIENTE' && !preapprovalId && !!trialEndDate && new Date(trialEndDate) < new Date());
 
-  const suscripcionActiva = estadoSuscripcion === 'ACTIVA' || estadoSuscripcion === 'TRIAL' || estadoSuscripcion === '' || !estadoSuscripcion;
+  const suscripcionActiva = estadoSuscripcion === 'ACTIVA' || estadoSuscripcion === 'TRIAL' || estadoSuscripcion === 'CANCELACION_PENDIENTE' || estadoSuscripcion === '' || !estadoSuscripcion;
   const mostrarBloqueo = rol === 'ADMIN' && !suscripcionActiva && !!estadoSuscripcion;
-  const esTrial = estadoSuscripcion === 'TRIAL';
+  const esTrial                = estadoSuscripcion === 'TRIAL';
+  const esCancelacionPendiente = estadoSuscripcion === 'CANCELACION_PENDIENTE';
 
   // Calcular días restantes de trial (solo cuando sigue en TRIAL activo)
   const diasTrialRestantes = (() => {
@@ -235,17 +143,34 @@ export function Dashboard() {
     return Math.max(0, diff);
   })();
 
+  // Fecha de corte para cancelación pendiente
+  const currentPeriodEndRaw = (suscripcion as any)?.currentPeriodEnd as string | undefined;
+  const fechaCorte = currentPeriodEndRaw
+    ? new Date(currentPeriodEndRaw).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })
+    : null;
+
   const planParaReintentar = (suscripcion?.planId ?? user?.suscripcion?.planId ?? '') as string;
   const puedeReintentar = planParaReintentar === 'BASICO' || planParaReintentar === 'PRO';
 
   const handleReintentar = () => {
-    navigate(`/checkout?plan=${planParaReintentar}`);
+    navigate(`/checkout/culqi?plan=${planParaReintentar}`);
   };
 
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rol, userId]);
+
+  // Gastos del período — solo ADMIN
+  useEffect(() => {
+    if (rol !== 'ADMIN') return;
+    const now = new Date();
+    const inicio = getRangeStart(timeFilter, now);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    gastoService.getTotal(fmt(inicio), fmt(now))
+      .then((t) => setTotalGastosPeriodo(Number(t)))
+      .catch(() => setTotalGastosPeriodo(0));
+  }, [timeFilter, rol]);
 
   const fetchData = async () => {
     try {
@@ -272,7 +197,7 @@ export function Dashboard() {
 
       // ✅ Ventas según rol
       let ventasPromise: Promise<VentaDTO[]>;
-      if (rol === 'ADMIN' || rol === 'GERENTE') {
+      if (rol === 'ADMIN') {
         setCanLoadVentas(true);
         ventasPromise = ventaService.getAll();
       } else if (rol === 'VENDEDOR') {
@@ -431,11 +356,16 @@ export function Dashboard() {
     };
   }, [productos, ventas, filteredVentas, movimientos]);
 
-  const gridColsClass = rol === 'GESTOR_INVENTARIO' ? 'lg:grid-cols-2' : 'lg:grid-cols-4';
+  const gridColsClass =
+    rol === 'GESTOR_INVENTARIO'
+      ? 'lg:grid-cols-2'
+      : rol === 'ADMIN'
+        ? 'lg:grid-cols-3'
+        : 'lg:grid-cols-4';
 
-  if (loading || suscripcionLoading) return <LoadingSpinner />;
+  if (loading) return <LoadingSpinner />;
 
-  const showVentasCards = canLoadVentas && (rol === 'ADMIN' || rol === 'GERENTE' || rol === 'VENDEDOR');
+  const showVentasCards = canLoadVentas && (rol === 'ADMIN' || rol === 'VENDEDOR');
 
   return (
     <div className="relative space-y-6">
@@ -469,7 +399,7 @@ export function Dashboard() {
                 </div>
               </div>
             ) : estadoSuscripcion === 'PENDIENTE' ? (
-              /* Pago iniciado pero aún no confirmado por Mercado Pago */
+              /* Pago iniciado pero aún no confirmado */
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-3">
@@ -477,7 +407,7 @@ export function Dashboard() {
                     <div>
                       <p className="font-semibold">Pago en proceso</p>
                       <p className="text-sm">
-                        Tu pago está siendo procesado por Mercado Pago. Si ya pagaste, espera unos minutos o reintenta.
+                        Tu pago está siendo procesado. Si ya pagaste, espera unos minutos o reintenta.
                       </p>
                     </div>
                   </div>
@@ -518,6 +448,31 @@ export function Dashboard() {
           </div>
         </>
       )}
+      {/* Banner de cancelación pendiente — acceso activo hasta currentPeriodEnd */}
+      {rol === 'ADMIN' && esCancelacionPendiente && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <Clock className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-semibold">Suscripción cancelada</p>
+                <p className="text-sm">
+                  {fechaCorte
+                    ? `Acceso activo hasta el ${fechaCorte}. Después deberás renovar para seguir usando el sistema.`
+                    : 'Tu acceso se mantendrá hasta el final del período pagado.'}
+                </p>
+              </div>
+            </div>
+            {puedeReintentar && (
+              <Button size="sm" variant="outline" className="shrink-0 text-amber-800 border-amber-400 hover:bg-amber-100 dark:text-amber-200 dark:border-amber-600" onClick={handleReintentar}>
+                <CreditCard className="mr-2 h-4 w-4" />
+                Renovar
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Banner de período de prueba */}
       {rol === 'ADMIN' && esTrial && (
         <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200">
@@ -581,6 +536,94 @@ export function Dashboard() {
         )}
       </div>
 
+{/* ── Acciones rápidas ─────────────────────────────────────────────────── */}
+      <div className="animate-fade-in-up-delay-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+          <Zap size={12} /> Acceso rápido
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {/* Nueva Venta — ADMIN, VENDEDOR */}
+          {(rol === 'ADMIN' || rol === 'VENDEDOR') && (
+            <button
+              onClick={() => navigate('/pos')}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+            >
+              <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-none">Nueva Venta</p>
+                <p className="text-xs text-muted-foreground mt-1">Abrir POS</p>
+              </div>
+            </button>
+          )}
+
+          {/* Ajuste de Stock — ADMIN, GESTOR_INVENTARIO */}
+          {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
+            <button
+              onClick={() => navigate('/dashboard/inventario')}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+            >
+              <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                <Package size={18} className="text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-none">Ajuste Stock</p>
+                <p className="text-xs text-muted-foreground mt-1">Inventario</p>
+              </div>
+            </button>
+          )}
+
+          {/* Registrar Gasto — ADMIN */}
+          {(rol === 'ADMIN') && (
+            <button
+              onClick={() => navigate('/dashboard/gastos')}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+            >
+              <div className="h-9 w-9 rounded-lg bg-rose-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-rose-500/20 transition-colors">
+                <Wallet size={18} className="text-rose-600 dark:text-rose-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-none">Registrar Gasto</p>
+                <p className="text-xs text-muted-foreground mt-1">Egresos</p>
+              </div>
+            </button>
+          )}
+
+          {/* Ver Reportes — ADMIN, GESTOR_INVENTARIO */}
+          {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
+            <button
+              onClick={() => navigate('/dashboard/reportes')}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+            >
+              <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                <BarChart2 size={18} className="text-violet-600 dark:text-violet-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-none">Reportes</p>
+                <p className="text-xs text-muted-foreground mt-1">Ver análisis</p>
+              </div>
+            </button>
+          )}
+
+          {/* Orden de Compra — ADMIN, GESTOR_INVENTARIO */}
+          {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
+            <button
+              onClick={() => navigate('/dashboard/compras/ordenes')}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+            >
+              <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                <ClipboardList size={18} className="text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-none">Nueva OC</p>
+                <p className="text-xs text-muted-foreground mt-1">Orden de compra</p>
+              </div>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Stats Grid */}
       <div className={`grid gap-4 grid-cols-2 ${gridColsClass} animate-fade-in-up-delay-1`}>
         {/* Productos */}
@@ -621,7 +664,7 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Ventas e Ingresos SOLO para ADMIN/GERENTE/VENDEDOR */}
+        {/* Ventas e Ingresos SOLO para ADMIN/VENDEDOR */}
         {showVentasCards && (
           <>
             <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
@@ -669,6 +712,57 @@ export function Dashboard() {
                 </p>
               </CardContent>
             </Card>
+
+            {/* Gastos y Utilidad Neta — solo ADMIN */}
+            {(rol === 'ADMIN') && (
+              <>
+                <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+                  <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Gastos</p>
+                    </div>
+                    <div className="h-9 w-9 rounded-xl bg-rose-500/10 flex items-center justify-center flex-shrink-0">
+                      <TrendingDown className="text-rose-600 dark:text-rose-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
+                      S/.{totalGastosPeriodo.toFixed(2)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Egresos del período</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+                  <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Utilidad Neta</p>
+                    </div>
+                    <div className="h-9 w-9 rounded-xl bg-teal-500/10 flex items-center justify-center flex-shrink-0">
+                      <TrendingUp className="text-teal-600 dark:text-teal-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    {(() => {
+                      const utilidad = stats.ingresoFiltrado - totalGastosPeriodo;
+                      const positiva = utilidad >= 0;
+                      return (
+                        <>
+                          <div className={`text-3xl font-bold tracking-tight ${positiva ? 'text-teal-600 dark:text-teal-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                            S/.{utilidad.toFixed(2)}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {positiva ? 'Ingresos − Gastos' : 'Pérdida neta del período'}
+                          </p>
+                        </>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </>
         )}
       </div>

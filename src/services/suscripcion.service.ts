@@ -1,11 +1,8 @@
 import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
 import type {
-  SuscripcionCheckoutRequestDTO,
-  SuscripcionCheckoutResponseDTO,
   SuscripcionDTO,
   SuscripcionEstadoResponseDTO,
-  TipoDocumento,
 } from '../types';
 
 export const suscripcionService = {
@@ -99,22 +96,6 @@ export const suscripcionService = {
   },
 
   /**
-   * Iniciar checkout de Mercado Pago para un plan pagado
-   */
-  checkout: async (
-    planId: SuscripcionCheckoutRequestDTO['planId'],
-    tipoDocumento?: TipoDocumento,
-    numeroDocumento?: string,
-  ): Promise<SuscripcionCheckoutResponseDTO> => {
-    const payload: SuscripcionCheckoutRequestDTO = { planId, tipoDocumento, numeroDocumento };
-    const { data } = await axiosInstance.post<SuscripcionCheckoutResponseDTO>(
-      API_ENDPOINTS.SUSCRIPCIONES.CHECKOUT,
-      payload
-    );
-    return data;
-  },
-
-  /**
    * Obtener la suscripción del usuario actual (por usuarioId)
    */
   getMiSuscripcion: async (usuarioId: number): Promise<SuscripcionDTO> => {
@@ -141,13 +122,4 @@ export const suscripcionService = {
     await axiosInstance.patch(API_ENDPOINTS.SUSCRIPCIONES.CANCEL_MI_SUSCRIPCION);
   },
 
-  /**
-   * Sincronizar el estado de la suscripción consultando Mercado Pago en tiempo real
-   */
-  sincronizar: async (): Promise<SuscripcionEstadoResponseDTO> => {
-    const { data } = await axiosInstance.post<SuscripcionEstadoResponseDTO>(
-      API_ENDPOINTS.SUSCRIPCIONES.SINCRONIZAR
-    );
-    return data;
-  },
 };
