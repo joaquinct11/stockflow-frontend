@@ -315,7 +315,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
       <aside
         className={cn(
           'fixed left-0 top-0 z-50 h-screen flex flex-col',
-          'bg-slate-900 border-r border-slate-800',
+          'bg-[#0f1117] border-r border-white/[0.06]',
           'transition-all duration-300 ease-in-out',
           'lg:translate-x-0',
           collapsed ? 'lg:w-16' : 'lg:w-64',
@@ -325,7 +325,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
       >
         {/* ── Logo ──────────────────────────────────────────────── */}
         <div className={cn(
-          'flex h-16 items-center border-b border-slate-800 flex-shrink-0',
+          'flex h-16 items-center border-b border-white/[0.06] flex-shrink-0',
           collapsed ? 'justify-center px-3' : 'justify-between px-4'
         )}>
           {!collapsed && (
@@ -335,7 +335,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
               </div>
               <div>
                 <span className="text-white font-bold text-base tracking-tight">Fluxus</span>
-                <p className="text-slate-500 text-[10px] leading-tight">ERP · Gestión</p>
+                <p className="text-slate-300/70/60 text-[10px] leading-tight tracking-wide">Mini ERP · Perú</p>
               </div>
             </div>
           )}
@@ -348,7 +348,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
 
           <button
             onClick={onClose}
-            className="rounded-md p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 lg:hidden"
+            className="rounded-md p-1.5 text-slate-300/70 hover:text-white hover:bg-white/10 lg:hidden"
           >
             <X size={18} />
           </button>
@@ -357,8 +357,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             onClick={() => onCollapsedChange(!collapsed)}
             className={cn(
               'hidden lg:flex items-center justify-center rounded-md p-1.5',
-              'text-slate-400 hover:text-white hover:bg-slate-800',
-              collapsed && 'absolute -right-3 top-5 bg-slate-900 border border-slate-700 shadow-md'
+              'text-slate-300/70 hover:text-white hover:bg-white/10',
+              collapsed && 'absolute -right-3 top-5 bg-[#0f1117] border border-white/[0.08] shadow-md'
             )}
             aria-label={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
           >
@@ -368,9 +368,9 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
 
         {/* ── Badge de Rol ──────────────────────────────────────── */}
         {!collapsed && user && (
-          <div className="px-4 py-2.5 border-b border-slate-800 flex-shrink-0">
+          <div className="px-4 py-2.5 border-b border-white/[0.06] flex-shrink-0">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Rol</span>
+              <span className="text-[10px] font-semibold text-slate-400/60 uppercase tracking-wider">Rol</span>
               <span className={cn(
                 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide',
                 ROL_BADGE[user.rol] ?? 'bg-slate-700 text-slate-300'
@@ -400,8 +400,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                       'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                       collapsed && 'justify-center px-2',
                       active
-                        ? 'bg-primary text-white shadow-md shadow-primary/20'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-md shadow-primary/30'
+                        : 'text-slate-300/70 hover:text-white hover:bg-white/10'
                     )}
                   >
                     <Icon size={18} className="flex-shrink-0" />
@@ -427,8 +427,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                       'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                       collapsed && 'justify-center px-2',
                       groupActive
-                        ? 'bg-primary/20 text-primary'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        ? 'bg-primary/15 text-primary'
+                        : 'text-slate-300/70 hover:text-white hover:bg-white/10'
                     )}
                     title={collapsed ? entry.title : undefined}
                     aria-expanded={collapsed ? undefined : expanded}
@@ -447,7 +447,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
 
                   {/* Subitems */}
                   {!collapsed && expanded && (
-                    <div className="ml-3 pl-3 border-l border-slate-700/60 space-y-0.5">
+                    <div className="ml-3 pl-3 border-l border-white/[0.08]/60 space-y-0.5">
                       {visibleChildren.map((it) => {
                         const Icon = it.icon;
                         const active = isPathActive(it.href);
@@ -459,8 +459,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                             className={cn(
                               'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
                               active
-                                ? 'text-white bg-slate-800 font-medium'
-                                : 'text-slate-500 hover:text-white hover:bg-slate-800'
+                                ? 'text-white bg-white/10 font-semibold'
+                                : 'text-slate-400/60 hover:text-white hover:bg-white/10'
                             )}
                           >
                             <Icon size={16} className="flex-shrink-0" />
@@ -478,7 +478,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         {/* ── User Info ─────────────────────────────────────────── */}
         {user && (
           <div className={cn(
-            'border-t border-slate-800 p-3 flex-shrink-0',
+            'border-t border-white/[0.06] p-3 flex-shrink-0',
             collapsed ? 'flex justify-center' : 'flex items-center gap-3'
           )}>
             {/* Avatar con iniciales */}
@@ -488,7 +488,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             {!collapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">{user.nombre}</p>
-                <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                <p className="text-xs text-slate-400/60 truncate">{user.email}</p>
               </div>
             )}
           </div>

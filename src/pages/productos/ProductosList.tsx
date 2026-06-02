@@ -197,7 +197,7 @@ export function ProductosList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    console.log('🖼️ imagenUrl al guardar:', formData.imagenUrl ? `SÍ (${formData.imagenUrl.length} chars)` : 'NO / undefined');
+    if (import.meta.env.DEV) { console.log('🖼️ imagenUrl al guardar:', formData.imagenUrl ? `SÍ (${formData.imagenUrl.length} chars)` : 'NO / undefined'); }
 
     try {
       if (editingId) {

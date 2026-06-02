@@ -249,15 +249,13 @@ function App() {
               }
             />
 
-            {/* Gestión de Permisos - Solo ADMIN + Plan PRO */}
+            {/* Gestión de Permisos - Solo ADMIN */}
             <Route
               path="admin/permisos"
               element={
                 <SubscripcionGuard>
                   <RoleProtectedRoute allowedRoles={['ADMIN']}>
-                    <PlanGuard requiredPlan="PRO" feature="Gestión de permisos granulares">
-                      <PermisosConfig />
-                    </PlanGuard>
+                    <PermisosConfig />
                   </RoleProtectedRoute>
                 </SubscripcionGuard>
               }
