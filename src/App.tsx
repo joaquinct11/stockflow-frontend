@@ -11,7 +11,6 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { RoleProtectedRoute } from './components/shared/RoleProtectedRoute';
 import { SubscripcionGuard } from './components/shared/SubscripcionGuard';
-import { PlanGuard } from './components/shared/PlanGuard';
 
 // Landing Page
 import { LandingPage } from './pages/landing/LandingPage';
