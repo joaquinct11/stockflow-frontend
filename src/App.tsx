@@ -11,7 +11,6 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { RoleProtectedRoute } from './components/shared/RoleProtectedRoute';
 import { SubscripcionGuard } from './components/shared/SubscripcionGuard';
-import { PlanGuard } from './components/shared/PlanGuard';
 
 // Landing Page
 import { LandingPage } from './pages/landing/LandingPage';
@@ -249,15 +248,13 @@ function App() {
               }
             />
 
-            {/* Gestión de Permisos - Solo ADMIN + Plan PRO */}
+            {/* Gestión de Permisos - Solo ADMIN */}
             <Route
               path="admin/permisos"
               element={
                 <SubscripcionGuard>
                   <RoleProtectedRoute allowedRoles={['ADMIN']}>
-                    <PlanGuard requiredPlan="PRO" feature="Gestión de permisos granulares">
-                      <PermisosConfig />
-                    </PlanGuard>
+                    <PermisosConfig />
                   </RoleProtectedRoute>
                 </SubscripcionGuard>
               }

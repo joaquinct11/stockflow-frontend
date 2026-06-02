@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 
 export function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -26,7 +27,8 @@ export function Login() {
         setUser(response);
       }
       toast.success(`¡Bienvenido ${response.nombre}!`);
-      navigate('/dashboard');
+      const redirect = searchParams.get('redirect');
+      navigate(redirect && redirect.startsWith('/') ? redirect : '/dashboard');
     } catch (error: any) {
       if (import.meta.env.DEV) console.error('❌ Error en login:', error);
       toast.error(error.response?.data?.mensaje || 'Email o contraseña incorrectos');

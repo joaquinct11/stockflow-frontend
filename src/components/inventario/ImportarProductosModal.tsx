@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { Upload, Download, CheckCircle2, XCircle, AlertCircle, FileSpreadsheet, ArrowRight, RotateCcw } from 'lucide-react';
+import { Upload, Download, CheckCircle2, XCircle, AlertCircle, FileSpreadsheet, ArrowRight, RotateCcw, Info } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import axiosInstance from '../../api/axios.config';
 import { API_ENDPOINTS } from '../../api/endpoints';
+import { categoriaService } from '../../services/categoria.service';
 import toast from 'react-hot-toast';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -43,51 +44,45 @@ interface Props {
 }
 
 // ── Mapeo flexible de columnas ────────────────────────────────────────────────
-// Acepta variantes en español/inglés, con/sin tildes, etc.
 
 const COLUMN_MAP: Record<string, keyof ProductoImportRow> = {
-  // nombre
   nombre: 'nombre', name: 'nombre', producto: 'nombre',
-  // codigo_barras
   codigo_barras: 'codigoBarras', codigobarras: 'codigoBarras',
   codigo: 'codigoBarras', barcode: 'codigoBarras', sku: 'codigoBarras',
-  // categoria
   categoria: 'categoria', category: 'categoria',
-  // precio_venta
   precio_venta: 'precioVenta', precioventa: 'precioVenta',
   precio: 'precioVenta', price: 'precioVenta',
-  // costo_unitario
   costo_unitario: 'costoUnitario', costounitario: 'costoUnitario',
   costo: 'costoUnitario', cost: 'costoUnitario',
-  // stock_actual
   stock_actual: 'stockActual', stockactual: 'stockActual',
   stock: 'stockActual', cantidad: 'stockActual',
-  // stock_minimo
   stock_minimo: 'stockMinimo', stockminimo: 'stockMinimo',
   stock_min: 'stockMinimo', minimo: 'stockMinimo',
-  // stock_maximo
   stock_maximo: 'stockMaximo', stockmaximo: 'stockMaximo',
   stock_max: 'stockMaximo', maximo: 'stockMaximo',
-  // unidad_medida
   unidad_medida: 'unidadMedida', unidadmedida: 'unidadMedida',
   unidad: 'unidadMedida', unit: 'unidadMedida', um: 'unidadMedida',
 };
 
+function stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function normalizeKey(raw: string): string {
-  return raw
-    .toLowerCase()
-    .trim()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')  // quitar tildes/diacríticos
-    .replace(/[^a-z0-9\s_]/g, '')    // quitar *, #, paréntesis, etc.
-    .trim()
-    .replace(/[\s]+/g, '_')          // espacios → guión bajo
-    .replace(/_+/g, '_')             // colapsar __ → _
-    .replace(/^_|_$/g, '');          // quitar _ al inicio/fin
+  return stripAccents(raw.toLowerCase().trim())
+    .replace(/[^a-z0-9\s_]/g, '').trim()
+    .replace(/[\s]+/g, '_').replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+function normalizeName(s: string): string {
+  return stripAccents(s.toLowerCase().trim());
 }
 
 function parseSheet(workbook: XLSX.WorkBook): ProductoImportRow[] {
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  // Leer la primera hoja que no sea "Referencia"
+  const sheetName = workbook.SheetNames.find(n => n !== 'Referencia') ?? workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
   const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
 
   return raw.map((row) => {
@@ -96,7 +91,7 @@ function parseSheet(workbook: XLSX.WorkBook): ProductoImportRow[] {
       const normalized = normalizeKey(key);
       const field = COLUMN_MAP[normalized];
       if (!field) continue;
-      if (field === 'nombre' || field === 'codigoBarras' || field === 'categoria' || field === 'unidadMedida') {
+      if (['nombre', 'codigoBarras', 'categoria', 'unidadMedida'].includes(field)) {
         parsed[field] = String(value ?? '').trim() as never;
       } else {
         const n = parseFloat(String(value));
@@ -104,25 +99,55 @@ function parseSheet(workbook: XLSX.WorkBook): ProductoImportRow[] {
       }
     }
     return parsed as ProductoImportRow;
-  }).filter(r => r.nombre); // descartar filas completamente vacías
+  }).filter(r => r.nombre);
 }
 
-// ── Plantilla de descarga ─────────────────────────────────────────────────────
+// ── Generar plantilla con hoja de referencia ──────────────────────────────────
 
-function descargarPlantilla() {
-  const headers = [
-    ['nombre*', 'codigo_barras', 'categoria', 'precio_venta*', 'costo_unitario',
-     'stock_actual', 'stock_minimo', 'stock_maximo', 'unidad_medida'],
-  ];
-  const ejemplos = [
-    ['Paracetamol 500mg', 'MED-001', 'Medicamentos', 5.50, 3.20, 100, 20, 500, 'Unidad'],
-    ['Alcohol 70° 1L',   'MED-002', 'Desinfectantes', 8.00, 5.00, 50,  10, 200, 'Litro'],
-    ['Mascarilla KN95',  '',        'Protección',     2.50, 1.50, 200, 50, 1000, 'Unidad'],
-  ];
-  const ws = XLSX.utils.aoa_to_sheet([...headers, ...ejemplos]);
-  ws['!cols'] = [18, 14, 14, 13, 13, 12, 12, 12, 14].map(w => ({ wch: w }));
+function descargarPlantilla(
+  categorias: { nombre: string }[],
+  unidades: { nombre: string }[],
+) {
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+
+  // ── Hoja 1: Productos ──
+  const headers = [['nombre*', 'codigo_barras', 'categoria', 'precio_venta*', 'costo_unitario',
+    'stock_actual', 'stock_minimo', 'stock_maximo', 'unidad_medida']];
+
+  // Ejemplos usando las categorías y unidades reales del sistema (si existen)
+  const cat1 = categorias[0]?.nombre ?? 'General';
+  const cat2 = categorias[1]?.nombre ?? cat1;
+  const um1  = unidades[0]?.nombre  ?? 'Unidad';
+  const um2  = unidades[1]?.nombre  ?? um1;
+
+  const ejemplos = [
+    ['Producto Ejemplo 1', 'COD-001', cat1, 10.00, 6.50, 50, 10, 200, um1],
+    ['Producto Ejemplo 2', 'COD-002', cat2, 25.00, 15.00, 30, 5, 100, um2],
+    ['Producto Ejemplo 3', '',        cat1,  5.50,  3.00, 100, 20, 500, um1],
+  ];
+
+  const wsProductos = XLSX.utils.aoa_to_sheet([...headers, ...ejemplos]);
+  wsProductos['!cols'] = [22, 14, 16, 13, 13, 12, 12, 12, 16].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, wsProductos, 'Productos');
+
+  // ── Hoja 2: Referencia ──
+  const maxLen = Math.max(categorias.length, unidades.length, 1);
+  const refData: (string | number)[][] = [
+    ['CATEGORÍAS DISPONIBLES', '', 'UNIDADES DE MEDIDA DISPONIBLES'],
+    ['(copia y pega el nombre exacto)', '', '(copia y pega el nombre exacto)'],
+  ];
+  for (let i = 0; i < maxLen; i++) {
+    refData.push([
+      categorias[i]?.nombre ?? '',
+      '',
+      unidades[i]?.nombre ?? '',
+    ]);
+  }
+
+  const wsRef = XLSX.utils.aoa_to_sheet(refData);
+  wsRef['!cols'] = [30, 4, 30].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, wsRef, 'Referencia');
+
   XLSX.writeFile(wb, 'plantilla_importacion_productos.xlsx');
 }
 
@@ -131,13 +156,22 @@ function descargarPlantilla() {
 type Step = 'upload' | 'preview' | 'result';
 
 export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMedida = [] }: Props) {
-  const [step, setStep] = useState<Step>('upload');
-  const [rows, setRows] = useState<ProductoImportRow[]>([]);
+  const [step, setStep]         = useState<Step>('upload');
+  const [rows, setRows]         = useState<ProductoImportRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [result, setResult]     = useState<ImportResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [categorias, setCategorias] = useState<{ nombre: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Cargar categorías al abrir el modal
+  useEffect(() => {
+    if (!isOpen) return;
+    categoriaService.getAll()
+      .then(data => setCategorias(data))
+      .catch(() => {});
+  }, [isOpen]);
 
   const reset = () => {
     setStep('upload');
@@ -148,12 +182,23 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
   };
 
   const handleClose = () => {
-    // Si hubo productos importados, refrescar el inventario al cerrar (no durante)
-    if (result && (result.creados > 0 || result.actualizados > 0)) {
-      onSuccess();
-    }
+    if (result && (result.creados > 0 || result.actualizados > 0)) onSuccess();
     reset();
     onClose();
+  };
+
+  // ── Sets de nombres normalizados para validación rápida ───────────────────
+  const categoriasSet = new Set(categorias.map(c => normalizeName(c.nombre)));
+  const unidadesSet   = new Set(unidadesMedida.map(u => normalizeName(u.nombre)));
+
+  const categoriaStatus = (val?: string): 'ok' | 'nuevo' | 'vacio' => {
+    if (!val) return 'vacio';
+    return categoriasSet.has(normalizeName(val)) ? 'ok' : 'nuevo';
+  };
+
+  const unidadStatus = (val?: string): 'ok' | 'error' | 'vacio' => {
+    if (!val) return 'vacio';
+    return unidadesSet.has(normalizeName(val)) ? 'ok' : 'error';
   };
 
   // ── Parsear archivo ───────────────────────────────────────────────────────
@@ -203,18 +248,20 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
   const ejecutarImportacion = async () => {
     setImporting(true);
     try {
-      const { data } = await axiosInstance.post<ImportResult>(
-        API_ENDPOINTS.PRODUCTOS.IMPORTAR,
-        rows,
-      );
+      const { data } = await axiosInstance.post<ImportResult>(API_ENDPOINTS.PRODUCTOS.IMPORTAR, rows);
       setResult(data);
-      setStep('result'); // onSuccess se llama al cerrar el modal para no desmontar la vista
+      setStep('result');
     } catch {
       toast.error('Error al importar productos');
     } finally {
       setImporting(false);
     }
   };
+
+  // Contadores de advertencias en el preview
+  const unidadesInvalidas  = rows.filter(r => r.unidadMedida && unidadStatus(r.unidadMedida) === 'error').length;
+  const categoriasNuevas   = rows.filter(r => r.categoria && categoriaStatus(r.categoria) === 'nuevo').length;
+  const filasSinPrecio     = rows.filter(r => !r.precioVenta || r.precioVenta <= 0).length;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -245,7 +292,7 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
         {/* ── PASO 1: Upload ── */}
         {step === 'upload' && (
           <div className="flex flex-col gap-4">
-            {/* Zona de drag & drop */}
+            {/* Zona drag & drop */}
             <div
               className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors
                 ${dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/40'}`}
@@ -257,27 +304,31 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
               <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChange} />
               <Upload size={36} className="mx-auto mb-3 text-muted-foreground" />
               <p className="font-medium">Arrastra tu archivo aquí o haz clic para seleccionarlo</p>
-              <p className="text-sm text-muted-foreground mt-1">Formatos soportados: .xlsx, .xls, .csv</p>
+              <p className="text-sm text-muted-foreground mt-1">Formatos: .xlsx, .xls, .csv</p>
             </div>
 
-            {/* Plantilla */}
+            {/* Descarga de plantilla */}
             <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
               <FileSpreadsheet size={20} className="text-green-600 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">¿Primera vez? Descarga la plantilla</p>
+                <p className="text-sm font-medium">Descarga la plantilla con tus datos</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Contiene las columnas necesarias con ejemplos. Las columnas marcadas con <span className="text-red-500">*</span> son obligatorias.
+                  Incluye una hoja <strong>Referencia</strong> con las categorías y unidades exactas de tu sistema para copiarlas sin errores.
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={descargarPlantilla} className="shrink-0">
+              <Button
+                variant="outline" size="sm"
+                onClick={() => descargarPlantilla(categorias, unidadesMedida)}
+                className="shrink-0"
+              >
                 <Download size={14} className="mr-1.5" />
                 Plantilla
               </Button>
             </div>
 
-            {/* Info de columnas */}
-            <div className="rounded-lg border p-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+            {/* Info columnas */}
+            <div className="rounded-lg border p-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Columnas reconocidas
               </p>
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
@@ -285,24 +336,48 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                 <div><span className="font-medium">codigo_barras</span> — Código único (opcional)</div>
                 <div><span className="font-medium text-red-500">precio_venta*</span> — Precio de venta</div>
                 <div><span className="font-medium">costo_unitario</span> — Costo de compra</div>
-                <div><span className="font-medium">categoria</span> — Categoría</div>
-                <div><span className="font-medium">unidad_medida</span> — Nombre exacto de la UM</div>
+                <div><span className="font-medium">categoria</span> — Nombre exacto de la categoría</div>
+                <div><span className="font-medium">unidad_medida</span> — Nombre exacto de la unidad</div>
                 <div><span className="font-medium">stock_actual</span> — Stock inicial</div>
                 <div><span className="font-medium">stock_minimo / stock_maximo</span></div>
               </div>
-              <p className="text-xs text-muted-foreground mt-3">
-                💡 Si el <span className="font-medium">codigo_barras</span> ya existe, el producto se <span className="font-medium">actualiza</span>. Si no, se <span className="font-medium">crea nuevo</span>.
+              <p className="text-xs text-muted-foreground">
+                💡 Si el <strong>codigo_barras</strong> ya existe, el producto se <strong>actualiza</strong>. Si no, se <strong>crea nuevo</strong>.
               </p>
-              {unidadesMedida.length > 0 && (
-                <div className="mt-3 pt-3 border-t">
-                  <p className="text-xs font-medium mb-1">Unidades de medida disponibles:</p>
+
+              {/* Categorías disponibles */}
+              {categorias.length > 0 && (
+                <div className="pt-2 border-t space-y-1">
+                  <p className="text-xs font-medium flex items-center gap-1.5">
+                    <Info size={12} className="text-primary" />
+                    Categorías disponibles en tu sistema:
+                  </p>
                   <div className="flex flex-wrap gap-1">
-                    {unidadesMedida.map(u => (
-                      <span key={u.nombre} className="px-2 py-0.5 rounded bg-muted text-xs font-mono">
-                        {u.nombre}
-                      </span>
+                    {categorias.map(c => (
+                      <span key={c.nombre} className="px-2 py-0.5 rounded bg-muted text-xs font-mono">{c.nombre}</span>
                     ))}
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Si pones un nombre nuevo, se creará la categoría automáticamente.
+                  </p>
+                </div>
+              )}
+
+              {/* Unidades disponibles */}
+              {unidadesMedida.length > 0 && (
+                <div className="pt-2 border-t space-y-1">
+                  <p className="text-xs font-medium flex items-center gap-1.5">
+                    <Info size={12} className="text-primary" />
+                    Unidades de medida disponibles:
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {unidadesMedida.map(u => (
+                      <span key={u.nombre} className="px-2 py-0.5 rounded bg-muted text-xs font-mono">{u.nombre}</span>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                    ⚠ La unidad de medida debe coincidir exactamente. Si no existe, el producto quedará sin unidad asignada.
+                  </p>
                 </div>
               )}
             </div>
@@ -315,7 +390,7 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">{fileName}</p>
-                <p className="text-sm text-muted-foreground">{rows.length} producto(s) listos para importar</p>
+                <p className="text-sm text-muted-foreground">{rows.length} producto(s) detectados</p>
               </div>
               <Button variant="ghost" size="sm" onClick={reset}>
                 <RotateCcw size={14} className="mr-1.5" /> Cambiar archivo
@@ -340,15 +415,32 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                   </thead>
                   <tbody>
                     {rows.map((row, i) => {
-                      const error = !row.nombre || !row.precioVenta || row.precioVenta <= 0;
+                      const errorFila = !row.nombre || !row.precioVenta || row.precioVenta <= 0;
+                      const catSt  = categoriaStatus(row.categoria);
+                      const uniSt  = unidadStatus(row.unidadMedida);
                       return (
-                        <tr key={i} className={`border-t ${error ? 'bg-red-50 dark:bg-red-950/20' : 'hover:bg-muted/30'}`}>
+                        <tr key={i} className={`border-t ${errorFila ? 'bg-red-50 dark:bg-red-950/20' : 'hover:bg-muted/30'}`}>
                           <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
-                          <td className={`px-3 py-2 font-medium ${error ? 'text-red-600' : ''}`}>
+                          <td className={`px-3 py-2 font-medium ${errorFila ? 'text-red-600' : ''}`}>
                             {row.nombre || <span className="italic text-red-500">vacío</span>}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.codigoBarras || '—'}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.categoria || '—'}</td>
+                          <td className="px-3 py-2 text-muted-foreground font-mono">{row.codigoBarras || '—'}</td>
+
+                          {/* Categoría con indicador */}
+                          <td className="px-3 py-2">
+                            {!row.categoria ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : catSt === 'ok' ? (
+                              <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
+                                <CheckCircle2 size={11} />{row.categoria}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400" title="Se creará esta categoría">
+                                <AlertCircle size={11} />{row.categoria}
+                              </span>
+                            )}
+                          </td>
+
                           <td className={`px-3 py-2 text-right ${!row.precioVenta || row.precioVenta <= 0 ? 'text-red-500' : ''}`}>
                             {row.precioVenta ? `S/ ${Number(row.precioVenta).toFixed(2)}` : <span className="text-red-500">—</span>}
                           </td>
@@ -356,7 +448,21 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                             {row.costoUnitario ? `S/ ${Number(row.costoUnitario).toFixed(2)}` : '—'}
                           </td>
                           <td className="px-3 py-2 text-right">{row.stockActual ?? 0}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.unidadMedida || '—'}</td>
+
+                          {/* Unidad con indicador */}
+                          <td className="px-3 py-2">
+                            {!row.unidadMedida ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : uniSt === 'ok' ? (
+                              <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
+                                <CheckCircle2 size={11} />{row.unidadMedida}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400" title="No existe esta unidad — quedará sin asignar">
+                                <XCircle size={11} />{row.unidadMedida}
+                              </span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -365,19 +471,43 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
               </div>
             </div>
 
-            {/* Advertencias previas */}
-            {rows.some(r => !r.nombre || !r.precioVenta || r.precioVenta <= 0) && (
+            {/* Leyenda */}
+            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-green-600" /> Reconocido en el sistema</span>
+              <span className="flex items-center gap-1"><AlertCircle size={11} className="text-blue-500" /> Categoría nueva (se creará)</span>
+              <span className="flex items-center gap-1"><XCircle size={11} className="text-red-500" /> Unidad no encontrada (quedará vacía)</span>
+            </div>
+
+            {/* Advertencias */}
+            {filasSinPrecio > 0 && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-sm">
+                <XCircle size={15} className="text-red-600 mt-0.5 shrink-0" />
+                <span className="text-red-800 dark:text-red-200">
+                  <strong>{filasSinPrecio} fila(s)</strong> sin precio de venta — serán rechazadas al importar.
+                </span>
+              </div>
+            )}
+            {unidadesInvalidas > 0 && (
               <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 text-sm">
-                <AlertCircle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                <AlertCircle size={15} className="text-amber-600 mt-0.5 shrink-0" />
                 <span className="text-amber-800 dark:text-amber-200">
-                  Las filas marcadas en rojo tienen datos inválidos y serán reportadas como error al importar.
+                  <strong>{unidadesInvalidas} producto(s)</strong> tienen una unidad de medida que no existe en tu sistema. Quedarán sin unidad asignada.
+                  Revisa la hoja <strong>Referencia</strong> de la plantilla para ver los nombres exactos.
+                </span>
+              </div>
+            )}
+            {categoriasNuevas > 0 && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-sm">
+                <Info size={15} className="text-blue-600 mt-0.5 shrink-0" />
+                <span className="text-blue-800 dark:text-blue-200">
+                  <strong>{categoriasNuevas} producto(s)</strong> tienen una categoría que no existe aún — se creará automáticamente al importar.
                 </span>
               </div>
             )}
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={ejecutarImportacion} disabled={importing}>
+              <Button onClick={ejecutarImportacion} disabled={importing || rows.length === 0}>
                 {importing ? 'Importando...' : `Importar ${rows.length} productos`}
               </Button>
             </div>
@@ -387,7 +517,6 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
         {/* ── PASO 3: Resultado ── */}
         {step === 'result' && result && (
           <div className="flex flex-col gap-4">
-            {/* Tarjetas de resumen */}
             <div className="grid grid-cols-4 gap-3">
               <div className="rounded-lg border p-3 text-center">
                 <p className="text-2xl font-bold">{result.total}</p>
@@ -401,8 +530,7 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                 <p className="text-2xl font-bold text-blue-600">{result.actualizados}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Actualizados</p>
               </div>
-              <div className={`rounded-lg border p-3 text-center ${result.errores > 0
-                ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : 'border-border'}`}>
+              <div className={`rounded-lg border p-3 text-center ${result.errores > 0 ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : 'border-border'}`}>
                 <p className={`text-2xl font-bold ${result.errores > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
                   {result.errores}
                 </p>
@@ -410,12 +538,11 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
               </div>
             </div>
 
-            {/* Mensaje principal */}
             {result.creados + result.actualizados > 0 ? (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-200">
                 <CheckCircle2 size={16} />
                 <span>
-                  Importación completada: <strong>{result.creados}</strong> productos creados
+                  <strong>{result.creados}</strong> productos creados
                   {result.actualizados > 0 && <> y <strong>{result.actualizados}</strong> actualizados</>}.
                 </span>
               </div>
@@ -426,7 +553,6 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
               </div>
             )}
 
-            {/* Lista de errores */}
             {result.filaErrores.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
                 <div className="px-3 py-2 bg-red-50 dark:bg-red-950/30 border-b flex items-center gap-2">
