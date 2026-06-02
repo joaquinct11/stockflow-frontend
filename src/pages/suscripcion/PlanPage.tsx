@@ -132,7 +132,7 @@ export function PlanPage() {
                   Crear cuenta y comenzar — Gratis
                 </Link>
                 <Link
-                  to="/login"
+                  to="/login?redirect=/checkout/culqi%3Fplan%3DBASICO"
                   className="block w-full text-center border border-gray-300 dark:border-gray-700 hover:border-primary hover:text-primary text-gray-700 dark:text-gray-300 font-medium py-2.5 px-4 rounded-lg text-sm transition-colors"
                 >
                   Ya tengo cuenta — Iniciar sesión

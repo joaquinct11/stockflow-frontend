@@ -19,7 +19,7 @@ export type Module =
   | 'CLIENTES'
   | 'GASTOS';
 
-type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 
 // Mapping from frontend Permission names to backend verb prefixes (verb-first format).
 const PERMISSION_CODE_MAP: Record<Permission, string> = {
@@ -124,105 +124,90 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
 const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
   DASHBOARD: {
     ADMIN: ['ver_global', 'ver_personal'],
-    GERENTE: ['ver_global', 'ver_personal'],
     VENDEDOR: ['ver_personal'],
     GESTOR_INVENTARIO: ['ver_personal'],
   },
 
   PROVEEDORES: {
     ADMIN: ['crear', 'editar', 'activar', 'cambiarEstado', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['crear', 'editar', 'cambiarEstado', 'ver'],
   },
 
   PRODUCTOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: ['ver'],
     GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
   },
 
   VENTAS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver_todas'],
-    GERENTE: ['crear', 'ver_todas'],
-    VENDEDOR: ['crear', 'ver_propias'], // puede crear via POS, pero no ve el módulo historial
+    VENDEDOR: ['crear', 'ver_propias'],
     GESTOR_INVENTARIO: [],
   },
 
   POS: {
     ADMIN: ['ver', 'crear'],
-    GERENTE: ['ver', 'crear'],
     VENDEDOR: ['ver', 'crear'],
     GESTOR_INVENTARIO: [],
   },
 
   INVENTARIO: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['crear', 'ver'],
   },
 
   USUARIOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'cambiarEstado', 'ver'],
-    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
   },
 
   SUSCRIPCIONES: {
     ADMIN: ['ver', 'activar', 'eliminar'],
-    GERENTE: ['ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
   },
 
   REPORTES: {
     ADMIN: ['ver'],
-    GERENTE: ['ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['ver'],
   },
 
   FACTURACION: {
     ADMIN: ['ver', 'ver_todas', 'crear', 'eliminar'],
-    GERENTE: ['ver', 'ver_todas', 'crear', 'eliminar'],
     VENDEDOR: ['crear', 'ver_propias'],
     GESTOR_INVENTARIO: [],
   },
 
   COMPRAS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
   },
 
   RECEPCIONES: {
     ADMIN: ['crear', 'editar', 'ver'],
-    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
   },
 
   CONFIGURACION: {
     ADMIN: ['ver', 'editar'],
-    GERENTE: ['ver', 'editar'],
     VENDEDOR: ['ver'],
     GESTOR_INVENTARIO: ['ver'],
   },
 
   CLIENTES: {
     ADMIN: ['crear', 'editar', 'eliminar', 'cambiarEstado', 'ver'],
-    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
     VENDEDOR: ['crear', 'editar', 'ver'],
     GESTOR_INVENTARIO: [],
   },
 
   GASTOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
-    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
   },
@@ -301,7 +286,6 @@ export function usePermissions() {
     );
   };
 
-  const isGerente = rol === 'GERENTE';
   const isVendedor = rol === 'VENDEDOR';
   const isGestorInventario = rol === 'GESTOR_INVENTARIO';
 
@@ -322,7 +306,6 @@ export function usePermissions() {
     canViewGlobal,
     canViewPersonal,
     isAdmin,
-    isGerente,
     isVendedor,
     isGestorInventario,
   };

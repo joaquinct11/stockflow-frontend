@@ -19,7 +19,6 @@ type TimeFilter = 'HOY' | 'SEMANA' | 'MES' | 'ANUAL';
 
 function safeRol(rol?: string): Role {
   if (rol === 'ADMIN' || rol === 'VENDEDOR' || rol === 'GESTOR_INVENTARIO') return rol;
-  if (rol === 'GERENTE') return 'ADMIN'; // compatibilidad con cuentas viejas
   return 'VENDEDOR';
 }
 
