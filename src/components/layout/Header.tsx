@@ -12,6 +12,12 @@ interface HeaderProps {
   onMenuClick: () => void;
 }
 
+const ROL_LABEL: Record<string, string> = {
+  ADMIN:             'Administrador',
+  VENDEDOR:          'Vendedor',
+  GESTOR_INVENTARIO: 'Almacén',
+};
+
 function getInitials(nombre?: string) {
   if (!nombre) return '?';
   const parts = nombre.trim().split(' ');
@@ -361,7 +367,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             <div className="text-right hidden md:block">
               <p className="text-sm font-semibold leading-tight">{user?.nombre || 'Usuario'}</p>
               <p className="text-[10px] text-muted-foreground uppercase font-medium tracking-wide">
-                {user?.rol || 'ADMIN'}
+                {ROL_LABEL[user?.rol ?? ''] ?? user?.rol ?? 'Admin'}
               </p>
             </div>
 
