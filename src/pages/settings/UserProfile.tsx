@@ -64,6 +64,8 @@ export function UserProfile() {
     numeroDocumento: '',
     numeroCelular: '',
   });
+  const [editNombres,   setEditNombres]   = useState('');
+  const [editApellidos, setEditApellidos] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCurrentPwd, setShowCurrentPwd] = useState(false);
@@ -79,6 +81,8 @@ export function UserProfile() {
       setLoading(true);
       const data = await authService.obtenerPerfil();
       setProfile(data);
+      setEditNombres(data.nombre || '');
+      setEditApellidos(data.apellido || '');
       setEditProfileData({
         nombre: data.nombre || '',
         tipoDocumento: data.tipoDocumento || '',
@@ -95,6 +99,8 @@ export function UserProfile() {
 
   const handleOpenEditProfile = () => {
     if (!profile) return;
+    setEditNombres(profile.nombre || '');
+    setEditApellidos(profile.apellido || '');
     setEditProfileData({
       nombre: profile.nombre || '',
       tipoDocumento: profile.tipoDocumento || '',
@@ -108,17 +114,20 @@ export function UserProfile() {
     e.preventDefault();
     if (!profile) return;
 
-    const nuevoNombre = editProfileData.nombre.trim();
-    if (nuevoNombre.length < 3) {
-      toast.error('El nombre debe tener al menos 3 caracteres');
+    if (editNombres.trim().length < 2) {
+      toast.error('Ingresa tus nombres');
+      return;
+    }
+    if (editApellidos.trim().length < 2) {
+      toast.error('Ingresa tus apellidos');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // ✅ Tu backend requiere tenantId y rolNombre (y activo)
       await usuarioService.update(profile.usuarioId, {
-        nombre: nuevoNombre,
+        nombre: editNombres.trim(),
+        apellido: editApellidos.trim(),
         rolNombre: profile.rol,
         tenantId: profile.tenantId,
         activo: profile.activo,
@@ -335,18 +344,31 @@ export function UserProfile() {
         description="Actualiza tu información personal"
       >
         <form onSubmit={handleUpdateProfile} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Nombre Completo <span className="text-red-500">*</span>
-            </label>
-            <Input
-              placeholder="Tu nombre"
-              value={editProfileData.nombre}
-              onChange={(e) => setEditProfileData({ ...editProfileData, nombre: e.target.value })}
-              required
-              minLength={3}
-              maxLength={150}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Nombres <span className="text-red-500">*</span>
+              </label>
+              <Input
+                placeholder="Ej: Juan Carlos"
+                value={editNombres}
+                onChange={(e) => setEditNombres(e.target.value)}
+                required
+                maxLength={80}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Apellidos <span className="text-red-500">*</span>
+              </label>
+              <Input
+                placeholder="Ej: García López"
+                value={editApellidos}
+                onChange={(e) => setEditApellidos(e.target.value)}
+                required
+                maxLength={80}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

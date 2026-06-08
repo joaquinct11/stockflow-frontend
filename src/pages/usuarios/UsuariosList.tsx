@@ -125,6 +125,8 @@ export function UsuariosList() {
     numeroDocumento: '',
     numeroCelular: '',
   });
+  const [nombres,   setNombres]   = useState('');
+  const [apellidos, setApellidos] = useState('');
 
   useEffect(() => {
     if (hasViewPermission) fetchUsuarios();
@@ -170,16 +172,21 @@ export function UsuariosList() {
       numeroDocumento: '',
       numeroCelular: '',
     });
+    setNombres('');
+    setApellidos('');
     setEditingId(null);
     setIsDialogOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (nombres.trim().length < 2) { toast.error('Ingresa el nombre'); return; }
+    if (apellidos.trim().length < 2) { toast.error('Ingresa los apellidos'); return; }
     try {
       if (editingId) {
         const usuarioToUpdate = {
-          nombre: formData.nombre,
+          nombre: nombres.trim(),
+          apellido: apellidos.trim(),
           rolNombre: formData.rolNombre,
           activo: formData.activo,
           tenantId: tenantId!,
@@ -195,7 +202,7 @@ export function UsuariosList() {
           toast.error('No tienes permisos para crear usuarios');
           return;
         }
-        await usuarioService.create(formData as Usuario);
+        await usuarioService.create({ ...formData, nombre: nombres.trim(), apellido: apellidos.trim() } as Usuario);
         toast.success('Usuario creado exitosamente');
       }
 
@@ -209,6 +216,8 @@ export function UsuariosList() {
   };
 
   const handleEdit = (usuario: Usuario) => {
+    setNombres(usuario.nombre ?? '');
+    setApellidos(usuario.apellido ?? '');
     setFormData({
       nombre: usuario.nombre,
       email: usuario.email,
@@ -626,17 +635,28 @@ export function UsuariosList() {
             <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">
-                  Nombre Completo <span className="text-red-500">*</span>
+                  Nombres <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  placeholder="Juan Pérez"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  placeholder="Ej: Juan Carlos"
+                  value={nombres}
+                  onChange={(e) => setNombres(e.target.value)}
                   required
-                  minLength={3}
-                  maxLength={150}
+                  maxLength={80}
                 />
-                <p className="text-xs text-muted-foreground">Mínimo 3, máximo 150 caracteres</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Apellidos <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  placeholder="Ej: García López"
+                  value={apellidos}
+                  onChange={(e) => setApellidos(e.target.value)}
+                  required
+                  maxLength={80}
+                />
               </div>
 
               <div className="space-y-2">
@@ -652,6 +672,17 @@ export function UsuariosList() {
                   required
                 />
                 {editingId && <p className="text-xs text-muted-foreground">No se puede cambiar al editar</p>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Celular</label>
+                <Input
+                  type="tel"
+                  placeholder="Ej: 999888777"
+                  value={formData.numeroCelular ?? ''}
+                  onChange={(e) => setFormData({ ...formData, numeroCelular: e.target.value })}
+                  maxLength={20}
+                />
               </div>
 
               {!editingId && (
@@ -686,17 +717,6 @@ export function UsuariosList() {
                   placeholder="Ej: 12345678"
                   value={formData.numeroDocumento ?? ''}
                   onChange={(e) => setFormData({ ...formData, numeroDocumento: e.target.value })}
-                  maxLength={20}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Celular</label>
-                <Input
-                  type="tel"
-                  placeholder="Ej: 999888777"
-                  value={formData.numeroCelular ?? ''}
-                  onChange={(e) => setFormData({ ...formData, numeroCelular: e.target.value })}
                   maxLength={20}
                 />
               </div>
@@ -739,7 +759,7 @@ export function UsuariosList() {
             <Button
               type="submit"
               className="w-full sm:w-auto"
-              disabled={formData.nombre.length < 3 || formData.email.length < 5 || (!editingId && !canCreate('USUARIOS'))}
+              disabled={nombres.trim().length < 2 || apellidos.trim().length < 2 || formData.email.length < 5 || (!editingId && !canCreate('USUARIOS'))}
             >
               {editingId ? 'Actualizar' : 'Crear'} Usuario
             </Button>
