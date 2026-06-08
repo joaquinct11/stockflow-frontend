@@ -60,6 +60,12 @@ const ROL_BADGE: Record<string, string> = {
   GESTOR_INVENTARIO: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
 };
 
+const ROL_LABEL: Record<string, string> = {
+  ADMIN:             'Admin',
+  VENDEDOR:          'Vendedor',
+  GESTOR_INVENTARIO: 'Almacén',
+};
+
 function getInitials(nombre?: string) {
   if (!nombre) return '?';
   const parts = nombre.trim().split(' ');
@@ -375,7 +381,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide',
                 ROL_BADGE[user.rol] ?? 'bg-slate-700 text-slate-300'
               )}>
-                {user.rol}
+                {ROL_LABEL[user.rol] ?? user.rol}
               </span>
             </div>
           </div>

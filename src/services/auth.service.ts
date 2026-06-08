@@ -26,6 +26,7 @@ export interface UserProfile {
   usuarioId: number;
   email: string;
   nombre: string;
+  apellido?: string;
   rol: string;
   tenantId: string;
   createdAt: string | null;
