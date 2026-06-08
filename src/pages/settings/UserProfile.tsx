@@ -114,7 +114,6 @@ export function UserProfile() {
     e.preventDefault();
     if (!profile) return;
 
-    const nuevoNombre = `${editNombres.trim()} ${editApellidos.trim()}`.trim();
     if (editNombres.trim().length < 2) {
       toast.error('Ingresa tus nombres');
       return;
