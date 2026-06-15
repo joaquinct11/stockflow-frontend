@@ -1,6 +1,114 @@
-import type { ComprobanteDTO } from '../types';
+import type { ComprobanteDTO, VentaDTO } from '../types';
 import type { TenantConfigDTO } from '../types';
 import toast from 'react-hot-toast';
+
+export function printVentaTicket(
+  venta: VentaDTO,
+  config?: TenantConfigDTO | null,
+  clienteDni?: string,
+  clienteNombre?: string,
+): void {
+  const empresa = config?.nombreNegocio ?? 'Mi Empresa';
+  const ruc     = config?.ruc ? `RUC: ${config.ruc}` : '';
+  const dir     = config?.direccion ?? '';
+  const tel     = config?.telefono ? `Tel: ${config.telefono}` : '';
+  const pie     = config?.piePaginaPdf ?? '';
+  const moneda  = config?.moneda ?? 'S/.';
+  const igvPct  = config?.igvPorcentaje ?? 18;
+
+  const fecha = venta.createdAt
+    ? new Date(venta.createdAt).toLocaleString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+    : '—';
+
+  const subtotal = venta.detalles.reduce((s, d) => s + d.cantidad * d.precioUnitario, 0);
+  const igvAmt   = subtotal * igvPct / 100 / (1 + igvPct / 100);
+  const base     = subtotal - igvAmt;
+
+  const itemRows = venta.detalles.map(d => {
+    const cant = d.cantidad ?? 0;
+    const pu   = Number(d.precioUnitario ?? 0).toFixed(2);
+    const sub  = (cant * Number(d.precioUnitario ?? 0)).toFixed(2);
+    return `
+      <tr><td colspan="3" style="padding:1px 0;word-break:break-word">${d.productoNombre ?? `Prod #${d.productoId}`}</td></tr>
+      <tr>
+        <td style="padding-bottom:3px">${cant} x ${moneda}${pu}</td>
+        <td></td>
+        <td style="text-align:right;padding-bottom:3px"><b>${moneda}${sub}</b></td>
+      </tr>`;
+  }).join('');
+
+  const receptorBlock = (clienteDni || clienteNombre) ? `
+    <div>
+      ${clienteDni    ? `<p>DNI: ${clienteDni}</p>` : ''}
+      ${clienteNombre ? `<p>${clienteNombre}</p>`   : ''}
+    </div>
+    <div style="border-top:1px dashed #555;margin:5px 0"></div>` : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Ticket Venta #${venta.id}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  @page{size:80mm auto;margin:4mm 3mm}
+  body{font-family:'Courier New',Courier,monospace;font-size:11px;width:74mm;color:#000;line-height:1.35}
+  .center{text-align:center} .bold{font-weight:bold}
+  .sep-solid{border-top:1px solid #000;margin:5px 0}
+  .sep-dashed{border-top:1px dashed #555;margin:5px 0}
+  table{width:100%;border-collapse:collapse} td{vertical-align:top;font-size:11px}
+  .total-box{background:#f5f5f5;border:1px solid #000;padding:4px 6px;margin:4px 0}
+  .total-row td{padding:1px 0} .total-main td{font-size:14px;font-weight:bold;padding-top:3px}
+  @media print{body{width:74mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<div class="center">
+  <p class="bold" style="font-size:14px">${empresa}</p>
+  ${ruc ? `<p>${ruc}</p>` : ''}
+  ${dir ? `<p>${dir}</p>` : ''}
+  ${tel ? `<p>${tel}</p>` : ''}
+</div>
+<div class="sep-solid"></div>
+<div class="center">
+  <p class="bold" style="font-size:12px">TICKET DE VENTA</p>
+  <p class="bold" style="font-size:15px;letter-spacing:1px">#${venta.id}</p>
+  <p style="font-size:10px">Fecha: ${fecha}</p>
+  <p style="font-size:10px">Cajero: ${venta.vendedorNombre ?? '—'}</p>
+  <p style="font-size:10px">Pago: ${venta.metodoPago ?? '—'}</p>
+</div>
+<div class="sep-dashed"></div>
+${receptorBlock}
+<table>
+  <tr><td colspan="3" style="font-weight:bold;border-bottom:1px solid #000;padding-bottom:2px">DESCRIPCIÓN</td></tr>
+  <tr style="font-weight:bold;border-bottom:1px dashed #000">
+    <td>CANT x P.UNIT</td><td></td><td style="text-align:right">SUBTOTAL</td>
+  </tr>
+  ${itemRows}
+</table>
+<div class="sep-solid"></div>
+<div class="total-box">
+  <table class="total-row">
+    <tr><td>Op. Gravada:</td><td style="text-align:right">${moneda}${base.toFixed(2)}</td></tr>
+    <tr><td>IGV (${igvPct}%):</td><td style="text-align:right">${moneda}${igvAmt.toFixed(2)}</td></tr>
+  </table>
+  <div style="border-top:1px dashed #555;margin:5px 0"></div>
+  <table class="total-main">
+    <tr><td>TOTAL:</td><td style="text-align:right">${moneda}${subtotal.toFixed(2)}</td></tr>
+  </table>
+</div>
+<div class="sep-dashed"></div>
+<div class="center" style="font-size:9px;margin-top:4px">
+  ${pie ? `<p>${pie}</p>` : ''}
+  <p>Documento no válido para crédito fiscal</p>
+  <p>Generado con Fluxus ERP</p>
+</div>
+<p style="margin-top:12px">&nbsp;</p>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=340,height=700,scrollbars=yes');
+  if (!win) { toast.error('Permite ventanas emergentes para imprimir el ticket'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 400);
+}
 
 export function printTicket(comprobante: ComprobanteDTO, config?: TenantConfigDTO | null): void {
   const html = buildTicketHtml(comprobante, config);

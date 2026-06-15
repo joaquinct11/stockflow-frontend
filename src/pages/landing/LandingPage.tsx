@@ -334,7 +334,7 @@ export function LandingPage() {
               <div className="landing-pricing-badge">✅ Todo incluido</div>
               <div className="landing-pricing-plan">Plan Básico</div>
               <div className="landing-pricing-price">
-                <span>S/</span>129<sub>/mes</sub>
+                <span>S/</span>89<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
                 14 días de prueba gratuita. Sin tarjeta hasta que decidas quedarte. Cancela cuando quieras.
@@ -357,7 +357,7 @@ export function LandingPage() {
               </ul>
               {/* CTA principal → página de compra (carrito) */}
               <Link to="/plan" className="landing-pricing-cta primary">
-                Contratar Plan Básico — S/ 129/mes
+                Contratar Plan Básico — S/ 89/mes
               </Link>
               <Link to="/register?plan=BASICO" className="landing-pricing-cta" style={{ marginTop: '10px', background: 'transparent', border: '1px solid currentColor', opacity: 0.75 }}>
                 Probar 14 días gratis

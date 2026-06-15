@@ -253,16 +253,16 @@ export function Dashboard() {
   const stats = useMemo(() => {
     const bajoStock = productos.filter((p) => p.stockActual <= p.stockMinimo);
 
-    // ✅ NUEVO: productos próximos a vencer en 30 días (desde movimientos)
+    // productos próximos a vencer en 90 días (desde movimientos)
     const ahora = new Date();
     ahora.setHours(0, 0, 0, 0);
-    
+
     const proximosMes = new Date(ahora);
-    proximosMes.setDate(proximosMes.getDate() + 30);
+    proximosMes.setDate(proximosMes.getDate() + 90);
 
     if (import.meta.env.DEV) { console.log('📅 Debug vencimientos:');}
     if (import.meta.env.DEV) { console.log('   Hoy:', ahora.toLocaleDateString('es-PE'));}
-    if (import.meta.env.DEV) { console.log('   Próximos 30 días hasta:', proximosMes.toLocaleDateString('es-PE'));}
+    if (import.meta.env.DEV) { console.log('   Próximos 90 días hasta:', proximosMes.toLocaleDateString('es-PE'));}
     if (import.meta.env.DEV) { console.log('   Total movimientos:', movimientos.length);}
 
     // Construir mapa de productos por ID
@@ -293,7 +293,7 @@ export function Dashboard() {
         `   Movimiento ${mov.id}: Producto ${mov.productoId}, Vence: ${fv.toLocaleDateString('es-PE')}`
       );}
 
-      // Solo si vence entre hoy y +30 días
+      // Solo si vence entre hoy y +90 días
       if (fv >= ahora && fv <= proximosMes) {
         const prod = productosById.get(mov.productoId);
 
@@ -802,7 +802,7 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* Productos próximos a vencer (30 días) */}
+      {/* Productos próximos a vencer (90 días) */}
       {stats.productosProximosAVencer.length > 0 && (
         <Card className="border-0 shadow-sm animate-fade-in-up-delay-3">
           <CardHeader className="pb-3">
@@ -813,7 +813,7 @@ export function Dashboard() {
               <div>
                 <CardTitle className="text-base">Próximos a Vencer</CardTitle>
                 <CardDescription className="text-xs">
-                  {stats.productosProximosAVencer.length} producto(s) vencen en los próximos 30 días
+                  {stats.productosProximosAVencer.length} producto(s) vencen en los próximos 90 días
                 </CardDescription>
               </div>
             </div>

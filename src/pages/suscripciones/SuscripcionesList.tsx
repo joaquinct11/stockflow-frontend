@@ -114,7 +114,7 @@ export function SuscripcionesList() {
         return;
       }
       setSuscripcionEstado(estado.estado);
-      const precioReal = estado.precioMensual ?? 129;
+      const precioReal = estado.precioMensual ?? 89;
       setSuscripcion({
         planId: estado.planId,
         precioMensual: precioReal,
@@ -218,7 +218,7 @@ export function SuscripcionesList() {
               </div>
               <div>
                 <CardTitle>Plan Básico</CardTitle>
-                <CardDescription>S/. {(suscripcion.precioMensual ?? 129).toFixed(2)} / mes</CardDescription>
+                <CardDescription>S/. {(suscripcion.precioMensual ?? 89).toFixed(2)} / mes</CardDescription>
               </div>
             </div>
             {estadoBadge(suscripcion.estado ?? '', suscripcion.preapprovalId)}

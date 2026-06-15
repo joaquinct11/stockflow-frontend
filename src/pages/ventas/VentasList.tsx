@@ -40,7 +40,7 @@ import {
   SlidersHorizontal,
   Printer,
 } from 'lucide-react';
-import { printTicket } from '../../utils/printTicket';
+import { printVentaTicket } from '../../utils/printTicket';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -88,6 +88,11 @@ export function VentasList() {
 
   const [devolucionVenta, setDevolucionVenta] = useState<VentaDTO | null>(null);
   const [showDevolucion, setShowDevolucion] = useState(false);
+
+  // ── Ticket dialog ────────────────────────────────────────────────────────────
+  const [ticketVenta, setTicketVenta] = useState<VentaDTO | null>(null);
+  const [ticketDni, setTicketDni]     = useState('');
+  const [ticketNombre, setTicketNombre] = useState('');
 
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
@@ -844,6 +849,16 @@ export function VentasList() {
                             >
                               <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
+                            {venta.estado !== 'ANULADA' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Imprimir ticket"
+                                onClick={() => { setTicketVenta(venta); setTicketDni(''); setTicketNombre(''); }}
+                              >
+                                <Printer className="h-4 w-4 text-violet-600" />
+                              </Button>
+                            )}
                             {(venta.estado === 'COMPLETADA' || venta.estado === 'DEVUELTA_PARCIAL') && (
                               <Button
                                 variant="ghost"
@@ -1065,20 +1080,21 @@ export function VentasList() {
                   );
                 })()}
 
-                {(() => {
-                  const comp = comprobantes.find(c => c.ventaId === selectedVenta.id);
-                  if (!comp) return null;
-                  return (
-                    <Button
-                      variant="outline"
-                      className="w-full flex items-center gap-2"
-                      onClick={() => printTicket(comp, negocioConfig)}
-                    >
-                      <Printer size={16} />
-                      Imprimir Ticket
-                    </Button>
-                  );
-                })()}
+                {selectedVenta.estado !== 'ANULADA' && (
+                  <Button
+                    variant="outline"
+                    className="w-full flex items-center gap-2"
+                    onClick={() => {
+                      closeDetailDialog();
+                      setTicketVenta(selectedVenta);
+                      setTicketDni('');
+                      setTicketNombre('');
+                    }}
+                  >
+                    <Printer size={16} />
+                    Imprimir ticket
+                  </Button>
+                )}
 
                 <Button onClick={closeDetailDialog} className="w-full">
                   Cerrar
@@ -1099,6 +1115,55 @@ export function VentasList() {
           }}
         />
       )}
+
+      {/* Dialog — Ticket de venta */}
+      <Dialog
+        isOpen={!!ticketVenta}
+        onClose={() => setTicketVenta(null)}
+        title="Imprimir ticket"
+        description={ticketVenta ? `Venta #${ticketVenta.id} · S/.${ticketVenta.total.toFixed(2)}` : ''}
+        size="sm"
+      >
+        {ticketVenta && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Agrega los datos del cliente al ticket (opcional).</p>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-muted-foreground">DNI (opcional)</label>
+                <Input
+                  placeholder="12345678"
+                  maxLength={8}
+                  value={ticketDni}
+                  onChange={e => setTicketDni(e.target.value.replace(/\D/g, ''))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-muted-foreground">Nombre (opcional)</label>
+                <Input
+                  placeholder="Juan Pérez"
+                  value={ticketNombre}
+                  onChange={e => setTicketNombre(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2 border-t">
+              <Button variant="outline" className="flex-1" onClick={() => setTicketVenta(null)}>
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 gap-2"
+                onClick={() => {
+                  printVentaTicket(ticketVenta, negocioConfig, ticketDni.trim() || undefined, ticketNombre.trim() || undefined);
+                  setTicketVenta(null);
+                }}
+              >
+                <Printer size={15} />
+                Imprimir
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
 
       {/* Confirm Dialog */}
       <ConfirmDialog

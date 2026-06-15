@@ -45,6 +45,7 @@ export function InventarioList() {
   const { userId, tenantId } = useCurrentUser();
   const { canCreate, canView } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
+  const esFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
   const hasViewPermission = canView('INVENTARIO');
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
@@ -91,6 +92,7 @@ export function InventarioList() {
     costoUnitario: undefined,
     lote: '',
     fechaVencimiento: undefined,
+    registroSanitario: '',
   });
 
   useEffect(() => {
@@ -284,6 +286,7 @@ export function InventarioList() {
       costoUnitario: undefined,
       lote: '',
       fechaVencimiento: undefined,
+      registroSanitario: '',
     });
     setSelectedProducto(null);
     setSelectedProveedorMov(null);
@@ -625,7 +628,6 @@ export function InventarioList() {
                     {([
                       { key: 'todos',      label: 'Todos' },
                       { key: 'vencidos',   label: 'Vencidos' },
-                      { key: 'proximos30', label: 'Próx. 30 días' },
                       { key: 'proximos90', label: 'Próx. 90 días' },
                     ] as const).map((f) => (
                       <button
@@ -678,6 +680,7 @@ export function InventarioList() {
                             <TableHead>Producto</TableHead>
                             <TableHead>Lote</TableHead>
                             <TableHead>Fecha venc.</TableHead>
+                            {esFarmacia && <TableHead>Reg. Sanitario</TableHead>}
                             <TableHead className="text-center">Cant. recibida</TableHead>
                             <TableHead className="text-center">Días restantes</TableHead>
                             <TableHead className="text-center">Estado</TableHead>
@@ -688,24 +691,21 @@ export function InventarioList() {
                             const dias = l.diasRestantes;
                             const vencido    = dias < 0;
                             const critico    = !vencido && dias <= 7;
-                            const proximo30  = !vencido && dias <= 30;
                             const proximo90  = !vencido && dias <= 90;
 
                             const estadoBadge = vencido
                               ? <Badge variant="destructive">Vencido</Badge>
                               : critico
                               ? <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">Crítico</span>
-                              : proximo30
-                              ? <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">Próx. 30d</span>
                               : proximo90
-                              ? <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20">Próx. 90d</span>
+                              ? <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">Próx. 90d</span>
                               : <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">Vigente</span>;
 
                             const rowBg = vencido
                               ? 'bg-red-500/5'
                               : critico
                               ? 'bg-red-500/5'
-                              : proximo30
+                              : proximo90
                               ? 'bg-amber-500/5'
                               : '';
 
@@ -730,11 +730,16 @@ export function InventarioList() {
                                     day: '2-digit', month: 'short', year: 'numeric',
                                   })}
                                 </TableCell>
+                                {esFarmacia && (
+                                  <TableCell className="text-sm font-mono">
+                                    {l.registroSanitario || <span className="text-muted-foreground text-xs italic">—</span>}
+                                  </TableCell>
+                                )}
                                 <TableCell className="text-center text-sm font-semibold">
                                   {l.cantidad}
                                 </TableCell>
                                 <TableCell className="text-center text-sm font-semibold">
-                                  <span className={vencido ? 'text-red-600' : critico ? 'text-red-500' : proximo30 ? 'text-amber-600' : 'text-emerald-600'}>
+                                  <span className={vencido ? 'text-red-600' : critico ? 'text-red-500' : proximo90 ? 'text-amber-600' : 'text-emerald-600'}>
                                     {vencido ? `Hace ${Math.abs(dias)} días` : `${dias} días`}
                                   </span>
                                 </TableCell>
@@ -845,6 +850,7 @@ export function InventarioList() {
                               costoUnitario: undefined,
                               lote: '',
                               fechaVencimiento: undefined,
+                              registroSanitario: '',
                             }),
                           });
                           setSelectedProveedorMov(null);
@@ -882,6 +888,7 @@ export function InventarioList() {
                         costoUnitario: undefined,
                         lote: '',
                         fechaVencimiento: undefined,
+                        registroSanitario: '',
                       }),
                     });
                     setSelectedProveedorMov(null);
@@ -956,6 +963,22 @@ export function InventarioList() {
                         onChange={(e) => setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })}
                       />
                     </div>
+
+                    {/* Registro sanitario — solo para BOTICA/FARMACIA */}
+                    {esFarmacia && (
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-sm font-medium">
+                          Registro Sanitario <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="text"
+                          value={formData.registroSanitario ?? ''}
+                          onChange={(e) => setFormData({ ...formData, registroSanitario: e.target.value })}
+                          placeholder="Ej: D.G.S.P. N° 23456-2024"
+                        />
+                        <p className="text-xs text-muted-foreground">Requerido por DIGEMID para productos farmacéuticos.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -123,6 +123,8 @@ export interface ProductoDTO {
   unidadMedidaNombre?: string;
   /** URL de imagen del producto (opcional). Null → fallback con letra del nombre. */
   imagenUrl?: string;
+  /** Fecha del lote más próximo a vencer. Solo lectura, calculado por el backend. */
+  proximaFechaVencimiento?: string;
 }
 
 // ========================================
@@ -278,14 +280,8 @@ export interface TenantConfigDTO {
   piePaginaPdf?: string;
   serieBoleta?: string;
   serieFactura?: string;
-  /** URL base del OSE (Nubefact / Efact). Ej: https://api.nubefact.com/api/v1/{slug} */
-  oseUrl?: string;
-  /**
-   * Token API del OSE.
-   * El backend devuelve el valor enmascarado (••••••últimos6chars) en GET.
-   * Enviar vacío = mantener el existente; enviar nuevo valor = actualizarlo.
-   */
-  oseToken?: string;
+  /** Rubro del negocio: BOTICA | FARMACIA | MINIMARKET | FERRETERIA | RESTAURANTE | TIENDA | OTRO */
+  rubro?: string;
 }
 
 // ✅ NUEVO
@@ -328,6 +324,7 @@ export interface MovimientoInventarioDTO {
   costoUnitario?: number;
   lote?: string;
   fechaVencimiento?: string;
+  registroSanitario?: string;
 }
 
 /** Tipos de movimiento que se muestran en la lista principal de Movimientos Inventario */
@@ -473,6 +470,7 @@ export interface OrdenCompraDTO {
   id?: number;
   proveedorId: number;
   proveedorNombre?: string;
+  proveedorTelefono?: string;
   estado: EstadoOC;
   observaciones?: string;
   tenantId?: string;
@@ -505,6 +503,7 @@ export interface RecepcionItemDTO {
   precioUnitario?: number;
   fechaVencimiento?: string;
   lote?: string;
+  registroSanitario?: string;
 }
 
 export interface RecepcionDTO {

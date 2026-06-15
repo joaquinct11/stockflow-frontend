@@ -37,6 +37,7 @@ import {
   X,
   FileDown,
   SlidersHorizontal,
+  MessageCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -117,6 +118,25 @@ export function OrdenComprasList() {
     } catch {
       toast.error('No se pudo descargar el PDF');
     }
+  };
+
+  const enviarWhatsApp = (oc: OrdenCompraDTO) => {
+    const digits = (oc.proveedorTelefono ?? '').replace(/\D/g, '');
+    if (!digits) {
+      toast.error('Este proveedor no tiene teléfono registrado. Agrégalo en Proveedores.');
+      return;
+    }
+    const phone = digits.startsWith('51') ? digits : `51${digits}`;
+    const fecha = oc.createdAt ? new Date(oc.createdAt).toLocaleDateString('es-PE') : '';
+    const msg = [
+      `Estimado proveedor, le enviamos la Orden de Compra N° ${String(oc.id).padStart(5, '0')}${fecha ? ` del ${fecha}` : ''}.`,
+      '',
+      'Le adjuntamos el PDF con el detalle completo.',
+      '',
+      'Por favor confirmar disponibilidad y fecha de entrega.',
+    ].join('\n');
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    toast.success('Recuerda adjuntar el PDF de la OC antes de enviar', { duration: 5000 });
   };
 
   // Confirm dialog state (cancelar OC)
@@ -1103,16 +1123,27 @@ export function OrdenComprasList() {
 
             {/* Actions */}
             <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-between pt-2 border-t">
-              {/* Izquierda: descargar PDF */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => selectedOc?.id != null && descargarPdfOC(selectedOc.id)}
-                className="text-muted-foreground"
-              >
-                <FileDown size={15} className="mr-2 text-red-500" />
-                Descargar PDF
-              </Button>
+              {/* Izquierda: PDF + WhatsApp */}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => selectedOc?.id != null && descargarPdfOC(selectedOc.id)}
+                  className="text-muted-foreground"
+                >
+                  <FileDown size={15} className="mr-2 text-red-500" />
+                  Descargar PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => enviarWhatsApp(selectedOc)}
+                  className="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 dark:border-green-800 dark:hover:bg-green-950"
+                >
+                  <MessageCircle size={15} className="mr-2" />
+                  Enviar por WhatsApp
+                </Button>
+              </div>
 
               {/* Derecha: acciones de estado */}
               <div className="flex flex-col-reverse sm:flex-row gap-2">
