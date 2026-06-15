@@ -98,7 +98,7 @@ export function TerminosPage() {
 
       <LegalSection num={5} title="Precios y facturación">
         <p style={p}>
-          El Plan Básico tiene un precio de <span style={strong}>S/ 129.00 (IGV incluido)</span> por
+          El Plan Básico tiene un precio de <span style={strong}>S/ 89.00 (IGV incluido)</span> por
           mes calendario. Los precios se expresan en Soles peruanos (PEN) e incluyen el Impuesto
           General a las Ventas (IGV 18%).
         </p>

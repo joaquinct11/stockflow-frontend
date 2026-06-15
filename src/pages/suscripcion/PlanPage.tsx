@@ -20,9 +20,9 @@ const FEATURES = [
 ];
 
 // Precio en soles (sin IGV + IGV = total)
-const PRECIO_SIN_IGV = 109.32;
-const IGV             = 19.68;
-const PRECIO_TOTAL    = 129.00;
+const PRECIO_SIN_IGV = 75.42;
+const IGV             = 13.58;
+const PRECIO_TOTAL    = 89.00;
 
 export function PlanPage() {
   return (

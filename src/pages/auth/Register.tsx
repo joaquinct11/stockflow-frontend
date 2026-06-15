@@ -190,7 +190,7 @@ export function Register() {
                 Todo incluido · POS, inventario, compras, facturación, reportes y más
               </p>
             </div>
-            <p className="text-sm font-bold text-primary shrink-0">S/ 129<span className="font-normal text-muted-foreground">/mes</span></p>
+            <p className="text-sm font-bold text-primary shrink-0">S/ 89<span className="font-normal text-muted-foreground">/mes</span></p>
           </div>
 
           {/* Separador */}

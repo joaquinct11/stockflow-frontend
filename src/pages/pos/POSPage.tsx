@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ScanLine, X, Plus, Minus, Trash2, ShoppingCart,
@@ -288,6 +288,25 @@ export function POSPage() {
     }, 200);
     return () => clearTimeout(t);
   }, [query, todosProductos]);
+
+  // ── Grid ordenado: próximos a vencer primero ─────────────────────────────
+  const productosDisponibles = useMemo(() => {
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const limite = new Date(hoy); limite.setDate(limite.getDate() + 90);
+
+    return todosProductos
+      .filter(p => p.activo !== false && (p.stockActual ?? 0) > 0)
+      .sort((a, b) => {
+        const fvA = a.proximaFechaVencimiento ? new Date(a.proximaFechaVencimiento + 'T00:00:00') : null;
+        const fvB = b.proximaFechaVencimiento ? new Date(b.proximaFechaVencimiento + 'T00:00:00') : null;
+        const aProximo = fvA && fvA >= hoy && fvA <= limite;
+        const bProximo = fvB && fvB >= hoy && fvB <= limite;
+        if (aProximo && !bProximo) return -1;
+        if (!aProximo && bProximo) return 1;
+        if (aProximo && bProximo) return fvA!.getTime() - fvB!.getTime();
+        return 0;
+      });
+  }, [todosProductos]);
 
   // ── Búsqueda exacta por código de barras (lector) ────────────────────────
   const buscarPorCodigo = useCallback((codigo: string) => {
@@ -1127,29 +1146,61 @@ export function POSPage() {
               </div>
             )}
             {/* Grid rápido */}
-            {resultados.length === 0 && query === '' && (
+            {resultados.length === 0 && query === '' && productosDisponibles.length === 0 && (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
+                <div className="h-16 w-16 rounded-2xl bg-gray-800 flex items-center justify-center mb-1">
+                  <span className="text-3xl">📦</span>
+                </div>
+                <p className="text-gray-300 font-medium">Sin productos con stock</p>
+                <p className="text-gray-500 text-sm max-w-xs">Ve a <strong>Inventario → Productos</strong> para agregar productos y asignarles stock antes de usar el POS.</p>
+              </div>
+            )}
+            {resultados.length === 0 && query === '' && productosDisponibles.length > 0 && (
               <div className="flex-1 overflow-y-auto p-3">
                 <p className="text-xs text-gray-600 uppercase tracking-wider mb-2 px-1">Productos disponibles</p>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {todosProductos.filter(p => p.activo !== false && (p.stockActual ?? 0) > 0).slice(0, 16).map(p => (
-                    <button key={p.id} onClick={() => agregarAlCarrito(p)}
-                      className="flex flex-col rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-primary/40 text-left transition-all overflow-hidden group"
-                    >
-                      {/* Imagen grande */}
-                      <div className="w-full h-28 bg-gray-800 flex items-center justify-center overflow-hidden group-hover:brightness-110 transition-all flex-shrink-0">
-                        {p.imagenUrl
-                          ? <img src={p.imagenUrl} alt={p.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display='flex'); }} />
-                          : null}
-                        <span className={`text-4xl font-bold text-gray-700 ${p.imagenUrl ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}>{p.nombre.charAt(0).toUpperCase()}</span>
-                      </div>
-                      {/* Info */}
-                      <div className="p-2.5">
-                        <p className="text-xs font-medium leading-snug line-clamp-2 mb-1">{p.nombre}</p>
-                        <p className="text-sm font-bold text-primary">{fmt(p.precioVenta ?? 0)}</p>
-                        <p className="text-[10px] text-gray-600 mt-0.5">Stock: {p.stockActual}</p>
-                      </div>
-                    </button>
-                  ))}
+                  {productosDisponibles.slice(0, 20).map(p => {
+                    const hoy = new Date(); hoy.setHours(0,0,0,0);
+                    const limite90 = new Date(hoy); limite90.setDate(limite90.getDate() + 90);
+                    const fv = p.proximaFechaVencimiento ? new Date(p.proximaFechaVencimiento + 'T00:00:00') : null;
+                    const diasRestantes = fv ? Math.ceil((fv.getTime() - hoy.getTime()) / 86400000) : null;
+                    const porVencer = fv && fv >= hoy && fv <= limite90;
+                    const critico   = diasRestantes !== null && diasRestantes <= 7;
+                    return (
+                      <button key={p.id} onClick={() => agregarAlCarrito(p)}
+                        className={`flex flex-col rounded-xl border text-left transition-all overflow-hidden group relative
+                          ${porVencer
+                            ? 'bg-amber-950/40 hover:bg-amber-900/40 border-amber-700/50 hover:border-amber-500'
+                            : 'bg-gray-900 hover:bg-gray-800 border-gray-800 hover:border-primary/40'}`}
+                      >
+                        {/* Badge vencimiento */}
+                        {porVencer && (
+                          <span className={`absolute top-1.5 right-1.5 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded-full
+                            ${critico ? 'bg-red-500 text-white' : 'bg-amber-500 text-black'}`}>
+                            {critico ? `¡${diasRestantes}d!` : `${diasRestantes}d`}
+                          </span>
+                        )}
+                        {/* Imagen */}
+                        <div className="w-full h-28 bg-gray-800 flex items-center justify-center overflow-hidden group-hover:brightness-110 transition-all flex-shrink-0">
+                          {p.imagenUrl
+                            ? <img src={p.imagenUrl} alt={p.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display='flex'); }} />
+                            : null}
+                          <span className={`text-4xl font-bold text-gray-700 ${p.imagenUrl ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}>{p.nombre.charAt(0).toUpperCase()}</span>
+                        </div>
+                        {/* Info */}
+                        <div className="p-2.5">
+                          <p className="text-xs font-medium leading-snug line-clamp-2 mb-1">{p.nombre}</p>
+                          <p className="text-sm font-bold text-primary">{fmt(p.precioVenta ?? 0)}</p>
+                          <p className="text-[10px] text-gray-600 mt-0.5">Stock: {p.stockActual}</p>
+                          {porVencer && (
+                            <p className={`text-[9px] font-semibold mt-0.5 ${critico ? 'text-red-400' : 'text-amber-400'}`}>
+                              Vence {fv!.toLocaleDateString('es-PE', { day:'2-digit', month:'short' })}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

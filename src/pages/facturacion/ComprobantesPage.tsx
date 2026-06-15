@@ -14,11 +14,10 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, Printer, X, Send, Download, SlidersHorizontal, AlertTriangle } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, X, Send, Download, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
-import { printTicket } from '../../utils/printTicket';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 const TIPO_OPTIONS: TipoComprobante[] = ['BOLETA', 'FACTURA'];
@@ -370,13 +369,7 @@ export function ComprobantesPage() {
       subtitle: `${v.vendedorNombre ?? ''} · ${v.metodoPago}${v.createdAt ? ' · ' + new Date(v.createdAt).toLocaleDateString('es-PE') : ''}`,
     }));
 
-  const oseNombre = (() => {
-    const url = (tenantConfig?.oseUrl ?? '').toLowerCase();
-    if (url.includes('nubefact')) return 'Nubefact';
-    if (url.includes('efact'))   return 'Efact';
-    if (url.includes('sunat'))   return 'SUNAT SOL';
-    return 'tu proveedor OSE';
-  })();
+  const oseNombre = 'ApiSunat';
 
   if (!canView) {
     return (
@@ -759,14 +752,6 @@ export function ComprobantesPage() {
                                 ? <span className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin inline-block" />
                                 : <Download className="h-4 w-4 text-slate-500" />
                               }
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              title="Imprimir ticket"
-                              onClick={() => printTicket(c, tenantConfig)}
-                            >
-                              <Printer className="h-4 w-4 text-slate-500" />
                             </Button>
                             {c.estado === 'EMITIDO' && c.sunatEstado !== 'ACEPTADO' && (
                               <Button
@@ -1189,14 +1174,6 @@ export function ComprobantesPage() {
               >
                 <Download size={15} />
                 {downloadingPdf === selectedComprobante.id ? 'Generando...' : 'Descargar PDF'}
-              </Button>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => printTicket(selectedComprobante, tenantConfig)}
-                title="Imprimir ticket"
-              >
-                <Printer size={15} />
               </Button>
               {selectedComprobante.estado === 'EMITIDO' && selectedComprobante.sunatEstado !== 'ACEPTADO' && (
                 <Button

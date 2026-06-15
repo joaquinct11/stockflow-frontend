@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 type Option = { id: number | string; label: string; subtitle?: string };
 type EstadoRecepFilter = 'TODOS' | 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
@@ -57,6 +58,7 @@ function normalizeRecepcion(raw: any): RecepcionDTO {
     precioUnitario: d.precioUnitario,
     fechaVencimiento: d.fechaVencimiento,
     lote: d.lote,
+    registroSanitario: d.registroSanitario,
   }));
 
   const hasComp = !!raw?.tipoComprobante && !!raw?.serie && !!raw?.numero;
@@ -113,6 +115,8 @@ function Stepper({ items, comprobante }: { items: RecepcionItemDTO[]; comprobant
 
 export function RecepcionList() {
   const { canCreate, canView, canEdit, puede } = usePermissions();
+  const rubro = useTenantConfigStore((s) => s.config?.rubro ?? 'OTRO');
+  const esFarmacia = rubro === 'BOTICA' || rubro === 'FARMACIA';
 
   const hasViewPermission = canView('RECEPCIONES') || canView('INVENTARIO');
   const canCreateRecep   = canCreate('RECEPCIONES') || puede('CREAR_RECEPCION');
@@ -153,15 +157,17 @@ export function RecepcionList() {
 
   // Add item (formulario extra — solo para productos fuera de la OC)
   const [selectedProductoId, setSelectedProductoId] = useState<number | null>(null);
-  const [itemQty, setItemQty]       = useState<number>(1);
-  const [itemExpiry, setItemExpiry] = useState('');
-  const [itemLote, setItemLote]     = useState('');
+  const [itemQty, setItemQty]           = useState<number>(1);
+  const [itemExpiry, setItemExpiry]     = useState('');
+  const [itemLote, setItemLote]         = useState('');
+  const [itemRegSan, setItemRegSan]     = useState('');
   const [showAddProduct, setShowAddProduct] = useState(false);
 
   // Edición inline de la tabla de productos
   const [editQty, setEditQty]           = useState<Record<number, number>>({});
   const [editVenc, setEditVenc]         = useState<Record<number, string>>({});
   const [editLote, setEditLote]         = useState<Record<number, string>>({});
+  const [editRegSan, setEditRegSan]     = useState<Record<number, string>>({});
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
 
   // Comprobante
@@ -388,28 +394,37 @@ export function RecepcionList() {
     const initQty: Record<number, number> = {};
     const initVenc: Record<number, string> = {};
     const initLote: Record<number, string> = {};
+    const initRegSan: Record<number, string> = {};
     for (const it of selectedRecep.items ?? []) {
-      initQty[it.productoId]  = it.cantidadRecibida ?? 0;
-      initVenc[it.productoId] = it.fechaVencimiento ?? '';
-      initLote[it.productoId] = it.lote ?? '';
+      initQty[it.productoId]    = it.cantidadRecibida ?? 0;
+      initVenc[it.productoId]   = it.fechaVencimiento ?? '';
+      initLote[it.productoId]   = it.lote ?? '';
+      initRegSan[it.productoId] = it.registroSanitario ?? '';
     }
     setEditQty(initQty);
     setEditVenc(initVenc);
     setEditLote(initLote);
+    setEditRegSan(initRegSan);
   }, [selectedRecep]);
 
   const closeDetail = () => {
     setIsDetailOpen(false); setSelectedRecepId(null); setSelectedRecep(null);
-    setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote('');
-    setShowAddProduct(false); setEditQty({}); setEditVenc({}); setEditLote({});
+    setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote(''); setItemRegSan('');
+    setShowAddProduct(false); setEditQty({}); setEditVenc({}); setEditLote({}); setEditRegSan({});
   };
 
   // Guardar cantidad inline de una fila de la tabla
   const handleInlineSave = async (item: RecepcionItemDTO) => {
     if (!selectedRecep?.id) return;
-    const qty  = editQty[item.productoId]  ?? item.cantidadRecibida ?? 0;
-    const venc = editVenc[item.productoId] ?? item.fechaVencimiento ?? '';
-    const lote = editLote[item.productoId] ?? item.lote ?? '';
+    const qty    = editQty[item.productoId]    ?? item.cantidadRecibida ?? 0;
+    const venc   = editVenc[item.productoId]   ?? item.fechaVencimiento ?? '';
+    const lote   = editLote[item.productoId]   ?? item.lote ?? '';
+    const regSan = editRegSan[item.productoId] ?? item.registroSanitario ?? '';
+    if (esFarmacia && qty > 0) {
+      if (!venc)   { toast.error('La fecha de vencimiento es obligatoria'); return; }
+      if (!lote)   { toast.error('El lote es obligatorio'); return; }
+      if (!regSan) { toast.error('El registro sanitario es obligatorio'); return; }
+    }
     setSavingItemId(item.productoId);
     try {
       await recepcionService.upsertItem(selectedRecep.id, {
@@ -417,6 +432,7 @@ export function RecepcionList() {
         cantidadRecibida: qty,
         fechaVencimiento: venc || undefined,
         lote: lote || undefined,
+        registroSanitario: regSan || undefined,
       });
       await refreshDetail();
       toast.success('Producto actualizado');
@@ -427,9 +443,10 @@ export function RecepcionList() {
 
   // Restablecer fila a cantidad 0 sin vencimiento ni lote (requiere guardar para persistir)
   const handleInlineReset = (item: RecepcionItemDTO) => {
-    setEditQty(prev  => ({ ...prev,  [item.productoId]: 0 }));
-    setEditVenc(prev => ({ ...prev,  [item.productoId]: '' }));
-    setEditLote(prev => ({ ...prev,  [item.productoId]: '' }));
+    setEditQty(prev    => ({ ...prev, [item.productoId]: 0 }));
+    setEditVenc(prev   => ({ ...prev, [item.productoId]: '' }));
+    setEditLote(prev   => ({ ...prev, [item.productoId]: '' }));
+    setEditRegSan(prev => ({ ...prev, [item.productoId]: '' }));
   };
 
   // Marcar todos los productos como completamente recibidos (qty = esperado)
@@ -460,6 +477,11 @@ export function RecepcionList() {
   const handleAddItem = async () => {
     if (!selectedRecep?.id || !selectedProducto) { toast.error('Selecciona un producto'); return; }
     if (itemQty <= 0) { toast.error('La cantidad debe ser mayor a 0'); return; }
+    if (esFarmacia) {
+      if (!itemExpiry) { toast.error('La fecha de vencimiento es obligatoria'); return; }
+      if (!itemLote)   { toast.error('El lote es obligatorio'); return; }
+      if (!itemRegSan) { toast.error('El registro sanitario es obligatorio'); return; }
+    }
     setDetailActionLoading(true);
     try {
       await recepcionService.upsertItem(selectedRecep.id, {
@@ -467,9 +489,10 @@ export function RecepcionList() {
         cantidadRecibida: itemQty,
         fechaVencimiento: itemExpiry || undefined,
         lote: itemLote || undefined,
+        registroSanitario: itemRegSan || undefined,
       });
       await refreshDetail();
-      setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote('');
+      setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote(''); setItemRegSan('');
       toast.success('Producto guardado');
     } catch (e: any) {
       toast.error(e?.response?.data?.mensaje ?? 'Error al guardar producto');
@@ -520,6 +543,15 @@ export function RecepcionList() {
     }
     if ((selectedRecep.items ?? []).length === 0) {
       toast.error('Agrega al menos un producto'); return;
+    }
+    if (esFarmacia) {
+      const sinDatos = (selectedRecep.items ?? []).filter(
+        it => (it.cantidadRecibida ?? 0) > 0 && (!it.fechaVencimiento || !it.lote || !it.registroSanitario)
+      );
+      if (sinDatos.length > 0) {
+        toast.error(`${sinDatos.length} producto(s) sin lote, vencimiento o registro sanitario. Guarda cada fila antes de confirmar.`);
+        return;
+      }
     }
     setDetailActionLoading(true);
     try {
@@ -574,6 +606,7 @@ export function RecepcionList() {
           cantidadRecibida: nuevaQty,
           fechaVencimiento: itemEnRecep.fechaVencimiento || undefined,
           lote: itemEnRecep.lote || undefined,
+          registroSanitario: itemEnRecep.registroSanitario || undefined,
         });
         const updated = normalizeRecepcion(await recepcionService.getById(selectedRecep.id));
         setSelectedRecep(updated);
@@ -1181,6 +1214,7 @@ export function RecepcionList() {
                       <TableHead className="text-center">Estado</TableHead>
                       <TableHead>Vencimiento</TableHead>
                       <TableHead>Lote</TableHead>
+                      {esFarmacia && <TableHead>Reg. Sanitario{isEditable && <span className="text-destructive ml-0.5">*</span>}</TableHead>}
                       {isEditable && canEditRecep && <TableHead />}
                     </TableRow>
                   </TableHeader>
@@ -1273,13 +1307,28 @@ export function RecepcionList() {
                                 type="text"
                                 value={editLote[it.productoId] ?? ''}
                                 onChange={(e) => setEditLote(prev => ({ ...prev, [it.productoId]: e.target.value }))}
-                                placeholder="Opc."
-                                className="w-20 text-xs border rounded px-1.5 py-1 bg-background focus:outline-none focus:border-primary"
+                                placeholder={esFarmacia ? 'Requerido' : 'Opc.'}
+                                className={`w-20 text-xs border rounded px-1.5 py-1 bg-background focus:outline-none focus:border-primary ${esFarmacia && !(editLote[it.productoId] ?? it.lote) ? 'border-amber-400' : ''}`}
                               />
                             ) : (
                               <span className="text-xs">{it.lote || '—'}</span>
                             )}
                           </TableCell>
+                          {esFarmacia && (
+                            <TableCell>
+                              {isEditable && canEditRecep ? (
+                                <input
+                                  type="text"
+                                  value={editRegSan[it.productoId] ?? ''}
+                                  onChange={(e) => setEditRegSan(prev => ({ ...prev, [it.productoId]: e.target.value }))}
+                                  placeholder="Requerido"
+                                  className={`w-28 text-xs border rounded px-1.5 py-1 bg-background focus:outline-none focus:border-primary ${!(editRegSan[it.productoId] ?? it.registroSanitario) ? 'border-amber-400' : ''}`}
+                                />
+                              ) : (
+                                <span className="text-xs">{it.registroSanitario || '—'}</span>
+                              )}
+                            </TableCell>
+                          )}
                           {isEditable && canEditRecep && (
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-1">
@@ -1393,10 +1442,21 @@ export function RecepcionList() {
                       onChange={(e) => setItemExpiry(e.target.value)} className="h-9" />
                   </div>
                   <div className="w-32">
-                    <label className="text-xs text-muted-foreground mb-1 block">Lote</label>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Lote{esFarmacia && <span className="text-destructive ml-0.5">*</span>}
+                    </label>
                     <Input value={itemLote} onChange={(e) => setItemLote(e.target.value)}
-                      placeholder="Opc." className="h-9" />
+                      placeholder={esFarmacia ? 'Requerido' : 'Opc.'} className="h-9" />
                   </div>
+                  {esFarmacia && (
+                    <div className="w-36">
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        Reg. Sanitario<span className="text-destructive ml-0.5">*</span>
+                      </label>
+                      <Input value={itemRegSan} onChange={(e) => setItemRegSan(e.target.value)}
+                        placeholder="Requerido" className="h-9" />
+                    </div>
+                  )}
                   <Button onClick={handleAddItem} disabled={detailActionLoading || !selectedProducto} className="h-9">
                     <PackagePlus size={14} className="mr-1" /> Guardar
                   </Button>
