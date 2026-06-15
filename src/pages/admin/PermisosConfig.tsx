@@ -15,9 +15,11 @@ import toast from 'react-hot-toast';
 // ─── Labels de permisos ───────────────────────────────────────────────────────
 const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   VER_VENTAS:               { label: 'Ver todas las ventas',             descripcion: 'Historial completo de ventas del negocio' },
+  VER_MIS_VENTAS:           { label: 'Ver mis ventas',                   descripcion: 'Consultar el historial de las propias ventas' },
   CREAR_VENTA:              { label: 'Realizar ventas en el POS',        descripcion: 'Abrir el POS y registrar ventas' },
   VER_DETALLE_VENTA:        { label: 'Ver detalle de una venta',         descripcion: 'Consultar el detalle de cualquier venta' },
-  ELIMINAR_VENTA:           { label: 'Eliminar ventas',                  descripcion: 'Borrar ventas registradas' },
+  ANULAR_VENTA:             { label: 'Anular ventas',                    descripcion: 'Anular ventas registradas (revierte el stock automáticamente)' },
+  ELIMINAR_VENTA:           { label: 'Eliminar ventas (legacy)',         descripcion: 'Acceso heredado — también permite anular ventas' },
   VER_CAJA:                 { label: 'Ver el módulo Caja',               descripcion: 'Acceder a la pantalla de caja' },
   ABRIR_CAJA:               { label: 'Abrir turno de caja',              descripcion: 'Iniciar un turno de caja' },
   CERRAR_CAJA:              { label: 'Cerrar turno de caja',             descripcion: 'Cerrar y cuadrar la caja' },
@@ -61,12 +63,13 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   VER_USUARIOS:             { label: 'Ver listado de usuarios',          descripcion: 'Consultar los usuarios registrados' },
   CREAR_USUARIO:            { label: 'Crear usuarios',                   descripcion: 'Invitar y crear nuevos colaboradores' },
   EDITAR_USUARIO:           { label: 'Editar usuarios',                  descripcion: 'Modificar datos y rol de un usuario' },
+  ELIMINAR_USUARIO:         { label: 'Eliminar usuarios',               descripcion: 'Borrar usuarios del sistema permanentemente' },
   CAMBIAR_ESTADO_USUARIO:   { label: 'Activar / desactivar usuarios',    descripcion: 'Habilitar o inhabilitar el acceso de un usuario' },
 };
 
 // ─── Grupos ───────────────────────────────────────────────────────────────────
 const PERMISSION_GROUPS: { label: string; color: string; icon: React.ReactNode; codes: string[] }[] = [
-  { label: 'Ventas',           color: 'emerald', icon: <ShoppingCart size={15} />, codes: ['VER_VENTAS','CREAR_VENTA','VER_DETALLE_VENTA','ELIMINAR_VENTA'] },
+  { label: 'Ventas',           color: 'emerald', icon: <ShoppingCart size={15} />, codes: ['VER_VENTAS','VER_MIS_VENTAS','CREAR_VENTA','VER_DETALLE_VENTA','ANULAR_VENTA','ELIMINAR_VENTA'] },
   { label: 'Caja',             color: 'blue',    icon: <Wallet       size={15} />, codes: ['VER_CAJA','ABRIR_CAJA','CERRAR_CAJA'] },
   { label: 'Clientes',         color: 'violet',  icon: <Users        size={15} />, codes: ['VER_CLIENTES','CREAR_CLIENTE','EDITAR_CLIENTE','CAMBIAR_ESTADO_CLIENTE','ELIMINAR_CLIENTE'] },
   { label: 'Devoluciones y NC',color: 'orange',  icon: <RotateCcw    size={15} />, codes: ['VER_DEVOLUCIONES','CREAR_DEVOLUCION','VER_NOTAS_CREDITO','EMITIR_NOTA_CREDITO'] },
@@ -78,7 +81,7 @@ const PERMISSION_GROUPS: { label: string; color: string; icon: React.ReactNode; 
   { label: 'Recepciones',      color: 'lime',    icon: <ClipboardCheck size={15} />, codes: ['VER_RECEPCIONES','CREAR_RECEPCION','CONFIRMAR_RECEPCION'] },
   { label: 'Gastos',           color: 'rose',    icon: <Wallet       size={15} />, codes: ['VER_GASTOS','CREAR_GASTO','EDITAR_GASTO','ELIMINAR_GASTO'] },
   { label: 'Reportes',         color: 'purple',  icon: <BarChart3    size={15} />, codes: ['VER_REPORTES'] },
-  { label: 'Usuarios',         color: 'slate',   icon: <Users        size={15} />, codes: ['VER_USUARIOS','CREAR_USUARIO','EDITAR_USUARIO','CAMBIAR_ESTADO_USUARIO'] },
+  { label: 'Usuarios',         color: 'slate',   icon: <Users        size={15} />, codes: ['VER_USUARIOS','CREAR_USUARIO','EDITAR_USUARIO','CAMBIAR_ESTADO_USUARIO','ELIMINAR_USUARIO'] },
 ];
 
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string; iconBg: string }> = {

@@ -9,7 +9,7 @@ import { usuarioService } from '../../services/usuario.service';
 import { tenantConfigService } from '../../services/tenantConfig.service';
 import {
   Trash2, AlertTriangle, Building2, Upload, X, Save,
-  Percent, FileText, Phone, Mail, MapPin, Hash, Receipt, Zap, CheckCircle2,
+  Percent, FileText, Phone, Mail, MapPin, Hash, Receipt,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { DeleteAccountValidationDTO, TenantConfigDTO } from '../../types';
@@ -26,13 +26,12 @@ export function AccountSettings() {
   // ── Config ─────────────────────────────────────────────────────────────────
   const [configLoading, setConfigLoading] = useState(true);
   const [saving, setSaving]               = useState(false);
-  const [oseTokenGuardado, setOseTokenGuardado] = useState(false);
   const [logoPreview, setLogoPreview]     = useState<string | null>(null);
   const [form, setForm] = useState<TenantConfigDTO>({
     nombreNegocio: '', ruc: '', direccion: '', telefono: '',
     emailContacto: '', ciudad: '', logoBase64: null, moneda: 'S/.',
     igvPorcentaje: 18, piePaginaPdf: '', serieBoleta: 'BBB1',
-    serieFactura: 'FFF1', oseUrl: '', oseToken: '',
+    serieFactura: 'FFF1', rubro: 'OTRO',
   });
 
   // ── Eliminar cuenta ────────────────────────────────────────────────────────
@@ -57,7 +56,6 @@ export function AccountSettings() {
       setConfigLoading(true);
       const data = await tenantConfigService.getConfig();
       setConfig(data);
-      setOseTokenGuardado(!!data.oseToken);
       setForm({
         nombreNegocio: data.nombreNegocio ?? '', ruc: data.ruc ?? '',
         direccion: data.direccion ?? '', telefono: data.telefono ?? '',
@@ -65,7 +63,7 @@ export function AccountSettings() {
         logoBase64: data.logoBase64 ?? null, moneda: data.moneda ?? 'S/.',
         igvPorcentaje: data.igvPorcentaje ?? 18, piePaginaPdf: data.piePaginaPdf ?? '',
         serieBoleta: data.serieBoleta ?? 'BBB1', serieFactura: data.serieFactura ?? 'FFF1',
-        oseUrl: data.oseUrl ?? '', oseToken: '',
+        rubro: data.rubro ?? 'OTRO',
       });
       if (data.logoBase64) setLogoPreview(data.logoBase64);
     } catch {
@@ -168,88 +166,123 @@ export function AccountSettings() {
                 />
 
                 {configLoading ? <Loader /> : (
-                  <div className="space-y-6">
-                    {/* Logo */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Logo del negocio</label>
-                      <div className="flex items-center gap-5">
-                        {logoPreview ? (
-                          <div className="relative w-20 h-20 rounded-xl border overflow-hidden bg-muted flex items-center justify-center">
-                            <img src={logoPreview} alt="Logo" className="object-contain w-full h-full p-1" />
-                            <button
-                              type="button"
-                              onClick={() => { setLogoPreview(null); setForm(p => ({ ...p, logoBase64: '' })); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                              className="absolute top-1 right-1 rounded-full bg-destructive text-white p-0.5 hover:bg-destructive/80"
-                            >
-                              <X size={10} />
-                            </button>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+                    {/* ── Formulario (2/3) ───────────────────────────────── */}
+                    <div className="lg:col-span-2 space-y-5">
+                      {/* Logo */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Logo del negocio</label>
+                        <div className="flex items-center gap-5">
+                          {logoPreview ? (
+                            <div className="relative w-20 h-20 rounded-xl border overflow-hidden bg-muted flex items-center justify-center">
+                              <img src={logoPreview} alt="Logo" className="object-contain w-full h-full p-1" />
+                              <button
+                                type="button"
+                                onClick={() => { setLogoPreview(null); setForm(p => ({ ...p, logoBase64: '' })); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                                className="absolute top-1 right-1 rounded-full bg-destructive text-white p-0.5 hover:bg-destructive/80"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="w-20 h-20 rounded-xl border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center gap-1 text-muted-foreground bg-muted/30">
+                              <Building2 size={22} className="opacity-40" />
+                              <span className="text-[10px]">Sin logo</span>
+                            </div>
+                          )}
+                          <div className="space-y-1.5">
+                            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                              <Upload size={13} className="mr-2" />
+                              {logoPreview ? 'Cambiar logo' : 'Subir logo'}
+                            </Button>
+                            <p className="text-xs text-muted-foreground">PNG o JPG · Máx. 2.5 MB</p>
                           </div>
-                        ) : (
-                          <div className="w-20 h-20 rounded-xl border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center gap-1 text-muted-foreground bg-muted/30">
-                            <Building2 size={22} className="opacity-40" />
-                            <span className="text-[10px]">Sin logo</span>
-                          </div>
-                        )}
+                          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleLogoChange} />
+                        </div>
+                      </div>
+
+                      {/* Campos */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                            <Upload size={13} className="mr-2" />
-                            {logoPreview ? 'Cambiar logo' : 'Subir logo'}
-                          </Button>
-                          <p className="text-xs text-muted-foreground">PNG o JPG · Máx. 2.5 MB</p>
+                          <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Building2 size={13} />Nombre del negocio <span className="text-destructive">*</span></label>
+                          <Input value={form.nombreNegocio ?? ''} onChange={field('nombreNegocio')} placeholder="Ej: Farmacia San José" />
                         </div>
-                        <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleLogoChange} />
-                      </div>
-                    </div>
-
-                    {/* Campos */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Building2 size={13} />Nombre del negocio <span className="text-destructive">*</span></label>
-                        <Input value={form.nombreNegocio ?? ''} onChange={field('nombreNegocio')} placeholder="Ej: Farmacia San José" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Hash size={13} />RUC <span className="text-destructive">*</span></label>
-                        <Input value={form.ruc ?? ''} onChange={field('ruc')} placeholder="20512345678" maxLength={11} />
-                      </div>
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><MapPin size={13} />Dirección</label>
-                        <Input value={form.direccion ?? ''} onChange={field('direccion')} placeholder="Av. Lima 123, Miraflores" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><MapPin size={13} />Ciudad</label>
-                        <Input value={form.ciudad ?? ''} onChange={field('ciudad')} placeholder="Lima" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Phone size={13} />Teléfono</label>
-                        <Input value={form.telefono ?? ''} onChange={field('telefono')} placeholder="987 654 321" />
-                      </div>
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Mail size={13} />Email de contacto</label>
-                        <Input value={form.emailContacto ?? ''} onChange={field('emailContacto')} placeholder="contacto@minegocio.com" type="email" />
-                      </div>
-                    </div>
-
-                    {/* Vista previa PDF */}
-                    {(form.nombreNegocio || logoPreview) && (
-                      <div className="rounded-xl border border-dashed p-4 space-y-2 bg-muted/20">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Vista previa · Encabezado PDF</p>
-                        <div className="flex items-start gap-3 p-3 bg-white dark:bg-zinc-900 rounded-lg border text-sm">
-                          {logoPreview && <img src={logoPreview} alt="Logo" className="h-12 w-12 object-contain shrink-0 rounded" />}
-                          <div>
-                            <p className="font-bold text-base leading-tight">{form.nombreNegocio || 'Mi negocio'}</p>
-                            {form.ruc && <p className="text-xs text-muted-foreground">RUC: {form.ruc}</p>}
-                            {form.direccion && <p className="text-xs text-muted-foreground">{form.direccion}{form.ciudad ? `, ${form.ciudad}` : ''}</p>}
-                            {form.telefono && <p className="text-xs text-muted-foreground">Tel: {form.telefono}</p>}
-                          </div>
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Hash size={13} />RUC <span className="text-destructive">*</span></label>
+                          <Input value={form.ruc ?? ''} onChange={field('ruc')} placeholder="20512345678" maxLength={11} />
+                        </div>
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><MapPin size={13} />Dirección</label>
+                          <Input value={form.direccion ?? ''} onChange={field('direccion')} placeholder="Av. Lima 123, Miraflores" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><MapPin size={13} />Ciudad</label>
+                          <Input value={form.ciudad ?? ''} onChange={field('ciudad')} placeholder="Lima" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Phone size={13} />Teléfono</label>
+                          <Input value={form.telefono ?? ''} onChange={field('telefono')} placeholder="987 654 321" />
+                        </div>
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Mail size={13} />Email de contacto</label>
+                          <Input value={form.emailContacto ?? ''} onChange={field('emailContacto')} placeholder="contacto@minegocio.com" type="email" />
+                        </div>
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Building2 size={13} />Tipo de negocio (rubro)</label>
+                          <select
+                            value={form.rubro ?? 'OTRO'}
+                            onChange={(e) => setForm(p => ({ ...p, rubro: e.target.value }))}
+                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm h-10"
+                          >
+                            <option value="BOTICA">Botica</option>
+                            <option value="FARMACIA">Farmacia</option>
+                            <option value="MINIMARKET">Minimarket</option>
+                            <option value="FERRETERIA">Ferretería</option>
+                            <option value="RESTAURANTE">Restaurante</option>
+                            <option value="TIENDA">Tienda / Bodega</option>
+                            <option value="OTRO">Otro</option>
+                          </select>
+                          {(form.rubro === 'BOTICA' || form.rubro === 'FARMACIA') && (
+                            <p className="text-xs text-blue-600 dark:text-blue-400">
+                              En recepciones se requerirá lote, fecha de vencimiento y registro sanitario.
+                            </p>
+                          )}
                         </div>
                       </div>
-                    )}
 
-                    <div className="flex justify-end pt-2">
-                      <Button onClick={handleSave} disabled={saving} className="gap-2">
-                        <Save size={14} />{saving ? 'Guardando...' : 'Guardar cambios'}
-                      </Button>
+                      <div className="flex justify-end pt-1">
+                        <Button onClick={handleSave} disabled={saving} className="gap-2">
+                          <Save size={14} />{saving ? 'Guardando...' : 'Guardar cambios'}
+                        </Button>
+                      </div>
                     </div>
+
+                    {/* ── Vista previa (1/3) · sticky ───────────────────── */}
+                    <div className="lg:sticky lg:top-6">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Vista previa · PDF</p>
+                      <div className="rounded-xl border bg-white dark:bg-zinc-900 shadow-sm p-4 space-y-1 text-sm">
+                        {logoPreview
+                          ? <img src={logoPreview} alt="Logo" className="h-14 w-14 object-contain mb-3 rounded" />
+                          : <div className="h-14 w-14 mb-3 rounded-lg bg-muted/40 border-2 border-dashed border-muted-foreground/20 flex items-center justify-center"><Building2 size={20} className="text-muted-foreground/30" /></div>
+                        }
+                        <p className="font-bold text-base leading-tight">
+                          {form.nombreNegocio || <span className="text-muted-foreground/40 italic text-sm">Nombre del negocio</span>}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {form.ruc ? `RUC: ${form.ruc}` : <span className="opacity-30">RUC: —</span>}
+                        </p>
+                        {(form.direccion || form.ciudad) && (
+                          <p className="text-xs text-muted-foreground">
+                            {[form.direccion, form.ciudad].filter(Boolean).join(', ')}
+                          </p>
+                        )}
+                        {form.telefono && <p className="text-xs text-muted-foreground">Tel: {form.telefono}</p>}
+                        {form.emailContacto && <p className="text-xs text-muted-foreground">{form.emailContacto}</p>}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/50 mt-2 text-center">Así aparecerá en los PDFs generados</p>
+                    </div>
+
                   </div>
                 )}
               </div>
@@ -259,83 +292,32 @@ export function AccountSettings() {
                 <SectionHeader
                   icon={Receipt}
                   title="Facturación electrónica"
-                  description="Configura IGV, series de comprobantes y la integración con tu OSE para emitir a SUNAT."
+                  description="Configura IGV, series de comprobantes y pie de página para tus boletas y facturas."
                 />
 
                 {configLoading ? <Loader /> : (
                   <div className="space-y-6">
-                    {/* IGV / Moneda / Series / Pie */}
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">General</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium text-muted-foreground">Moneda</label>
-                          <Input value={form.moneda ?? 'S/.'} onChange={field('moneda')} placeholder="S/." />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Percent size={13} />IGV (%)</label>
-                          <Input type="number" min={0} max={100} step={0.1} value={form.igvPorcentaje ?? 18}
-                            onChange={e => setForm(p => ({ ...p, igvPorcentaje: Number(e.target.value) }))} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium text-muted-foreground">Serie Boleta</label>
-                          <Input value={form.serieBoleta ?? 'BBB1'} onChange={field('serieBoleta')} placeholder="BBB1" maxLength={10} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium text-muted-foreground">Serie Factura</label>
-                          <Input value={form.serieFactura ?? 'FFF1'} onChange={field('serieFactura')} placeholder="FFF1" maxLength={10} />
-                        </div>
-                        <div className="space-y-1.5 sm:col-span-2">
-                          <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><FileText size={13} />Pie de página en PDFs</label>
-                          <Input value={form.piePaginaPdf ?? ''} onChange={field('piePaginaPdf')} placeholder="Ej: Gracias por su preferencia · RUC 20512345678" />
-                        </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-muted-foreground">Moneda</label>
+                        <Input value={form.moneda ?? 'S/.'} onChange={field('moneda')} placeholder="S/." />
                       </div>
-                    </div>
-
-                    {/* OSE */}
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Integración OSE — Envío a SUNAT</p>
-                      <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/20 p-5 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Zap size={15} className="text-indigo-600 dark:text-indigo-400" />
-                            <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
-                              Conecta tu OSE (Nubefact, Efact, Alegra…)
-                            </p>
-                          </div>
-                          {oseTokenGuardado && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                              <CheckCircle2 size={10} /> Configurado
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-indigo-700 dark:text-indigo-400 leading-relaxed">
-                          Ingresa la URL y el token de tu OSE para que Fluxus pueda enviar los comprobantes electrónicos directamente a SUNAT con validez oficial.
-                        </p>
-                        <div className="grid gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-indigo-800 dark:text-indigo-300">URL del OSE</label>
-                            <Input
-                              value={form.oseUrl ?? ''} onChange={field('oseUrl')}
-                              placeholder="https://api.nubefact.com/api/v1/mi-empresa"
-                              className="font-mono text-xs"
-                            />
-                            <p className="text-[11px] text-muted-foreground">URL que te entregó tu OSE al crear tu empresa (incluye el slug al final).</p>
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-indigo-800 dark:text-indigo-300">Token API del OSE</label>
-                            <Input
-                              type="password"
-                              value={form.oseToken ?? ''} onChange={field('oseToken')}
-                              placeholder={oseTokenGuardado ? '••••••  (guardado — deja vacío para no cambiar)' : 'Pega tu token API aquí'}
-                              className="font-mono text-xs" autoComplete="new-password"
-                            />
-                            <p className="text-[11px] text-muted-foreground">
-                              En Nubefact: <strong>Mi perfil → Token de API</strong>.{' '}
-                              {oseTokenGuardado && 'Deja vacío si no quieres cambiar el token actual.'}
-                            </p>
-                          </div>
-                        </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Percent size={13} />IGV (%)</label>
+                        <Input type="number" min={0} max={100} step={0.1} value={form.igvPorcentaje ?? 18}
+                          onChange={e => setForm(p => ({ ...p, igvPorcentaje: Number(e.target.value) }))} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-muted-foreground">Serie Boleta</label>
+                        <Input value={form.serieBoleta ?? 'BBB1'} onChange={field('serieBoleta')} placeholder="BBB1" maxLength={10} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-muted-foreground">Serie Factura</label>
+                        <Input value={form.serieFactura ?? 'FFF1'} onChange={field('serieFactura')} placeholder="FFF1" maxLength={10} />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><FileText size={13} />Pie de página en PDFs</label>
+                        <Input value={form.piePaginaPdf ?? ''} onChange={field('piePaginaPdf')} placeholder="Ej: Gracias por su preferencia · RUC 20512345678" />
                       </div>
                     </div>
 

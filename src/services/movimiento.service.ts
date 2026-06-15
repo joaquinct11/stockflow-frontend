@@ -11,6 +11,7 @@ export interface LoteVencimientoDTO {
   fechaVencimiento: string; // yyyy-MM-dd
   cantidad: number;
   diasRestantes: number; // negativo = ya vencido
+  registroSanitario?: string;
 }
 
 export const movimientoService = {
