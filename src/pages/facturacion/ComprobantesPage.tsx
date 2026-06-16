@@ -54,6 +54,7 @@ export function ComprobantesPage() {
   const canView = canAccess('FACTURACION');
   const canEmitir = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
   const canAnular = puede('ANULAR_COMPROBANTE') || canDelete('FACTURACION');
+  const canEnviarSunat = puede('ENVIAR_SUNAT');
 
   const [comprobantes, setComprobantes] = useState<ComprobanteDTO[]>([]);
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
@@ -426,7 +427,7 @@ export function ComprobantesPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tight">{comprobantes.length}</div>
+            <div className="text-3xl font-bold tracking-tight">{comprobantesBase.length}</div>
             <p className="text-xs text-muted-foreground mt-1">Registrados en el sistema</p>
           </CardContent>
         </Card>
@@ -441,7 +442,7 @@ export function ComprobantesPage() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-              {comprobantes.filter((c) => c.estado === 'EMITIDO').length}
+              {comprobantesBase.filter((c) => c.estado === 'EMITIDO').length}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Válidos y enviados</p>
           </CardContent>
@@ -457,7 +458,7 @@ export function ComprobantesPage() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">
-              {comprobantes.filter((c) => c.estado === 'ANULADO').length}
+              {comprobantesBase.filter((c) => c.estado === 'ANULADO').length}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Anulados</p>
           </CardContent>
@@ -473,7 +474,7 @@ export function ComprobantesPage() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-              S/.{comprobantes.filter((c) => c.estado === 'EMITIDO').reduce((s, c) => s + (c.total ?? 0), 0).toFixed(2)}
+              S/.{comprobantesBase.filter((c) => c.estado === 'EMITIDO').reduce((s, c) => s + (c.total ?? 0), 0).toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">De comprobantes emitidos</p>
           </CardContent>
@@ -660,8 +661,8 @@ export function ComprobantesPage() {
           ) : sortedComprobantes.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title={comprobantes.length === 0 ? 'Todavía no hay comprobantes' : 'Sin resultados'}
-              description={comprobantes.length === 0
+              title={comprobantesBase.length === 0 ? 'Todavía no hay comprobantes' : 'Sin resultados'}
+              description={comprobantesBase.length === 0
                 ? 'Los comprobantes electrónicos (boletas y facturas) se generan desde el módulo de Ventas al emitirlos hacia SUNAT a través de tu OSE.'
                 : 'No se encontraron comprobantes con los filtros aplicados.'}
             />
@@ -775,7 +776,7 @@ export function ComprobantesPage() {
                                 <Printer className="h-4 w-4 text-slate-500" />
                               </Button>
                             )}
-                            {c.estado === 'EMITIDO' && c.sunatEstado !== 'ACEPTADO' && (
+                            {canEnviarSunat && c.estado === 'EMITIDO' && c.sunatEstado !== 'ACEPTADO' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1209,7 +1210,7 @@ export function ComprobantesPage() {
                   PDF Ticket
                 </Button>
               )}
-              {selectedComprobante.estado === 'EMITIDO' && selectedComprobante.sunatEstado !== 'ACEPTADO' && (
+              {canEnviarSunat && selectedComprobante.estado === 'EMITIDO' && selectedComprobante.sunatEstado !== 'ACEPTADO' && (
                 <Button
                   variant="outline"
                   className="flex-1 gap-2 min-w-[130px] border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
