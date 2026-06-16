@@ -1575,8 +1575,8 @@ export function POSPage() {
                     <div className="absolute bottom-0 right-0 w-9 h-9 border-b-[3px] border-r-[3px] border-primary rounded-br" />
                     {/* Línea de escaneo */}
                     <div
-                      className="absolute left-3 right-3 h-0.5 bg-primary/80 animate-scanline shadow-[0_0_6px_theme(colors.primary)]"
-                      style={{ top: '15%' }}
+                      className="absolute left-3 right-3 h-0.5 bg-primary/80 animate-scanline"
+                      style={{ top: '15%', boxShadow: '0 0 6px hsl(var(--primary))' }}
                     />
                   </div>
                 </div>
