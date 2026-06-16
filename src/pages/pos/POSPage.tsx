@@ -279,7 +279,8 @@ export function POSPage() {
         .filter(p => p.activo !== false)
         .filter(p =>
           p.nombre.toLowerCase().includes(lower) ||
-          (p.codigoBarras ?? '').toLowerCase().includes(lower)
+          (p.codigoBarras ?? '').toLowerCase().includes(lower) ||
+          (p.componentes ?? '').toLowerCase().includes(lower)
         )
         .slice(0, 8);
       setResultados(matches);
@@ -1138,6 +1139,11 @@ export function POSPage() {
                           {p.codigoBarras && <span className="mr-2">{p.codigoBarras}</span>}
                           Stock: <span className={p.stockActual! <= 0 ? 'text-red-400' : 'text-gray-400'}>{p.stockActual}</span>
                         </p>
+                        {p.componentes && (
+                          <p className="text-[10px] text-gray-600 truncate" title={p.componentes}>
+                            {p.componentes}
+                          </p>
+                        )}
                       </div>
                       <p className="text-sm font-bold text-primary flex-shrink-0">{fmt(p.precioVenta ?? 0)}</p>
                     </button>
@@ -1366,6 +1372,11 @@ export function POSPage() {
                             <p className="text-xs text-gray-500">
                               Stock: <span className={p.stockActual! <= 0 ? 'text-red-400' : 'text-gray-400'}>{p.stockActual}</span>
                             </p>
+                            {p.componentes && (
+                              <p className="text-[10px] text-gray-600 truncate" title={p.componentes}>
+                                {p.componentes}
+                              </p>
+                            )}
                           </div>
                           <div className="flex-shrink-0 text-right">
                             <p className="text-sm font-bold text-primary">{fmt(p.precioVenta ?? 0)}</p>

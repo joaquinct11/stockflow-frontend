@@ -270,6 +270,7 @@ export function ProductosList() {
       tenantId: producto.tenantId,
       unidadMedidaId: producto.unidadMedidaId || 0,
       imagenUrl: producto.imagenUrl,
+      componentes: producto.componentes,
     });
     setImgPreview(producto.imagenUrl ?? null);
 
@@ -888,6 +889,21 @@ export function ProductosList() {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Sección: Composición */}
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Composición / Contenido</p>
+              <p className="text-xs text-muted-foreground">Opcional. Lista los componentes o principios activos (ej: paracetamol 500mg, amoxicilina 250mg). Permite encontrar este producto al buscar por ingrediente en el POS.</p>
+            </div>
+            <textarea
+              placeholder="Ej: paracetamol 500mg, amoxicilina 250mg, vitamina C..."
+              value={formData.componentes ?? ''}
+              onChange={e => setFormData(p => ({ ...p, componentes: e.target.value || undefined }))}
+              rows={3}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            />
           </div>
 
           {/* Sección: Imagen */}

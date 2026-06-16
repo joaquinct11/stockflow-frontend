@@ -854,7 +854,12 @@ export function VentasList() {
                                 variant="ghost"
                                 size="icon"
                                 title="Imprimir ticket"
-                                onClick={() => { setTicketVenta(venta); setTicketDni(''); setTicketNombre(''); }}
+                                onClick={() => {
+                                  const cl = venta.clienteId ? clienteById.get(venta.clienteId) : null;
+                                  setTicketVenta(venta);
+                                  setTicketDni(cl?.numeroDocumento ?? '');
+                                  setTicketNombre(cl?.nombre ?? '');
+                                }}
                               >
                                 <Printer className="h-4 w-4 text-violet-600" />
                               </Button>
@@ -1086,9 +1091,10 @@ export function VentasList() {
                     className="w-full flex items-center gap-2"
                     onClick={() => {
                       closeDetailDialog();
+                      const cl = selectedVenta.clienteId ? clienteById.get(selectedVenta.clienteId) : null;
                       setTicketVenta(selectedVenta);
-                      setTicketDni('');
-                      setTicketNombre('');
+                      setTicketDni(cl?.numeroDocumento ?? '');
+                      setTicketNombre(cl?.nombre ?? '');
                     }}
                   >
                     <Printer size={16} />

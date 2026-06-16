@@ -123,6 +123,8 @@ export interface ProductoDTO {
   unidadMedidaNombre?: string;
   /** URL de imagen del producto (opcional). Null → fallback con letra del nombre. */
   imagenUrl?: string;
+  /** Composición o contenido (ej: "paracetamol 500mg, amoxicilina 250mg"). Opcional. */
+  componentes?: string;
   /** Fecha del lote más próximo a vencer. Solo lectura, calculado por el backend. */
   proximaFechaVencimiento?: string;
 }
@@ -430,8 +432,11 @@ export interface ComprobanteDTO {
   sunatMensaje?: string;
   sunatTicket?: string;
   pdfUrl?: string;
+  pdfTicketUrl?: string;
   xmlUrl?: string;
   qr?: string;
+  hash?: string;
+  fechaEmision?: string;
 }
 
 export interface EmitirComprobanteForm {
@@ -501,6 +506,7 @@ export interface RecepcionItemDTO {
   cantidadEsperada?: number;
   cantidadRecibida: number;
   precioUnitario?: number;
+  precioVenta?: number;
   fechaVencimiento?: string;
   lote?: string;
   registroSanitario?: string;

@@ -56,6 +56,7 @@ function normalizeRecepcion(raw: any): RecepcionDTO {
     cantidadEsperada: d.cantidadEsperada,
     cantidadRecibida: d.cantidadRecibida,
     precioUnitario: d.precioUnitario,
+    precioVenta: d.precioVenta,
     fechaVencimiento: d.fechaVencimiento,
     lote: d.lote,
     registroSanitario: d.registroSanitario,
@@ -157,18 +158,20 @@ export function RecepcionList() {
 
   // Add item (formulario extra — solo para productos fuera de la OC)
   const [selectedProductoId, setSelectedProductoId] = useState<number | null>(null);
-  const [itemQty, setItemQty]           = useState<number>(1);
-  const [itemExpiry, setItemExpiry]     = useState('');
-  const [itemLote, setItemLote]         = useState('');
-  const [itemRegSan, setItemRegSan]     = useState('');
+  const [itemQty, setItemQty]               = useState<number>(1);
+  const [itemExpiry, setItemExpiry]         = useState('');
+  const [itemLote, setItemLote]             = useState('');
+  const [itemRegSan, setItemRegSan]         = useState('');
+  const [itemPrecioVenta, setItemPrecioVenta] = useState('');
   const [showAddProduct, setShowAddProduct] = useState(false);
 
   // Edición inline de la tabla de productos
-  const [editQty, setEditQty]           = useState<Record<number, number>>({});
-  const [editVenc, setEditVenc]         = useState<Record<number, string>>({});
-  const [editLote, setEditLote]         = useState<Record<number, string>>({});
-  const [editRegSan, setEditRegSan]     = useState<Record<number, string>>({});
-  const [savingItemId, setSavingItemId] = useState<number | null>(null);
+  const [editQty, setEditQty]                 = useState<Record<number, number>>({});
+  const [editVenc, setEditVenc]               = useState<Record<number, string>>({});
+  const [editLote, setEditLote]               = useState<Record<number, string>>({});
+  const [editRegSan, setEditRegSan]           = useState<Record<number, string>>({});
+  const [editPrecioVenta, setEditPrecioVenta] = useState<Record<number, string>>({});
+  const [savingItemId, setSavingItemId]       = useState<number | null>(null);
 
   // Comprobante
   const [compTipo, setCompTipo]   = useState<TipoComprobanteProveedor>('FACTURA');
@@ -409,17 +412,19 @@ export function RecepcionList() {
 
   const closeDetail = () => {
     setIsDetailOpen(false); setSelectedRecepId(null); setSelectedRecep(null);
-    setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote(''); setItemRegSan('');
-    setShowAddProduct(false); setEditQty({}); setEditVenc({}); setEditLote({}); setEditRegSan({});
+    setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote(''); setItemRegSan(''); setItemPrecioVenta('');
+    setShowAddProduct(false); setEditQty({}); setEditVenc({}); setEditLote({}); setEditRegSan({}); setEditPrecioVenta({});
   };
 
   // Guardar cantidad inline de una fila de la tabla
   const handleInlineSave = async (item: RecepcionItemDTO) => {
     if (!selectedRecep?.id) return;
-    const qty    = editQty[item.productoId]    ?? item.cantidadRecibida ?? 0;
-    const venc   = editVenc[item.productoId]   ?? item.fechaVencimiento ?? '';
-    const lote   = editLote[item.productoId]   ?? item.lote ?? '';
-    const regSan = editRegSan[item.productoId] ?? item.registroSanitario ?? '';
+    const qty        = editQty[item.productoId]        ?? item.cantidadRecibida ?? 0;
+    const venc       = editVenc[item.productoId]       ?? item.fechaVencimiento ?? '';
+    const lote       = editLote[item.productoId]       ?? item.lote ?? '';
+    const regSan     = editRegSan[item.productoId]     ?? item.registroSanitario ?? '';
+    const pvRaw      = editPrecioVenta[item.productoId];
+    const precioVenta = pvRaw !== undefined ? (pvRaw ? Number(pvRaw) : undefined) : item.precioVenta;
     if (esFarmacia && qty > 0) {
       if (!venc)   { toast.error('La fecha de vencimiento es obligatoria'); return; }
       if (!lote)   { toast.error('El lote es obligatorio'); return; }
@@ -433,6 +438,7 @@ export function RecepcionList() {
         fechaVencimiento: venc || undefined,
         lote: lote || undefined,
         registroSanitario: regSan || undefined,
+        precioVenta,
       });
       await refreshDetail();
       toast.success('Producto actualizado');
@@ -443,10 +449,11 @@ export function RecepcionList() {
 
   // Restablecer fila a cantidad 0 sin vencimiento ni lote (requiere guardar para persistir)
   const handleInlineReset = (item: RecepcionItemDTO) => {
-    setEditQty(prev    => ({ ...prev, [item.productoId]: 0 }));
-    setEditVenc(prev   => ({ ...prev, [item.productoId]: '' }));
-    setEditLote(prev   => ({ ...prev, [item.productoId]: '' }));
-    setEditRegSan(prev => ({ ...prev, [item.productoId]: '' }));
+    setEditQty(prev        => ({ ...prev, [item.productoId]: 0 }));
+    setEditVenc(prev       => ({ ...prev, [item.productoId]: '' }));
+    setEditLote(prev       => ({ ...prev, [item.productoId]: '' }));
+    setEditRegSan(prev     => ({ ...prev, [item.productoId]: '' }));
+    setEditPrecioVenta(prev => ({ ...prev, [item.productoId]: '' }));
   };
 
   // Marcar todos los productos como completamente recibidos (qty = esperado)
@@ -490,9 +497,10 @@ export function RecepcionList() {
         fechaVencimiento: itemExpiry || undefined,
         lote: itemLote || undefined,
         registroSanitario: itemRegSan || undefined,
+        precioVenta: itemPrecioVenta ? Number(itemPrecioVenta) : undefined,
       });
       await refreshDetail();
-      setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote(''); setItemRegSan('');
+      setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote(''); setItemRegSan(''); setItemPrecioVenta('');
       toast.success('Producto guardado');
     } catch (e: any) {
       toast.error(e?.response?.data?.mensaje ?? 'Error al guardar producto');
@@ -1215,6 +1223,7 @@ export function RecepcionList() {
                       <TableHead>Vencimiento</TableHead>
                       <TableHead>Lote</TableHead>
                       {esFarmacia && <TableHead>Reg. Sanitario{isEditable && <span className="text-destructive ml-0.5">*</span>}</TableHead>}
+                      <TableHead>P. Venta</TableHead>
                       {isEditable && canEditRecep && <TableHead />}
                     </TableRow>
                   </TableHeader>
@@ -1329,6 +1338,21 @@ export function RecepcionList() {
                               )}
                             </TableCell>
                           )}
+                          <TableCell>
+                            {isEditable && canEditRecep ? (
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={editPrecioVenta[it.productoId] ?? (it.precioVenta != null ? String(it.precioVenta) : '')}
+                                onChange={(e) => setEditPrecioVenta(prev => ({ ...prev, [it.productoId]: e.target.value }))}
+                                placeholder="Opc."
+                                className="w-20 text-xs border rounded px-1.5 py-1 bg-background focus:outline-none focus:border-primary"
+                              />
+                            ) : (
+                              <span className="text-xs">{it.precioVenta != null ? `S/ ${it.precioVenta}` : '—'}</span>
+                            )}
+                          </TableCell>
                           {isEditable && canEditRecep && (
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-1">
@@ -1457,6 +1481,12 @@ export function RecepcionList() {
                         placeholder="Requerido" className="h-9" />
                     </div>
                   )}
+                  <div className="w-32">
+                    <label className="text-xs text-muted-foreground mb-1 block">Precio venta</label>
+                    <Input type="number" min={0} step="0.01" value={itemPrecioVenta}
+                      onChange={(e) => setItemPrecioVenta(e.target.value)}
+                      placeholder="Opc." className="h-9" />
+                  </div>
                   <Button onClick={handleAddItem} disabled={detailActionLoading || !selectedProducto} className="h-9">
                     <PackagePlus size={14} className="mr-1" /> Guardar
                   </Button>
