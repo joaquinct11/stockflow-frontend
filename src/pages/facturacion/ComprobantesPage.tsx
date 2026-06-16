@@ -14,7 +14,7 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, X, Send, Download, SlidersHorizontal, AlertTriangle } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, X, Send, Download, SlidersHorizontal, AlertTriangle, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
@@ -78,7 +78,7 @@ export function ComprobantesPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // Anular confirm
-  const [confirmAnular, setConfirmAnular] = useState<{ isOpen: boolean; id: number | null; sunatEstado?: string }>({
+  const [confirmAnular, setConfirmAnular] = useState<{ isOpen: boolean; id: number | null; sunatEstado?: string; tipo?: string }>({
     isOpen: false,
     id: null,
   });
@@ -223,6 +223,12 @@ export function ComprobantesPage() {
 
   const handleDownloadPdf = async (comprobante: ComprobanteDTO) => {
     if (!comprobante.id) return;
+    // Si tiene URL de ApiSunat, abrir PDF A4 directamente
+    if (comprobante.pdfUrl) {
+      window.open(comprobante.pdfUrl, '_blank');
+      return;
+    }
+    // Si no, generar PDF local
     try {
       setDownloadingPdf(comprobante.id);
       const blob = await facturacionService.downloadPdf(comprobante.id);
@@ -238,6 +244,12 @@ export function ComprobantesPage() {
       toast.error('No se pudo descargar el PDF');
     } finally {
       setDownloadingPdf(null);
+    }
+  };
+
+  const handleDownloadTicket = (comprobante: ComprobanteDTO) => {
+    if (comprobante.pdfTicketUrl) {
+      window.open(comprobante.pdfTicketUrl, '_blank');
     }
   };
 
@@ -753,6 +765,16 @@ export function ComprobantesPage() {
                                 : <Download className="h-4 w-4 text-slate-500" />
                               }
                             </Button>
+                            {c.pdfTicketUrl && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Descargar PDF Ticket (80mm)"
+                                onClick={() => handleDownloadTicket(c)}
+                              >
+                                <Printer className="h-4 w-4 text-slate-500" />
+                              </Button>
+                            )}
                             {c.estado === 'EMITIDO' && c.sunatEstado !== 'ACEPTADO' && (
                               <Button
                                 variant="ghost"
@@ -772,7 +794,7 @@ export function ComprobantesPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
-                                onClick={() => setConfirmAnular({ isOpen: true, id: c.id!, sunatEstado: c.sunatEstado })}
+                                onClick={() => setConfirmAnular({ isOpen: true, id: c.id!, sunatEstado: c.sunatEstado, tipo: c.tipo })}
                               >
                                 Anular
                               </Button>
@@ -1171,10 +1193,22 @@ export function ComprobantesPage() {
                 className="flex-1 gap-2 min-w-[130px]"
                 disabled={downloadingPdf === selectedComprobante.id}
                 onClick={() => handleDownloadPdf(selectedComprobante)}
+                title="PDF tamaño A4"
               >
                 <Download size={15} />
-                {downloadingPdf === selectedComprobante.id ? 'Generando...' : 'Descargar PDF'}
+                {downloadingPdf === selectedComprobante.id ? 'Generando...' : 'PDF A4'}
               </Button>
+              {selectedComprobante.pdfTicketUrl && (
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2 min-w-[130px]"
+                  onClick={() => handleDownloadTicket(selectedComprobante)}
+                  title="PDF Ticket 80mm para impresora térmica"
+                >
+                  <Printer size={15} />
+                  PDF Ticket
+                </Button>
+              )}
               {selectedComprobante.estado === 'EMITIDO' && selectedComprobante.sunatEstado !== 'ACEPTADO' && (
                 <Button
                   variant="outline"
@@ -1210,8 +1244,10 @@ export function ComprobantesPage() {
         title="Anular Comprobante"
         description={
           (confirmAnular.sunatEstado === 'ACEPTADO' || confirmAnular.sunatEstado === 'PENDIENTE')
-            ? `⚠️ Este comprobante ya fue enviado a SUNAT (${confirmAnular.sunatEstado}). La anulación solo se aplica localmente.\n\nPara la baja electrónica ante SUNAT deberás ingresar manualmente a tu panel de ${oseNombre} y registrar la comunicación de baja.`
-            : '¿Estás seguro de que deseas anular este comprobante? Esta acción no se puede deshacer.'
+            ? confirmAnular.tipo === 'BOLETA'
+              ? `Esta boleta fue enviada a SUNAT (${confirmAnular.sunatEstado}). Al confirmar se enviará un resumen diario de baja a SUNAT vía ${oseNombre}.\n\nNota: SUNAT procesa las bajas de boletas de forma asíncrona, por lo que el estado quedará PENDIENTE hasta que SUNAT lo confirme. El stock se repondrá automáticamente.`
+              : `Esta factura fue enviada a SUNAT (${confirmAnular.sunatEstado}). Al confirmar se enviará una comunicación de baja electrónica a SUNAT vía ${oseNombre} y el stock se repondrá automáticamente.`
+            : '¿Estás seguro de que deseas anular este comprobante? Se repondrá el stock de los productos automáticamente.'
         }
         confirmText="Anular Comprobante"
         onConfirm={handleAnular}
