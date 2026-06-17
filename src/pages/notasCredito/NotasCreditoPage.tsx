@@ -1,10 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { FileText, Download, RefreshCw, Tag, CheckCircle2, Clock, XCircle, Banknote, Search, SlidersHorizontal, X } from 'lucide-react';
+import { FileText, FileDown, Printer, RefreshCw, Tag, CheckCircle2, Clock, XCircle, Banknote, Search, SlidersHorizontal, X } from 'lucide-react';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import toast from 'react-hot-toast';
 import { notaCreditoService } from '../../services/notaCredito.service';
+import { printNotaCreditoTicket } from '../../utils/printTicket';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import type { NotaCreditoDTO } from '../../types';
 
 type FiltroEstado = 'TODOS' | 'PENDIENTE' | 'USADA' | 'ANULADA';
@@ -46,6 +48,7 @@ function fmtFecha(iso?: string) {
 }
 
 export function NotasCreditoPage() {
+  const { config: negocioConfig } = useTenantConfigStore();
   const [notas, setNotas] = useState<NotaCreditoDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<FiltroEstado>('TODOS');
@@ -53,7 +56,7 @@ export function NotasCreditoPage() {
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
-  const [descargando, setDescargando] = useState<number | null>(null);
+  const [descargando, setDescargando] = useState<string | null>(null); // `${id}-A4` | `${id}-TICKET`
 
   const fetchNotas = async () => {
     try {
@@ -73,14 +76,18 @@ export function NotasCreditoPage() {
 
   const handleDescargarPdf = async (nc: NotaCreditoDTO) => {
     try {
-      setDescargando(nc.id);
-      await notaCreditoService.descargarPdf(nc.id);
+      setDescargando(`${nc.id}-A4`);
+      await notaCreditoService.descargarPdf(nc.id, 'A4');
       toast.success(`PDF de ${nc.codigo} descargado`);
     } catch {
       toast.error('Error al generar el PDF');
     } finally {
       setDescargando(null);
     }
+  };
+
+  const handleImprimirTicket = (nc: NotaCreditoDTO) => {
+    printNotaCreditoTicket(nc, negocioConfig);
   };
 
   const activeFiltersCount = useMemo(() => {
@@ -351,7 +358,7 @@ export function NotasCreditoPage() {
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Vence</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Venta origen</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Canjeada en venta</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">PDF</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Descargar</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -417,19 +424,25 @@ export function NotasCreditoPage() {
 
                       {/* Acciones */}
                       <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => handleDescargarPdf(nc)}
-                          disabled={descargando === nc.id}
-                          title="Descargar PDF"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-input hover:bg-muted text-xs transition-colors disabled:opacity-50"
-                        >
-                          {descargando === nc.id ? (
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Download className="w-3.5 h-3.5" />
-                          )}
-                          PDF
-                        </button>
+                        <div className="inline-flex gap-1">
+                          <button
+                            onClick={() => handleDescargarPdf(nc)}
+                            disabled={descargando === `${nc.id}-A4`}
+                            title="Descargar PDF A4"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-input hover:bg-muted text-xs transition-colors disabled:opacity-50"
+                          >
+                            {descargando === `${nc.id}-A4` ? <RefreshCw className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />}
+                            A4
+                          </button>
+                          <button
+                            onClick={() => handleImprimirTicket(nc)}
+                            title="Imprimir ticket 80mm"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-input hover:bg-muted text-xs transition-colors"
+                          >
+                            <Printer className="w-3 h-3" />
+                            Ticket
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
