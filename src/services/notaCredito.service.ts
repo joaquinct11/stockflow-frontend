@@ -17,14 +17,15 @@ export const notaCreditoService = {
     return data;
   },
 
-  descargarPdf: async (id: number): Promise<void> => {
-    const res = await axiosInstance.get(API_ENDPOINTS.NOTAS_CREDITO.PDF(id), {
+  descargarPdf: async (id: number, formato: 'A4' | 'TICKET' = 'A4'): Promise<void> => {
+    const res = await axiosInstance.get(`${API_ENDPOINTS.NOTAS_CREDITO.PDF(id)}?formato=${formato}`, {
       responseType: 'blob',
     });
+    const filename = formato === 'TICKET' ? `nc-ticket-${id}.pdf` : `nota-credito-${id}.pdf`;
     const url = window.URL.createObjectURL(new Blob([res.data]));
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nota-credito-${id}.pdf`);
+    link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     link.remove();

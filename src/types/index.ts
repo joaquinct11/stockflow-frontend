@@ -716,6 +716,7 @@ export interface CajaDTO {
   observaciones: string | null;
   fechaApertura: string;
   fechaCierre: string | null;
+  cerradoPorNombre: string | null;
 }
 
 export interface AbrirCajaDTO {

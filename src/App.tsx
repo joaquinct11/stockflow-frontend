@@ -313,7 +313,7 @@ function App() {
               path="notas-credito"
               element={
                 <SubscripcionGuard>
-                  <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                  <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE']} anyPermission={['VER_NOTAS_CREDITO', 'EMITIR_NOTA_CREDITO']}>
                     <NotasCreditoPage />
                   </RoleProtectedRoute>
                 </SubscripcionGuard>
