@@ -336,6 +336,9 @@ export function CajaPage() {
                       <TableRow key={caja.id}>
                         <TableCell>
                           <p className="font-medium text-sm">{caja.usuarioNombre}</p>
+                          {caja.estado === 'CERRADA' && caja.cerradoPorNombre && caja.cerradoPorNombre !== caja.usuarioNombre && (
+                            <p className="text-xs text-muted-foreground">Cerró: {caja.cerradoPorNombre}</p>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm">{formatDate(caja.fechaApertura)}</TableCell>
                         <TableCell className="text-sm">{formatDate(caja.fechaCierre)}</TableCell>
@@ -396,9 +399,15 @@ export function CajaPage() {
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-muted-foreground text-xs uppercase font-semibold mb-1">Cajero</p>
+                <p className="text-muted-foreground text-xs uppercase font-semibold mb-1">Abrió</p>
                 <p className="font-medium">{selectedCaja.usuarioNombre}</p>
               </div>
+              {selectedCaja.estado === 'CERRADA' && selectedCaja.cerradoPorNombre && (
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase font-semibold mb-1">Cerró</p>
+                  <p className="font-medium">{selectedCaja.cerradoPorNombre}</p>
+                </div>
+              )}
               <div>
                 <p className="text-muted-foreground text-xs uppercase font-semibold mb-1">Estado</p>
                 <Badge variant={selectedCaja.estado === 'ABIERTA' ? 'warning' : 'success'}>

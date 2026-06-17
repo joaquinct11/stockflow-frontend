@@ -77,7 +77,7 @@ function getInitials(nombre?: string) {
 export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: SidebarProps) {
   const location = useLocation();
   const { user } = useAuthStore();
-  const { canAccess, isAdmin } = usePermissions();
+  const { canAccess, isAdmin, puede } = usePermissions();
 
   const isPathActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
@@ -132,7 +132,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             title: 'Notas de Crédito',
             href: '/dashboard/notas-credito',
             icon: Receipt,
-            show: isAdmin,
+            show: isAdmin || puede('VER_NOTAS_CREDITO'),
           },
         ],
       },

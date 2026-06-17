@@ -1,4 +1,4 @@
-import type { ComprobanteDTO, VentaDTO } from '../types';
+import type { ComprobanteDTO, NotaCreditoDTO, VentaDTO } from '../types';
 import type { TenantConfigDTO } from '../types';
 import toast from 'react-hot-toast';
 
@@ -172,6 +172,64 @@ ${clienteBlock}
 <div class="sep-dashed"></div>
 <div class="center" style="font-size:9px;margin-top:4px">
   ${pie ? `<p>${pie}</p>` : ''}
+  <p>Documento no válido para crédito fiscal</p>
+  <p>Generado con Fluxus ERP</p>
+</div>
+<p style="margin-top:12px">&nbsp;</p>
+</body></html>`;
+
+  openTicket(html);
+}
+
+// ── Ticket de NOTA DE CRÉDITO ────────────────────────────────────────────────
+export function printNotaCreditoTicket(nc: NotaCreditoDTO, config?: TenantConfigDTO | null): void {
+  const empresa = config?.nombreNegocio ?? 'Mi Empresa';
+  const ruc     = config?.ruc ?? '';
+  const dir     = config?.direccion ?? '';
+  const tel     = config?.telefono ?? '';
+  const pie     = config?.piePaginaPdf ?? '';
+
+  const fmtFecha = (iso?: string | null) => iso
+    ? new Date(iso).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : '—';
+
+  const monto = (nc.montoTotal ?? 0).toFixed(2);
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Nota de Crédito ${nc.codigo}</title>
+<style>${BASE_STYLES}</style></head><body>
+
+<div class="center">
+  <p class="bold" style="font-size:14px">${empresa}</p>
+  ${ruc ? `<p>RUC: ${ruc}</p>` : ''}
+  ${dir ? `<p>${dir}</p>`       : ''}
+  ${tel ? `<p>Tel: ${tel}</p>`  : ''}
+</div>
+<div class="sep-solid"></div>
+
+<div class="center">
+  <p class="bold" style="font-size:13px">NOTA DE CRÉDITO</p>
+  <p class="bold" style="font-size:17px">${nc.codigo}</p>
+</div>
+<div class="sep-dashed"></div>
+
+<p><span class="lbl">Emisión:</span> ${fmtFecha(nc.fechaEmision)}</p>
+<p><span class="lbl">Vence:</span> ${fmtFecha(nc.fechaVencimiento)}</p>
+${nc.ventaOrigenId ? `<p><span class="lbl">Venta origen:</span> #${nc.ventaOrigenId}</p>` : ''}
+<div class="sep-solid"></div>
+
+<div class="center" style="margin:6px 0">
+  <p style="font-size:11px;font-weight:bold">TOTAL A FAVOR</p>
+  <p class="bold" style="font-size:20px">S/ ${monto}</p>
+  <p style="font-size:10px">${amountToWords(nc.montoTotal ?? 0)}</p>
+</div>
+
+<div class="sep-dashed"></div>
+<div class="center" style="font-size:9px;margin-top:4px">
+  <p>Presenta este ticket en tu próxima compra</p>
+  <p>y se descontará el monto indicado.</p>
+  <p style="margin-top:4px"><b>Válido hasta: ${fmtFecha(nc.fechaVencimiento)}</b></p>
+  ${pie ? `<p style="margin-top:4px">${pie}</p>` : ''}
   <p>Documento no válido para crédito fiscal</p>
   <p>Generado con Fluxus ERP</p>
 </div>

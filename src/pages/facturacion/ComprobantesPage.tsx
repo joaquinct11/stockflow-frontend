@@ -14,7 +14,7 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, X, Send, Download, SlidersHorizontal, AlertTriangle, Printer } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, X, Send, FileDown, SlidersHorizontal, AlertTriangle, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
@@ -763,7 +763,7 @@ export function ComprobantesPage() {
                             >
                               {downloadingPdf === c.id
                                 ? <span className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin inline-block" />
-                                : <Download className="h-4 w-4 text-slate-500" />
+                                : <FileDown className="h-4 w-4 text-slate-500" />
                               }
                             </Button>
                             {c.pdfTicketUrl && (
@@ -1196,7 +1196,7 @@ export function ComprobantesPage() {
                 onClick={() => handleDownloadPdf(selectedComprobante)}
                 title="PDF tamaño A4"
               >
-                <Download size={15} />
+                <FileDown size={15} />
                 {downloadingPdf === selectedComprobante.id ? 'Generando...' : 'PDF A4'}
               </Button>
               {selectedComprobante.pdfTicketUrl && (
