@@ -213,11 +213,11 @@ export function RecepcionList() {
       setLoading(true);
       const prodData = await productoService.getAll().catch(() => []);
       setProductos(prodData);
-      if (puede('VER_OC')) {
+      if (puede('VER_OC') || puede('CREAR_RECEPCION')) {
         const ocData = await ordenCompraService.getAll().catch(() => []);
         setOcs(ocData);
       }
-      if (puede('VER_PROVEEDORES')) {
+      if (puede('VER_PROVEEDORES') || puede('CREAR_RECEPCION')) {
         const provData = await proveedorService.getActivos().catch(() => []);
         setProveedores(provData);
       }
@@ -233,11 +233,11 @@ export function RecepcionList() {
       ]);
       setRecepciones((recDataRaw as any[]).map(normalizeRecepcion));
       setProductos(prodData);
-      if (puede('VER_OC')) {
+      if (puede('VER_OC') || puede('CREAR_RECEPCION')) {
         const ocData = await ordenCompraService.getAll().catch(() => []);
         setOcs(ocData);
       }
-      if (puede('VER_PROVEEDORES')) {
+      if (puede('VER_PROVEEDORES') || puede('CREAR_RECEPCION')) {
         const provData = await proveedorService.getActivos().catch(() => []);
         setProveedores(provData);
       }

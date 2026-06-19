@@ -877,7 +877,7 @@ export function VentasList() {
                                 <RotateCcw className="h-4 w-4 text-amber-600" />
                               </Button>
                             )}
-                            {canDelete('VENTAS') && venta.estado !== 'ANULADA' && (
+                            {(puede('ANULAR_VENTA') || canDelete('VENTAS')) && venta.estado !== 'ANULADA' && (
                               <Button
                                 variant="ghost"
                                 size="icon"

@@ -56,6 +56,7 @@ export function POSPage() {
 
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [mobileTab, setMobileTab] = useState<'productos' | 'carrito'>('productos');
+  const [soloGenerico, setSoloGenerico] = useState(false);
 
   // ── Estado de nota de credito ─────────────────────────────────────────
   const [ncCodigo, setNcCodigo] = useState('');
@@ -277,6 +278,7 @@ export function POSPage() {
       const lower = q.toLowerCase();
       const matches = todosProductos
         .filter(p => p.activo !== false)
+        .filter(p => !soloGenerico || p.esGenerico === true)
         .filter(p =>
           p.nombre.toLowerCase().includes(lower) ||
           (p.codigoBarras ?? '').toLowerCase().includes(lower) ||
@@ -288,7 +290,7 @@ export function POSPage() {
       setBuscando(false);
     }, 200);
     return () => clearTimeout(t);
-  }, [query, todosProductos]);
+  }, [query, todosProductos, soloGenerico]);
 
   // ── Grid ordenado: próximos a vencer primero ─────────────────────────────
   const productosDisponibles = useMemo(() => {
@@ -297,6 +299,7 @@ export function POSPage() {
 
     return todosProductos
       .filter(p => p.activo !== false && (p.stockActual ?? 0) > 0)
+      .filter(p => !soloGenerico || p.esGenerico === true)
       .sort((a, b) => {
         const fvA = a.proximaFechaVencimiento ? new Date(a.proximaFechaVencimiento + 'T00:00:00') : null;
         const fvB = b.proximaFechaVencimiento ? new Date(b.proximaFechaVencimiento + 'T00:00:00') : null;
@@ -307,7 +310,7 @@ export function POSPage() {
         if (aProximo && bProximo) return fvA!.getTime() - fvB!.getTime();
         return 0;
       });
-  }, [todosProductos]);
+  }, [todosProductos, soloGenerico]);
 
   // ── Búsqueda exacta por código de barras (lector) ────────────────────────
   const buscarPorCodigo = useCallback((codigo: string) => {
@@ -1105,6 +1108,15 @@ export function POSPage() {
                   />
                   {buscando && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setSoloGenerico(v => !v)}
+                  title={soloGenerico ? 'Mostrando solo genéricos — clic para ver todos' : 'Filtrar solo genéricos'}
+                  className={`flex items-center gap-1.5 px-3 h-10 rounded-xl border text-xs font-medium transition-colors flex-shrink-0 ${soloGenerico ? 'bg-primary border-primary text-primary-foreground' : 'bg-gray-800 border-gray-700 hover:border-primary hover:text-primary text-gray-400'}`}
+                >
+                  <Tag size={14} />
+                  <span className="hidden sm:inline">Genérico</span>
+                </button>
                 {hasCamera && (
                   <button
                     type="button"
@@ -1138,6 +1150,8 @@ export function POSPage() {
                         <p className="text-xs text-gray-500">
                           {p.codigoBarras && <span className="mr-2">{p.codigoBarras}</span>}
                           Stock: <span className={p.stockActual! <= 0 ? 'text-red-400' : 'text-gray-400'}>{p.stockActual}</span>
+                          {p.unidadesPorCaja && <span className="ml-2 text-gray-600">· {p.unidadesPorCaja} u/caja</span>}
+                          {p.esGenerico && <span className="ml-2 text-blue-400 font-medium">Genérico</span>}
                         </p>
                         {p.componentes && (
                           <p className="text-[10px] text-gray-600 truncate" title={p.componentes}>
