@@ -8,7 +8,7 @@ import {
   Search, Shield, Save, ShoppingCart, Wallet, Users, Package, Boxes,
   Truck, BarChart3, FileText, RotateCcw, Building2, ClipboardCheck,
   CheckCircle2, Settings2, Crown, ChevronDown, ChevronUp,
-  Info,
+  Info, CreditCard,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -19,10 +19,10 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   CREAR_VENTA:              { label: 'Realizar ventas en el POS',        descripcion: 'Abrir el POS y registrar ventas' },
   VER_DETALLE_VENTA:        { label: 'Ver detalle de una venta',         descripcion: 'Consultar el detalle de cualquier venta' },
   ANULAR_VENTA:             { label: 'Anular ventas',                    descripcion: 'Anular ventas registradas (revierte el stock automáticamente)' },
-  ELIMINAR_VENTA:           { label: 'Eliminar ventas (legacy)',         descripcion: 'Acceso heredado — también permite anular ventas' },
   VER_CAJA:                 { label: 'Ver el módulo Caja',               descripcion: 'Acceder a la pantalla de caja' },
   ABRIR_CAJA:               { label: 'Abrir turno de caja',              descripcion: 'Iniciar un turno de caja' },
   CERRAR_CAJA:              { label: 'Cerrar turno de caja',             descripcion: 'Cerrar y cuadrar la caja' },
+  RETIRO_CAJA:              { label: 'Registrar retiro parcial',          descripcion: 'Retirar efectivo de la caja sin cerrar el turno' },
   VER_CLIENTES:             { label: 'Ver clientes',                     descripcion: 'Acceder al listado de clientes' },
   CREAR_CLIENTE:            { label: 'Registrar clientes',               descripcion: 'Agregar nuevos clientes' },
   EDITAR_CLIENTE:           { label: 'Editar clientes',                  descripcion: 'Modificar información de clientes' },
@@ -32,7 +32,8 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   CREAR_DEVOLUCION:         { label: 'Registrar devoluciones',           descripcion: 'Procesar devoluciones de venta' },
   VER_NOTAS_CREDITO:        { label: 'Ver notas de crédito',             descripcion: 'Listado de notas de crédito' },
   EMITIR_NOTA_CREDITO:      { label: 'Emitir notas de crédito',          descripcion: 'Generar notas de crédito electrónicas' },
-  VER_FACTURACION:          { label: 'Ver módulo Facturación',           descripcion: 'Acceder a la pantalla de comprobantes' },
+  VER_FACTURACION:          { label: 'Ver toda la facturación',          descripcion: 'Acceder a todos los comprobantes del negocio' },
+  VER_MIS_FACTURACION:      { label: 'Ver mis comprobantes',             descripcion: 'Ver únicamente los comprobantes de las propias ventas' },
   EMITIR_COMPROBANTE:       { label: 'Emitir boletas y facturas',        descripcion: 'Emitir comprobantes electrónicos' },
   VER_COMPROBANTE:          { label: 'Ver comprobantes emitidos',        descripcion: 'Consultar comprobantes ya emitidos' },
   ANULAR_COMPROBANTE:       { label: 'Anular comprobantes',              descripcion: 'Anular boletas o facturas emitidas' },
@@ -52,7 +53,9 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   CAMBIAR_ESTADO_PROVEEDOR: { label: 'Activar / desactivar proveedores', descripcion: 'Habilitar o inhabilitar proveedores' },
   VER_OC:                   { label: 'Ver órdenes de compra',            descripcion: 'Acceder al módulo de compras' },
   CREAR_OC:                 { label: 'Crear órdenes de compra',          descripcion: 'Generar nuevas órdenes de compra a proveedores' },
-  EDITAR_OC:                { label: 'Editar órdenes de compra',         descripcion: 'Modificar OC pendientes' },
+  EDITAR_OC:                { label: 'Editar órdenes de compra',         descripcion: 'Modificar ítems y observaciones de OC en borrador' },
+  ENVIAR_OC:                { label: 'Enviar OC al proveedor',           descripcion: 'Marcar la OC como enviada al proveedor' },
+  CANCELAR_OC:              { label: 'Cancelar órdenes de compra',       descripcion: 'Cancelar una OC pendiente o enviada' },
   VER_RECEPCIONES:          { label: 'Ver recepciones de mercadería',    descripcion: 'Acceder al módulo de recepciones' },
   CREAR_RECEPCION:          { label: 'Registrar recepciones',            descripcion: 'Crear nuevas recepciones de mercadería' },
   CONFIRMAR_RECEPCION:      { label: 'Confirmar recepciones',            descripcion: 'Confirmar y cerrar una recepción' },
@@ -60,6 +63,7 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   CREAR_GASTO:              { label: 'Registrar gastos',                 descripcion: 'Agregar nuevos gastos o egresos' },
   EDITAR_GASTO:             { label: 'Editar gastos',                    descripcion: 'Modificar gastos ya registrados' },
   ELIMINAR_GASTO:           { label: 'Eliminar gastos',                  descripcion: 'Borrar gastos del sistema' },
+  VER_SUSCRIPCIONES:        { label: 'Ver suscripciones',                descripcion: 'Consultar el estado y detalle de la suscripción activa' },
   VER_REPORTES:             { label: 'Acceder a Reportes',               descripcion: 'Ver reportes de ventas, inventario y rentabilidad' },
   VER_USUARIOS:             { label: 'Ver listado de usuarios',          descripcion: 'Consultar los usuarios registrados' },
   CREAR_USUARIO:            { label: 'Crear usuarios',                   descripcion: 'Invitar y crear nuevos colaboradores' },
@@ -68,21 +72,35 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   CAMBIAR_ESTADO_USUARIO:   { label: 'Activar / desactivar usuarios',    descripcion: 'Habilitar o inhabilitar el acceso de un usuario' },
 };
 
-// ─── Grupos ───────────────────────────────────────────────────────────────────
+// ─── Grupos (orden = sidebar) ─────────────────────────────────────────────────
+// Ventas → Caja → Historial Ventas → Facturación → Notas/Devoluciones
+// Gastos → OC → Recepciones
+// Contactos → Clientes → Proveedores
+// Inventario → Productos → Movimientos
+// Usuarios
+// Reportes
 const PERMISSION_GROUPS: { label: string; color: string; icon: React.ReactNode; codes: string[] }[] = [
-  { label: 'Ventas',           color: 'emerald', icon: <ShoppingCart size={15} />, codes: ['VER_VENTAS','VER_MIS_VENTAS','CREAR_VENTA','VER_DETALLE_VENTA','ANULAR_VENTA','ELIMINAR_VENTA'] },
-  { label: 'Caja',             color: 'blue',    icon: <Wallet       size={15} />, codes: ['VER_CAJA','ABRIR_CAJA','CERRAR_CAJA'] },
-  { label: 'Clientes',         color: 'violet',  icon: <Users        size={15} />, codes: ['VER_CLIENTES','CREAR_CLIENTE','EDITAR_CLIENTE','CAMBIAR_ESTADO_CLIENTE','ELIMINAR_CLIENTE'] },
+  // ── Ventas ────────────────────────────────────────────────────────
+  { label: 'Historial de Ventas', color: 'emerald', icon: <ShoppingCart size={15} />, codes: ['CREAR_VENTA','VER_VENTAS','VER_MIS_VENTAS','VER_DETALLE_VENTA','ANULAR_VENTA'] },
+  { label: 'Caja',             color: 'blue',    icon: <Wallet       size={15} />, codes: ['VER_CAJA','ABRIR_CAJA','CERRAR_CAJA','RETIRO_CAJA'] },
+  { label: 'Facturación',      color: 'indigo',  icon: <FileText     size={15} />, codes: ['VER_FACTURACION','VER_MIS_FACTURACION','EMITIR_COMPROBANTE','VER_COMPROBANTE','ANULAR_COMPROBANTE','ENVIAR_SUNAT'] },
   { label: 'Devoluciones y NC',color: 'orange',  icon: <RotateCcw    size={15} />, codes: ['VER_DEVOLUCIONES','CREAR_DEVOLUCION','VER_NOTAS_CREDITO','EMITIR_NOTA_CREDITO'] },
-  { label: 'Facturación',      color: 'indigo',  icon: <FileText     size={15} />, codes: ['VER_FACTURACION','EMITIR_COMPROBANTE','VER_COMPROBANTE','ANULAR_COMPROBANTE','ENVIAR_SUNAT'] },
-  { label: 'Productos',        color: 'pink',    icon: <Package      size={15} />, codes: ['VER_PRODUCTOS','CREAR_PRODUCTO','EDITAR_PRODUCTO','ELIMINAR_PRODUCTO'] },
-  { label: 'Inventario',       color: 'amber',   icon: <Boxes        size={15} />, codes: ['VER_INVENTARIO','CREAR_INVENTARIO','VER_DETALLE_INVENTARIO','ELIMINAR_INVENTARIO'] },
-  { label: 'Proveedores',      color: 'teal',    icon: <Building2    size={15} />, codes: ['VER_PROVEEDORES','CREAR_PROVEEDOR','EDITAR_PROVEEDOR','CAMBIAR_ESTADO_PROVEEDOR','ELIMINAR_PROVEEDOR'] },
-  { label: 'Órdenes de Compra',color: 'cyan',    icon: <Truck        size={15} />, codes: ['VER_OC','CREAR_OC','EDITAR_OC'] },
-  { label: 'Recepciones',      color: 'lime',    icon: <ClipboardCheck size={15} />, codes: ['VER_RECEPCIONES','CREAR_RECEPCION','CONFIRMAR_RECEPCION'] },
+  // ── Gastos ────────────────────────────────────────────────────────
   { label: 'Gastos',           color: 'rose',    icon: <Wallet       size={15} />, codes: ['VER_GASTOS','CREAR_GASTO','EDITAR_GASTO','ELIMINAR_GASTO'] },
-  { label: 'Reportes',         color: 'purple',  icon: <BarChart3    size={15} />, codes: ['VER_REPORTES'] },
+  { label: 'Órdenes de Compra',color: 'cyan',    icon: <Truck        size={15} />, codes: ['VER_OC','CREAR_OC','EDITAR_OC','ENVIAR_OC','CANCELAR_OC'] },
+  { label: 'Recepciones',      color: 'lime',    icon: <ClipboardCheck size={15} />, codes: ['VER_RECEPCIONES','CREAR_RECEPCION','CONFIRMAR_RECEPCION'] },
+  // ── Contactos ─────────────────────────────────────────────────────
+  { label: 'Clientes',         color: 'violet',  icon: <Users        size={15} />, codes: ['VER_CLIENTES','CREAR_CLIENTE','EDITAR_CLIENTE','CAMBIAR_ESTADO_CLIENTE','ELIMINAR_CLIENTE'] },
+  { label: 'Proveedores',      color: 'teal',    icon: <Building2    size={15} />, codes: ['VER_PROVEEDORES','CREAR_PROVEEDOR','EDITAR_PROVEEDOR','CAMBIAR_ESTADO_PROVEEDOR','ELIMINAR_PROVEEDOR'] },
+  // ── Inventario ────────────────────────────────────────────────────
+  { label: 'Productos',        color: 'pink',    icon: <Package      size={15} />, codes: ['VER_PRODUCTOS','CREAR_PRODUCTO','EDITAR_PRODUCTO','ELIMINAR_PRODUCTO'] },
+  { label: 'Movimientos',      color: 'amber',   icon: <Boxes        size={15} />, codes: ['VER_INVENTARIO','CREAR_INVENTARIO'] },
+  // ── Usuarios ──────────────────────────────────────────────────────
   { label: 'Usuarios',         color: 'slate',   icon: <Users        size={15} />, codes: ['VER_USUARIOS','CREAR_USUARIO','EDITAR_USUARIO','CAMBIAR_ESTADO_USUARIO','ELIMINAR_USUARIO'] },
+  // ── Suscripciones ─────────────────────────────────────────────────
+  { label: 'Suscripciones',    color: 'violet',  icon: <CreditCard   size={15} />, codes: ['VER_SUSCRIPCIONES'] },
+  // ── Reportes ──────────────────────────────────────────────────────
+  { label: 'Reportes',         color: 'purple',  icon: <BarChart3    size={15} />, codes: ['VER_REPORTES'] },
 ];
 
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string; iconBg: string }> = {
@@ -286,8 +304,8 @@ export function PermisosConfig() {
     const byCode = new Map<string, Permiso>();
     for (const p of catalog) { const code = getPermCode(p); if (code) byCode.set(code, p); }
     return PERMISSION_GROUPS.map(g => {
+      // Incluir TODOS los permisos del grupo: base (bloqueados) + extras (editables)
       const perms = g.codes
-        .filter(code => !basePermisos.includes(code))
         .map((code, i) => byCode.get(code) ?? ({ id: -(i + 1), nombre: code } as Permiso));
       return { ...g, perms };
     }).filter(g => g.perms.length > 0);
@@ -506,9 +524,10 @@ export function PermisosConfig() {
                   <div className="space-y-2">
                     {extraGroups.map(group => {
                       const c = COLOR_MAP[group.color] ?? COLOR_MAP.slate;
-                      const assignable = group.perms.map(getPermCode);
-                      const activeCount = assignable.filter(code => userPermisos.includes(code)).length;
-                      const allOn = activeCount === assignable.length && assignable.length > 0;
+                      // Solo los editables (no base) cuentan para el toggle del grupo
+                      const editableCodes = group.perms.map(getPermCode).filter(code => !basePermisos.includes(code));
+                      const activeCount = editableCodes.filter(code => userPermisos.includes(code)).length;
+                      const allOn = editableCodes.length > 0 && activeCount === editableCodes.length;
                       const isOpen = expandedGroups[group.label] ?? false;
 
                       return (
@@ -525,16 +544,17 @@ export function PermisosConfig() {
                               <span className="text-sm font-semibold truncate">{group.label}</span>
                               {activeCount > 0 && (
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${c.bg} ${c.text} border ${c.border}`}>
-                                  {activeCount}/{assignable.length}
+                                  {activeCount}/{editableCodes.length}
                                 </span>
                               )}
                             </button>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              {/* Toggle todo el grupo */}
-                              <Toggle
-                                checked={allOn}
-                                onChange={() => toggleGroup(assignable)}
-                              />
+                              {editableCodes.length > 0 && (
+                                <Toggle
+                                  checked={allOn}
+                                  onChange={() => toggleGroup(editableCodes)}
+                                />
+                              )}
                               <button
                                 onClick={() => setExpandedGroups(prev => ({ ...prev, [group.label]: !isOpen }))}
                                 className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
@@ -549,21 +569,31 @@ export function PermisosConfig() {
                             <div className="divide-y border-t">
                               {group.perms.map(perm => {
                                 const code = getPermCode(perm);
+                                const isBase = basePermisos.includes(code);
                                 const isChecked = userPermisos.includes(code);
                                 const info = PERM_LABELS[code];
                                 return (
                                   <div
                                     key={code}
-                                    onClick={() => togglePermiso(code)}
-                                    className="flex items-center justify-between gap-4 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                                    onClick={() => !isBase && togglePermiso(code)}
+                                    className={`flex items-center justify-between gap-4 px-4 py-3 transition-colors ${isBase ? 'cursor-default opacity-60' : 'cursor-pointer hover:bg-muted/30'}`}
                                   >
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium">{info?.label ?? code}</p>
-                                      {info?.descripcion && (
-                                        <p className="text-xs text-muted-foreground mt-0.5">{info.descripcion}</p>
-                                      )}
+                                    <div className="min-w-0 flex items-start gap-2">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <p className="text-sm font-medium">{info?.label ?? code}</p>
+                                          {isBase && (
+                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border flex-shrink-0">
+                                              Rol
+                                            </span>
+                                          )}
+                                        </div>
+                                        {info?.descripcion && (
+                                          <p className="text-xs text-muted-foreground mt-0.5">{info.descripcion}</p>
+                                        )}
+                                      </div>
                                     </div>
-                                    <Toggle checked={isChecked} onChange={() => togglePermiso(code)} />
+                                    <Toggle checked={isChecked} onChange={() => !isBase && togglePermiso(code)} disabled={isBase} />
                                   </div>
                                 );
                               })}

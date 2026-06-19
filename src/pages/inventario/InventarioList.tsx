@@ -90,6 +90,7 @@ export function InventarioList() {
     tenantId: '',
     proveedorId: undefined,
     costoUnitario: undefined,
+    precioVenta: undefined,
     lote: '',
     fechaVencimiento: undefined,
     registroSanitario: '',
@@ -242,10 +243,7 @@ export function InventarioList() {
       return;
     }
 
-    if (!formData.descripcion) {
-      toast.error('La descripción es requerida');
-      return;
-    }
+
 
     if (formData.tipo === 'ENTRADA' && formData.costoUnitario !== undefined && formData.costoUnitario <= 0) {
       toast.error('El costo unitario debe ser mayor a 0');
@@ -934,17 +932,30 @@ export function InventarioList() {
                       />
                     </div>
 
-                    {/* Costo unitario */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Costo unitario</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formData.costoUnitario ?? ''}
-                        onChange={(e) => setFormData({ ...formData, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined })}
-                        placeholder="0.00"
-                      />
+                    {/* Costo unitario y Precio de venta */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Costo unitario</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.costoUnitario ?? ''}
+                          onChange={(e) => setFormData({ ...formData, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined })}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Precio de venta</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.precioVenta ?? ''}
+                          onChange={(e) => setFormData({ ...formData, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined })}
+                          placeholder="0.00"
+                        />
+                      </div>
                     </div>
 
                     {/* Lote */}
@@ -996,7 +1007,7 @@ export function InventarioList() {
                   <Input
                     type="number"
                     min="1"
-                    value={formData.cantidad}
+                    value={formData.cantidad === 0 ? '' : formData.cantidad}
                     onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     className="font-semibold"
@@ -1018,14 +1029,13 @@ export function InventarioList() {
               {/* 4) Descripción */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">
-                  Descripción <span className="text-red-500">*</span>
+                  Descripción
                 </label>
                 <Input
                   type="text"
-                  placeholder="Motivo o detalles del movimiento"
+                  placeholder="Motivo o detalles del movimiento (opcional)"
                   value={formData.descripcion}
                   onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                  required
                 />
                 <p className="text-xs text-muted-foreground">
                   Ej: Ajuste por conteo físico / Devolución por producto dañado.
@@ -1042,7 +1052,7 @@ export function InventarioList() {
             <Button
               type="submit"
               className="w-full sm:w-auto"
-              disabled={formData.productoId === 0 || formData.cantidad <= 0 || !formData.descripcion}
+              disabled={formData.productoId === 0 || formData.cantidad <= 0}
             >
               Registrar Movimiento
             </Button>

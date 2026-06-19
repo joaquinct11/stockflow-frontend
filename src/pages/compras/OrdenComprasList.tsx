@@ -172,7 +172,7 @@ export function OrdenComprasList() {
       setLoading(true);
       const productosData = await productoService.getAll();
       setProductos(productosData);
-      if (puede('VER_PROVEEDORES')) {
+      if (puede('VER_PROVEEDORES') || puede('CREAR_OC')) {
         const proveedoresData = await proveedorService.getActivos();
         setProveedores(proveedoresData);
       }
@@ -193,7 +193,7 @@ export function OrdenComprasList() {
       ]);
       setOrdenes(ordenesData);
       setProductos(productosData);
-      if (puede('VER_PROVEEDORES')) {
+      if (puede('VER_PROVEEDORES') || puede('CREAR_OC')) {
         const proveedoresData = await proveedorService.getActivos();
         setProveedores(proveedoresData);
       }
