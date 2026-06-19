@@ -29,7 +29,7 @@ import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
 export function KardexPage() {
-  const { canView } = usePermissions();
+  const { canView, puede } = usePermissions();
   const hasViewPermission = canView('INVENTARIO');
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
@@ -61,12 +61,12 @@ export function KardexPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [productosData, proveedoresData] = await Promise.all([
-        productoService.getAll(),
-        proveedorService.getAll(),
-      ]);
+      const productosData = await productoService.getAll();
       setProductos(productosData);
-      setProveedores(proveedoresData);
+      if (puede('VER_PROVEEDORES')) {
+        const proveedoresData = await proveedorService.getAll();
+        setProveedores(proveedoresData);
+      }
     } catch (error) {
       toast.error('Error al cargar datos');
       if (import.meta.env.DEV) { console.error(error);}

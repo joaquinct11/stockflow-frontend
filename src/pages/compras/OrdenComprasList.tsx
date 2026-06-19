@@ -57,7 +57,7 @@ type EstadoOCFilter = 'TODOS' | 'BORRADOR' | 'ENVIADA' | 'RECIBIDA_PARCIAL' | 'R
 
 export function OrdenComprasList() {
   const navigate = useNavigate();
-  const { canCreate, canView, canEdit } = usePermissions();
+  const { canCreate, canView, canEdit, puede } = usePermissions();
 
   // Ajusta si tu sistema usa otro módulo para permisos de compras:
   const hasViewPermission = canView('COMPRAS') || canView('COMPRAS') || canView('PROVEEDORES');
@@ -170,12 +170,12 @@ export function OrdenComprasList() {
   const fetchFormData = async () => {
     try {
       setLoading(true);
-      const [proveedoresData, productosData] = await Promise.all([
-        proveedorService.getActivos(),
-        productoService.getAll(),
-      ]);
-      setProveedores(proveedoresData);
+      const productosData = await productoService.getAll();
       setProductos(productosData);
+      if (puede('VER_PROVEEDORES')) {
+        const proveedoresData = await proveedorService.getActivos();
+        setProveedores(proveedoresData);
+      }
     } catch (e) {
       toast.error('Error al cargar datos');
       if (import.meta.env.DEV) console.error(e);
@@ -187,14 +187,16 @@ export function OrdenComprasList() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [ordenesData, proveedoresData, productosData] = await Promise.all([
+      const [ordenesData, productosData] = await Promise.all([
         ordenCompraService.getAll(),
-        proveedorService.getActivos(),
         productoService.getAll(),
       ]);
       setOrdenes(ordenesData);
-      setProveedores(proveedoresData);
       setProductos(productosData);
+      if (puede('VER_PROVEEDORES')) {
+        const proveedoresData = await proveedorService.getActivos();
+        setProveedores(proveedoresData);
+      }
     } catch (e) {
       toast.error('Error al cargar órdenes de compra');
       if (import.meta.env.DEV) console.error(e);
