@@ -121,6 +121,8 @@ export function ProductosList() {
     activo: true,
     tenantId: user?.tenantId ?? '',
     unidadMedidaId: 0,
+    esGenerico: false,
+    unidadesPorCaja: undefined,
   });
 
   useEffect(() => {
@@ -271,6 +273,8 @@ export function ProductosList() {
       unidadMedidaId: producto.unidadMedidaId || 0,
       imagenUrl: producto.imagenUrl,
       componentes: producto.componentes,
+      esGenerico: producto.esGenerico ?? false,
+      unidadesPorCaja: producto.unidadesPorCaja,
     });
     setImgPreview(producto.imagenUrl ?? null);
 
@@ -291,6 +295,8 @@ export function ProductosList() {
       activo: true,
       tenantId: user?.tenantId ?? '',
       unidadMedidaId: unidadesMedida.length > 0 ? unidadesMedida[0].id : 0,
+      esGenerico: false,
+      unidadesPorCaja: undefined,
     });
     setEditingId(null);
     setIsDialogOpen(false);
@@ -633,7 +639,7 @@ export function ProductosList() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">
-                  Código de Barras <span className="text-red-500">*</span>
+                  Código de Barras <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
                 </label>
                 <div className="relative">
                   <Barcode className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
@@ -642,7 +648,6 @@ export function ProductosList() {
                     value={formData.codigoBarras}
                     onChange={(e) => setFormData({ ...formData, codigoBarras: e.target.value })}
                     className="pl-10 h-11"
-                    required
                   />
                 </div>
               </div>
@@ -818,8 +823,9 @@ export function ProductosList() {
                 <Input
                   type="number"
                   min="0"
-                  value={formData.stockMinimo}
+                  value={formData.stockMinimo === 0 ? '' : formData.stockMinimo}
                   onChange={(e) => setFormData({ ...formData, stockMinimo: parseInt(e.target.value || '0') })}
+                  placeholder="0"
                   className="h-11"
                   required
                 />
@@ -832,8 +838,9 @@ export function ProductosList() {
                 <Input
                   type="number"
                   min="0"
-                  value={formData.stockMaximo}
+                  value={formData.stockMaximo === 0 ? '' : formData.stockMaximo}
                   onChange={(e) => setFormData({ ...formData, stockMaximo: parseInt(e.target.value || '0') })}
+                  placeholder="0"
                   className="h-11"
                   required
                 />
@@ -857,8 +864,9 @@ export function ProductosList() {
                     type="number"
                     step="0.01"
                     min="0"
-                    value={formData.costoUnitario}
+                    value={formData.costoUnitario === 0 ? '' : formData.costoUnitario}
                     onChange={(e) => setFormData({ ...formData, costoUnitario: parseFloat(e.target.value || '0') })}
+                    placeholder="0.00"
                     className="pl-10 h-11"
                   />
                 </div>
@@ -874,8 +882,9 @@ export function ProductosList() {
                     type="number"
                     step="0.01"
                     min="0.01"
-                    value={formData.precioVenta}
+                    value={formData.precioVenta === 0 ? '' : formData.precioVenta}
                     onChange={(e) => setFormData({ ...formData, precioVenta: parseFloat(e.target.value || '0') })}
+                    placeholder="0.00"
                     className="pl-10 h-11"
                     required
                   />
@@ -887,6 +896,38 @@ export function ProductosList() {
                     {(((formData.precioVenta - formData.costoUnitario) / formData.costoUnitario) * 100).toFixed(1)}%
                   </p>
                 )}
+              </div>
+            </div>
+          </div>
+
+          {/* Sección: Clasificación farmacéutica */}
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Clasificación</p>
+              <p className="text-xs text-muted-foreground">Datos para búsqueda y presentación del producto.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg border bg-background cursor-pointer"
+                onClick={() => setFormData(p => ({ ...p, esGenerico: !p.esGenerico }))}>
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${formData.esGenerico ? 'bg-primary border-primary' : 'border-muted-foreground'}`}>
+                  {formData.esGenerico && <svg viewBox="0 0 12 10" className="w-3 h-3 text-primary-foreground fill-current"><path d="M1 5l3.5 3.5L11 1"/></svg>}
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Producto genérico</p>
+                  <p className="text-xs text-muted-foreground">Permite filtrar genéricos en el POS</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Unidades por caja</label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={formData.unidadesPorCaja === undefined || formData.unidadesPorCaja === 0 ? '' : formData.unidadesPorCaja}
+                  onChange={(e) => setFormData(p => ({ ...p, unidadesPorCaja: e.target.value ? parseInt(e.target.value) : undefined }))}
+                  placeholder="Ej: 100 (tabletas/caja)"
+                  className="h-11"
+                />
+                <p className="text-xs text-muted-foreground">Cuántas unidades trae la caja o presentación.</p>
               </div>
             </div>
           </div>

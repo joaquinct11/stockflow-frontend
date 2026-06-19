@@ -125,6 +125,10 @@ export interface ProductoDTO {
   imagenUrl?: string;
   /** Composición o contenido (ej: "paracetamol 500mg, amoxicilina 250mg"). Opcional. */
   componentes?: string;
+  /** True si el producto es genérico (sin marca). */
+  esGenerico?: boolean;
+  /** Cuántas unidades trae cada caja/presentación (ej: 100 tabletas/caja). Informativo. */
+  unidadesPorCaja?: number;
   /** Fecha del lote más próximo a vencer. Solo lectura, calculado por el backend. */
   proximaFechaVencimiento?: string;
 }
@@ -324,6 +328,7 @@ export interface MovimientoInventarioDTO {
   // Campos exclusivos para tipo === 'ENTRADA' o 'SALDO_INICIAL'
   proveedorId?: number;
   costoUnitario?: number;
+  precioVenta?: number;
   lote?: string;
   fechaVencimiento?: string;
   registroSanitario?: string;
