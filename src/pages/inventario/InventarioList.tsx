@@ -43,7 +43,7 @@ import { ImportarProductosModal } from '../../components/inventario/ImportarProd
 
 export function InventarioList() {
   const { userId, tenantId } = useCurrentUser();
-  const { canCreate, canView } = usePermissions();
+  const { canCreate, canView, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
   const esFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
   const hasViewPermission = canView('INVENTARIO');
@@ -131,14 +131,16 @@ export function InventarioList() {
 
   const fetchFormData = async () => {
     try {
-      const [productosData, unidadesData, proveedoresData] = await Promise.all([
+      const [productosData, unidadesData] = await Promise.all([
         productoService.getAll(),
         unidadMedidaService.getAll(),
-        proveedorService.getAll(),
       ]);
       setProductos(productosData);
-      setProveedores(proveedoresData);
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
+      if (puede('VER_PROVEEDORES')) {
+        const proveedoresData = await proveedorService.getAll();
+        setProveedores(proveedoresData);
+      }
     } catch (error) {
       toast.error('Error al cargar datos del formulario');
       if (import.meta.env.DEV) console.error(error);
@@ -148,14 +150,16 @@ export function InventarioList() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [productosData, unidadesData, proveedoresData] = await Promise.all([
+      const [productosData, unidadesData] = await Promise.all([
         productoService.getAll(),
         unidadMedidaService.getAll(),
-        proveedorService.getAll(),
       ]);
       setProductos(productosData);
-      setProveedores(proveedoresData);
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
+      if (puede('VER_PROVEEDORES')) {
+        const proveedoresData = await proveedorService.getAll();
+        setProveedores(proveedoresData);
+      }
     } catch (error) {
       toast.error('Error al cargar datos');
       if (import.meta.env.DEV) console.error(error);

@@ -211,26 +211,36 @@ export function RecepcionList() {
   const fetchFormData = async () => {
     try {
       setLoading(true);
-      const [ocData, provData, prodData] = await Promise.all([
-        ordenCompraService.getAll().catch(() => []),
-        proveedorService.getActivos().catch(() => []),
-        productoService.getAll().catch(() => []),
-      ]);
-      setOcs(ocData); setProveedores(provData); setProductos(prodData);
+      const prodData = await productoService.getAll().catch(() => []);
+      setProductos(prodData);
+      if (puede('VER_OC')) {
+        const ocData = await ordenCompraService.getAll().catch(() => []);
+        setOcs(ocData);
+      }
+      if (puede('VER_PROVEEDORES')) {
+        const provData = await proveedorService.getActivos().catch(() => []);
+        setProveedores(provData);
+      }
     } finally { setLoading(false); }
   };
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [recDataRaw, ocData, provData, prodData] = await Promise.all([
+      const [recDataRaw, prodData] = await Promise.all([
         recepcionService.getAll(),
-        ordenCompraService.getAll().catch(() => []),
-        proveedorService.getActivos().catch(() => []),
         productoService.getAll().catch(() => []),
       ]);
       setRecepciones((recDataRaw as any[]).map(normalizeRecepcion));
-      setOcs(ocData); setProveedores(provData); setProductos(prodData);
+      setProductos(prodData);
+      if (puede('VER_OC')) {
+        const ocData = await ordenCompraService.getAll().catch(() => []);
+        setOcs(ocData);
+      }
+      if (puede('VER_PROVEEDORES')) {
+        const provData = await proveedorService.getActivos().catch(() => []);
+        setProveedores(provData);
+      }
     } catch { toast.error('Error al cargar recepciones'); }
     finally { setLoading(false); }
   };
