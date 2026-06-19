@@ -59,6 +59,9 @@ export function InventarioList() {
   const [, setSelectedProveedorMov] = useState<any>(null);
 
   // Kardex dialog state
+  const [cantidadCajas, setCantidadCajas] = useState<number | undefined>(undefined);
+  const [unidadesPorCajaForm, setUnidadesPorCajaForm] = useState<number | undefined>(undefined);
+
   const [isKardexOpen, setIsKardexOpen] = useState(false);
   const [kardexLoading, setKardexLoading] = useState(false);
   const [kardexProducto, setKardexProducto] = useState<ProductoDTO | null>(null);
@@ -292,6 +295,8 @@ export function InventarioList() {
     });
     setSelectedProducto(null);
     setSelectedProveedorMov(null);
+    setCantidadCajas(undefined);
+    setUnidadesPorCajaForm(undefined);
     setIsDialogOpen(false);
   };
 
@@ -794,10 +799,15 @@ export function InventarioList() {
                       if (producto) {
                         setSelectedProducto(option);
                         setFormData({ ...formData, productoId: producto.id! });
+                        if (producto.unidadesPorCaja) {
+                          setUnidadesPorCajaForm(producto.unidadesPorCaja);
+                        }
                       }
                     } else {
                       setSelectedProducto(null);
                       setFormData({ ...formData, productoId: 0 });
+                      setCantidadCajas(undefined);
+                      setUnidadesPorCajaForm(undefined);
                     }
                   }}
                   placeholder="Buscar producto por nombre..."
@@ -956,6 +966,55 @@ export function InventarioList() {
                           placeholder="0.00"
                         />
                       </div>
+                    </div>
+
+                    {/* Cajas y Unidades por caja */}
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium">
+                        Conversión caja → unidades{' '}
+                        <span className="font-normal text-muted-foreground">(opcional)</span>
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          type="number"
+                          min="1"
+                          className="w-28"
+                          value={cantidadCajas ?? ''}
+                          onChange={(e) => {
+                            const cajas = e.target.value ? parseInt(e.target.value) : undefined;
+                            setCantidadCajas(cajas);
+                            if (cajas && unidadesPorCajaForm) {
+                              setFormData(prev => ({ ...prev, cantidad: cajas * unidadesPorCajaForm }));
+                            }
+                          }}
+                          placeholder="Cajas"
+                        />
+                        <span className="text-muted-foreground text-sm font-medium">×</span>
+                        <Input
+                          type="number"
+                          min="1"
+                          className="w-32"
+                          value={unidadesPorCajaForm ?? ''}
+                          onChange={(e) => {
+                            const unidades = e.target.value ? parseInt(e.target.value) : undefined;
+                            setUnidadesPorCajaForm(unidades);
+                            if (cantidadCajas && unidades) {
+                              setFormData(prev => ({ ...prev, cantidad: cantidadCajas * unidades }));
+                            }
+                          }}
+                          placeholder="Uds/caja"
+                        />
+                        {cantidadCajas && unidadesPorCajaForm ? (
+                          <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                            = {cantidadCajas * unidadesPorCajaForm} unidades
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">= total en unidades</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Tabletas, ampollas, etc. Actualiza el campo Cantidad automáticamente.
+                      </p>
                     </div>
 
                     {/* Lote */}
