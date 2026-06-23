@@ -108,7 +108,7 @@ export function printVentaTicket(
     const pu   = Number(d.precioUnitario ?? 0).toFixed(2);
     const sub  = (cant * Number(d.precioUnitario ?? 0)).toFixed(2);
     return `
-      <tr class="item-nombre"><td colspan="4">${d.productoNombre ?? `Prod #${d.productoId}`}</td></tr>
+      <tr class="item-nombre"><td colspan="4">${d.productoNombre ?? `Prod #${d.productoId}`}${d.varianteDescripcion ? ` <span style="font-weight:normal;font-size:9px">(${d.varianteDescripcion})</span>` : ''}</td></tr>
       <tr>
         <td class="col-cant">${cant}</td>
         <td class="col-um">UND</td>
@@ -276,7 +276,7 @@ function buildTicketHtml(c: ComprobanteDTO, cfg?: TenantConfigDTO | null): strin
         const pu   = Number(it.precioUnitario ?? 0).toFixed(2);
         const sub  = Number(it.subtotal ?? 0).toFixed(2);
         return `
-          <tr class="item-nombre"><td colspan="4">${it.productoNombre ?? `Prod #${it.productoId}`}</td></tr>
+          <tr class="item-nombre"><td colspan="4">${it.productoNombre ?? `Prod #${it.productoId}`}${it.varianteDescripcion ? ` <span style="font-weight:normal;font-size:9px">(${it.varianteDescripcion})</span>` : ''}</td></tr>
           <tr>
             <td class="col-cant">${cant}</td>
             <td class="col-um">NIU</td>

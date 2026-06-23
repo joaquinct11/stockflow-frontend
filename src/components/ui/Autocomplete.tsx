@@ -7,6 +7,7 @@ interface Option {
   id: number | string;
   label: string;
   subtitle?: string;
+  searchText?: string;
 }
 
 interface AutocompleteProps {
@@ -33,8 +34,10 @@ export function Autocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Filtrar opciones
+  const q = search.toLowerCase();
   const filteredOptions = options.filter((option) =>
-    option.label.toLowerCase().includes(search.toLowerCase())
+    option.label.toLowerCase().includes(q) ||
+    (option.searchText && option.searchText.toLowerCase().includes(q))
   );
 
   // Cerrar al hacer clic fuera
