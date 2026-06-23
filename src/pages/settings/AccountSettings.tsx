@@ -240,12 +240,18 @@ export function AccountSettings() {
                             <option value="MINIMARKET">Minimarket</option>
                             <option value="FERRETERIA">Ferretería</option>
                             <option value="RESTAURANTE">Restaurante</option>
+                            <option value="TIENDA_ROPA">Tienda de Ropa</option>
                             <option value="TIENDA">Tienda / Bodega</option>
                             <option value="OTRO">Otro</option>
                           </select>
                           {(form.rubro === 'BOTICA' || form.rubro === 'FARMACIA') && (
                             <p className="text-xs text-blue-600 dark:text-blue-400">
                               En recepciones se requerirá lote, fecha de vencimiento y registro sanitario.
+                            </p>
+                          )}
+                          {form.rubro === 'TIENDA_ROPA' && (
+                            <p className="text-xs text-violet-600 dark:text-violet-400">
+                              Los productos mostrarán campos de talla y color. Se ocultarán campos farmacéuticos.
                             </p>
                           )}
                         </div>

@@ -4,7 +4,8 @@ import type { LoteVencimientoDTO } from '../../services/movimiento.service';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { proveedorService } from '../../services/proveedor.service';
-import type { MovimientoInventarioDTO, ProductoDTO, ProveedorDTO, UnidadMedidaDTO } from '../../types';
+import { productoVarianteService } from '../../services/productoVariante.service';
+import type { MovimientoInventarioDTO, ProductoDTO, ProductoVarianteDTO, ProveedorDTO, UnidadMedidaDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -58,9 +59,11 @@ export function InventarioList() {
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
   const [, setSelectedProveedorMov] = useState<any>(null);
 
-  // Kardex dialog state
-  const [cantidadCajas, setCantidadCajas] = useState<number | undefined>(undefined);
-  const [unidadesPorCajaForm, setUnidadesPorCajaForm] = useState<number | undefined>(undefined);
+  // Variantes (TIENDA_ROPA)
+  const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
+  const [variantesProducto, setVariantesProducto] = useState<ProductoVarianteDTO[]>([]);
+  const [selectedVarianteId, setSelectedVarianteId] = useState<number | null>(null);
+  const [loadingVariantes, setLoadingVariantes] = useState(false);
 
   const [isKardexOpen, setIsKardexOpen] = useState(false);
   const [kardexLoading, setKardexLoading] = useState(false);
@@ -188,6 +191,7 @@ export function InventarioList() {
     id: p.id!,
     label: `${p.nombre}`,
     subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoriaNombre || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
+    searchText: [p.componentes, p.codigoBarras].filter(Boolean).join(' '),
   }));
 
   const openKardex = async (producto: ProductoDTO) => {
@@ -253,9 +257,15 @@ export function InventarioList() {
       return;
     }
 
+    // Para TIENDA_ROPA: si el producto tiene variantes, requerir selección
+    if (esRopa && variantesProducto.length > 0 && !selectedVarianteId) {
+      toast.error('Selecciona una variante (talla/color) para este producto');
+      return;
+    }
+
     const payload: MovimientoInventarioDTO =
       formData.tipo === 'ENTRADA'
-        ? { ...formData }
+        ? { ...formData, varianteId: selectedVarianteId ?? undefined }
         : {
             productoId: formData.productoId,
             tipo: formData.tipo,
@@ -264,6 +274,7 @@ export function InventarioList() {
             referencia: formData.referencia,
             usuarioId: formData.usuarioId,
             tenantId: formData.tenantId,
+            varianteId: selectedVarianteId ?? undefined,
           };
 
     try {
@@ -295,8 +306,8 @@ export function InventarioList() {
     });
     setSelectedProducto(null);
     setSelectedProveedorMov(null);
-    setCantidadCajas(undefined);
-    setUnidadesPorCajaForm(undefined);
+    setVariantesProducto([]);
+    setSelectedVarianteId(null);
     setIsDialogOpen(false);
   };
 
@@ -480,9 +491,9 @@ export function InventarioList() {
           {/* ── Tabs de navegación ── */}
           <div className="flex gap-1 border-b">
             {([
-              { key: 'stock',  label: 'Stock',  icon: <Package className="h-4 w-4" /> },
-              { key: 'lotes',  label: 'Lotes',  icon: <FlaskConical className="h-4 w-4" /> },
-            ] as const).map((tab) => (
+              { key: 'stock',  label: 'Stock',  icon: <Package className="h-4 w-4" />, visible: true },
+              { key: 'lotes',  label: 'Lotes',  icon: <FlaskConical className="h-4 w-4" />, visible: !esRopa },
+            ] as const).filter(t => t.visible).map((tab) => (
               <button
                 key={tab.key}
                 type="button"
@@ -793,21 +804,26 @@ export function InventarioList() {
                 <Autocomplete
                   options={productosOptions}
                   value={selectedProducto}
-                  onChange={(option) => {
+                  onChange={async (option) => {
+                    setVariantesProducto([]);
+                    setSelectedVarianteId(null);
                     if (option) {
                       const producto = productos.find((p) => p.id === option.id);
                       if (producto) {
                         setSelectedProducto(option);
                         setFormData({ ...formData, productoId: producto.id! });
-                        if (producto.unidadesPorCaja) {
-                          setUnidadesPorCajaForm(producto.unidadesPorCaja);
+                        if (esRopa) {
+                          setLoadingVariantes(true);
+                          try {
+                            const vars = await productoVarianteService.getByProducto(producto.id!);
+                            setVariantesProducto(vars.filter(v => v.activo !== false));
+                          } catch { /* sin variantes */ }
+                          finally { setLoadingVariantes(false); }
                         }
                       }
                     } else {
                       setSelectedProducto(null);
                       setFormData({ ...formData, productoId: 0 });
-                      setCantidadCajas(undefined);
-                      setUnidadesPorCajaForm(undefined);
                     }
                   }}
                   placeholder="Buscar producto por nombre..."
@@ -817,6 +833,41 @@ export function InventarioList() {
                   Selecciona el producto al que se le aplicará el movimiento.
                 </p>
               </div>
+
+              {/* 1b) Variante — solo TIENDA_ROPA cuando el producto tiene variantes */}
+              {esRopa && (loadingVariantes || variantesProducto.length > 0) && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Variante (talla / color) <span className="text-red-500">*</span>
+                  </label>
+                  {loadingVariantes ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
+                      Cargando variantes...
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {variantesProducto.map(v => {
+                        const desc = [v.talla, v.color].filter(Boolean).join(' / ') || v.sku || `#${v.id}`;
+                        const active = selectedVarianteId === v.id;
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setSelectedVarianteId(active ? null : v.id!)}
+                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${active ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}
+                          >
+                            <span className="font-medium">{desc}</span>
+                            <span className={`text-xs font-mono ${(v.stockActual ?? 0) <= (v.stockMinimo ?? 0) ? 'text-red-500' : 'text-emerald-600'}`}>
+                              Stock: {v.stockActual}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* 2) Tipo Movimiento */}
               <div className="space-y-2">
@@ -942,8 +993,8 @@ export function InventarioList() {
                       />
                     </div>
 
-                    {/* Costo unitario y Precio de venta */}
-                    <div className="grid grid-cols-2 gap-3">
+                    {/* Costo unitario (siempre) + Precio de venta (solo no-ropa) */}
+                    <div className={`grid gap-3 ${esRopa ? 'grid-cols-1' : 'grid-cols-2'}`}>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Costo unitario</label>
                         <Input
@@ -955,88 +1006,43 @@ export function InventarioList() {
                           placeholder="0.00"
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Precio de venta</label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.precioVenta ?? ''}
-                          onChange={(e) => setFormData({ ...formData, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined })}
-                          placeholder="0.00"
-                        />
-                      </div>
+                      {!esRopa && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Precio de venta</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData.precioVenta ?? ''}
+                            onChange={(e) => setFormData({ ...formData, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined })}
+                            placeholder="0.00"
+                          />
+                        </div>
+                      )}
                     </div>
 
-                    {/* Cajas y Unidades por caja */}
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-sm font-medium">
-                        Conversión caja → unidades{' '}
-                        <span className="font-normal text-muted-foreground">(opcional)</span>
-                      </label>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Input
-                          type="number"
-                          min="1"
-                          className="w-28"
-                          value={cantidadCajas ?? ''}
-                          onChange={(e) => {
-                            const cajas = e.target.value ? parseInt(e.target.value) : undefined;
-                            setCantidadCajas(cajas);
-                            if (cajas && unidadesPorCajaForm) {
-                              setFormData(prev => ({ ...prev, cantidad: cajas * unidadesPorCajaForm }));
-                            }
-                          }}
-                          placeholder="Cajas"
-                        />
-                        <span className="text-muted-foreground text-sm font-medium">×</span>
-                        <Input
-                          type="number"
-                          min="1"
-                          className="w-32"
-                          value={unidadesPorCajaForm ?? ''}
-                          onChange={(e) => {
-                            const unidades = e.target.value ? parseInt(e.target.value) : undefined;
-                            setUnidadesPorCajaForm(unidades);
-                            if (cantidadCajas && unidades) {
-                              setFormData(prev => ({ ...prev, cantidad: cantidadCajas * unidades }));
-                            }
-                          }}
-                          placeholder="Uds/caja"
-                        />
-                        {cantidadCajas && unidadesPorCajaForm ? (
-                          <span className="text-sm font-semibold text-green-700 dark:text-green-400">
-                            = {cantidadCajas * unidadesPorCajaForm} unidades
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">= total en unidades</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Tabletas, ampollas, etc. Actualiza el campo Cantidad automáticamente.
-                      </p>
-                    </div>
-
-                    {/* Lote */}
+                    {/* Lote / N° Pedido */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Lote</label>
+                      <label className="text-sm font-medium">{esRopa ? 'N° Pedido / Referencia' : 'Lote'}</label>
                       <Input
                         type="text"
                         value={formData.lote ?? ''}
                         onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
-                        placeholder="Ej: LOT-2025-001"
+                        placeholder={esRopa ? 'Ej: PED-2025-001' : 'Ej: LOT-2025-001'}
                       />
                     </div>
 
-                    {/* Fecha de vencimiento */}
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-sm font-medium">Fecha de vencimiento</label>
-                      <Input
-                        type="date"
-                        value={formData.fechaVencimiento ?? ''}
-                        onChange={(e) => setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })}
-                      />
-                    </div>
+                    {/* Fecha de vencimiento — solo para no-ropa */}
+                    {!esRopa && (
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-sm font-medium">Fecha de vencimiento</label>
+                        <Input
+                          type="date"
+                          value={formData.fechaVencimiento ?? ''}
+                          onChange={(e) => setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })}
+                        />
+                      </div>
+                    )}
 
                     {/* Registro sanitario — solo para BOTICA/FARMACIA */}
                     {esFarmacia && (

@@ -1010,7 +1010,10 @@ export function VentasList() {
                         return (
                           <TableRow key={index}>
                             <TableCell className="font-medium">
-                              {detalle.productoNombre || productoInfo?.nombre || `Producto #${detalle.productoId}`}
+                              <div>{detalle.productoNombre || productoInfo?.nombre || `Producto #${detalle.productoId}`}</div>
+                              {detalle.varianteDescripcion && (
+                                <div className="text-xs text-muted-foreground font-normal">{detalle.varianteDescripcion}</div>
+                              )}
                             </TableCell>
                             <TableCell className="text-center">{detalle.cantidad}</TableCell>
                             <TableCell className="text-right">S/.{detalle.precioUnitario.toFixed(2)}</TableCell>

@@ -4,7 +4,7 @@ import {
   ScanLine, X, Plus, Minus, Trash2, ShoppingCart,
   Banknote, CreditCard, Smartphone, CheckCircle2,
   ArrowLeft, RotateCcw, Loader2, Search, Wallet, Lock, Tag, User, UserPlus,
-  Camera, CameraOff,
+  Camera, CameraOff, Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productoService } from '../../services/producto.service';
@@ -15,7 +15,9 @@ import { clienteService } from '../../services/cliente.service';
 import type { ClienteDTO } from '../../services/cliente.service';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
-import type { ProductoDTO, DetalleVentaDTO, CajaDTO, ValidarNotaCreditoResponseDTO } from '../../types';
+import type { ProductoDTO, DetalleVentaDTO, CajaDTO, ValidarNotaCreditoResponseDTO, VentaDTO, ProductoVarianteDTO } from '../../types';
+import { printVentaTicket } from '../../utils/printTicket';
+import { productoVarianteService } from '../../services/productoVariante.service';
 
 // ── Tipos locales ──────────────────────────────────────────────────────────────
 
@@ -23,7 +25,12 @@ interface CartItem {
   producto: ProductoDTO;
   cantidad: number;
   precioUnitario: number;
+  varianteId?: number;
+  varianteDescripcion?: string;
 }
+
+const cartItemKey = (item: { producto: ProductoDTO; varianteId?: number }) =>
+  item.varianteId ? `${item.producto.id}-v${item.varianteId}` : `${item.producto.id}`;
 
 type MetodoPago = 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
 type POSStep = 'venta' | 'cobro' | 'exito';
@@ -41,6 +48,7 @@ export function POSPage() {
   const location = useLocation();
   const { user } = useAuthStore();
   const { config: negocio } = useTenantConfigStore();
+  const esRopa = negocio?.rubro === 'TIENDA_ROPA';
 
   // ── Estado principal ──────────────────────────────────────────────────────
   const [step, setStep] = useState<POSStep>('venta');
@@ -52,7 +60,14 @@ export function POSPage() {
   const [montoPagado, setMontoPagado] = useState('');
   const [cobrando, setCobrando] = useState(false);
   const [ultimaVentaId, setUltimaVentaId] = useState<number | null>(null);
+  const [ultimaVenta, setUltimaVenta] = useState<VentaDTO | null>(null);
   const [todosProductos, setTodosProductos] = useState<ProductoDTO[]>([]);
+
+  // ── Selector de variantes ──────────────────────────────────────────────────
+  const [variantePickerOpen, setVariantePickerOpen] = useState(false);
+  const [variantePickerProducto, setVariantePickerProducto] = useState<ProductoDTO | null>(null);
+  const [variantesDisponibles, setVariantesDisponibles] = useState<ProductoVarianteDTO[]>([]);
+  const [loadingVariantes, setLoadingVariantes] = useState(false);
 
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [mobileTab, setMobileTab] = useState<'productos' | 'carrito'>('productos');
@@ -396,36 +411,62 @@ export function POSPage() {
   useEffect(() => () => stopCamera(), [stopCamera]);
 
   // ── Carrito ───────────────────────────────────────────────────────────────
-  const agregarAlCarrito = (producto: ProductoDTO, switchToCart = false) => {
+  const agregarAlCarrito = async (producto: ProductoDTO, switchToCart = false) => {
+    // Para TIENDA_ROPA: mostrar picker de variantes
+    if (esRopa) {
+      try {
+        setLoadingVariantes(true);
+        const vars = await productoVarianteService.getByProducto(producto.id!);
+        const activas = vars.filter(v => v.activo !== false && (v.stockActual ?? 0) > 0);
+        if (activas.length > 0) {
+          setVariantePickerProducto(producto);
+          setVariantesDisponibles(activas);
+          setVariantePickerOpen(true);
+          setLoadingVariantes(false);
+          return;
+        }
+      } catch { /* sin variantes, continúa flujo normal */ }
+      finally { setLoadingVariantes(false); }
+    }
+
     if ((producto.stockActual ?? 0) <= 0) {
       toast.error(`Sin stock: ${producto.nombre}`);
       return;
     }
+    agregarItemAlCarrito(producto, undefined, undefined, switchToCart);
+  };
+
+  const agregarItemAlCarrito = (
+    producto: ProductoDTO,
+    varianteId?: number,
+    varianteDescripcion?: string,
+    switchToCart = false,
+  ) => {
     setCart(prev => {
-      const idx = prev.findIndex(i => i.producto.id === producto.id);
+      const key = cartItemKey({ producto, varianteId });
+      const idx = prev.findIndex(i => cartItemKey(i) === key);
       if (idx >= 0) {
         const newCart = [...prev];
         const item = newCart[idx];
-        if (item.cantidad >= (producto.stockActual ?? 0)) {
-          toast.error(`Stock máximo disponible: ${producto.stockActual}`);
+        const stockMax = varianteId
+          ? (variantesDisponibles.find(v => v.id === varianteId)?.stockActual ?? producto.stockActual ?? 0)
+          : (producto.stockActual ?? 0);
+        if (item.cantidad >= stockMax) {
+          toast.error(`Stock máximo disponible: ${stockMax}`);
           return prev;
         }
         newCart[idx] = { ...item, cantidad: item.cantidad + 1 };
         return newCart;
       }
-      return [...prev, {
-        producto,
-        cantidad: 1,
-        precioUnitario: producto.precioVenta ?? 0,
-      }];
+      return [...prev, { producto, cantidad: 1, precioUnitario: producto.precioVenta ?? 0, varianteId, varianteDescripcion }];
     });
     if (switchToCart) setMobileTab('carrito');
     refocus();
   };
 
-  const cambiarCantidad = (productoId: number, delta: number) => {
+  const cambiarCantidad = (key: string, delta: number) => {
     setCart(prev => prev
-      .map(item => item.producto.id === productoId
+      .map(item => cartItemKey(item) === key
         ? { ...item, cantidad: item.cantidad + delta }
         : item
       )
@@ -433,8 +474,8 @@ export function POSPage() {
     );
   };
 
-  const quitarItem = (productoId: number) => {
-    setCart(prev => prev.filter(i => i.producto.id !== productoId));
+  const quitarItem = (key: string) => {
+    setCart(prev => prev.filter(i => cartItemKey(i) !== key));
     refocus();
   };
 
@@ -595,6 +636,8 @@ export function POSPage() {
         cantidad: item.cantidad,
         precioUnitario: item.precioUnitario,
         subtotal: item.cantidad * item.precioUnitario,
+        varianteId: item.varianteId,
+        varianteDescripcion: item.varianteDescripcion,
       }));
 
       const venta = await ventaService.create({
@@ -609,6 +652,18 @@ export function POSPage() {
       });
 
       setUltimaVentaId(venta.id ?? null);
+      setUltimaVenta({
+        ...venta,
+        vendedorNombre: user?.nombre ?? undefined,
+        detalles: cart.map(item => ({
+          productoId: item.producto.id!,
+          productoNombre: item.producto.nombre,
+          cantidad: item.cantidad,
+          precioUnitario: item.precioUnitario,
+          varianteId: item.varianteId,
+          varianteDescripcion: item.varianteDescripcion,
+        })),
+      });
 
       // Actualizar stock local inmediatamente (sin recargar del servidor)
       setTodosProductos(prev => prev.map(p => {
@@ -635,6 +690,7 @@ export function POSPage() {
     setMontoPagado('');
     setMetodoPago('EFECTIVO');
     setUltimaVentaId(null);
+    setUltimaVenta(null);
     setNcCodigo('');
     setNcInfo(null);
     quitarCliente();
@@ -731,10 +787,11 @@ export function POSPage() {
   }
 
   return (
+    <>
     <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden select-none">
 
       {/* ── Barra superior ─────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between px-4 h-12 bg-gray-900 border-b border-gray-800 flex-shrink-0">
+      <header className="flex items-center justify-between px-4 h-12 bg-gray-900 border-b border-primary/20 flex-shrink-0" style={{boxShadow:'0 1px 0 0 rgb(var(--primary)/0.15)'}}>
         <div className="flex items-center gap-3">
           <ScanLine size={18} className="text-primary" />
           <span className="font-semibold text-sm">
@@ -809,6 +866,15 @@ export function POSPage() {
                 <span>{METODOS.find(m => m.id === metodoPago)?.label}</span>
               </div>
             </div>
+            {ultimaVenta && (
+              <button
+                onClick={() => printVentaTicket(ultimaVenta, negocio, clienteSeleccionado?.numeroDocumento ?? undefined, clienteSeleccionado?.nombre ?? undefined)}
+                className="w-full py-3 rounded-xl bg-gray-800 hover:bg-gray-700 font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                <Printer size={16} />
+                Imprimir ticket
+              </button>
+            )}
             <button
               onClick={nuevaVenta}
               autoFocus
@@ -1108,6 +1174,7 @@ export function POSPage() {
                   />
                   {buscando && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
                 </div>
+                {!esRopa && (
                 <button
                   type="button"
                   onClick={() => setSoloGenerico(v => !v)}
@@ -1117,6 +1184,7 @@ export function POSPage() {
                   <Tag size={14} />
                   <span className="hidden sm:inline">Genérico</span>
                 </button>
+                )}
                 {hasCamera && (
                   <button
                     type="button"
@@ -1137,7 +1205,7 @@ export function POSPage() {
                   return (
                     <button key={p.id}
                       onClick={() => { agregarAlCarrito(p); setQuery(''); setResultados([]); setSelectedIndex(-1); }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors group ${isActive ? 'bg-primary/20 border border-primary/40' : 'hover:bg-gray-800 border border-transparent'}`}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group ${isActive ? 'bg-primary/15 border border-primary/50 shadow-sm shadow-primary/10' : 'hover:bg-gray-800/80 border border-gray-800 hover:border-gray-700'}`}
                     >
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${isActive ? 'bg-primary/30' : 'bg-gray-800 group-hover:bg-gray-700'}`}>
                         {p.imagenUrl
@@ -1191,7 +1259,7 @@ export function POSPage() {
                         className={`flex flex-col rounded-xl border text-left transition-all overflow-hidden group relative
                           ${porVencer
                             ? 'bg-amber-950/40 hover:bg-amber-900/40 border-amber-700/50 hover:border-amber-500'
-                            : 'bg-gray-900 hover:bg-gray-800 border-gray-800 hover:border-primary/40'}`}
+                            : 'bg-gray-900 hover:bg-gray-800/90 border-gray-800 hover:border-primary/50 hover:shadow-md hover:shadow-primary/5'}`}
                       >
                         {/* Badge vencimiento */}
                         {porVencer && (
@@ -1201,7 +1269,7 @@ export function POSPage() {
                           </span>
                         )}
                         {/* Imagen */}
-                        <div className="w-full h-28 bg-gray-800 flex items-center justify-center overflow-hidden group-hover:brightness-110 transition-all flex-shrink-0">
+                        <div className="w-full h-28 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center overflow-hidden group-hover:brightness-110 transition-all flex-shrink-0">
                           {p.imagenUrl
                             ? <img src={p.imagenUrl} alt={p.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display='flex'); }} />
                             : null}
@@ -1232,8 +1300,8 @@ export function POSPage() {
           </div>
 
           {/* Panel derecho carrito — desktop */}
-          <div className="hidden lg:flex w-72 xl:w-80 flex-col bg-gray-900 flex-shrink-0">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+          <div className="hidden lg:flex w-72 xl:w-80 flex-col bg-gray-950 flex-shrink-0">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900">
               <div className="flex items-center gap-2">
                 <ShoppingCart size={16} className="text-gray-400" />
                 <span className="text-sm font-semibold">Carrito</span>
@@ -1258,9 +1326,9 @@ export function POSPage() {
                 </div>
               ) : (
                 cart.map(item => (
-                  <div key={item.producto.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-800 group">
+                  <div key={cartItemKey(item)} className="flex items-center gap-2 px-2 py-2 rounded-lg border border-gray-800/60 bg-gray-900/60 hover:border-gray-700 hover:bg-gray-900 group transition-colors">
                     {/* Thumbnail */}
-                    <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-700 flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-800 flex items-center justify-center flex-shrink-0">
                       {item.producto.imagenUrl
                         ? <img src={item.producto.imagenUrl} alt={item.producto.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display=''); }} />
                         : null}
@@ -1268,31 +1336,32 @@ export function POSPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium leading-tight truncate">{item.producto.nombre}</p>
+                      {item.varianteDescripcion && <p className="text-xs text-violet-400 leading-tight">{item.varianteDescripcion}</p>}
                       <p className="text-xs text-gray-500 mt-0.5">{fmt(item.precioUnitario)} c/u</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      <button onClick={() => cambiarCantidad(item.producto.id!, -1)} className="w-6 h-6 rounded-md bg-gray-700 hover:bg-gray-600 flex items-center justify-center"><Minus size={11} /></button>
-                      <span className="w-6 text-center text-sm font-bold">{item.cantidad}</span>
-                      <button onClick={() => cambiarCantidad(item.producto.id!, 1)} disabled={item.cantidad >= (item.producto.stockActual ?? 0)} className="w-6 h-6 rounded-md bg-gray-700 hover:bg-gray-600 disabled:opacity-30 flex items-center justify-center"><Plus size={11} /></button>
+                      <button onClick={() => cambiarCantidad(cartItemKey(item), -1)} className="w-6 h-6 rounded-md bg-gray-800 hover:bg-red-500/20 hover:text-red-400 border border-gray-700 hover:border-red-500/40 flex items-center justify-center transition-colors"><Minus size={11} /></button>
+                      <span className="w-6 text-center text-sm font-bold text-white">{item.cantidad}</span>
+                      <button onClick={() => cambiarCantidad(cartItemKey(item), 1)} disabled={item.cantidad >= (item.producto.stockActual ?? 0)} className="w-6 h-6 rounded-md bg-gray-800 hover:bg-primary/20 hover:text-primary border border-gray-700 hover:border-primary/40 disabled:opacity-30 flex items-center justify-center transition-colors"><Plus size={11} /></button>
                     </div>
                     <div className="text-right min-w-[52px] flex-shrink-0">
                       <p className="text-xs font-bold">{fmt(item.cantidad * item.precioUnitario)}</p>
                     </div>
-                    <button onClick={() => quitarItem(item.producto.id!)} className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all flex-shrink-0"><X size={13} /></button>
+                    <button onClick={() => quitarItem(cartItemKey(item))} className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all flex-shrink-0"><X size={13} /></button>
                   </div>
                 ))
               )}
             </div>
-            <div className="border-t border-gray-800 p-4 space-y-3">
+            <div className="border-t border-gray-800 p-4 space-y-3 bg-gray-900/50">
               <div className="flex justify-between items-baseline">
-                <span className="text-sm text-gray-400">{cart.reduce((s, i) => s + i.cantidad, 0)} producto(s)</span>
-                <span className="text-2xl font-bold">{fmt(total)}</span>
+                <span className="text-xs text-gray-500">{cart.reduce((s, i) => s + i.cantidad, 0)} producto(s)</span>
+                <span className="text-2xl font-bold text-white">{fmt(total)}</span>
               </div>
               <button onClick={() => setStep('cobro')} disabled={cart.length === 0}
-                className="w-full py-3.5 rounded-xl bg-green-500 hover:bg-green-400 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-base transition-all flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-base transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-500/20 hover:shadow-green-500/30"
               >
                 <CheckCircle2 size={18} />Cobrar
-                <span className="text-green-200 text-xs font-normal ml-1">F2</span>
+                <span className="text-green-200/70 text-xs font-normal ml-1">F2</span>
               </button>
             </div>
           </div>
@@ -1488,15 +1557,16 @@ export function POSPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium leading-tight truncate">{item.producto.nombre}</p>
+                          {item.varianteDescripcion && <p className="text-xs text-violet-400 leading-tight">{item.varianteDescripcion}</p>}
                           <p className="text-xs text-gray-500 mt-0.5">{fmt(item.precioUnitario)} c/u</p>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <button onClick={() => cambiarCantidad(item.producto.id!, -1)}
+                          <button onClick={() => cambiarCantidad(cartItemKey(item), -1)}
                             className="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center">
                             <Minus size={13} />
                           </button>
                           <span className="w-7 text-center text-sm font-bold">{item.cantidad}</span>
-                          <button onClick={() => cambiarCantidad(item.producto.id!, 1)}
+                          <button onClick={() => cambiarCantidad(cartItemKey(item), 1)}
                             disabled={item.cantidad >= (item.producto.stockActual ?? 0)}
                             className="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-30 flex items-center justify-center">
                             <Plus size={13} />
@@ -1504,7 +1574,7 @@ export function POSPage() {
                         </div>
                         <div className="text-right min-w-[60px] flex-shrink-0">
                           <p className="text-sm font-bold text-primary">{fmt(item.cantidad * item.precioUnitario)}</p>
-                          <button onClick={() => quitarItem(item.producto.id!)} className="text-gray-600 hover:text-red-400 transition-colors mt-0.5">
+                          <button onClick={() => quitarItem(cartItemKey(item))} className="text-gray-600 hover:text-red-400 transition-colors mt-0.5">
                             <X size={12} />
                           </button>
                         </div>
@@ -1704,5 +1774,59 @@ export function POSPage() {
         </div>
       )}
     </div>
+
+    {/* ── Selector de variantes (TIENDA_ROPA) ───────────────────────────────── */}
+    {variantePickerOpen && variantePickerProducto && (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+        onClick={() => setVariantePickerOpen(false)}>
+        <div className="bg-gray-900 border border-gray-700/80 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl"
+          onClick={e => e.stopPropagation()}>
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="font-bold text-base text-white">{variantePickerProducto.nombre}</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Elige la variante a agregar al carrito</p>
+            </div>
+            <span className="text-xs bg-violet-500/20 text-violet-400 border border-violet-500/30 px-2 py-0.5 rounded-full font-medium">
+              {variantesDisponibles.length} opciones
+            </span>
+          </div>
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
+            {loadingVariantes ? (
+              <div className="flex justify-center py-6"><div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" /></div>
+            ) : variantesDisponibles.map(v => {
+              const desc = [v.talla, v.color].filter(Boolean).join(' / ');
+              const sinStock = (v.stockActual ?? 0) <= 0;
+              return (
+                <button
+                  key={v.id}
+                  disabled={sinStock}
+                  onClick={() => {
+                    agregarItemAlCarrito(variantePickerProducto, v.id!, desc, true);
+                    setVariantePickerOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between rounded-xl border px-4 py-3 transition-all text-left
+                    ${sinStock
+                      ? 'border-gray-800 opacity-40 cursor-not-allowed bg-gray-900/40'
+                      : 'border-gray-700 hover:border-violet-500 hover:bg-violet-500/10 bg-gray-800/50 hover:shadow-sm hover:shadow-violet-500/10 active:scale-[0.98]'}`}
+                >
+                  <div>
+                    <p className="font-semibold text-sm text-white">{desc || v.sku || `Variante #${v.id}`}</p>
+                    {v.sku && <p className="text-xs text-gray-400 mt-0.5">SKU: {v.sku}</p>}
+                  </div>
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${sinStock ? 'bg-gray-800 text-gray-600' : 'bg-emerald-900/40 text-emerald-400 border border-emerald-800/50'}`}>
+                    {v.stockActual ?? 0} uds
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={() => setVariantePickerOpen(false)}
+            className="w-full py-2.5 rounded-xl border border-gray-700 text-gray-500 hover:text-white hover:border-gray-500 text-sm transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
