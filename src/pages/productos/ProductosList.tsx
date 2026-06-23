@@ -34,6 +34,8 @@ import {
   Loader2,
   Upload,
   Layers,
+  ArrowUpAZ,
+  ArrowDownAZ,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -65,6 +67,7 @@ export function ProductosList() {
   const [savingCategoria, setSavingCategoria] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -452,14 +455,20 @@ export function ProductosList() {
   };
 
   // Filtrado por búsqueda
-  const filteredProductos = productos.filter((p) => {
-    const q = searchTerm.toLowerCase();
-    return (
-      p.nombre.toLowerCase().includes(q) ||
-      p.codigoBarras?.toLowerCase().includes(q) ||
-      p.categoriaNombre?.toLowerCase().includes(q)
+  const filteredProductos = productos
+    .filter((p) => {
+      const q = searchTerm.toLowerCase();
+      return (
+        p.nombre.toLowerCase().includes(q) ||
+        p.codigoBarras?.toLowerCase().includes(q) ||
+        p.categoriaNombre?.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) =>
+      sortOrder === 'asc'
+        ? a.nombre.localeCompare(b.nombre, 'es')
+        : b.nombre.localeCompare(a.nombre, 'es')
     );
-  });
 
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -607,7 +616,15 @@ export function ProductosList() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
-                          <TableHead>Producto</TableHead>
+                          <TableHead>
+                            <button
+                              onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
+                              className="flex items-center gap-1 font-semibold uppercase tracking-wider text-xs hover:text-primary transition-colors"
+                            >
+                              Producto
+                              {sortOrder === 'asc' ? <ArrowUpAZ className="h-3.5 w-3.5" /> : <ArrowDownAZ className="h-3.5 w-3.5" />}
+                            </button>
+                          </TableHead>
                           <TableHead>Código</TableHead>
                           <TableHead>Categoría</TableHead>
                           <TableHead>Unidad</TableHead>

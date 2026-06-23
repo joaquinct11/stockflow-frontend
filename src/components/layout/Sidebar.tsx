@@ -27,6 +27,7 @@ import {
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -78,6 +79,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const location = useLocation();
   const { user } = useAuthStore();
   const { canAccess, isAdmin, puede } = usePermissions();
+  const { config: negocioConfig } = useTenantConfigStore();
+  const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
 
   const isPathActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
@@ -143,7 +146,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         key: 'gastos',
         title: 'Gastos',
         icon: TrendingDown,
-        show: canAccess('GASTOS') || canAccess('COMPRAS') || canAccess('RECEPCIONES'),
+        show: canAccess('GASTOS') || (!esRopa && (canAccess('COMPRAS') || canAccess('RECEPCIONES'))),
         items: [
           {
             title: 'Gastos y Egresos',
@@ -155,13 +158,13 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             title: 'Órdenes de Compra',
             href: '/dashboard/compras/ordenes',
             icon: ClipboardList,
-            show: canAccess('COMPRAS'),
+            show: !esRopa && canAccess('COMPRAS'),
           },
           {
             title: 'Recepciones',
             href: '/dashboard/recepciones',
             icon: Inbox,
-            show: canAccess('RECEPCIONES'),
+            show: !esRopa && canAccess('RECEPCIONES'),
           },
         ],
       },
