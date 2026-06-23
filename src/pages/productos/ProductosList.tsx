@@ -47,7 +47,6 @@ export function ProductosList() {
   const { user } = useAuthStore();
   const { config: negocioConfig } = useTenantConfigStore();
   const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
-  const esFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);

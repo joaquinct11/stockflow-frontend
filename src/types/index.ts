@@ -432,6 +432,8 @@ export interface ItemComprobanteDTO {
   cantidad: number;
   precioUnitario: number;
   subtotal: number;
+  varianteId?: number;
+  varianteDescripcion?: string;
 }
 
 export interface ComprobanteDTO {
