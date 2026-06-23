@@ -3,7 +3,8 @@ import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { categoriaService } from '../../services/categoria.service';
 import { movimientoService } from '../../services/movimiento.service';
-import type { ProductoDTO, UnidadMedidaDTO, CategoriaDTO } from '../../types';
+import { productoVarianteService } from '../../services/productoVariante.service';
+import type { ProductoDTO, UnidadMedidaDTO, CategoriaDTO, ProductoVarianteDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -32,16 +33,21 @@ import {
   X,
   Loader2,
   Upload,
+  Layers,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 
 export function ProductosList() {
   const { canCreate, canEdit, canDelete, canView } = usePermissions();
   const hasViewPermission = canView('PRODUCTOS');
   const { user } = useAuthStore();
+  const { config: negocioConfig } = useTenantConfigStore();
+  const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
+  const esFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
@@ -109,6 +115,23 @@ export function ProductosList() {
     action: null as (() => Promise<void>) | null,
   });
 
+  // Variantes (solo TIENDA_ROPA)
+  const [isVariantesOpen, setIsVariantesOpen] = useState(false);
+  const [productoVariantes, setProductoVariantes] = useState<ProductoVarianteDTO[]>([]);
+  const [selectedProductoVariantes, setSelectedProductoVariantes] = useState<ProductoDTO | null>(null);
+  const [loadingVariantes, setLoadingVariantes] = useState(false);
+  const [varianteForm, setVarianteForm] = useState<ProductoVarianteDTO>({ productoId: 0, talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '', activo: true });
+  const [editingVarianteId, setEditingVarianteId] = useState<number | null>(null);
+  const [savingVariante, setSavingVariante] = useState(false);
+
+  // Borrador de variantes en el formulario de producto (TIENDA_ROPA)
+  interface VarianteBorrador { id?: number; talla: string; color: string; stockActual: number; stockMinimo: number; sku: string; }
+  const [variantesBorrador, setVariantesBorrador] = useState<VarianteBorrador[]>([]);
+  const addVarianteBorrador = () => setVariantesBorrador(p => [...p, { talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '' }]);
+  const removeVarianteBorrador = (idx: number) => setVariantesBorrador(p => p.filter((_, i) => i !== idx));
+  const updateVarianteBorrador = (idx: number, field: string, value: string | number) =>
+    setVariantesBorrador(p => p.map((v, i) => i === idx ? { ...v, [field]: value } : v));
+
   const [formData, setFormData] = useState<ProductoDTO>({
     nombre: '',
     codigoBarras: '',
@@ -123,6 +146,8 @@ export function ProductosList() {
     unidadMedidaId: 0,
     esGenerico: false,
     unidadesPorCaja: undefined,
+    talla: undefined,
+    color: undefined,
   });
 
   useEffect(() => {
@@ -204,12 +229,29 @@ export function ProductosList() {
     try {
       if (editingId) {
         await productoService.update(editingId, formData);
+
+        // Guardar variantes borrador en EDIT: POST nuevas, PUT existentes
+        if (esRopa && variantesBorrador.length > 0) {
+          await Promise.all(variantesBorrador.map(v =>
+            v.id
+              ? productoVarianteService.update(v.id, { ...v, productoId: editingId, activo: true })
+              : productoVarianteService.create({ ...v, productoId: editingId, activo: true })
+          ));
+        }
+
         toast.success('Producto actualizado');
       } else {
         const nuevoProducto = await productoService.create(formData);
 
-        // Crear movimiento de "Saldo inicial" al crear el producto
-        if (nuevoProducto.id && formData.stockActual > 0) {
+        // Guardar variantes borrador en CREATE
+        if (esRopa && variantesBorrador.length > 0 && nuevoProducto.id) {
+          await Promise.all(variantesBorrador.map(v =>
+            productoVarianteService.create({ ...v, productoId: nuevoProducto.id!, activo: true })
+          ));
+        }
+
+        // Crear movimiento de "Saldo inicial" solo si NO hay variantes (el stock en variantes se gestiona aparte)
+        if (nuevoProducto.id && formData.stockActual > 0 && (!esRopa || variantesBorrador.length === 0)) {
           try {
             await movimientoService.create({
               productoId: nuevoProducto.id,
@@ -257,7 +299,7 @@ export function ProductosList() {
     });
   };
 
-  const handleEdit = (producto: ProductoDTO) => {
+  const handleEdit = async (producto: ProductoDTO) => {
     setFormData({
       id: producto.id,
       nombre: producto.nombre,
@@ -275,10 +317,22 @@ export function ProductosList() {
       componentes: producto.componentes,
       esGenerico: producto.esGenerico ?? false,
       unidadesPorCaja: producto.unidadesPorCaja,
+      talla: producto.talla,
+      color: producto.color,
     });
     setImgPreview(producto.imagenUrl ?? null);
-
     setEditingId(producto.id!);
+
+    // Cargar variantes existentes como borrador
+    if (esRopa && producto.id) {
+      try {
+        const vars = await productoVarianteService.getByProducto(producto.id);
+        setVariantesBorrador(vars.map(v => ({ id: v.id, talla: v.talla ?? '', color: v.color ?? '', stockActual: v.stockActual ?? 0, stockMinimo: v.stockMinimo ?? 0, sku: v.sku ?? '' })));
+      } catch { setVariantesBorrador([]); }
+    } else {
+      setVariantesBorrador([]);
+    }
+
     setIsDialogOpen(true);
   };
 
@@ -297,11 +351,69 @@ export function ProductosList() {
       unidadMedidaId: unidadesMedida.length > 0 ? unidadesMedida[0].id : 0,
       esGenerico: false,
       unidadesPorCaja: undefined,
+      talla: undefined,
+      color: undefined,
     });
     setEditingId(null);
     setIsDialogOpen(false);
     setImgPreview(null);
+    setVariantesBorrador([]);
     if (imgInputRef.current) imgInputRef.current.value = '';
+  };
+
+  const handleAbrirVariantes = async (producto: ProductoDTO) => {
+    setSelectedProductoVariantes(producto);
+    setIsVariantesOpen(true);
+    setEditingVarianteId(null);
+    setVarianteForm({ productoId: producto.id!, talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '', activo: true });
+    try {
+      setLoadingVariantes(true);
+      const vars = await productoVarianteService.getByProducto(producto.id!);
+      setProductoVariantes(vars);
+    } catch { toast.error('Error al cargar variantes'); }
+    finally { setLoadingVariantes(false); }
+  };
+
+  const handleSaveVariante = async () => {
+    if (!selectedProductoVariantes) return;
+    if (!varianteForm.talla && !varianteForm.color && !varianteForm.sku) {
+      toast.error('Ingresa al menos talla, color o SKU');
+      return;
+    }
+    try {
+      setSavingVariante(true);
+      const dto: ProductoVarianteDTO = { ...varianteForm, productoId: selectedProductoVariantes.id! };
+      if (editingVarianteId) {
+        await productoVarianteService.update(editingVarianteId, dto);
+        toast.success('Variante actualizada');
+      } else {
+        await productoVarianteService.create(dto);
+        toast.success('Variante agregada');
+      }
+      const vars = await productoVarianteService.getByProducto(selectedProductoVariantes.id!);
+      setProductoVariantes(vars);
+      setEditingVarianteId(null);
+      setVarianteForm({ productoId: selectedProductoVariantes.id!, talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '', activo: true });
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.mensaje || 'Error al guardar variante');
+    } finally { setSavingVariante(false); }
+  };
+
+  const handleEditVariante = (v: ProductoVarianteDTO) => {
+    setEditingVarianteId(v.id!);
+    setVarianteForm({ ...v });
+  };
+
+  const handleDeleteVariante = async (id: number) => {
+    if (!selectedProductoVariantes) return;
+    try {
+      await productoVarianteService.delete(id);
+      toast.success('Variante eliminada');
+      const vars = await productoVarianteService.getByProducto(selectedProductoVariantes.id!);
+      setProductoVariantes(vars);
+      await fetchData();
+    } catch { toast.error('Error al eliminar variante'); }
   };
 
   // Crear nueva unidad de medida inline
@@ -550,6 +662,16 @@ export function ProductosList() {
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
+                                  {esRopa && (
+                                    <Button
+                                      variant="ghost" size="icon"
+                                      onClick={() => handleAbrirVariantes(producto)}
+                                      title="Gestionar variantes (talla/color)"
+                                      className="text-violet-500 hover:text-violet-700"
+                                    >
+                                      <Layers className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                   {canEdit('PRODUCTOS') && (
                                     <Button variant="ghost" size="icon" onClick={() => handleEdit(producto)} title="Editar">
                                       <Edit2 className="h-4 w-4" />
@@ -900,52 +1022,120 @@ export function ProductosList() {
             </div>
           </div>
 
-          {/* Sección: Clasificación farmacéutica */}
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <div className="mb-3">
-              <p className="text-sm font-semibold">Clasificación</p>
-              <p className="text-xs text-muted-foreground">Datos para búsqueda y presentación del producto.</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-3 p-3 rounded-lg border bg-background cursor-pointer"
-                onClick={() => setFormData(p => ({ ...p, esGenerico: !p.esGenerico }))}>
-                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${formData.esGenerico ? 'bg-primary border-primary' : 'border-muted-foreground'}`}>
-                  {formData.esGenerico && <svg viewBox="0 0 12 10" className="w-3 h-3 text-primary-foreground fill-current"><path d="M1 5l3.5 3.5L11 1"/></svg>}
-                </div>
+          {/* Sección: Variantes de ropa — solo TIENDA_ROPA */}
+          {esRopa && (
+            <div className="rounded-lg border border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-800 p-4 space-y-3">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium">Producto genérico</p>
-                  <p className="text-xs text-muted-foreground">Permite filtrar genéricos en el POS</p>
+                  <p className="text-sm font-semibold text-violet-800 dark:text-violet-300">Variantes de ropa</p>
+                  <p className="text-xs text-muted-foreground">Agrega cada combinación de talla y color con su stock.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addVarianteBorrador}
+                  className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 transition-colors"
+                >
+                  <Plus size={13} /> Agregar variante
+                </button>
+              </div>
+
+              {variantesBorrador.length === 0 ? (
+                <div className="text-center py-4 text-xs text-muted-foreground border border-dashed border-violet-300 dark:border-violet-700 rounded-lg">
+                  Aún no hay variantes. Haz clic en "+ Agregar variante" para comenzar.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 px-1">
+                    {['Talla', 'Color', 'SKU (opcional)', ''].map(h => (
+                      <span key={h} className="text-xs font-medium text-muted-foreground">{h}</span>
+                    ))}
+                  </div>
+                  {variantesBorrador.map((v, idx) => (
+                    <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+                      <select
+                        value={v.talla}
+                        onChange={e => updateVarianteBorrador(idx, 'talla', e.target.value)}
+                        className="rounded-md border border-input bg-background px-2 py-1.5 text-sm h-9"
+                      >
+                        <option value="">Sin talla</option>
+                        {['XS','S','M','L','XL','XXL','XXXL','28','30','32','34','36','38','40','42','44','UNICA'].map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <Input
+                        value={v.color}
+                        onChange={e => updateVarianteBorrador(idx, 'color', e.target.value)}
+                        placeholder="Ej: Negro, Azul..."
+                        className="h-9 text-sm"
+                      />
+                      <Input
+                        value={v.sku}
+                        onChange={e => updateVarianteBorrador(idx, 'sku', e.target.value)}
+                        placeholder="Ej: VEST-NEG-S"
+                        className="h-9 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeVarianteBorrador(idx)}
+                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sección: Clasificación — solo farmacia/general (oculto para ropa) */}
+          {!esRopa && (
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="mb-3">
+                <p className="text-sm font-semibold">Clasificación</p>
+                <p className="text-xs text-muted-foreground">Datos para búsqueda y presentación del producto.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 p-3 rounded-lg border bg-background cursor-pointer"
+                  onClick={() => setFormData(p => ({ ...p, esGenerico: !p.esGenerico }))}>
+                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${formData.esGenerico ? 'bg-primary border-primary' : 'border-muted-foreground'}`}>
+                    {formData.esGenerico && <svg viewBox="0 0 12 10" className="w-3 h-3 text-primary-foreground fill-current"><path d="M1 5l3.5 3.5L11 1"/></svg>}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Producto genérico</p>
+                    <p className="text-xs text-muted-foreground">Permite filtrar genéricos en el POS</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Unidades por caja</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={formData.unidadesPorCaja === undefined || formData.unidadesPorCaja === 0 ? '' : formData.unidadesPorCaja}
+                    onChange={(e) => setFormData(p => ({ ...p, unidadesPorCaja: e.target.value ? parseInt(e.target.value) : undefined }))}
+                    placeholder="Ej: 100 (tabletas/caja)"
+                    className="h-11"
+                  />
+                  <p className="text-xs text-muted-foreground">Cuántas unidades trae la caja o presentación.</p>
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Unidades por caja</label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.unidadesPorCaja === undefined || formData.unidadesPorCaja === 0 ? '' : formData.unidadesPorCaja}
-                  onChange={(e) => setFormData(p => ({ ...p, unidadesPorCaja: e.target.value ? parseInt(e.target.value) : undefined }))}
-                  placeholder="Ej: 100 (tabletas/caja)"
-                  className="h-11"
-                />
-                <p className="text-xs text-muted-foreground">Cuántas unidades trae la caja o presentación.</p>
-              </div>
             </div>
-          </div>
+          )}
 
-          {/* Sección: Composición */}
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <div className="mb-3">
-              <p className="text-sm font-semibold">Composición / Contenido</p>
-              <p className="text-xs text-muted-foreground">Opcional. Lista los componentes o principios activos (ej: paracetamol 500mg, amoxicilina 250mg). Permite encontrar este producto al buscar por ingrediente en el POS.</p>
+          {/* Sección: Composición — solo farmacia/general */}
+          {!esRopa && (
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="mb-3">
+                <p className="text-sm font-semibold">Composición / Contenido</p>
+                <p className="text-xs text-muted-foreground">Opcional. Lista los componentes o principios activos (ej: paracetamol 500mg, amoxicilina 250mg). Permite encontrar este producto al buscar por ingrediente en el POS.</p>
+              </div>
+              <textarea
+                placeholder="Ej: paracetamol 500mg, amoxicilina 250mg, vitamina C..."
+                value={formData.componentes ?? ''}
+                onChange={e => setFormData(p => ({ ...p, componentes: e.target.value || undefined }))}
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
-            <textarea
-              placeholder="Ej: paracetamol 500mg, amoxicilina 250mg, vitamina C..."
-              value={formData.componentes ?? ''}
-              onChange={e => setFormData(p => ({ ...p, componentes: e.target.value || undefined }))}
-              rows={3}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+          )}
 
           {/* Sección: Imagen */}
           <div className="rounded-lg border bg-muted/30 p-4">
@@ -988,6 +1178,100 @@ export function ProductosList() {
             </Button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Dialog: Gestión de variantes (TIENDA_ROPA) */}
+      <Dialog
+        isOpen={isVariantesOpen}
+        onClose={() => { setIsVariantesOpen(false); setEditingVarianteId(null); }}
+        title={`Variantes — ${selectedProductoVariantes?.nombre ?? ''}`}
+        description="Gestiona las combinaciones de talla y color con su stock individual."
+        size="lg"
+      >
+        <div className="space-y-5">
+          {/* Formulario agregar/editar variante */}
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <p className="text-sm font-semibold">{editingVarianteId ? 'Editar variante' : 'Nueva variante'}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Talla</label>
+                <select
+                  value={varianteForm.talla ?? ''}
+                  onChange={e => setVarianteForm(p => ({ ...p, talla: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm h-9"
+                >
+                  <option value="">Sin talla</option>
+                  {['XS','S','M','L','XL','XXL','XXXL','28','30','32','34','36','38','40','42','44','UNICA'].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Color</label>
+                <Input placeholder="Ej: Negro, Rojo, Azul marino..." value={varianteForm.color ?? ''} onChange={e => setVarianteForm(p => ({ ...p, color: e.target.value }))} />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">SKU (opcional)</label>
+                <Input placeholder="Ej: VEST-NEG-S" value={varianteForm.sku ?? ''} onChange={e => setVarianteForm(p => ({ ...p, sku: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              {editingVarianteId && (
+                <Button variant="outline" size="sm" onClick={() => { setEditingVarianteId(null); setVarianteForm({ productoId: selectedProductoVariantes?.id ?? 0, talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '', activo: true }); }}>
+                  Cancelar
+                </Button>
+              )}
+              <Button size="sm" onClick={handleSaveVariante} disabled={savingVariante}>
+                {savingVariante ? <Loader2 size={14} className="animate-spin mr-1" /> : <Plus size={14} className="mr-1" />}
+                {editingVarianteId ? 'Actualizar' : 'Agregar variante'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Lista de variantes existentes */}
+          {loadingVariantes ? (
+            <div className="flex justify-center py-6"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div>
+          ) : productoVariantes.length === 0 ? (
+            <div className="text-center py-6 text-sm text-muted-foreground">
+              <Layers size={32} className="mx-auto mb-2 opacity-30" />
+              <p>Sin variantes aún. Agrega la primera combinación arriba.</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Talla</TableHead>
+                    <TableHead>Color</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead className="text-right">Stock</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {productoVariantes.map(v => (
+                    <TableRow key={v.id} className={!v.activo ? 'opacity-50' : ''}>
+                      <TableCell className="font-medium">{v.talla || '—'}</TableCell>
+                      <TableCell>{v.color || '—'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{v.sku || '—'}</TableCell>
+                      <TableCell className={`text-right font-mono font-semibold ${(v.stockActual ?? 0) <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {v.stockActual ?? 0}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handleEditVariante(v)} title="Editar">
+                            <Edit2 size={13} />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteVariante(v.id!)} title="Eliminar" className="text-destructive hover:text-destructive">
+                            <Trash2 size={13} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       </Dialog>
 
       <ConfirmDialog

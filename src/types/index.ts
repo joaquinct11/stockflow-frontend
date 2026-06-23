@@ -129,6 +129,10 @@ export interface ProductoDTO {
   esGenerico?: boolean;
   /** Cuántas unidades trae cada caja/presentación (ej: 100 tabletas/caja). Informativo. */
   unidadesPorCaja?: number;
+  /** Talla del producto (ej: S, M, L, XL). Solo para rubros de ropa. */
+  talla?: string;
+  /** Color del producto. Solo para rubros de ropa. */
+  color?: string;
   /** Fecha del lote más próximo a vencer. Solo lectura, calculado por el backend. */
   proximaFechaVencimiento?: string;
 }
@@ -162,6 +166,25 @@ export interface DetalleVentaDTO {
   cantidad: number;
   precioUnitario: number;
   subtotal?: number;
+  varianteId?: number;
+  varianteDescripcion?: string;
+}
+
+// ========================================
+// PRODUCTO VARIANTES
+// ========================================
+
+export interface ProductoVarianteDTO {
+  id?: number;
+  productoId: number;
+  productoNombre?: string;
+  talla?: string;
+  color?: string;
+  stockActual: number;
+  stockMinimo: number;
+  sku?: string;
+  activo?: boolean;
+  tenantId?: string;
 }
 
 // ========================================
@@ -332,6 +355,7 @@ export interface MovimientoInventarioDTO {
   lote?: string;
   fechaVencimiento?: string;
   registroSanitario?: string;
+  varianteId?: number;
 }
 
 /** Tipos de movimiento que se muestran en la lista principal de Movimientos Inventario */

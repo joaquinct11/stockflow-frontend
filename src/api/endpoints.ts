@@ -165,6 +165,14 @@ export const API_ENDPOINTS = {
     ABRIR: '/cajas/abrir',
     CERRAR: (id: number) => `/cajas/${id}/cerrar`,
     RETIRO: (id: number) => `/cajas/${id}/retiro`,
+    CORREGIR_CIERRE: (id: number) => `/cajas/${id}/corregir-cierre`,
+  },
+
+  PRODUCTO_VARIANTES: {
+    BY_PRODUCTO: (productoId: number) => `/producto-variantes/producto/${productoId}`,
+    CREATE: '/producto-variantes',
+    UPDATE: (id: number) => `/producto-variantes/${id}`,
+    DELETE: (id: number) => `/producto-variantes/${id}`,
   },
 
   NOTAS_CREDITO: {

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { cajaService } from '../../services/caja.service';
+import type { CorregirCierreDTO } from '../../services/caja.service';
 import type { CajaDTO, CerrarCajaDTO, RegistrarRetiroDTO } from '../../types';
+import { useAuthStore } from '../../store/authStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -11,7 +13,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import {
   Wallet, TrendingUp, Banknote, CreditCard, Smartphone,
-  Lock, CheckCircle, Clock, Eye, ArrowDownLeft,
+  Lock, CheckCircle, Clock, Eye, ArrowDownLeft, Pencil,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -30,6 +32,9 @@ function formatDate(s: string | null | undefined): string {
 
 export function CajaPage() {
 
+  const { user } = useAuthStore();
+  const isAdmin = user?.rol === 'ADMIN';
+
   const [cajas, setCajas] = useState<CajaDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCaja, setSelectedCaja] = useState<CajaDTO | null>(null);
@@ -42,6 +47,11 @@ export function CajaPage() {
   const [isRetiroOpen, setIsRetiroOpen] = useState(false);
   const [retiroForm, setRetiroForm] = useState<RegistrarRetiroDTO>({ monto: 0, motivo: '' });
   const [retirando, setRetirando] = useState(false);
+
+  // Corrección de cierre (solo ADMIN)
+  const [isCorregirOpen, setIsCorregirOpen] = useState(false);
+  const [corregirForm, setCorregirForm] = useState<CorregirCierreDTO>({ montoContado: 0, observaciones: '' });
+  const [corrigiendo, setCorrigiendo] = useState(false);
 
   useEffect(() => {
     fetchCajas();
@@ -119,6 +129,31 @@ export function CajaPage() {
       toast.error(err?.response?.data?.mensaje || 'Error al registrar el retiro');
     } finally {
       setRetirando(false);
+    }
+  };
+
+  const handleAbrirCorregir = (caja: CajaDTO) => {
+    setSelectedCaja(caja);
+    setCorregirForm({ montoContado: caja.montoContado ?? 0, observaciones: caja.observaciones ?? '' });
+    setIsCorregirOpen(true);
+  };
+
+  const handleCorregirCierre = async () => {
+    if (!selectedCaja) return;
+    if (corregirForm.montoContado < 0) {
+      toast.error('El monto contado no puede ser negativo');
+      return;
+    }
+    try {
+      setCorrigiendo(true);
+      await cajaService.corregirCierre(selectedCaja.id, corregirForm);
+      toast.success('Cierre de caja corregido correctamente');
+      setIsCorregirOpen(false);
+      await fetchCajas();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.mensaje || 'Error al corregir el cierre');
+    } finally {
+      setCorrigiendo(false);
     }
   };
 
@@ -380,6 +415,16 @@ export function CajaPage() {
                                   <Lock size={15} className="text-destructive" />
                                 </Button>
                               </>
+                            )}
+                            {caja.estado === 'CERRADA' && isAdmin && (
+                              <Button
+                                variant="ghost" size="icon"
+                                onClick={() => handleAbrirCorregir(caja)}
+                                title="Corregir cierre (Admin)"
+                                className="text-amber-500 hover:text-amber-700"
+                              >
+                                <Pencil size={15} />
+                              </Button>
                             )}
                           </div>
                         </TableCell>
@@ -699,6 +744,91 @@ export function CajaPage() {
                 disabled={cerrando || cerrarForm.montoContado < 0}
               >
                 {cerrando ? 'Cerrando...' : 'Cerrar Caja'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+      {/* Dialog: Corregir Cierre (solo ADMIN) */}
+      <Dialog
+        isOpen={isCorregirOpen}
+        onClose={() => setIsCorregirOpen(false)}
+        title="Corregir cierre de caja"
+        description="Solo administradores pueden corregir el monto contado de una caja cerrada. El sistema recalculará la diferencia automáticamente."
+      >
+        {selectedCaja && (
+          <div className="space-y-5">
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-4 text-sm space-y-2">
+              <p className="font-semibold text-amber-800 dark:text-amber-400">Valores actuales del cierre</p>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Apertura + Efectivo ventas − Retiros</span>
+                <span className="font-mono font-medium">
+                  {formatCurrency(
+                    (selectedCaja.montoApertura ?? 0) +
+                    (selectedCaja.totalEfectivo ?? 0) -
+                    (selectedCaja.totalRetiros ?? 0)
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Contado registrado</span>
+                <span className="font-mono font-medium">{formatCurrency(selectedCaja.montoContado)}</span>
+              </div>
+              <div className={`flex justify-between font-semibold border-t pt-2 ${(selectedCaja.diferencia ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                <span>Diferencia actual</span>
+                <span className="font-mono">
+                  {(selectedCaja.diferencia ?? 0) >= 0 ? '+' : ''}{formatCurrency(selectedCaja.diferencia)}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nuevo monto contado <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-muted-foreground text-sm font-medium">S/.</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={corregirForm.montoContado || ''}
+                  onChange={e => setCorregirForm(prev => ({ ...prev, montoContado: parseFloat(e.target.value) || 0 }))}
+                  className="pl-10"
+                  placeholder="0.00"
+                  autoFocus
+                />
+              </div>
+              {corregirForm.montoContado >= 0 && (
+                <div className={`text-sm font-semibold ${
+                  corregirForm.montoContado - ((selectedCaja.montoApertura ?? 0) + (selectedCaja.totalEfectivo ?? 0) - (selectedCaja.totalRetiros ?? 0)) >= 0
+                    ? 'text-emerald-600' : 'text-red-600'
+                }`}>
+                  {(() => {
+                    const esperado = (selectedCaja.montoApertura ?? 0) + (selectedCaja.totalEfectivo ?? 0) - (selectedCaja.totalRetiros ?? 0);
+                    const diff = corregirForm.montoContado - esperado;
+                    return `Nueva diferencia: ${diff >= 0 ? '+' : ''}S/. ${diff.toFixed(2)} ${diff > 0 ? '(sobrante)' : diff < 0 ? '(faltante)' : '(cuadra exacto)'}`;
+                  })()}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Observaciones (opcional)</label>
+              <textarea
+                value={corregirForm.observaciones || ''}
+                onChange={e => setCorregirForm(prev => ({ ...prev, observaciones: e.target.value }))}
+                placeholder="Motivo de la corrección, error al cerrar, etc."
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[70px] focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2 border-t">
+              <Button variant="outline" onClick={() => setIsCorregirOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={handleCorregirCierre}
+                disabled={corrigiendo || corregirForm.montoContado < 0}
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                {corrigiendo ? 'Guardando...' : 'Guardar corrección'}
               </Button>
             </div>
           </div>

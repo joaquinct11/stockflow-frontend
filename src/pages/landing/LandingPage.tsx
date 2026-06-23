@@ -50,15 +50,15 @@ export function LandingPage() {
             </div>
 
             <h1 className="landing-hero-title">
-              Del pedido a la{' '}
-              <span className="landing-hero-title-highlight">factura electrónica</span>
-              {', '}todo en un solo sistema
+              Vende, controla tu stock y{' '}
+              <span className="landing-hero-title-highlight">factura electrónico</span>
+              {', '}todo desde un solo sistema
             </h1>
 
             <p className="landing-hero-subtitle">
               POS con caja integrada, inventario en tiempo real, compras, devoluciones,
-              notas de crédito y facturación electrónica compatible con tu OSE (Nubefact, Alegra, Efact y más).
-              Sin apps separadas, sin Excel.
+              notas de crédito y <strong>facturación electrónica integrada</strong> que envía tus
+              boletas y facturas directo a SUNAT. Sin apps separadas, sin Excel.
             </p>
 
             <div className="landing-hero-actions">
@@ -75,7 +75,7 @@ export function LandingPage() {
               <div className="landing-hero-trust-badges">
                 <span className="landing-trust-badge">Soporte en español</span>
                 <span className="landing-trust-badge">Multi‑usuario</span>
-                <span className="landing-trust-badge">Datos seguros</span>
+                <span className="landing-trust-badge">SUNAT integrado</span>
               </div>
             </div>
           </div>
@@ -91,16 +91,16 @@ export function LandingPage() {
               <div className="landing-mockup-body">
                 <div className="landing-mockup-stats">
                   <div className="landing-stat-card">
-                    <div className="landing-stat-value">1,284</div>
+                    <div className="landing-stat-value">S/12.4K</div>
+                    <div className="landing-stat-label">Ventas hoy</div>
+                  </div>
+                  <div className="landing-stat-card">
+                    <div className="landing-stat-value">348</div>
                     <div className="landing-stat-label">Productos</div>
                   </div>
                   <div className="landing-stat-card">
-                    <div className="landing-stat-value">S/98.4K</div>
-                    <div className="landing-stat-label">Valor de stock</div>
-                  </div>
-                  <div className="landing-stat-card">
-                    <div className="landing-stat-value" style={{ color: '#ff5050' }}>12</div>
-                    <div className="landing-stat-label">Alertas</div>
+                    <div className="landing-stat-value" style={{ color: '#ff5050' }}>5</div>
+                    <div className="landing-stat-label">Stock bajo</div>
                   </div>
                 </div>
 
@@ -111,24 +111,24 @@ export function LandingPage() {
                     <span className="landing-mockup-cell header">Estado</span>
                   </div>
                   <div className="landing-mockup-row">
-                    <span className="landing-mockup-cell name">Paracetamol 500mg</span>
-                    <span className="landing-mockup-cell">248</span>
+                    <span className="landing-mockup-cell name">Polo Básico Blanco M</span>
+                    <span className="landing-mockup-cell">84</span>
                     <span className="landing-stock-badge ok">OK</span>
                   </div>
                   <div className="landing-mockup-row">
-                    <span className="landing-mockup-cell name">Ibuprofeno 400mg</span>
-                    <span className="landing-mockup-cell">18</span>
+                    <span className="landing-mockup-cell name">Zapatillas Runner 42</span>
+                    <span className="landing-mockup-cell">12</span>
                     <span className="landing-stock-badge low">BAJO</span>
                   </div>
                   <div className="landing-mockup-row">
-                    <span className="landing-mockup-cell name">Amoxicilina 500mg</span>
-                    <span className="landing-mockup-cell">3</span>
-                    <span className="landing-stock-badge critical">CRÍTICO</span>
+                    <span className="landing-mockup-cell name">Paracetamol 500mg</span>
+                    <span className="landing-mockup-cell">210</span>
+                    <span className="landing-stock-badge ok">OK</span>
                   </div>
                   <div className="landing-mockup-row">
-                    <span className="landing-mockup-cell name">Omeprazol 20mg</span>
-                    <span className="landing-mockup-cell">152</span>
-                    <span className="landing-stock-badge ok">OK</span>
+                    <span className="landing-mockup-cell name">Tornillo Hexagonal 3/8"</span>
+                    <span className="landing-mockup-cell">3</span>
+                    <span className="landing-stock-badge critical">CRÍTICO</span>
                   </div>
                 </div>
               </div>
@@ -153,7 +153,7 @@ export function LandingPage() {
               <div className="landing-flow-number">1</div>
               <div className="landing-flow-content">
                 <h4>Orden de compra</h4>
-                <p>Genera OCs a tus proveedores con cantidad y precio pactado.</p>
+                <p>Genera OCs a tus proveedores con cantidades y precios pactados.</p>
               </div>
             </div>
             <div className="landing-flow-arrow">→</div>
@@ -161,7 +161,7 @@ export function LandingPage() {
               <div className="landing-flow-number">2</div>
               <div className="landing-flow-content">
                 <h4>Recepción</h4>
-                <p>Registra lo recibido. El stock se actualiza automáticamente.</p>
+                <p>Registra lo que llega. El stock sube automáticamente al guardar.</p>
               </div>
             </div>
             <div className="landing-flow-arrow">→</div>
@@ -169,15 +169,15 @@ export function LandingPage() {
               <div className="landing-flow-number">3</div>
               <div className="landing-flow-content">
                 <h4>Venta en el POS</h4>
-                <p>Cobra con caja integrada, busca productos al instante y acepta cualquier método de pago.</p>
+                <p>Cobra en efectivo, tarjeta o Yape/Plin con caja integrada y vuelto automático.</p>
               </div>
             </div>
             <div className="landing-flow-arrow">→</div>
             <div className="landing-flow-step">
               <div className="landing-flow-number">4</div>
               <div className="landing-flow-content">
-                <h4>Facturación electrónica</h4>
-                <p>Emite boletas y facturas desde la venta. Fluxus las envía a SUNAT a través de tu OSE (Nubefact, Alegra, Efact, etc.).</p>
+                <h4>Factura a SUNAT</h4>
+                <p>Emite boletas y facturas desde la venta. Fluxus las envía a SUNAT al instante y guarda el CDR oficial.</p>
               </div>
             </div>
           </div>
@@ -203,7 +203,7 @@ export function LandingPage() {
               <div className="landing-feature-icon">🖥️</div>
               <h3 className="landing-feature-title">Punto de Venta (POS)</h3>
               <p className="landing-feature-desc">
-                POS ágil con búsqueda instantánea de productos por nombre, atajos de teclado
+                POS ágil con búsqueda instantánea por nombre o código de barras, atajos de teclado
                 (F2 cobrar, F4 limpiar) y cálculo automático de vuelto.
               </p>
             </div>
@@ -212,17 +212,17 @@ export function LandingPage() {
               <div className="landing-feature-icon">💰</div>
               <h3 className="landing-feature-title">Caja registradora</h3>
               <p className="landing-feature-desc">
-                Apertura y cierre de caja con fondo de apertura, totales por método de pago
+                Apertura y cierre de caja con fondo inicial, totales por método de pago
                 (efectivo, tarjeta, Yape/Plin) y control de diferencias al cierre.
               </p>
             </div>
 
             <div className="landing-feature-card">
-              <div className="landing-feature-icon">🔄</div>
-              <h3 className="landing-feature-title">Devoluciones y notas de crédito</h3>
+              <div className="landing-feature-icon">🧾</div>
+              <h3 className="landing-feature-title">Facturación electrónica integrada</h3>
               <p className="landing-feature-desc">
-                Registra devoluciones totales o parciales con reposición de stock automática.
-                Emite notas de crédito aplicables como descuento directamente en el POS.
+                Emite boletas y facturas directamente desde cada venta. Fluxus las envía a SUNAT
+                de forma automática y descarga el CDR oficial, XML y PDF sin pasos extra.
               </p>
             </div>
 
@@ -240,26 +240,25 @@ export function LandingPage() {
               <h3 className="landing-feature-title">Compras y recepciones</h3>
               <p className="landing-feature-desc">
                 Órdenes de compra con estados (borrador → enviada → recibida), recepciones
-                parciales y propagación automática del costo al inventario.
+                parciales y actualización automática del costo al inventario.
+              </p>
+            </div>
+
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon">🔄</div>
+              <h3 className="landing-feature-title">Devoluciones y notas de crédito</h3>
+              <p className="landing-feature-desc">
+                Registra devoluciones totales o parciales con reposición de stock automática.
+                Emite notas de crédito aplicables como descuento directamente en el POS.
               </p>
             </div>
 
             <div className="landing-feature-card">
               <div className="landing-feature-icon">🛒</div>
-              <h3 className="landing-feature-title">Ventas con IGV</h3>
+              <h3 className="landing-feature-title">Historial de ventas</h3>
               <p className="landing-feature-desc">
-                Registra ventas en efectivo, tarjeta o Yape/Plin. Calcula subtotal,
-                IGV configurable y vuelto automático. Historial completo por vendedor y período.
-              </p>
-            </div>
-
-            <div className="landing-feature-card">
-              <div className="landing-feature-icon">🧾</div>
-              <h3 className="landing-feature-title">Facturación electrónica</h3>
-              <p className="landing-feature-desc">
-                Emite boletas y facturas desde cada venta. Fluxus se conecta a tu cuenta OSE
-                (Nubefact, Alegra, Efact u otro compatible) para el envío a SUNAT, CDR oficial
-                y descarga del XML y PDF.
+                Registro completo por vendedor y período. Anula ventas con un clic y revierte
+                el stock automáticamente. Filtra por fecha, método de pago o estado.
               </p>
             </div>
 
@@ -267,8 +266,8 @@ export function LandingPage() {
               <div className="landing-feature-icon">👥</div>
               <h3 className="landing-feature-title">Roles y permisos</h3>
               <p className="landing-feature-desc">
-                Tres roles simples: Administrador, Vendedor y Almacenero.
-                Cada rol tiene acceso exactamente a lo que necesita, sin configuraciones complicadas.
+                Administrador, Gerente, Vendedor y más. Configura exactamente a qué módulos
+                y acciones tiene acceso cada usuario de tu equipo.
               </p>
             </div>
 
@@ -291,28 +290,41 @@ export function LandingPage() {
           <div className="landing-section-header">
             <span className="landing-section-label">¿Para quién es?</span>
             <h2 className="landing-section-title">Diseñado para negocios que mueven producto</h2>
+            <p className="landing-section-subtitle">
+              Fluxus se adapta a tu rubro. Cada tipo de negocio ve solo lo que necesita.
+            </p>
           </div>
 
           <div className="landing-audience-grid">
             <div className="landing-audience-card">
               <div className="landing-audience-icon">💊</div>
               <h4>Farmacias y boticas</h4>
-              <p>Control de lotes, fechas de vencimiento y stock crítico por producto.</p>
+              <p>Control de lotes, fechas de vencimiento, registro sanitario y alertas de stock crítico por producto.</p>
+            </div>
+            <div className="landing-audience-card">
+              <div className="landing-audience-icon">👗</div>
+              <h4>Tiendas de ropa</h4>
+              <p>Gestión por talla y color, control de stock por variante y POS rápido con búsqueda por categoría.</p>
             </div>
             <div className="landing-audience-card">
               <div className="landing-audience-icon">🏪</div>
               <h4>Tiendas y bodegas</h4>
-              <p>POS rápido con caja integrada, historial diario y control de proveedores.</p>
+              <p>POS rápido con caja integrada, historial diario de ventas y control de proveedores.</p>
             </div>
             <div className="landing-audience-card">
               <div className="landing-audience-icon">🔧</div>
               <h4>Ferreterías y distribuidoras</h4>
-              <p>OCs a varios proveedores, recepciones parciales y costos de compra.</p>
+              <p>OCs a varios proveedores, recepciones parciales y costos de compra actualizados en tiempo real.</p>
+            </div>
+            <div className="landing-audience-card">
+              <div className="landing-audience-icon">🛒</div>
+              <h4>Minimarkets</h4>
+              <p>Manejo de múltiples categorías, POS por código de barras y control de merma y vencimientos.</p>
             </div>
             <div className="landing-audience-card">
               <div className="landing-audience-icon">📦</div>
               <h4>Almacenes y depósitos</h4>
-              <p>Movimientos de inventario, kardex y reportes de valorización de stock.</p>
+              <p>Movimientos de inventario, kardex completo y reportes de valorización de stock.</p>
             </div>
           </div>
         </div>
@@ -346,16 +358,14 @@ export function LandingPage() {
                 <li><span className="check">✓</span> Control de lotes y fechas de vencimiento</li>
                 <li><span className="check">✓</span> Órdenes de compra y recepciones a proveedores</li>
                 <li><span className="check">✓</span> Devoluciones y notas de crédito aplicables en POS</li>
-                <li><span className="check">✓</span> Facturación electrónica: boletas y facturas</li>
-                <li><span className="check">✓</span> <strong>🏛 Facturación electrónica</strong> compatible con Nubefact, Alegra, Efact y más <span style={{ fontSize: '11px', opacity: 0.7 }}>(requiere cuenta OSE propia)</span></li>
+                <li><span className="check">✓</span> <strong>Facturación electrónica integrada</strong> — boletas y facturas a SUNAT sin configuraciones adicionales</li>
+                <li><span className="check">✓</span> CDR oficial, descarga de XML y PDF por comprobante</li>
                 <li><span className="check">✓</span> Reportes históricos sin límite de fecha</li>
                 <li><span className="check">✓</span> Exportación a Excel y PDF</li>
-                <li><span className="check">✓</span> 3 roles: Administrador, Vendedor y Almacenero</li>
-                <li><span className="check">✓</span> Permisos por módulo configurables por usuario</li>
+                <li><span className="check">✓</span> Roles con permisos configurables por usuario</li>
                 <li><span className="check">✓</span> Hasta 10 usuarios</li>
                 <li><span className="check">✓</span> Soporte por WhatsApp en español</li>
               </ul>
-              {/* CTA principal → página de compra (carrito) */}
               <Link to="/plan" className="landing-pricing-cta primary">
                 Contratar Plan Básico — S/ 89/mes
               </Link>
@@ -406,9 +416,8 @@ export function LandingPage() {
             </Link>
             <p>
               Mini‑ERP para negocios peruanos. POS, inventario, compras, devoluciones
-              y facturación electrónica compatible con tu OSE en una sola plataforma.
+              y facturación electrónica integrada con SUNAT en una sola plataforma.
             </p>
-            {/* Datos legales de la empresa */}
             <p style={{ fontSize: '11px', marginTop: '8px', opacity: 0.6, lineHeight: 1.6 }}>
               Joaquin Castillo Tello · RUC: 10769109566<br />
               Jr. Libertad 455, Magdalena del Mar, Lima<br />

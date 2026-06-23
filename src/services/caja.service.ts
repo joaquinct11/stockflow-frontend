@@ -2,6 +2,11 @@ import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
 import type { CajaDTO, AbrirCajaDTO, CerrarCajaDTO, RetiroCajaDTO, RegistrarRetiroDTO } from '../types';
 
+export interface CorregirCierreDTO {
+  montoContado: number;
+  observaciones?: string;
+}
+
 export const cajaService = {
   getActiva: async (): Promise<CajaDTO | null> => {
     try {
@@ -35,6 +40,11 @@ export const cajaService = {
 
   registrarRetiro: async (id: number, req: RegistrarRetiroDTO): Promise<RetiroCajaDTO> => {
     const { data } = await axiosInstance.post<RetiroCajaDTO>(API_ENDPOINTS.CAJAS.RETIRO(id), req);
+    return data;
+  },
+
+  corregirCierre: async (id: number, req: CorregirCierreDTO): Promise<CajaDTO> => {
+    const { data } = await axiosInstance.put<CajaDTO>(API_ENDPOINTS.CAJAS.CORREGIR_CIERRE(id), req);
     return data;
   },
 };
