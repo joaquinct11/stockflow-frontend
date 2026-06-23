@@ -251,7 +251,7 @@ export function AccountSettings() {
                           )}
                           {form.rubro === 'TIENDA_ROPA' && (
                             <p className="text-xs text-violet-600 dark:text-violet-400">
-                              Los productos mostrarán campos de talla y color. Se ocultarán campos farmacéuticos.
+                              Los productos mostrarán campos de talla y color.
                             </p>
                           )}
                         </div>

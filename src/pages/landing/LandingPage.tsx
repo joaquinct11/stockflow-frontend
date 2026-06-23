@@ -50,9 +50,9 @@ export function LandingPage() {
             </div>
 
             <h1 className="landing-hero-title">
-              Vende, controla tu stock y{' '}
-              <span className="landing-hero-title-highlight">factura electrónico</span>
-              {', '}todo desde un solo sistema
+              Vende más, pierde menos{' '}
+              <span className="landing-hero-title-highlight">y lleva el control</span>
+              {' '}de todo en un solo lugar
             </h1>
 
             <p className="landing-hero-subtitle">

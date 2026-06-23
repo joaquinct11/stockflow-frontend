@@ -34,6 +34,8 @@ import {
   FileDown,
   Upload,
   FlaskConical,
+  ArrowUpAZ,
+  ArrowDownAZ,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -56,6 +58,7 @@ export function InventarioList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
   const [, setSelectedProveedorMov] = useState<any>(null);
 
@@ -345,12 +348,18 @@ export function InventarioList() {
     }
   };
 
-  const filteredProductos = productos.filter(
-    (p) =>
-      p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.categoriaNombre?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredProductos = productos
+    .filter(
+      (p) =>
+        p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.codigoBarras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.categoriaNombre?.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+    .sort((a, b) =>
+      sortOrder === 'asc'
+        ? a.nombre.localeCompare(b.nombre, 'es')
+        : b.nombre.localeCompare(a.nombre, 'es')
+    );
 
   const totalPages = Math.ceil(filteredProductos.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -558,7 +567,15 @@ export function InventarioList() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Producto</TableHead>
+                              <TableHead>
+                                <button
+                                  onClick={() => { setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); }}
+                                  className="flex items-center gap-1 font-semibold uppercase tracking-wider text-xs hover:text-primary transition-colors"
+                                >
+                                  Producto
+                                  {sortOrder === 'asc' ? <ArrowUpAZ className="h-3.5 w-3.5" /> : <ArrowDownAZ className="h-3.5 w-3.5" />}
+                                </button>
+                              </TableHead>
                               <TableHead>Categoría</TableHead>
                               <TableHead>Unidad</TableHead>
                               <TableHead className="text-center">Stock Actual</TableHead>

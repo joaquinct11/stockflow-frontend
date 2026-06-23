@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { adminService } from '../../services/admin.service';
 import type { AdminUsuario, Permiso } from '../../types';
 import { Button } from '../../components/ui/Button';
@@ -202,7 +203,12 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
+const OC_RECEPCIONES_LABELS = ['Órdenes de Compra', 'Recepciones'];
+
 export function PermisosConfig() {
+  const { config: negocioConfig } = useTenantConfigStore();
+  const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
+
   const [usuarios, setUsuarios]               = useState<AdminUsuario[]>([]);
   const [permisosCatalog, setPermisosCatalog] = useState<Permiso[]>([]);
   const [selectedUserId, setSelectedUserId]   = useState<number | null>(null);
@@ -303,12 +309,13 @@ export function PermisosConfig() {
     const catalog = Array.isArray(permisosCatalog) ? permisosCatalog : [];
     const byCode = new Map<string, Permiso>();
     for (const p of catalog) { const code = getPermCode(p); if (code) byCode.set(code, p); }
-    return PERMISSION_GROUPS.map(g => {
-      // Incluir TODOS los permisos del grupo: base (bloqueados) + extras (editables)
-      const perms = g.codes
-        .map((code, i) => byCode.get(code) ?? ({ id: -(i + 1), nombre: code } as Permiso));
-      return { ...g, perms };
-    }).filter(g => g.perms.length > 0);
+    return PERMISSION_GROUPS
+      .filter(g => !esRopa || !OC_RECEPCIONES_LABELS.includes(g.label))
+      .map(g => {
+        const perms = g.codes
+          .map((code, i) => byCode.get(code) ?? ({ id: -(i + 1), nombre: code } as Permiso));
+        return { ...g, perms };
+      }).filter(g => g.perms.length > 0);
   }, [permisosCatalog, basePermisos]);
 
   const getRolCard = (rolNombre: string) => ROL_CARDS.find(r => r.rol === rolNombre) ?? ROL_CARDS[1];
