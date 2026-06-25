@@ -23,6 +23,7 @@ import {
   ScanLine,
   Wallet,
   Receipt,
+  Award,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -81,6 +82,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const { canAccess, isAdmin, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
   const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
+  const esFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
 
   const isPathActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
@@ -236,6 +238,15 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             show: isAdmin,
           },
         ],
+      },
+
+      // ── Certificados (solo BOTICA/FARMACIA) ──────────────────────
+      {
+        type: 'item',
+        title: 'Certificados',
+        href: '/dashboard/certificados',
+        icon: Award,
+        show: canAccess('CERTIFICADOS'),
       },
 
       // ── Resto ────────────────────────────────────────────────────

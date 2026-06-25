@@ -778,6 +778,22 @@ export interface ComprasPorProveedorDTO {
   montoEstimado: number | null;
 }
 
+// ── Certificados establecimiento ──────────────────────────────────────────────
+export type CertificadoEstado = 'VIGENTE' | 'POR_VENCER' | 'VENCIDO';
+
+export interface CertificadoDTO {
+  id?: number;
+  tipo: string; // predefinidos o texto libre personalizado
+  descripcion: string;
+  usuarioId?: number;
+  usuarioNombre?: string;
+  fechaVencimiento: string; // ISO date
+  diasAlerta?: number;
+  observaciones?: string;
+  estado?: CertificadoEstado;
+  diasRestantes?: number;
+}
+
 // ── Financiero (P&L) ──────────────────────────────────────────────────────────
 export interface GastoCategoriaDTO {
   categoria: string;

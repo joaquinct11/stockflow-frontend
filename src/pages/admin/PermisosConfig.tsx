@@ -9,7 +9,7 @@ import {
   Search, Shield, Save, ShoppingCart, Wallet, Users, Package, Boxes,
   Truck, BarChart3, FileText, RotateCcw, Building2, ClipboardCheck,
   CheckCircle2, Settings2, Crown, ChevronDown, ChevronUp,
-  Info, CreditCard,
+  Info, CreditCard, Award,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -71,6 +71,10 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   EDITAR_USUARIO:           { label: 'Editar usuarios',                  descripcion: 'Modificar datos y rol de un usuario' },
   ELIMINAR_USUARIO:         { label: 'Eliminar usuarios',               descripcion: 'Borrar usuarios del sistema permanentemente' },
   CAMBIAR_ESTADO_USUARIO:   { label: 'Activar / desactivar usuarios',    descripcion: 'Habilitar o inhabilitar el acceso de un usuario' },
+  VER_CERTIFICADOS:         { label: 'Ver certificados',                 descripcion: 'Acceder al módulo de certificados y vencimientos' },
+  CREAR_CERTIFICADO:        { label: 'Registrar certificados',           descripcion: 'Agregar nuevos certificados o documentos' },
+  EDITAR_CERTIFICADO:       { label: 'Editar certificados',              descripcion: 'Modificar datos de certificados existentes' },
+  ELIMINAR_CERTIFICADO:     { label: 'Eliminar certificados',            descripcion: 'Borrar certificados del sistema' },
 };
 
 // ─── Grupos (orden = sidebar) ─────────────────────────────────────────────────
@@ -98,6 +102,7 @@ const PERMISSION_GROUPS: { label: string; color: string; icon: React.ReactNode; 
   { label: 'Movimientos',      color: 'amber',   icon: <Boxes        size={15} />, codes: ['VER_INVENTARIO','CREAR_INVENTARIO'] },
   // ── Usuarios ──────────────────────────────────────────────────────
   { label: 'Usuarios',         color: 'slate',   icon: <Users        size={15} />, codes: ['VER_USUARIOS','CREAR_USUARIO','EDITAR_USUARIO','CAMBIAR_ESTADO_USUARIO','ELIMINAR_USUARIO'] },
+  { label: 'Certificados',     color: 'orange',  icon: <Award        size={15} />, codes: ['VER_CERTIFICADOS','CREAR_CERTIFICADO','EDITAR_CERTIFICADO','ELIMINAR_CERTIFICADO'] },
   // ── Suscripciones ─────────────────────────────────────────────────
   { label: 'Suscripciones',    color: 'violet',  icon: <CreditCard   size={15} />, codes: ['VER_SUSCRIPCIONES'] },
   // ── Reportes ──────────────────────────────────────────────────────
