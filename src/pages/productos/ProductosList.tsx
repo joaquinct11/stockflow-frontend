@@ -72,6 +72,10 @@ export function ProductosList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  // Sugerencias de nombre duplicado
+  const [nombreSugerencias, setNombreSugerencias] = useState<ProductoDTO[]>([]);
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
+
   // Imagen del producto
   const imgInputRef = useRef<HTMLInputElement>(null);
   const [imgPreview, setImgPreview] = useState<string | null>(null);
@@ -167,6 +171,25 @@ export function ProductosList() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  // Sugerencias debounced — solo en modo crear y con 3+ caracteres
+  useEffect(() => {
+    if (editingId || formData.nombre.length < 3) {
+      setNombreSugerencias([]);
+      setMostrarSugerencias(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const resultados = await productoService.search(formData.nombre);
+        setNombreSugerencias(resultados.slice(0, 6));
+        setMostrarSugerencias(resultados.length > 0);
+      } catch {
+        // silencioso
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [formData.nombre, editingId]);
 
   const fetchUnidades = async () => {
     try {
@@ -359,6 +382,8 @@ export function ProductosList() {
     setEditingId(null);
     setIsDialogOpen(false);
     setImgPreview(null);
+    setNombreSugerencias([]);
+    setMostrarSugerencias(false);
     setVariantesBorrador([]);
     if (imgInputRef.current) imgInputRef.current.value = '';
   };
@@ -768,10 +793,35 @@ export function ProductosList() {
                     placeholder="Nombre del producto"
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    onFocus={() => nombreSugerencias.length > 0 && setMostrarSugerencias(true)}
+                    onBlur={() => setTimeout(() => setMostrarSugerencias(false), 150)}
                     className="pl-10 h-11"
                     required
                     minLength={3}
                   />
+                  {mostrarSugerencias && nombreSugerencias.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-[200] mt-1 rounded-lg shadow-xl overflow-hidden border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900">
+                      <p className="px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border-b border-amber-200 dark:border-amber-800 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                        Ya existen productos con nombre similar
+                      </p>
+                      {nombreSugerencias.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setMostrarSugerencias(false)}
+                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800 last:border-0 cursor-default"
+                        >
+                          <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.nombre}</span>
+                          {p.codigoBarras && (
+                            <span className="ml-auto text-xs text-muted-foreground shrink-0 font-mono">{p.codigoBarras}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useInactivityLogout } from './hooks/useInactivityLogout';
@@ -11,6 +11,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { RoleProtectedRoute } from './components/shared/RoleProtectedRoute';
 import { SubscripcionGuard } from './components/shared/SubscripcionGuard';
+import { ErrorBoundary } from './components/shared/ErrorBoundary';
 
 // Landing Page
 import { LandingPage } from './pages/landing/LandingPage';
@@ -52,6 +53,7 @@ import { POSPage } from './pages/pos/POSPage';
 import { CajaPage } from './pages/caja/CajaPage';
 import { NotasCreditoPage } from './pages/notasCredito/NotasCreditoPage';
 import { GastosList } from './pages/gastos/GastosList';
+const CertificadosPage = lazy(() => import('./pages/certificados/CertificadosPage').then(m => ({ default: m.CertificadosPage })));
 
 function App() {
   const { initialize, isAuthenticated, setSuscripcionEstado } = useAuthStore();
@@ -327,6 +329,21 @@ function App() {
                 <SubscripcionGuard>
                   <RoleProtectedRoute module="GASTOS">
                     <GastosList />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
+              }
+            />
+            {/* Certificados */}
+            <Route
+              path="certificados"
+              element={
+                <SubscripcionGuard>
+                  <RoleProtectedRoute module="CERTIFICADOS">
+                    <ErrorBoundary>
+                      <Suspense fallback={<div className="flex h-64 items-center justify-center text-muted-foreground">Cargando...</div>}>
+                        <CertificadosPage />
+                      </Suspense>
+                    </ErrorBoundary>
                   </RoleProtectedRoute>
                 </SubscripcionGuard>
               }
