@@ -82,7 +82,6 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const { canAccess, isAdmin, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
   const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
-  const esFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
 
   const isPathActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
