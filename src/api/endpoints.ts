@@ -211,6 +211,15 @@ export const API_ENDPOINTS = {
     DELETE: (id: number) => `/gastos/${id}`,
   },
 
+  CERTIFICADOS: {
+    LIST:    '/certificados',
+    TIPOS:   '/certificados/tipos',
+    ALERTAS: '/certificados/alertas',
+    CREATE:  '/certificados',
+    UPDATE:  (id: number) => `/certificados/${id}`,
+    DELETE:  (id: number) => `/certificados/${id}`,
+  },
+
   CULQI: {
     CONFIG:       '/culqi/config',
     SUSCRIBIR:    '/culqi/suscribir',
