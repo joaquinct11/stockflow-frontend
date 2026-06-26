@@ -4,7 +4,7 @@ import {
   ScanLine, X, Plus, Minus, Trash2, ShoppingCart,
   Banknote, CreditCard, Smartphone, CheckCircle2,
   ArrowLeft, RotateCcw, Loader2, Search, Wallet, Lock, Tag, User, UserPlus,
-  Camera, CameraOff, Printer,
+  Camera, CameraOff, Printer, FileText, Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productoService } from '../../services/producto.service';
@@ -18,6 +18,7 @@ import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import type { ProductoDTO, DetalleVentaDTO, CajaDTO, ValidarNotaCreditoResponseDTO, VentaDTO, ProductoVarianteDTO } from '../../types';
 import { printVentaTicket } from '../../utils/printTicket';
 import { productoVarianteService } from '../../services/productoVariante.service';
+import { axiosInstance } from '../../api/axios.config';
 
 // ── Tipos locales ──────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ const cartItemKey = (item: { producto: ProductoDTO; varianteId?: number }) =>
 
 type MetodoPago = 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
 type POSStep = 'venta' | 'cobro' | 'exito';
+type TipoComprobante = 'TICKET' | 'BOLETA' | 'FACTURA';
 
 const METODOS: { id: MetodoPago; label: string; icon: React.ElementType }[] = [
   { id: 'EFECTIVO',   label: 'Efectivo',   icon: Banknote },
@@ -98,6 +100,11 @@ export function POSPage() {
   const [showCerrarCaja, setShowCerrarCaja] = useState(false);
   const [montoCierre, setMontoCierre] = useState('');
   const [cerrando, setCerrando] = useState(false);
+
+  // ── Estado de comprobante ─────────────────────────────────────────────
+  const [tipoComprobante, setTipoComprobante] = useState<TipoComprobante>('TICKET');
+  const [receptor, setReceptor] = useState({ docTipo: 'DNI', docNumero: '', nombre: '', direccion: '' });
+  const [ultimoComprobanteId, setUltimoComprobanteId] = useState<number | null>(null);
 
   // ── Estado de cámara ─────────────────────────────────────────────────
   const [showCameraScanner, setShowCameraScanner] = useState(false);
@@ -590,6 +597,24 @@ export function POSPage() {
     setShowRegistrarCliente(false);
   };
 
+  const seleccionarClienteComoReceptor = (c: ClienteDTO) => {
+    seleccionarCliente(c);
+    setReceptor({
+      docTipo: c.tipoDocumento || (tipoComprobante === 'FACTURA' ? 'RUC' : 'DNI'),
+      docNumero: c.numeroDocumento || '',
+      nombre: c.nombre || '',
+      direccion: '',
+    });
+  };
+
+  const quitarClienteYReceptor = () => {
+    setClienteSeleccionado(null);
+    setClienteQuery('');
+    setClienteResultados([]);
+    setShowRegistrarCliente(false);
+    setReceptor({ docTipo: tipoComprobante === 'FACTURA' ? 'RUC' : 'DNI', docNumero: '', nombre: '', direccion: '' });
+  };
+
   const quitarCliente = () => {
     setClienteSeleccionado(null);
     setClienteQuery('');
@@ -672,6 +697,23 @@ export function POSPage() {
         return { ...p, stockActual: Math.max(0, (p.stockActual ?? 0) - item.cantidad) };
       }));
 
+      // Emitir comprobante si se eligió boleta o factura
+      if (tipoComprobante !== 'TICKET' && venta.id) {
+        try {
+          const body: Record<string, unknown> = { ventaId: venta.id, tipo: tipoComprobante };
+          if (receptor.docNumero) {
+            body.receptorDocTipo   = tipoComprobante === 'FACTURA' ? 'RUC' : receptor.docTipo;
+            body.receptorDocNumero = receptor.docNumero;
+            body.receptorNombre    = receptor.nombre || undefined;
+            body.receptorDireccion = receptor.direccion || undefined;
+          }
+          const { data: comp } = await axiosInstance.post('/facturacion/comprobantes', body);
+          setUltimoComprobanteId(comp.id ?? null);
+        } catch {
+          toast.error('Venta registrada, pero no se pudo emitir el comprobante. Emítelo desde Facturación.');
+        }
+      }
+
       // Reset NC state
       setNcCodigo('');
       setNcInfo(null);
@@ -687,6 +729,9 @@ export function POSPage() {
     setCart([]);
     setQuery('');
     setResultados([]);
+    setTipoComprobante('TICKET');
+    setReceptor({ docTipo: 'DNI', docNumero: '', nombre: '', direccion: '' });
+    setUltimoComprobanteId(null);
     setMontoPagado('');
     setMetodoPago('EFECTIVO');
     setUltimaVentaId(null);
@@ -866,6 +911,30 @@ export function POSPage() {
                 <span>{METODOS.find(m => m.id === metodoPago)?.label}</span>
               </div>
             </div>
+            {ultimoComprobanteId && (
+              <button
+                onClick={async () => {
+                  try {
+                    const { data } = await axiosInstance.get(
+                      `/facturacion/comprobantes/${ultimoComprobanteId}/pdf`,
+                      { responseType: 'blob' }
+                    );
+                    const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${tipoComprobante === 'FACTURA' ? 'factura' : 'boleta'}-${ultimoComprobanteId}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    toast.error('No se pudo descargar el PDF');
+                  }
+                }}
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                <Download size={16} />
+                Descargar {tipoComprobante === 'FACTURA' ? 'Factura' : 'Boleta'} PDF
+              </button>
+            )}
             {ultimaVenta && (
               <button
                 onClick={() => printVentaTicket(ultimaVenta, negocio, clienteSeleccionado?.numeroDocumento ?? undefined, clienteSeleccionado?.nombre ?? undefined)}
@@ -942,111 +1011,189 @@ export function POSPage() {
               </div>
             </div>
 
-            {/* Cliente (opcional) */}
+            {/* ── Comprobante + Cliente/Receptor unificado ──────────────── */}
             <div className="space-y-2">
               <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                <User size={11} /> Cliente (opcional)
+                <FileText size={11} /> Comprobante
               </p>
-
-              {/* Cliente ya seleccionado */}
-              {clienteSeleccionado ? (
-                <div className="flex items-center gap-2 bg-blue-900/30 border border-blue-700/50 rounded-lg px-3 py-2">
-                  <User size={14} className="text-blue-400 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{clienteSeleccionado.nombre}</p>
-                    {clienteSeleccionado.numeroDocumento && (
-                      <p className="text-xs text-blue-300">{clienteSeleccionado.tipoDocumento} {clienteSeleccionado.numeroDocumento}</p>
-                    )}
-                  </div>
-                  <button type="button" onClick={quitarCliente} className="text-gray-500 hover:text-white flex-shrink-0">
-                    <X size={14} />
+              <div className="grid grid-cols-3 gap-2">
+                {(['TICKET', 'BOLETA', 'FACTURA'] as TipoComprobante[]).map(tipo => (
+                  <button
+                    key={tipo}
+                    type="button"
+                    onClick={() => {
+                      setTipoComprobante(tipo);
+                      quitarClienteYReceptor();
+                    }}
+                    className={`py-2 rounded-lg text-sm font-medium border transition-all ${
+                      tipoComprobante === tipo
+                        ? 'bg-primary border-primary text-white'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    {tipo === 'TICKET' ? '🧾 Ticket' : tipo === 'BOLETA' ? '📄 Boleta' : '🏢 Factura'}
                   </button>
-                </div>
-              ) : (
-                <>
-                  {/* Input búsqueda cliente */}
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="DNI, RUC o nombre del cliente..."
-                      value={clienteQuery}
-                      onChange={e => { setClienteQuery(e.target.value); setShowRegistrarCliente(false); }}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600 pr-8"
-                    />
-                    {buscandoCliente && (
-                      <Loader2 size={13} className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                    )}
-                  </div>
+                ))}
+              </div>
 
-                  {/* Resultados dropdown */}
-                  {clienteResultados.length > 0 && (
-                    <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-700/50">
-                      {clienteResultados.slice(0, 5).map(c => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => seleccionarCliente(c)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-700 transition-colors text-left"
-                        >
-                          <User size={14} className="text-gray-400 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{c.nombre}</p>
-                            {c.numeroDocumento && (
-                              <p className="text-xs text-gray-500">{c.tipoDocumento} {c.numeroDocumento}</p>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* No encontrado → formulario de registro rápido */}
-                  {showRegistrarCliente && clienteQuery.trim() && (
-                    <div className="bg-gray-800 border border-dashed border-gray-600 rounded-lg p-3 space-y-2">
-                      <p className="text-xs text-amber-400 flex items-center gap-1.5">
-                        <UserPlus size={12} /> Cliente no encontrado — registrar
-                      </p>
-                      <input
-                        type="text"
-                        placeholder="Nombre completo *"
-                        value={nuevoClienteForm.nombre}
-                        onChange={e => setNuevoClienteForm(f => ({ ...f, nombre: e.target.value }))}
-                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-500"
-                      />
-                      <div className="flex gap-2">
-                        <select
-                          value={nuevoClienteForm.tipoDocumento}
-                          onChange={e => setNuevoClienteForm(f => ({ ...f, tipoDocumento: e.target.value }))}
-                          className="bg-gray-700 border border-gray-600 rounded-md px-2 py-2 text-sm focus:outline-none focus:border-primary text-white w-24 flex-shrink-0"
-                        >
-                          <option value="DNI">DNI</option>
-                          <option value="RUC">RUC</option>
-                          <option value="CE">CE</option>
-                        </select>
-                        <input
-                          type="text"
-                          placeholder="Nro. documento"
-                          value={nuevoClienteForm.numeroDocumento}
-                          onChange={e => setNuevoClienteForm(f => ({ ...f, numeroDocumento: e.target.value }))}
-                          className="flex-1 bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-500"
-                        />
+              {/* TICKET: cliente opcional para historial CRM */}
+              {tipoComprobante === 'TICKET' && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs text-gray-600 flex items-center gap-1.5">
+                    <User size={10} /> Cliente (opcional — para historial)
+                  </p>
+                  {clienteSeleccionado ? (
+                    <div className="flex items-center gap-2 bg-blue-900/30 border border-blue-700/50 rounded-lg px-3 py-2">
+                      <User size={14} className="text-blue-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{clienteSeleccionado.nombre}</p>
+                        {clienteSeleccionado.numeroDocumento && (
+                          <p className="text-xs text-blue-300">{clienteSeleccionado.tipoDocumento} {clienteSeleccionado.numeroDocumento}</p>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleRegistrarCliente}
-                        disabled={guardandoCliente || !nuevoClienteForm.nombre.trim()}
-                        className="w-full py-2 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
-                      >
-                        {guardandoCliente ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
-                        Registrar y seleccionar
+                      <button type="button" onClick={quitarCliente} className="text-gray-500 hover:text-white flex-shrink-0">
+                        <X size={14} />
                       </button>
                     </div>
+                  ) : (
+                    <>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="DNI, RUC o nombre del cliente..."
+                          value={clienteQuery}
+                          onChange={e => { setClienteQuery(e.target.value); setShowRegistrarCliente(false); }}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600 pr-8"
+                        />
+                        {buscandoCliente && <Loader2 size={13} className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />}
+                      </div>
+                      {clienteResultados.length > 0 && (
+                        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-700/50">
+                          {clienteResultados.slice(0, 5).map(c => (
+                            <button key={c.id} type="button" onClick={() => seleccionarCliente(c)}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-700 transition-colors text-left">
+                              <User size={14} className="text-gray-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{c.nombre}</p>
+                                {c.numeroDocumento && <p className="text-xs text-gray-500">{c.tipoDocumento} {c.numeroDocumento}</p>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {showRegistrarCliente && clienteQuery.trim() && (
+                        <div className="bg-gray-800 border border-dashed border-gray-600 rounded-lg p-3 space-y-2">
+                          <p className="text-xs text-amber-400 flex items-center gap-1.5"><UserPlus size={12} /> Cliente no encontrado — registrar</p>
+                          <input type="text" placeholder="Nombre completo *" value={nuevoClienteForm.nombre}
+                            onChange={e => setNuevoClienteForm(f => ({ ...f, nombre: e.target.value }))}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-500" />
+                          <div className="flex gap-2">
+                            <select value={nuevoClienteForm.tipoDocumento} onChange={e => setNuevoClienteForm(f => ({ ...f, tipoDocumento: e.target.value }))}
+                              className="bg-gray-700 border border-gray-600 rounded-md px-2 py-2 text-sm focus:outline-none focus:border-primary text-white w-24 flex-shrink-0">
+                              <option value="DNI">DNI</option><option value="RUC">RUC</option><option value="CE">CE</option>
+                            </select>
+                            <input type="text" placeholder="Nro. documento" value={nuevoClienteForm.numeroDocumento}
+                              onChange={e => setNuevoClienteForm(f => ({ ...f, numeroDocumento: e.target.value }))}
+                              className="flex-1 bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-500" />
+                          </div>
+                          <button type="button" onClick={handleRegistrarCliente} disabled={guardandoCliente || !nuevoClienteForm.nombre.trim()}
+                            className="w-full py-2 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
+                            {guardandoCliente ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                            Registrar y seleccionar
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
-                </>
+                </div>
+              )}
+
+              {/* BOLETA / FACTURA: búsqueda de cliente que rellena el receptor */}
+              {(tipoComprobante === 'BOLETA' || tipoComprobante === 'FACTURA') && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs text-gray-600 flex items-center gap-1.5">
+                    <User size={10} />
+                    {tipoComprobante === 'FACTURA' ? 'Datos del receptor (RUC)' : 'Datos del receptor (DNI)'}
+                  </p>
+
+                  {/* Cliente seleccionado → chip con datos del receptor */}
+                  {clienteSeleccionado ? (
+                    <div className="flex items-center gap-2 bg-blue-900/30 border border-blue-700/50 rounded-lg px-3 py-2">
+                      <User size={14} className="text-blue-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{receptor.nombre || clienteSeleccionado.nombre}</p>
+                        {receptor.docNumero && <p className="text-xs text-blue-300">{receptor.docTipo} {receptor.docNumero}</p>}
+                      </div>
+                      <button type="button" onClick={quitarClienteYReceptor} className="text-gray-500 hover:text-white flex-shrink-0">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Buscar cliente existente */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder={tipoComprobante === 'FACTURA' ? 'Buscar por RUC o razón social...' : 'Buscar cliente por DNI o nombre...'}
+                          value={clienteQuery}
+                          onChange={e => { setClienteQuery(e.target.value); setShowRegistrarCliente(false); }}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600 pr-8"
+                        />
+                        {buscandoCliente && <Loader2 size={13} className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />}
+                      </div>
+
+                      {/* Resultados: al elegir uno rellena receptor automáticamente */}
+                      {clienteResultados.length > 0 && (
+                        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-700/50">
+                          {clienteResultados.slice(0, 5).map(c => (
+                            <button key={c.id} type="button" onClick={() => seleccionarClienteComoReceptor(c)}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-700 transition-colors text-left">
+                              <User size={14} className="text-gray-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{c.nombre}</p>
+                                {c.numeroDocumento && <p className="text-xs text-gray-500">{c.tipoDocumento} {c.numeroDocumento}</p>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Sin resultados o sin búsqueda: entrada manual */}
+                      {!clienteResultados.length && (
+                        <div className="space-y-2">
+                          {tipoComprobante === 'BOLETA' ? (
+                            <div className="flex gap-2">
+                              <select value={receptor.docTipo} onChange={e => setReceptor(r => ({ ...r, docTipo: e.target.value }))}
+                                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-sm text-white focus:outline-none focus:border-primary w-20 flex-shrink-0">
+                                <option value="DNI">DNI</option><option value="CE">CE</option>
+                              </select>
+                              <input type="text" placeholder="Nro. documento (opcional)" value={receptor.docNumero}
+                                onChange={e => setReceptor(r => ({ ...r, docNumero: e.target.value }))}
+                                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600" />
+                            </div>
+                          ) : (
+                            <input type="text" placeholder="RUC *" value={receptor.docNumero} maxLength={11}
+                              onChange={e => setReceptor(r => ({ ...r, docNumero: e.target.value }))}
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600 font-mono" />
+                          )}
+                          <input type="text"
+                            placeholder={tipoComprobante === 'FACTURA' ? 'Razón social *' : 'Nombre (opcional)'}
+                            value={receptor.nombre}
+                            onChange={e => setReceptor(r => ({ ...r, nombre: e.target.value }))}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600" />
+                          {tipoComprobante === 'FACTURA' && (
+                            <input type="text" placeholder="Dirección (opcional)" value={receptor.direccion}
+                              onChange={e => setReceptor(r => ({ ...r, direccion: e.target.value }))}
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600" />
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
-            {/* Nota de Crédito (opcional) */}
             <div className="space-y-2">
               <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
                 <Tag size={11} /> Nota de Crédito (opcional)
