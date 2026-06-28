@@ -341,7 +341,7 @@ export interface RolDTO {
 export interface MovimientoInventarioDTO {
   id?: number;
   productoId: number;
-  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'DEVOLUCION' | 'SALDO_INICIAL';
+  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'AJUSTE_PRECIO' | 'DEVOLUCION' | 'SALDO_INICIAL';
   cantidad: number;
   descripcion: string;
   referencia?: string;
