@@ -28,7 +28,6 @@ import {
   Tag,
   Scale,
   Boxes,
-  Wallet,
   Timer,
   X,
   Loader2,
