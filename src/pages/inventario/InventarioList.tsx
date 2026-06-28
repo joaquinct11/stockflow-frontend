@@ -89,6 +89,8 @@ export function InventarioList() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const [tipoAjuste, setTipoAjuste] = useState<'STOCK' | 'PRECIO' | 'AMBOS'>('STOCK');
+
   const [formData, setFormData] = useState<MovimientoInventarioDTO>({
     productoId: 0,
     tipo: 'ENTRADA',
@@ -248,8 +250,13 @@ export function InventarioList() {
       return;
     }
 
-    if (formData.cantidad <= 0) {
+    const esAjusteSoloPrecio = formData.tipo === 'AJUSTE' && tipoAjuste === 'PRECIO';
+    if (!esAjusteSoloPrecio && formData.cantidad <= 0) {
       toast.error('La cantidad debe ser mayor a 0');
+      return;
+    }
+    if (esAjusteSoloPrecio && !formData.costoUnitario && !formData.precioVenta) {
+      toast.error('Debes ingresar al menos un precio a actualizar');
       return;
     }
 
@@ -266,18 +273,25 @@ export function InventarioList() {
       return;
     }
 
+    // Resolver tipo real para AJUSTE según sub-tipo seleccionado
+    const tipoReal = (formData.tipo === 'AJUSTE' && tipoAjuste === 'PRECIO')
+      ? 'AJUSTE_PRECIO'
+      : formData.tipo;
+
     const payload: MovimientoInventarioDTO =
       formData.tipo === 'ENTRADA'
         ? { ...formData, varianteId: selectedVarianteId ?? undefined }
         : {
             productoId: formData.productoId,
-            tipo: formData.tipo,
+            tipo: tipoReal,
             cantidad: formData.cantidad,
             descripcion: formData.descripcion,
             referencia: formData.referencia,
             usuarioId: formData.usuarioId,
             tenantId: formData.tenantId,
             varianteId: selectedVarianteId ?? undefined,
+            costoUnitario: (formData.tipo === 'AJUSTE') ? formData.costoUnitario : undefined,
+            precioVenta:   (formData.tipo === 'AJUSTE') ? formData.precioVenta   : undefined,
           };
 
     try {
@@ -922,6 +936,7 @@ export function InventarioList() {
                         type="button"
                         onClick={() => {
                           const nuevoTipo = t.key as MovimientoInventarioDTO['tipo'];
+                          setTipoAjuste('STOCK');
                           setFormData({
                             ...formData,
                             tipo: nuevoTipo,
@@ -1080,33 +1095,148 @@ export function InventarioList() {
                 </div>
               )}
 
-              {/* 3) Cantidad y Referencia */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Cantidad <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={formData.cantidad === 0 ? '' : formData.cantidad}
-                    onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
-                    placeholder="0"
-                    className="font-semibold"
-                    required
-                  />
-                </div>
+              {/* Sub-tipo de AJUSTE — todos los campos van dentro del bloque */}
+              {formData.tipo === 'AJUSTE' && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4 space-y-4">
+                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider">Tipo de ajuste</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { key: 'STOCK', label: 'Stock', desc: 'Ajusta la cantidad' },
+                      { key: 'PRECIO', label: 'Precios', desc: 'Actualiza costo y precio' },
+                      { key: 'AMBOS', label: 'Ambos', desc: 'Stock y precios' },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          setTipoAjuste(opt.key);
+                          setFormData({ ...formData, costoUnitario: undefined, precioVenta: undefined, cantidad: 0 });
+                        }}
+                        className={`rounded-lg border p-2.5 text-left transition text-sm ${tipoAjuste === opt.key ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/40' : 'border-border hover:border-blue-300 bg-background'}`}
+                      >
+                        <p className="font-medium">{opt.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Referencia</label>
-                  <Input
-                    type="text"
-                    placeholder="Documento / nota / código interno"
-                    value={formData.referencia}
-                    onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
-                  />
+                  {/* Campos según sub-tipo */}
+                  {tipoAjuste === 'PRECIO' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Nuevo costo unitario</label>
+                        <Input
+                          type="number" min="0" step="0.01"
+                          value={formData.costoUnitario ?? ''}
+                          onChange={(e) => setFormData({ ...formData, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined })}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      {!esRopa && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Nuevo precio de venta</label>
+                          <Input
+                            type="number" min="0" step="0.01"
+                            value={formData.precioVenta ?? ''}
+                            onChange={(e) => setFormData({ ...formData, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined })}
+                            placeholder="0.00"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {tipoAjuste === 'STOCK' && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Cantidad <span className="text-red-500">*</span></label>
+                      <Input
+                        type="number" min="1"
+                        value={formData.cantidad === 0 ? '' : formData.cantidad}
+                        onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
+                        placeholder="0"
+                        className="font-semibold"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {tipoAjuste === 'AMBOS' && (
+                    <div className={`grid gap-3 ${esRopa ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Costo unitario</label>
+                        <Input
+                          type="number" min="0" step="0.01"
+                          value={formData.costoUnitario ?? ''}
+                          onChange={(e) => setFormData({ ...formData, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined })}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      {!esRopa && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Precio de venta</label>
+                          <Input
+                            type="number" min="0" step="0.01"
+                            value={formData.precioVenta ?? ''}
+                            onChange={(e) => setFormData({ ...formData, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined })}
+                            placeholder="0.00"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Cantidad <span className="text-red-500">*</span></label>
+                        <Input
+                          type="number" min="1"
+                          value={formData.cantidad === 0 ? '' : formData.cantidad}
+                          onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
+                          placeholder="0"
+                          className="font-semibold"
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Referencia</label>
+                    <Input
+                      type="text"
+                      placeholder="Documento / nota / código interno"
+                      value={formData.referencia}
+                      onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* 3) Cantidad y Referencia — solo para no-AJUSTE */}
+              {formData.tipo !== 'AJUSTE' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Cantidad <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={formData.cantidad === 0 ? '' : formData.cantidad}
+                      onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
+                      placeholder="0"
+                      className="font-semibold"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Referencia</label>
+                    <Input
+                      type="text"
+                      placeholder="Documento / nota / código interno"
+                      value={formData.referencia}
+                      onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* 4) Descripción */}
               <div className="space-y-2">
@@ -1134,7 +1264,7 @@ export function InventarioList() {
             <Button
               type="submit"
               className="w-full sm:w-auto"
-              disabled={formData.productoId === 0 || formData.cantidad <= 0}
+              disabled={formData.productoId === 0 || (formData.cantidad <= 0 && !(formData.tipo === 'AJUSTE' && tipoAjuste === 'PRECIO'))}
             >
               Registrar Movimiento
             </Button>

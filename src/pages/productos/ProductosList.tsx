@@ -1039,51 +1039,26 @@ export function ProductosList() {
           {/* Sección: Precios */}
           <div className="rounded-lg border bg-muted/30 p-4">
             <div className="mb-3">
-              <p className="text-sm font-semibold">Precios</p>
-              <p className="text-xs text-muted-foreground">Costo y precio de venta.</p>
+              <p className="text-sm font-semibold">Precio de venta</p>
+              <p className="text-xs text-muted-foreground">El costo se actualiza automáticamente al registrar entradas de stock.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Último costo unitario</label>
-                <div className="relative">
-                  <Wallet className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.costoUnitario === 0 ? '' : formData.costoUnitario}
-                    onChange={(e) => setFormData({ ...formData, costoUnitario: parseFloat(e.target.value || '0') })}
-                    placeholder="0.00"
-                    className="pl-10 h-11"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Precio de venta <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={formData.precioVenta === 0 ? '' : formData.precioVenta}
-                    onChange={(e) => setFormData({ ...formData, precioVenta: parseFloat(e.target.value || '0') })}
-                    placeholder="0.00"
-                    className="pl-10 h-11"
-                    required
-                  />
-                </div>
-
-                {formData.precioVenta > 0 && formData.costoUnitario > 0 && (
-                  <p className="text-xs text-green-600">
-                    Margen estimado:{' '}
-                    {(((formData.precioVenta - formData.costoUnitario) / formData.costoUnitario) * 100).toFixed(1)}%
-                  </p>
-                )}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Precio de venta <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={formData.precioVenta === 0 ? '' : formData.precioVenta}
+                  onChange={(e) => setFormData({ ...formData, precioVenta: parseFloat(e.target.value || '0') })}
+                  placeholder="0.00"
+                  className="pl-10 h-11"
+                  required
+                />
               </div>
             </div>
           </div>
