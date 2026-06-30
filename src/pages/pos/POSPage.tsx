@@ -19,6 +19,8 @@ import type { ProductoDTO, DetalleVentaDTO, CajaDTO, ValidarNotaCreditoResponseD
 import { printVentaTicket } from '../../utils/printTicket';
 import { productoVarianteService } from '../../services/productoVariante.service';
 import { axiosInstance } from '../../api/axios.config';
+import { movimientoService } from '../../services/movimiento.service';
+import type { LoteVencimientoDTO } from '../../services/movimiento.service';
 
 // ── Tipos locales ──────────────────────────────────────────────────────────────
 
@@ -51,6 +53,10 @@ export function POSPage() {
   const { user } = useAuthStore();
   const { config: negocio } = useTenantConfigStore();
   const esRopa = negocio?.rubro === 'TIENDA_ROPA';
+  const esFarmacia = negocio?.rubro === 'BOTICA' || negocio?.rubro === 'FARMACIA';
+
+  // ── Lotes por producto (solo farmacia) ───────────────────────────────────
+  const [proximoVencimientoMap, setProximoVencimientoMap] = useState<Map<number, LoteVencimientoDTO>>(new Map());
 
   // ── Estado principal ──────────────────────────────────────────────────────
   const [step, setStep] = useState<POSStep>('venta');
@@ -125,6 +131,34 @@ export function POSPage() {
   useEffect(() => {
     productoService.getAll().then(setTodosProductos).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!esFarmacia) return;
+    movimientoService.getLotes().then(lotes => {
+      const map = new Map<number, LoteVencimientoDTO>();
+      const conFecha = lotes.filter(l => l.fechaVencimiento);
+
+      // Agrupar por producto
+      const porProducto = new Map<number, LoteVencimientoDTO[]>();
+      conFecha.forEach(l => {
+        if (!porProducto.has(l.productoId)) porProducto.set(l.productoId, []);
+        porProducto.get(l.productoId)!.push(l);
+      });
+
+      // Por cada producto: priorizar el lote vigente más próximo a vencer.
+      // Solo mostrar vencido si TODOS los lotes están vencidos.
+      porProducto.forEach((lotesProducto, productoId) => {
+        const vigentes = lotesProducto.filter(l => l.diasRestantes >= 0)
+          .sort((a, b) => a.diasRestantes - b.diasRestantes);
+        const vencidos = lotesProducto.filter(l => l.diasRestantes < 0)
+          .sort((a, b) => b.diasRestantes - a.diasRestantes); // el menos vencido primero
+
+        map.set(productoId, vigentes.length > 0 ? vigentes[0] : vencidos[0]);
+      });
+
+      setProximoVencimientoMap(map);
+    }).catch(() => {});
+  }, [esFarmacia]);
 
   // ── Precargar carrito desde venta anulada (via navigate state) ────────────
   useEffect(() => {
@@ -1363,9 +1397,29 @@ export function POSPage() {
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium truncate ${isActive ? 'text-white' : ''}`}>{p.nombre}</p>
                         <p className="text-xs text-gray-500">
-                          {p.codigoBarras && <span className="mr-2">{p.codigoBarras}</span>}
-                          Stock: <span className={p.stockActual! <= 0 ? 'text-red-400' : 'text-gray-400'}>{p.stockActual}</span>
-                          {p.unidadesPorCaja && <span className="ml-2 text-gray-600">· {p.unidadesPorCaja} u/caja</span>}
+                          {esFarmacia ? (() => {
+                            const lote = proximoVencimientoMap.get(p.id!);
+                            const vencido = lote && lote.diasRestantes < 0;
+                            const proximo = lote && lote.diasRestantes >= 0 && lote.diasRestantes <= 30;
+                            const colorFecha = vencido ? 'text-red-400' : proximo ? 'text-amber-400' : 'text-gray-500';
+                            return (
+                              <>
+                                {lote?.lote && <span className="mr-2">Lote: {lote.lote}</span>}
+                                Stock: <span className={p.stockActual! <= 0 ? 'text-red-400' : 'text-gray-400'}>{p.stockActual}</span>
+                                {lote && (
+                                  <span className={`ml-2 ${colorFecha}`}>
+                                    · {vencido ? '⚠ Vencido' : `Vence ${lote.fechaVencimiento}`}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })() : (
+                            <>
+                              {p.codigoBarras && <span className="mr-2">{p.codigoBarras}</span>}
+                              Stock: <span className={p.stockActual! <= 0 ? 'text-red-400' : 'text-gray-400'}>{p.stockActual}</span>
+                              {p.unidadesPorCaja && <span className="ml-2 text-gray-600">· {p.unidadesPorCaja} u/caja</span>}
+                            </>
+                          )}
                           {p.esGenerico && <span className="ml-2 text-blue-400 font-medium">Genérico</span>}
                         </p>
                         {p.componentes && (
