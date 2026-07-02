@@ -308,7 +308,7 @@ export function SucursalesPage() {
         title="¿Desactivar sucursal?"
         description="Los datos de esta sucursal se conservan pero el local quedará inactivo. Esta acción se puede revertir desde soporte."
         confirmText="Desactivar"
-        variant="danger"
+        type="danger"
       />
     </div>
   );

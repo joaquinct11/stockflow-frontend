@@ -315,7 +315,7 @@ export function ComisionesPage() {
         title="¿Eliminar comisión?"
         description="Esta acción no se puede deshacer."
         confirmText="Eliminar"
-        variant="danger"
+        type="danger"
       />
     </div>
   );
