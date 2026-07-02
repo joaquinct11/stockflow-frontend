@@ -306,7 +306,7 @@ export function SucursalesPage() {
         onCancel={() => setConfirmId(null)}
         onConfirm={handleDesactivar}
         title="¿Desactivar sucursal?"
-        message="Los datos de esta sucursal se conservan pero el local quedará inactivo. Esta acción se puede revertir desde soporte."
+        description="Los datos de esta sucursal se conservan pero el local quedará inactivo. Esta acción se puede revertir desde soporte."
         confirmText="Desactivar"
         variant="danger"
       />

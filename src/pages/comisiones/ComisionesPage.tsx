@@ -313,7 +313,7 @@ export function ComisionesPage() {
         onCancel={() => setConfirmId(null)}
         onConfirm={handleEliminar}
         title="¿Eliminar comisión?"
-        message="Esta acción no se puede deshacer."
+        description="Esta acción no se puede deshacer."
         confirmText="Eliminar"
         variant="danger"
       />
