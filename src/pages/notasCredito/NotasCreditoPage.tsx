@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { notaCreditoService } from '../../services/notaCredito.service';
 import { printNotaCreditoTicket } from '../../utils/printTicket';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { useSucursalStore } from '../../store/sucursalStore';
 import type { NotaCreditoDTO } from '../../types';
 
 type FiltroEstado = 'TODOS' | 'PENDIENTE' | 'USADA' | 'ANULADA';
@@ -49,6 +50,9 @@ function fmtFecha(iso?: string) {
 
 export function NotasCreditoPage() {
   const { config: negocioConfig } = useTenantConfigStore();
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
   const [notas, setNotas] = useState<NotaCreditoDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<FiltroEstado>('TODOS');
@@ -61,7 +65,7 @@ export function NotasCreditoPage() {
   const fetchNotas = async () => {
     try {
       setLoading(true);
-      const data = await notaCreditoService.getAll();
+      const data = await notaCreditoService.getAll(sucursalId);
       setNotas(data);
     } catch {
       toast.error('Error al cargar las notas de crédito');
@@ -71,8 +75,10 @@ export function NotasCreditoPage() {
   };
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     fetchNotas();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sucursalLoaded, sucursalId]);
 
   const handleDescargarPdf = async (nc: NotaCreditoDTO) => {
     try {

@@ -8,8 +8,10 @@ export const certificadoService = {
     return data;
   },
 
-  listar: async (): Promise<CertificadoDTO[]> => {
-    const { data } = await axiosInstance.get<CertificadoDTO[]>(API_ENDPOINTS.CERTIFICADOS.LIST);
+  listar: async (sucursalId?: number): Promise<CertificadoDTO[]> => {
+    const { data } = await axiosInstance.get<CertificadoDTO[]>(API_ENDPOINTS.CERTIFICADOS.LIST, {
+      params: sucursalId ? { sucursalId } : undefined,
+    });
     return data;
   },
 

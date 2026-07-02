@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ventaService } from '../../services/venta.service';
 import { productoService } from '../../services/producto.service';
+import { cajaService } from '../../services/caja.service';
 import { facturacionService } from '../../services/facturacion.service';
 import { clienteService } from '../../services/cliente.service';
 import type { ClienteDTO } from '../../services/cliente.service';
@@ -39,6 +40,8 @@ import {
   RefreshCw,
   SlidersHorizontal,
   Printer,
+  Plus,
+  Zap,
 } from 'lucide-react';
 import { printVentaTicket } from '../../utils/printTicket';
 import toast from 'react-hot-toast';
@@ -47,6 +50,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
 import { exportarVentasExcel, exportarVentasPDF } from '../../utils/reportes-export';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { useSucursalStore } from '../../store/sucursalStore';
 import { DevolucionModal } from '../../components/ventas/DevolucionModal';
 
 const IGV_RATE = 0.18;
@@ -66,6 +70,29 @@ export function VentasList() {
   const navigate = useNavigate();
   const { canDelete, canViewAll, canViewOwn, canCreate, rol, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
+  const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+
+  // ── Estado dialog "Registrar Servicio" (solo rubro dealer) ──────────────────
+  const [registrarOpen, setRegistrarOpen] = useState(false);
+  const [registrarSaving, setRegistrarSaving] = useState(false);
+  const [cajaActivaServicio, setCajaActivaServicio] = useState<{ id: number } | null>(null);
+  const [registrarForm, setRegistrarForm] = useState({
+    servicioId: 0,
+    precioUnitario: 0,
+    cantidad: 1,
+    clienteId: 0,
+    metodoPago: 'EFECTIVO',
+  });
+  // Buscador de servicios
+  const [servicioSearch, setServicioSearch] = useState('');
+  const [servicioNombre, setServicioNombre] = useState('');
+  const [showServiciosList, setShowServiciosList] = useState(false);
+  // Cliente manual (DNI/RUC sin estar en la BD)
+  const [clienteSearch, setClienteSearch] = useState('');
+  const [clienteManual, setClienteManual] = useState({ tipoDoc: 'DNI', numDoc: '', nombre: '' });
+  const [usarManual, setUsarManual] = useState(false);
 
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
@@ -121,11 +148,12 @@ export function VentasList() {
   const [emitirSubmitting, setEmitirSubmitting] = useState(false);
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     if (userId) {
       fetchData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, rol]);
+  }, [sucursalLoaded, userId, rol, sucursalActual?.id]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -138,13 +166,13 @@ export function VentasList() {
       const hasViewPermission = canViewAll('VENTAS') || canViewOwn('VENTAS');
 
       const ventasPromise = (() => {
-        if (canViewAll('VENTAS')) return ventaService.getAll();
+        if (canViewAll('VENTAS')) return ventaService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined);
         if (canViewOwn('VENTAS')) return ventaService.getByVendor(userId!);
         return Promise.resolve([] as VentaDTO[]);
       })();
 
       const productosPromise =
-        hasViewPermission ? productoService.getAll() : Promise.resolve([] as ProductoDTO[]);
+        hasViewPermission ? productoService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined) : Promise.resolve([] as ProductoDTO[]);
 
       const comprobantesPromise = facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[]);
       const clientesPromise = clienteService.getAll().catch(() => [] as ClienteDTO[]);
@@ -166,6 +194,59 @@ export function VentasList() {
       setVentas([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resetRegistrarDialog = () => {
+    setRegistrarForm({ servicioId: 0, precioUnitario: 0, cantidad: 1, clienteId: 0, metodoPago: 'EFECTIVO' });
+    setServicioSearch(''); setServicioNombre(''); setShowServiciosList(false);
+    setClienteSearch(''); setClienteManual({ tipoDoc: 'DNI', numDoc: '', nombre: '' }); setUsarManual(false);
+    setCajaActivaServicio(null);
+  };
+
+  const handleRegistrarServicio = async () => {
+    if (!registrarForm.servicioId) { toast.error('Selecciona un servicio'); return; }
+    if (registrarForm.precioUnitario <= 0) { toast.error('El precio debe ser mayor a 0'); return; }
+    if (registrarForm.cantidad < 1) { toast.error('La cantidad debe ser al menos 1'); return; }
+
+    setRegistrarSaving(true);
+    try {
+      // Si es cliente manual y tiene datos → crearlo primero
+      let clienteId = registrarForm.clienteId || undefined;
+      if (usarManual && clienteManual.nombre.trim()) {
+        const nuevo = await clienteService.create({
+          nombre: clienteManual.nombre.trim(),
+          tipoDocumento: clienteManual.tipoDoc,
+          numeroDocumento: clienteManual.numDoc.trim() || undefined,
+        });
+        clienteId = nuevo.id;
+        setClientes((prev) => [...prev, nuevo]);
+      }
+
+      const subtotal = registrarForm.cantidad * registrarForm.precioUnitario;
+      await ventaService.create({
+        vendedorId: userId!,
+        metodoPago: registrarForm.metodoPago,
+        total: subtotal,
+        estado: 'COMPLETADA',
+        clienteId,
+        sucursalId: sucursalActual?.id,
+        cajaId: cajaActivaServicio?.id,
+        detalles: [{
+          productoId: registrarForm.servicioId,
+          cantidad: registrarForm.cantidad,
+          precioUnitario: registrarForm.precioUnitario,
+          subtotal,
+        }],
+      });
+      toast.success('Servicio registrado correctamente');
+      setRegistrarOpen(false);
+      resetRegistrarDialog();
+      fetchData();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Error al registrar');
+    } finally {
+      setRegistrarSaving(false);
     }
   };
 
@@ -412,10 +493,41 @@ export function VentasList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Ventas</h1>
-          <p className="text-muted-foreground">Gestiona las ventas y transacciones</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {esServicios ? 'Servicios Prestados' : 'Ventas'}
+          </h1>
+          <p className="text-muted-foreground">
+            {esServicios ? 'Registro de servicios facturados' : 'Gestiona las ventas y transacciones'}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {esServicios && canCreate('VENTAS') && (
+            <Button onClick={async () => {
+              const caja = await cajaService.getActiva(isMultiLocal && sucursalActual ? sucursalActual.id : undefined).catch(() => null);
+              if (!caja) {
+                toast.error(
+                  (t) => (
+                    <span>
+                      Sin caja abierta.{' '}
+                      <button
+                        className="underline font-semibold"
+                        onClick={() => { toast.dismiss(t.id); navigate('/dashboard/caja'); }}
+                      >
+                        Abrir caja
+                      </button>
+                    </span>
+                  ),
+                  { duration: 5000 }
+                );
+                return;
+              }
+              setCajaActivaServicio(caja);
+              setRegistrarOpen(true);
+            }} className="flex-1 sm:flex-none">
+              <Plus className="mr-2 h-4 w-4" />
+              Registrar Servicio
+            </Button>
+          )}
           {(canViewAll('VENTAS') || canViewOwn('VENTAS')) && filteredVentas.length > 0 && (
             <>
               <Button variant="outline" size="sm" onClick={handleExportExcel} className="flex-1 sm:flex-none">
@@ -1329,6 +1441,232 @@ export function VentasList() {
             </Button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Dialog: Registrar Servicio (solo EMPRESA_SERVICIOS) */}
+      <Dialog
+        isOpen={registrarOpen}
+        onClose={() => { setRegistrarOpen(false); resetRegistrarDialog(); }}
+        title="Registrar Servicio"
+        description="Registra un servicio prestado para poder emitir el comprobante."
+      >
+        <div className="space-y-4 p-1">
+
+          {/* ── Buscador de servicios ─────────────────────────────── */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Servicio <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <Zap className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Escribe para buscar..."
+                value={servicioNombre || servicioSearch}
+                className="pl-10 h-11"
+                onFocus={() => { setServicioNombre(''); setShowServiciosList(true); }}
+                onChange={(e) => {
+                  setServicioSearch(e.target.value);
+                  setServicioNombre('');
+                  setRegistrarForm((f) => ({ ...f, servicioId: 0, precioUnitario: 0 }));
+                  setShowServiciosList(true);
+                }}
+              />
+              {servicioNombre && (
+                <button
+                  type="button"
+                  onClick={() => { setServicioNombre(''); setServicioSearch(''); setRegistrarForm((f) => ({ ...f, servicioId: 0, precioUnitario: 0 })); }}
+                  className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X size={14} />
+                </button>
+              )}
+              {showServiciosList && (
+                <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-background border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {productos
+                    .filter((p) => p.activo && p.tipo === 'SERVICIO' && (!servicioSearch || p.nombre.toLowerCase().includes(servicioSearch.toLowerCase())))
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setRegistrarForm((f) => ({ ...f, servicioId: p.id!, precioUnitario: p.precioVenta ?? 0 }));
+                          setServicioNombre(p.nombre);
+                          setServicioSearch('');
+                          setShowServiciosList(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted flex items-center justify-between gap-2 border-b last:border-0"
+                      >
+                        <span className="font-medium truncate">{p.nombre}</span>
+                        <span className="text-primary font-semibold shrink-0">S/.{p.precioVenta?.toFixed(2)}</span>
+                      </button>
+                    ))}
+                  {productos.filter((p) => p.activo && p.tipo === 'SERVICIO' && (!servicioSearch || p.nombre.toLowerCase().includes(servicioSearch.toLowerCase()))).length === 0 && (
+                    <p className="px-4 py-3 text-sm text-muted-foreground">Sin resultados</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Cantidad y Precio ─────────────────────────────────── */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Cantidad</label>
+              <Input
+                type="number" min="1"
+                value={registrarForm.cantidad}
+                onChange={(e) => setRegistrarForm((f) => ({ ...f, cantidad: parseInt(e.target.value) || 1 }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Precio unitario (S/.)</label>
+              <Input
+                type="number" step="0.01" min="0.01"
+                value={registrarForm.precioUnitario || ''}
+                onChange={(e) => setRegistrarForm((f) => ({ ...f, precioUnitario: parseFloat(e.target.value) || 0 }))}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          {/* Total */}
+          {registrarForm.precioUnitario > 0 && (
+            <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-2.5 flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Total a cobrar</span>
+              <span className="text-lg font-bold text-primary">
+                S/.{(registrarForm.cantidad * registrarForm.precioUnitario).toFixed(2)}
+              </span>
+            </div>
+          )}
+
+          {/* ── Cliente ───────────────────────────────────────────── */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Cliente</label>
+              <button
+                type="button"
+                onClick={() => { setUsarManual(!usarManual); setRegistrarForm((f) => ({ ...f, clienteId: 0 })); setClienteSearch(''); }}
+                className="text-xs text-primary hover:underline"
+              >
+                {usarManual ? '← Buscar existente' : '+ DNI / RUC nuevo'}
+              </button>
+            </div>
+
+            {usarManual ? (
+              /* Cliente nuevo con DNI / RUC */
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Tipo doc.</label>
+                    <select
+                      value={clienteManual.tipoDoc}
+                      onChange={(e) => setClienteManual((m) => ({ ...m, tipoDoc: e.target.value }))}
+                      className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value="DNI">DNI</option>
+                      <option value="RUC">RUC</option>
+                      <option value="CE">CE</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-xs text-muted-foreground">Número</label>
+                    <Input
+                      placeholder={clienteManual.tipoDoc === 'RUC' ? '20xxxxxxxxx' : '12345678'}
+                      value={clienteManual.numDoc}
+                      onChange={(e) => setClienteManual((m) => ({ ...m, numDoc: e.target.value }))}
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    {clienteManual.tipoDoc === 'RUC' ? 'Razón social' : 'Nombre completo'} <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    placeholder={clienteManual.tipoDoc === 'RUC' ? 'Empresa S.A.C.' : 'Juan Pérez López'}
+                    value={clienteManual.nombre}
+                    onChange={(e) => setClienteManual((m) => ({ ...m, nombre: e.target.value }))}
+                    className="h-9"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Se guardará automáticamente en tus contactos.</p>
+              </div>
+            ) : (
+              /* Buscar cliente existente */
+              <div className="relative">
+                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Buscar por nombre o documento..."
+                  value={clienteSearch}
+                  onChange={(e) => { setClienteSearch(e.target.value); setRegistrarForm((f) => ({ ...f, clienteId: 0 })); }}
+                  className="pl-10 h-11"
+                />
+                {clienteSearch && (
+                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-background border rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => { setClienteSearch('Consumidor final'); setRegistrarForm((f) => ({ ...f, clienteId: 0 })); }}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-muted border-b text-muted-foreground"
+                    >
+                      Sin cliente / Consumidor final
+                    </button>
+                    {clientes
+                      .filter((c) => {
+                        const q = clienteSearch.toLowerCase();
+                        return c.nombre.toLowerCase().includes(q) || (c.numeroDocumento ?? '').includes(q);
+                      })
+                      .map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setRegistrarForm((f) => ({ ...f, clienteId: c.id! }));
+                            setClienteSearch(`${c.nombre}${c.numeroDocumento ? ` — ${c.numeroDocumento}` : ''}`);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center justify-between border-b last:border-0"
+                        >
+                          <span className="font-medium">{c.nombre}</span>
+                          {c.numeroDocumento && <span className="text-xs text-muted-foreground">{c.tipoDocumento} {c.numeroDocumento}</span>}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Método de pago ────────────────────────────────────── */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Método de pago</label>
+            <div className="grid grid-cols-4 gap-2">
+              {['EFECTIVO', 'TRANSFERENCIA', 'TARJETA', 'YAPE_PLIN'].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setRegistrarForm((f) => ({ ...f, metodoPago: m }))}
+                  className={`py-2 rounded-lg border text-xs font-medium transition-all ${
+                    registrarForm.metodoPago === m
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background border-input hover:bg-muted'
+                  }`}
+                >
+                  {m === 'YAPE_PLIN' ? 'Yape/Plin' : m.charAt(0) + m.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Botones ───────────────────────────────────────────── */}
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" className="flex-1" onClick={() => { setRegistrarOpen(false); resetRegistrarDialog(); }}>
+              Cancelar
+            </Button>
+            <Button className="flex-1" onClick={handleRegistrarServicio} disabled={registrarSaving}>
+              {registrarSaving ? 'Registrando...' : 'Registrar Servicio'}
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

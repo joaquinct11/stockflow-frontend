@@ -6,6 +6,7 @@ import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { proveedorService } from '../../services/proveedor.service';
 import { productoVarianteService } from '../../services/productoVariante.service';
 import type { MovimientoInventarioDTO, ProductoDTO, ProductoVarianteDTO, ProveedorDTO, UnidadMedidaDTO } from '../../types';
+import { useSucursalStore } from '../../store/sucursalStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -48,7 +49,11 @@ export function InventarioList() {
   const { userId, tenantId } = useCurrentUser();
   const { canCreate, canView, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
   const esFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
+  const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
   const hasViewPermission = canView('INVENTARIO');
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
@@ -116,6 +121,7 @@ export function InventarioList() {
   }, [userId, tenantId]);
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     if (hasViewPermission) {
       fetchData();
     } else if (canCreate('INVENTARIO')) {
@@ -125,7 +131,7 @@ export function InventarioList() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasViewPermission]);
+  }, [sucursalLoaded, hasViewPermission, sucursalId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -144,7 +150,7 @@ export function InventarioList() {
   const fetchFormData = async () => {
     try {
       const [productosData, unidadesData] = await Promise.all([
-        productoService.getAll(),
+        productoService.getAll(sucursalId),
         unidadMedidaService.getAll(),
       ]);
       setProductos(productosData);
@@ -163,7 +169,7 @@ export function InventarioList() {
     try {
       setLoading(true);
       const [productosData, unidadesData] = await Promise.all([
-        productoService.getAll(),
+        productoService.getAll(sucursalId),
         unidadMedidaService.getAll(),
       ]);
       setProductos(productosData);
@@ -192,7 +198,12 @@ export function InventarioList() {
     return m;
   }, [proveedores]);
 
-  const productosOptions = productos.map((p) => ({
+  // Para dealer: movimientos solo aplica a productos físicos (tipo PRODUCTO)
+  const productosFisicos = esServicios
+    ? productos.filter((p) => p.tipo === 'PRODUCTO' || !p.tipo)
+    : productos;
+
+  const productosOptions = productosFisicos.map((p) => ({
     id: p.id!,
     label: `${p.nombre}`,
     subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoriaNombre || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
@@ -204,7 +215,7 @@ export function InventarioList() {
     setIsKardexOpen(true);
     setKardexLoading(true);
     try {
-      const data = await movimientoService.getByProducto(producto.id!);
+      const data = await movimientoService.getByProducto(producto.id!, sucursalId);
       const sorted = [...data].sort((a, b) => {
         const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -280,7 +291,7 @@ export function InventarioList() {
 
     const payload: MovimientoInventarioDTO =
       formData.tipo === 'ENTRADA'
-        ? { ...formData, varianteId: selectedVarianteId ?? undefined }
+        ? { ...formData, varianteId: selectedVarianteId ?? undefined, sucursalId }
         : {
             productoId: formData.productoId,
             tipo: tipoReal,
@@ -292,6 +303,7 @@ export function InventarioList() {
             varianteId: selectedVarianteId ?? undefined,
             costoUnitario: (formData.tipo === 'AJUSTE') ? formData.costoUnitario : undefined,
             precioVenta:   (formData.tipo === 'AJUSTE') ? formData.precioVenta   : undefined,
+            sucursalId,
           };
 
     try {
@@ -362,7 +374,7 @@ export function InventarioList() {
     }
   };
 
-  const filteredProductos = productos
+  const filteredProductos = productosFisicos
     .filter(
       (p) =>
         p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -380,10 +392,10 @@ export function InventarioList() {
   const currentProductos = filteredProductos.slice(startIndex, startIndex + itemsPerPage);
 
   const invStats = useMemo(() => ({
-    total:      productos.length,
-    bajoStock:  productos.filter((p) => p.stockActual <= p.stockMinimo).length,
-    valor:      productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0),
-  }), [productos]);
+    total:      productosFisicos.length,
+    bajoStock:  productosFisicos.filter((p) => p.stockActual <= p.stockMinimo).length,
+    valor:      productosFisicos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0),
+  }), [productosFisicos]);
 
   const lotesFiltrados = useMemo(() => {
     return lotes.filter((l) => {
@@ -515,7 +527,7 @@ export function InventarioList() {
           <div className="flex gap-1 border-b">
             {([
               { key: 'stock',  label: 'Stock',  icon: <Package className="h-4 w-4" />, visible: true },
-              { key: 'lotes',  label: 'Lotes',  icon: <FlaskConical className="h-4 w-4" />, visible: !esRopa },
+              { key: 'lotes',  label: 'Lotes',  icon: <FlaskConical className="h-4 w-4" />, visible: !esRopa && !esServicios },
             ] as const).filter(t => t.visible).map((tab) => (
               <button
                 key={tab.key}
@@ -846,7 +858,7 @@ export function InventarioList() {
                         if (esRopa) {
                           setLoadingVariantes(true);
                           try {
-                            const vars = await productoVarianteService.getByProducto(producto.id!);
+                            const vars = await productoVarianteService.getByProducto(producto.id!, sucursalId);
                             setVariantesProducto(vars.filter(v => v.activo !== false));
                           } catch { /* sin variantes */ }
                           finally { setLoadingVariantes(false); }
@@ -1064,8 +1076,8 @@ export function InventarioList() {
                       />
                     </div>
 
-                    {/* Fecha de vencimiento — solo para no-ropa */}
-                    {!esRopa && (
+                    {/* Fecha de vencimiento — solo farmacia/general (no ropa ni dealer) */}
+                    {!esRopa && !esServicios && (
                       <div className="space-y-2 md:col-span-2">
                         <label className="text-sm font-medium">Fecha de vencimiento</label>
                         <Input

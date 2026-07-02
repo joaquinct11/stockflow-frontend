@@ -3,8 +3,10 @@ import { API_ENDPOINTS } from '../api/endpoints';
 import type { RecepcionDTO, RecepcionItemDTO, ComprobanteProveedorDTO } from '../types';
 
 export const recepcionService = {
-  getAll: async (): Promise<RecepcionDTO[]> => {
-    const { data } = await axiosInstance.get<RecepcionDTO[]>(API_ENDPOINTS.RECEPCIONES.LIST);
+  getAll: async (sucursalId?: number): Promise<RecepcionDTO[]> => {
+    const { data } = await axiosInstance.get<RecepcionDTO[]>(API_ENDPOINTS.RECEPCIONES.LIST, {
+      params: sucursalId ? { sucursalId } : undefined,
+    });
     return data;
   },
 

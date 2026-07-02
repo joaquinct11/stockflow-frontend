@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useSucursalStore } from '../../store/sucursalStore';
 import axiosInstance from '../../api/axios.config';
 import { API_ENDPOINTS } from '../../api/endpoints';
 
@@ -58,6 +59,9 @@ type EstadoOCFilter = 'TODOS' | 'BORRADOR' | 'ENVIADA' | 'RECIBIDA_PARCIAL' | 'R
 export function OrdenComprasList() {
   const navigate = useNavigate();
   const { canCreate, canView, canEdit, puede } = usePermissions();
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
 
   // Ajusta si tu sistema usa otro módulo para permisos de compras:
   const hasViewPermission = canView('COMPRAS') || canView('COMPRAS') || canView('PROVEEDORES');
@@ -153,6 +157,7 @@ export function OrdenComprasList() {
   const [itemPrice, setItemPrice] = useState<number | ''>('');
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     if (hasViewPermission) {
       fetchData();
     } else if (canCreateOC) {
@@ -161,7 +166,7 @@ export function OrdenComprasList() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasViewPermission]);
+  }, [sucursalLoaded, hasViewPermission, sucursalId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -188,7 +193,7 @@ export function OrdenComprasList() {
     try {
       setLoading(true);
       const [ordenesData, productosData] = await Promise.all([
-        ordenCompraService.getAll(),
+        ordenCompraService.getAll(sucursalId),
         productoService.getAll(),
       ]);
       setOrdenes(ordenesData);

@@ -19,6 +19,7 @@ import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { useSucursalStore } from '../../store/sucursalStore';
 
 const TIPO_OPTIONS: TipoComprobante[] = ['BOLETA', 'FACTURA'];
 // const ESTADO_OPTIONS = ['EMITIDO', 'ANULADO'];
@@ -50,6 +51,9 @@ export function ComprobantesPage() {
   const { canAccess, puede, canCreate, canDelete, isVendedor } = usePermissions();
   const { user } = useAuthStore();
   const { config: tenantConfig } = useTenantConfigStore();
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
 
   const canView = canAccess('FACTURACION');
   const canEmitir = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
@@ -88,6 +92,7 @@ export function ComprobantesPage() {
   const [enviandoSunat, setEnviandoSunat]       = useState<number | null>(null);
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     if (canView) {
       fetchComprobantes();
       fetchVentas();
@@ -95,7 +100,7 @@ export function ComprobantesPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, filterTipo, filterEstado, fechaDesde, fechaHasta]);
+  }, [sucursalLoaded, canView, filterTipo, filterEstado, fechaDesde, fechaHasta, sucursalId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -106,7 +111,7 @@ export function ComprobantesPage() {
       // VENDEDOR solo puede ver sus propias ventas (VER_MIS_VENTAS)
       const data = isVendedor && user?.usuarioId
         ? await ventaService.getByVendor(user.usuarioId)
-        : await ventaService.getAll();
+        : await ventaService.getAll(sucursalId);
       setVentas(data);
     } catch { /* no bloquear si falla */ }
   };
@@ -119,6 +124,7 @@ export function ComprobantesPage() {
         estado: filterEstado || undefined,
         fechaDesde: fechaDesde || undefined,
         fechaHasta: fechaHasta || undefined,
+        sucursalId,
       });
       setComprobantes(data);
     } catch (error: unknown) {

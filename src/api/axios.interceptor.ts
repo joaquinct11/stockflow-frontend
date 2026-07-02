@@ -44,10 +44,12 @@ export function setupAxiosInterceptors() {
 
       // Handle 403 Forbidden — show toast, do NOT logout
       if (error.response?.status === 403) {
-        const mensaje =
-          error.response?.data?.mensaje ||
-          'No tienes permisos para realizar esta acción';
-        showForbiddenToast(mensaje);
+        if (!(error.config as any)?.skipForbiddenToast) {
+          const mensaje =
+            error.response?.data?.mensaje ||
+            'No tienes permisos para realizar esta acción';
+          showForbiddenToast(mensaje);
+        }
         return Promise.reject(error);
       }
 

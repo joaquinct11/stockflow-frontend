@@ -15,6 +15,7 @@ import { clienteService } from '../../services/cliente.service';
 import type { ClienteDTO } from '../../services/cliente.service';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { useSucursalStore } from '../../store/sucursalStore';
 import type { ProductoDTO, DetalleVentaDTO, CajaDTO, ValidarNotaCreditoResponseDTO, VentaDTO, ProductoVarianteDTO } from '../../types';
 import { printVentaTicket } from '../../utils/printTicket';
 import { productoVarianteService } from '../../services/productoVariante.service';
@@ -52,6 +53,9 @@ export function POSPage() {
   const location = useLocation();
   const { user } = useAuthStore();
   const { config: negocio } = useTenantConfigStore();
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
   const esRopa = negocio?.rubro === 'TIENDA_ROPA';
   const esFarmacia = negocio?.rubro === 'BOTICA' || negocio?.rubro === 'FARMACIA';
 
@@ -129,8 +133,9 @@ export function POSPage() {
 
   // ── Cargar todos los productos al montar ──────────────────────────────────
   useEffect(() => {
-    productoService.getAll().then(setTodosProductos).catch(() => {});
-  }, []);
+    if (!sucursalLoaded) return;
+    productoService.getAll(sucursalId).then(setTodosProductos).catch(() => {});
+  }, [sucursalLoaded, sucursalId]);
 
   useEffect(() => {
     if (!esFarmacia) return;
@@ -206,7 +211,7 @@ export function POSPage() {
   useEffect(() => {
     const initCaja = async () => {
       try {
-        const activa = await cajaService.getActiva();
+        const activa = await cajaService.getActiva(sucursalId);
         if (activa) {
           setCajaActiva(activa);
         } else {
@@ -457,7 +462,7 @@ export function POSPage() {
     if (esRopa) {
       try {
         setLoadingVariantes(true);
-        const vars = await productoVarianteService.getByProducto(producto.id!);
+        const vars = await productoVarianteService.getByProducto(producto.id!, sucursalId);
         const activas = vars.filter(v => v.activo !== false && (v.stockActual ?? 0) > 0);
         if (activas.length > 0) {
           setVariantePickerProducto(producto);
@@ -547,7 +552,7 @@ export function POSPage() {
     try {
       setAbriendoCaja(true);
       const monto = parseFloat(montoApertura) || 0;
-      const caja = await cajaService.abrir({ montoApertura: monto });
+      const caja = await cajaService.abrir({ montoApertura: monto, sucursalId });
       setCajaActiva(caja);
       setShowAbrirCaja(false);
       toast.success('Caja abierta. ¡Listo para vender!');
@@ -707,6 +712,7 @@ export function POSPage() {
         cajaId: cajaActiva?.id,
         notaCreditoCodigo: ncInfo?.valida ? ncCodigo : undefined,
         clienteId: clienteSeleccionado?.id,
+        sucursalId: sucursalActual?.id,
         detalles,
       });
 
@@ -1355,7 +1361,7 @@ export function POSPage() {
                   />
                   {buscando && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
                 </div>
-                {!esRopa && (
+                {esFarmacia && (
                 <button
                   type="button"
                   onClick={() => setSoloGenerico(v => !v)}
@@ -1420,7 +1426,7 @@ export function POSPage() {
                               {p.unidadesPorCaja && <span className="ml-2 text-gray-600">· {p.unidadesPorCaja} u/caja</span>}
                             </>
                           )}
-                          {p.esGenerico && <span className="ml-2 text-blue-400 font-medium">Genérico</span>}
+                          {esFarmacia && p.esGenerico && <span className="ml-2 text-blue-400 font-medium">Genérico</span>}
                         </p>
                         {p.componentes && (
                           <p className="text-[10px] text-gray-600 truncate" title={p.componentes}>

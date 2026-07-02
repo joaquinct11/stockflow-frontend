@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useSucursalStore } from '../../store/sucursalStore';
 import { cn } from '../../lib/utils';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -74,6 +75,9 @@ const emptyForm: GastoDTO = {
 export function GastosList() {
   const { canCreate, canEdit, canDelete, canView } = usePermissions();
   const hasView = canView('GASTOS');
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
 
   const [gastos, setGastos] = useState<GastoDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,20 +102,21 @@ export function GastosList() {
   });
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     if (hasView) {
       fetchGastos();
       fetchTotalMes();
     } else {
       setLoading(false);
     }
-  }, [hasView]);
+  }, [sucursalLoaded, hasView, sucursalId]);
 
   useEffect(() => { setCurrentPage(1); }, [searchTerm, categoriaFilter, fechaDesde, fechaHasta, metodoPagoFilter]);
 
   const fetchGastos = async () => {
     try {
       setLoading(true);
-      const data = await gastoService.getAll();
+      const data = await gastoService.getAll(sucursalId);
       setGastos(data);
     } catch {
       toast.error('Error al cargar gastos');
@@ -123,7 +128,7 @@ export function GastosList() {
   const fetchTotalMes = async () => {
     try {
       const { inicio, fin } = mesActual();
-      const total = await gastoService.getTotal(inicio, fin);
+      const total = await gastoService.getTotal(inicio, fin, sucursalId);
       setTotalMes(Number(total));
     } catch { /* silencioso */ }
   };
@@ -137,7 +142,7 @@ export function GastosList() {
         await gastoService.update(editingGasto.id, formData);
         toast.success('Gasto actualizado');
       } else {
-        await gastoService.create(formData);
+        await gastoService.create({ ...formData, sucursalId });
         toast.success('Gasto registrado');
       }
       closeDialog();

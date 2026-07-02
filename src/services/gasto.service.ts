@@ -28,6 +28,7 @@ export interface GastoDTO {
   tenantId?: string;
   registradoPor?: string;
   createdAt?: string;
+  sucursalId?: number;
 }
 
 export const CATEGORIAS_GASTO: { value: CategoriaGasto; label: string; icon: string }[] = [
@@ -54,13 +55,17 @@ export const METODOS_PAGO_GASTO: { value: MetodoPagoGasto; label: string }[] = [
 ];
 
 export const gastoService = {
-  async getAll(): Promise<GastoDTO[]> {
-    const { data } = await axiosInstance.get<GastoDTO[]>(API_ENDPOINTS.GASTOS.LIST);
+  async getAll(sucursalId?: number): Promise<GastoDTO[]> {
+    const { data } = await axiosInstance.get<GastoDTO[]>(API_ENDPOINTS.GASTOS.LIST, {
+      params: sucursalId ? { sucursalId } : undefined,
+    });
     return data;
   },
 
-  async getActivos(): Promise<GastoDTO[]> {
-    const { data } = await axiosInstance.get<GastoDTO[]>(API_ENDPOINTS.GASTOS.LIST_ACTIVOS);
+  async getActivos(sucursalId?: number): Promise<GastoDTO[]> {
+    const { data } = await axiosInstance.get<GastoDTO[]>(API_ENDPOINTS.GASTOS.LIST_ACTIVOS, {
+      params: sucursalId ? { sucursalId } : undefined,
+    });
     return data;
   },
 
@@ -84,8 +89,10 @@ export const gastoService = {
     return data;
   },
 
-  async getTotal(inicio: string, fin: string): Promise<number> {
-    const { data } = await axiosInstance.get<{ total: number }>(API_ENDPOINTS.GASTOS.TOTAL(inicio, fin));
+  async getTotal(inicio: string, fin: string, sucursalId?: number): Promise<number> {
+    const { data } = await axiosInstance.get<{ total: number }>(API_ENDPOINTS.GASTOS.TOTAL(inicio, fin), {
+      params: sucursalId ? { sucursalId } : undefined,
+    });
     return data.total;
   },
 

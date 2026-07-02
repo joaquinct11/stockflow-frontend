@@ -18,9 +18,10 @@ export const movimientoService = {
   /**
    * Obtener todos los movimientos del tenant actual
    */
-  getAll: async (): Promise<MovimientoInventarioDTO[]> => {
+  getAll: async (sucursalId?: number): Promise<MovimientoInventarioDTO[]> => {
     const { data } = await axiosInstance.get<MovimientoInventarioDTO[]>(
-      API_ENDPOINTS.MOVIMIENTOS.LIST
+      API_ENDPOINTS.MOVIMIENTOS.LIST,
+      { params: sucursalId ? { sucursalId } : undefined }
     );
     return data;
   },
@@ -38,9 +39,10 @@ export const movimientoService = {
   /**
    * Obtener movimientos por producto
    */
-  getByProducto: async (productoId: number): Promise<MovimientoInventarioDTO[]> => {
+  getByProducto: async (productoId: number, sucursalId?: number): Promise<MovimientoInventarioDTO[]> => {
     const { data } = await axiosInstance.get<MovimientoInventarioDTO[]>(
-      API_ENDPOINTS.MOVIMIENTOS.GET_BY_PRODUCTO(productoId)
+      API_ENDPOINTS.MOVIMIENTOS.GET_BY_PRODUCTO(productoId),
+      { params: sucursalId ? { sucursalId } : undefined }
     );
     return data;
   },

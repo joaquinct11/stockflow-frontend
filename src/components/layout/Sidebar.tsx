@@ -24,11 +24,14 @@ import {
   Wallet,
   Receipt,
   Award,
+  Boxes,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { useSucursalStore } from '../../store/sucursalStore';
+import { usePlan } from '../../hooks/usePlan';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -81,11 +84,21 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const { user } = useAuthStore();
   const { canAccess, isAdmin, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
-  const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
+  const { sucursales } = useSucursalStore();
+  const { isPro } = usePlan();
+  const esRopa       = negocioConfig?.rubro === 'TIENDA_ROPA';
+  const esServicios  = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
+  const esPro        = isPro || sucursales.length > 0;
 
   const isPathActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
     if (href === '/pos') return location.pathname === '/pos';
+    if (href.includes('?')) {
+      const [hrefPath, hrefQuery] = href.split('?');
+      return location.pathname.startsWith(hrefPath) && location.search.includes(hrefQuery);
+    }
+    // For /dashboard/productos without query param, don't activate when a tipo param is present
+    if (href === '/dashboard/productos' && location.search.includes('tipo=')) return false;
     return location.pathname.startsWith(href);
   };
 
@@ -100,11 +113,11 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         show: true,
       },
 
-      // ── Ventas (Ingresos) ────────────────────────────────────────
+      // ── Ventas / Servicios ───────────────────────────────────────
       {
         type: 'group',
         key: 'ventas',
-        title: 'Ventas',
+        title: esServicios ? 'Facturación' : 'Ventas',
         icon: ShoppingCart,
         show: canAccess('VENTAS') || canAccess('FACTURACION') || canAccess('POS') || isAdmin,
         items: [
@@ -121,7 +134,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             show: canAccess('POS'),
           },
           {
-            title: 'Historial de Ventas',
+            title: esServicios ? 'Servicios prestados' : 'Historial de Ventas',
             href: '/dashboard/ventas',
             icon: ShoppingCart,
             show: canAccess('VENTAS'),
@@ -136,18 +149,18 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             title: 'Notas de Crédito',
             href: '/dashboard/notas-credito',
             icon: Receipt,
-            show: isAdmin || puede('VER_NOTAS_CREDITO'),
+            show: !esServicios && (isAdmin || puede('VER_NOTAS_CREDITO')),
           },
         ],
       },
 
-      // ── Gastos ───────────────────────────────────────────────────
+      // ── Gastos / Egresos ─────────────────────────────────────────
       {
         type: 'group',
         key: 'gastos',
         title: 'Gastos',
         icon: TrendingDown,
-        show: canAccess('GASTOS') || (!esRopa && (canAccess('COMPRAS') || canAccess('RECEPCIONES'))),
+        show: canAccess('GASTOS') || (!esRopa && !esServicios && (canAccess('COMPRAS') || canAccess('RECEPCIONES'))),
         items: [
           {
             title: 'Gastos y Egresos',
@@ -159,13 +172,13 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             title: 'Órdenes de Compra',
             href: '/dashboard/compras/ordenes',
             icon: ClipboardList,
-            show: !esRopa && canAccess('COMPRAS'),
+            show: !esRopa && !esServicios && canAccess('COMPRAS'),
           },
           {
             title: 'Recepciones',
             href: '/dashboard/recepciones',
             icon: Inbox,
-            show: !esRopa && canAccess('RECEPCIONES'),
+            show: !esRopa && !esServicios && canAccess('RECEPCIONES'),
           },
         ],
       },
@@ -193,19 +206,34 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         ],
       },
 
-      // ── Inventario ───────────────────────────────────────────────
+      // ── Comisiones (solo EMPRESA_SERVICIOS) ──────────────────────
+      {
+        type: 'item',
+        title: 'Comisiones',
+        href: '/dashboard/comisiones',
+        icon: BarChart3,
+        show: esServicios && (isAdmin || puede('VER_COMISIONES')),
+      },
+
+      // ── Inventario ────────────────────────────────────────────────
       {
         type: 'group',
         key: 'inventario',
-        title: 'Inventario',
+        title: esServicios ? 'Catálogo e Inventario' : 'Inventario',
         icon: PackageOpen,
         show: canAccess('PRODUCTOS') || canAccess('INVENTARIO'),
         items: [
           {
-            title: 'Productos',
-            href: '/dashboard/productos',
+            title: esServicios ? 'Catálogo de Servicios' : 'Productos',
+            href: esServicios ? '/dashboard/productos?tipo=SERVICIO' : '/dashboard/productos',
             icon: Package,
             show: canAccess('PRODUCTOS'),
+          },
+          {
+            title: 'Productos Físicos',
+            href: '/dashboard/productos?tipo=PRODUCTO',
+            icon: Boxes,
+            show: esServicios && canAccess('PRODUCTOS'),
           },
           {
             title: 'Movimientos',
@@ -239,13 +267,22 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         ],
       },
 
-      // ── Certificados (solo BOTICA/FARMACIA) ──────────────────────
+      // ── Certificados (solo BOTICA/FARMACIA, oculto para servicios) ─
       {
         type: 'item',
         title: 'Certificados',
         href: '/dashboard/certificados',
         icon: Award,
-        show: canAccess('CERTIFICADOS'),
+        show: !esServicios && canAccess('CERTIFICADOS'),
+      },
+
+      // ── Sucursales (solo ADMIN plan PRO) ─────────────────────────
+      {
+        type: 'item',
+        title: 'Sucursales',
+        href: '/dashboard/sucursales',
+        icon: Building2,
+        show: isAdmin && esPro,
       },
 
       // ── Resto ────────────────────────────────────────────────────
@@ -271,7 +308,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         show: true,
       },
     ],
-    [canAccess, isAdmin, user?.rol]
+    [canAccess, isAdmin, puede, user?.rol, esPro, esServicios]
   );
 
   const defaultExpanded = useMemo(() => {
@@ -289,14 +326,14 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
       isPathActive('/dashboard/clientes') ||
       isPathActive('/dashboard/proveedores');
     const inventarioOpen =
-      isPathActive('/dashboard/productos') ||
+      location.pathname.startsWith('/dashboard/productos') ||
       isPathActive('/dashboard/inventario') ||
       isPathActive('/dashboard/kardex');
     const usuariosOpen =
       isPathActive('/dashboard/usuarios') ||
       isPathActive('/dashboard/admin');
     return { ventas: ventasOpen, gastos: gastosOpen, contactos: contactosOpen, inventario: inventarioOpen, usuarios: usuariosOpen };
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   const [openGroups, setOpenGroups] = useState(defaultExpanded);
 

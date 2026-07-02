@@ -8,6 +8,7 @@ export interface ListComprobantesFilters {
   fechaDesde?: string;
   fechaHasta?: string;
   search?: string;
+  sucursalId?: number;
 }
 
 /**
@@ -49,6 +50,7 @@ export const facturacionService = {
     if (filters?.fechaDesde) params.append('fechaDesde', filters.fechaDesde);
     if (filters?.fechaHasta) params.append('fechaHasta', filters.fechaHasta);
     if (filters?.search) params.append('search', filters.search);
+    if (filters?.sucursalId) params.append('sucursalId', String(filters.sucursalId));
 
     const query = params.toString() ? `?${params.toString()}` : '';
     const response = await axiosInstance.get<ComprobanteApiDTO[]>(`${API_ENDPOINTS.FACTURACION.LIST}${query}`);

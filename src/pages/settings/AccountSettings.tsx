@@ -242,6 +242,7 @@ export function AccountSettings() {
                             <option value="RESTAURANTE">Restaurante</option>
                             <option value="TIENDA_ROPA">Tienda de Ropa</option>
                             <option value="TIENDA">Tienda / Bodega</option>
+                            <option value="EMPRESA_SERVICIOS">Empresa de Servicios / Dealer</option>
                             <option value="OTRO">Otro</option>
                           </select>
                           {(form.rubro === 'BOTICA' || form.rubro === 'FARMACIA') && (
@@ -252,6 +253,11 @@ export function AccountSettings() {
                           {form.rubro === 'TIENDA_ROPA' && (
                             <p className="text-xs text-violet-600 dark:text-violet-400">
                               Los productos mostrarán campos de talla y color.
+                            </p>
+                          )}
+                          {form.rubro === 'EMPRESA_SERVICIOS' && (
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                              Se activará el modo de servicios: catálogo sin stock, comisiones y facturación. Se ocultarán POS, inventario, OC y recepciones.
                             </p>
                           )}
                         </div>

@@ -14,6 +14,7 @@ import { Pagination } from '../../components/ui/Pagination';
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
 import { usePlan } from '../../hooks/usePlan';
+import { useSucursalStore } from '../../store/sucursalStore';
 import {
   Users,
   Plus,
@@ -29,6 +30,7 @@ import {
   ShoppingBag,
   Boxes,
   Mail,
+  MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -75,6 +77,8 @@ export function UsuariosList() {
 
   const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
   const { isBasico, limites } = usePlan();
+  const { sucursales } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
   const hasViewPermission = canView('USUARIOS');
 
   const allowedRoleOptions = useMemo(() => {
@@ -124,6 +128,7 @@ export function UsuariosList() {
     tipoDocumento: '',
     numeroDocumento: '',
     numeroCelular: '',
+    sucursalId: null,
   });
   const [nombres,   setNombres]   = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -171,6 +176,7 @@ export function UsuariosList() {
       tipoDocumento: '',
       numeroDocumento: '',
       numeroCelular: '',
+      sucursalId: null,
     });
     setNombres('');
     setApellidos('');
@@ -193,6 +199,7 @@ export function UsuariosList() {
           tipoDocumento: formData.tipoDocumento || undefined,
           numeroDocumento: formData.numeroDocumento || undefined,
           numeroCelular: formData.numeroCelular || undefined,
+          sucursalId: formData.rolNombre === 'ADMIN' ? null : (formData.sucursalId ?? null),
         };
 
         await usuarioService.update(editingId, usuarioToUpdate as Usuario);
@@ -227,6 +234,7 @@ export function UsuariosList() {
       tipoDocumento: usuario.tipoDocumento ?? '',
       numeroDocumento: usuario.numeroDocumento ?? '',
       numeroCelular: usuario.numeroCelular ?? '',
+      sucursalId: usuario.sucursalId ?? null,
     });
     setEditingId(usuario.id!);
     setIsDialogOpen(true);
@@ -337,15 +345,6 @@ export function UsuariosList() {
           <h1 className="text-3xl font-bold tracking-tight">Usuarios</h1>
           <p className="text-muted-foreground">
             Gestiona los usuarios del sistema
-            {isBasico && (
-              <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                limiteAlcanzado
-                  ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-              }`}>
-                {usuariosActuales}/{limites.usuarios} usuarios — Plan Básico
-              </span>
-            )}
           </p>
         </div>
 
@@ -361,25 +360,6 @@ export function UsuariosList() {
           </Button>
         )}
       </div>
-
-      {/* Banner límite de plan */}
-      {isBasico && limiteAlcanzado && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
-            <span className="text-lg">👑</span>
-            <p className="text-sm font-medium">
-              Alcanzaste el límite de {limites.usuarios} usuarios del plan Básico.
-              Actualiza al plan Pro para agregar más.
-            </p>
-          </div>
-          <a
-            href="/checkout?plan=PRO"
-            className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors"
-          >
-            Actualizar a Pro
-          </a>
-        </div>
-      )}
 
       {!hasViewPermission ? (
         <EmptyState
@@ -516,6 +496,7 @@ export function UsuariosList() {
                           <TableHead>Nombre</TableHead>
                           <TableHead>Email</TableHead>
                           <TableHead>Rol</TableHead>
+                          {isMultiLocal && <TableHead>Sede</TableHead>}
                           <TableHead>Estado</TableHead>
                           <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
@@ -537,6 +518,19 @@ export function UsuariosList() {
                             <TableCell>
                               <RolBadge role={usuario.rolNombre} />
                             </TableCell>
+
+                            {isMultiLocal && (
+                              <TableCell>
+                                {usuario.sucursalId ? (
+                                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                    <MapPin size={11} />
+                                    {sucursales.find((s) => s.id === usuario.sucursalId)?.nombre ?? `Sede #${usuario.sucursalId}`}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Todas</span>
+                                )}
+                              </TableCell>
+                            )}
 
                             <TableCell>
                               <Badge variant={usuario.activo ? 'success' : 'secondary'}>
@@ -749,6 +743,32 @@ export function UsuariosList() {
                   </p>
                 )}
               </div>
+
+              {/* Selector de sede — solo con ≥2 locales y rol no ADMIN */}
+              {isMultiLocal && formData.rolNombre !== 'ADMIN' && (
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    <MapPin size={14} className="text-muted-foreground" />
+                    Sede asignada <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.sucursalId ?? ''}
+                    onChange={(e) => setFormData({ ...formData, sucursalId: e.target.value ? Number(e.target.value) : null })}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    required
+                  >
+                    <option value="">Selecciona una sede</option>
+                    {sucursales.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}{s.esPrincipal ? ' (Principal)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    El vendedor solo verá datos de esta sede al iniciar sesión.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

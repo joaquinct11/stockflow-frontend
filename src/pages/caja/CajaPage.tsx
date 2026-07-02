@@ -3,6 +3,7 @@ import { cajaService } from '../../services/caja.service';
 import type { CorregirCierreDTO } from '../../services/caja.service';
 import type { CajaDTO, CerrarCajaDTO, RegistrarRetiroDTO } from '../../types';
 import { useAuthStore } from '../../store/authStore';
+import { useSucursalStore } from '../../store/sucursalStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -13,7 +14,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/Input';
 import {
   Wallet, TrendingUp, Banknote, CreditCard, Smartphone,
-  Lock, CheckCircle, Clock, Eye, ArrowDownLeft, Pencil,
+  Lock, CheckCircle, Clock, Eye, ArrowDownLeft, Pencil, Plus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -34,6 +35,9 @@ export function CajaPage() {
 
   const { user } = useAuthStore();
   const isAdmin = user?.rol === 'ADMIN';
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
 
   const [cajas, setCajas] = useState<CajaDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,14 +57,20 @@ export function CajaPage() {
   const [corregirForm, setCorregirForm] = useState<CorregirCierreDTO>({ montoContado: 0, observaciones: '' });
   const [corrigiendo, setCorrigiendo] = useState(false);
 
+  // Apertura de caja
+  const [isAbrirOpen, setIsAbrirOpen] = useState(false);
+  const [montoApertura, setMontoApertura] = useState('');
+  const [abriendo, setAbriendo] = useState(false);
+
   useEffect(() => {
+    if (!sucursalLoaded) return;
     fetchCajas();
-  }, []);
+  }, [sucursalLoaded, sucursalId]);
 
   const fetchCajas = async () => {
     try {
       setLoading(true);
-      const data = await cajaService.getAll();
+      const data = await cajaService.getAll(sucursalId);
       setCajas(data);
     } catch {
       toast.error('Error al cargar el historial de caja');
@@ -157,6 +167,22 @@ export function CajaPage() {
     }
   };
 
+  const handleAbrirCaja = async () => {
+    try {
+      setAbriendo(true);
+      const monto = parseFloat(montoApertura) || 0;
+      await cajaService.abrir({ montoApertura: monto, sucursalId });
+      toast.success('Caja abierta correctamente');
+      setIsAbrirOpen(false);
+      setMontoApertura('');
+      fetchCajas();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.mensaje || 'Error al abrir caja');
+    } finally {
+      setAbriendo(false);
+    }
+  };
+
   const cajasAbiertas = cajas.filter(c => c.estado === 'ABIERTA');
   const cajaActiva = cajasAbiertas[0] ?? null;
   const totalIngresosHoy = cajas
@@ -183,9 +209,17 @@ export function CajaPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Cuadre de Caja</h1>
-        <p className="text-muted-foreground">Historial de aperturas y cierres de caja</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Cuadre de Caja</h1>
+          <p className="text-muted-foreground">Historial de aperturas y cierres de caja</p>
+        </div>
+        {!cajaActiva && (
+          <Button onClick={() => setIsAbrirOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Abrir Caja
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -833,6 +867,41 @@ export function CajaPage() {
             </div>
           </div>
         )}
+      </Dialog>
+
+      {/* Dialog: Abrir Caja */}
+      <Dialog isOpen={isAbrirOpen} onClose={() => { setIsAbrirOpen(false); setMontoApertura(''); }} title="Abrir Caja">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Ingresa el efectivo inicial con el que empiezas la jornada.
+          </p>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fondo de apertura</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-muted-foreground font-medium text-sm">S/.</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={montoApertura}
+                onChange={e => setMontoApertura(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAbrirCaja()}
+                placeholder="0.00"
+                autoFocus
+                className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Si no tienes fondo inicial, deja en 0.</p>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => { setIsAbrirOpen(false); setMontoApertura(''); }}>
+              Cancelar
+            </Button>
+            <Button className="flex-1" onClick={handleAbrirCaja} disabled={abriendo}>
+              {abriendo ? 'Abriendo...' : 'Abrir Caja'}
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );
