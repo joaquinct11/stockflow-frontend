@@ -179,7 +179,7 @@ export function SucursalesPage() {
           <CardContent className="py-16 text-center text-muted-foreground">
             <Building2 size={40} className="mx-auto mb-3 opacity-20" />
             <p className="font-medium">Aún no tienes sucursales configuradas</p>
-            <p className="text-sm mt-1">Al hacer el upgrade al plan Pro se crea automáticamente tu sucursal principal.</p>
+            <p className="text-sm mt-1">Tu sucursal principal se crea automáticamente. Si no aparece, recarga la página.</p>
           </CardContent>
         </Card>
       ) : (
