@@ -5,7 +5,7 @@ import { productoService } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
 import { movimientoService } from '../../services/movimiento.service';
 import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard, TrendingDown, TrendingUp, Zap, ClipboardList, BarChart2, Wallet, Building2, FileText, Award } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard, TrendingDown, TrendingUp, Zap, ClipboardList, BarChart2, Wallet, FileText, Award } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { gastoService } from '../../services/gasto.service';
 import { comisionService } from '../../services/comision.service';

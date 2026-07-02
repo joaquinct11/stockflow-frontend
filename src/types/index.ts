@@ -76,6 +76,7 @@ export interface RegistrationRequestDTO {
   tipoDocumento?: string;
   numeroDocumento?: string;
   numeroCelular?: string;
+  rubro?: string;
 }
 
 // ========================================

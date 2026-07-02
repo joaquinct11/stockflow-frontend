@@ -23,7 +23,7 @@ const emptyForm: Omit<SucursalDTO, 'id'> = {
 };
 
 export function SucursalesPage() {
-  const { sucursales: storeList, setSucursales } = useSucursalStore();
+  const { setSucursales } = useSucursalStore();
   const [sucursales, setSucursalesLocal] = useState<SucursalDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -201,8 +201,8 @@ export function SucursalesPage() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {s.activo
-                      ? <CheckCircle size={14} className="text-emerald-500" title="Activa" />
-                      : <XCircle size={14} className="text-muted-foreground" title="Inactiva" />}
+                      ? <CheckCircle size={14} className="text-emerald-500" aria-label="Activa" />
+                      : <XCircle size={14} className="text-muted-foreground" aria-label="Inactiva" />}
                   </div>
                 </div>
               </CardHeader>
@@ -303,7 +303,7 @@ export function SucursalesPage() {
       {/* Confirm desactivar */}
       <ConfirmDialog
         isOpen={confirmId != null}
-        onClose={() => setConfirmId(null)}
+        onCancel={() => setConfirmId(null)}
         onConfirm={handleDesactivar}
         title="¿Desactivar sucursal?"
         message="Los datos de esta sucursal se conservan pero el local quedará inactivo. Esta acción se puede revertir desde soporte."

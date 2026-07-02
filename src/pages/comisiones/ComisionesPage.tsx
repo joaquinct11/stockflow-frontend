@@ -256,7 +256,7 @@ export function ComisionesPage() {
         </div>
         {totalPages > 1 && (
           <div className="border-t px-4 py-3">
-            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} totalItems={filtradas.length} itemsPerPage={PER_PAGE} />
           </div>
         )}
       </Card>
@@ -310,7 +310,7 @@ export function ComisionesPage() {
 
       <ConfirmDialog
         isOpen={confirmId != null}
-        onClose={() => setConfirmId(null)}
+        onCancel={() => setConfirmId(null)}
         onConfirm={handleEliminar}
         title="¿Eliminar comisión?"
         message="Esta acción no se puede deshacer."
