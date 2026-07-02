@@ -29,8 +29,9 @@ export const culqiService = {
    * Obtiene la public key y datos del plan desde el backend.
    * Usado para inicializar Culqi.js antes de abrir el modal de pago.
    */
-  getConfig: async (): Promise<CulqiConfigResponse> => {
-    const { data } = await axiosInstance.get<CulqiConfigResponse>(API_ENDPOINTS.CULQI.CONFIG);
+  getConfig: async (planId?: string): Promise<CulqiConfigResponse> => {
+    const params = planId ? { plan: planId } : undefined;
+    const { data } = await axiosInstance.get<CulqiConfigResponse>(API_ENDPOINTS.CULQI.CONFIG, { params });
     return data;
   },
 
@@ -43,6 +44,14 @@ export const culqiService = {
     const { data } = await axiosInstance.post<CulqiSuscribirResponse>(
       API_ENDPOINTS.CULQI.SUSCRIBIR,
       payload,
+    );
+    return data;
+  },
+
+  upgradePro: async (tokenId: string): Promise<CulqiSuscribirResponse> => {
+    const { data } = await axiosInstance.post<CulqiSuscribirResponse>(
+      API_ENDPOINTS.CULQI.UPGRADE_PRO,
+      { tokenId },
     );
     return data;
   },

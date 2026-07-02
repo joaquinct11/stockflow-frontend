@@ -3,6 +3,7 @@ import { movimientoService } from '../../services/movimiento.service';
 import { productoService } from '../../services/producto.service';
 import { proveedorService } from '../../services/proveedor.service';
 import type { MovimientoInventarioDTO, ProductoDTO, ProveedorDTO } from '../../types';
+import { useSucursalStore } from '../../store/sucursalStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -33,6 +34,9 @@ import { usePermissions } from '../../hooks/usePermissions';
 export function KardexPage() {
   const { canView, puede } = usePermissions();
   const hasViewPermission = canView('INVENTARIO');
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
@@ -49,13 +53,14 @@ export function KardexPage() {
   const [kardexMovimientos, setKardexMovimientos] = useState<MovimientoInventarioDTO[]>([]);
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     if (hasViewPermission) {
       fetchData();
     } else {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasViewPermission]);
+  }, [sucursalLoaded, hasViewPermission, sucursalId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -64,7 +69,7 @@ export function KardexPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const productosData = await productoService.getAll();
+      const productosData = await productoService.getAll(sucursalId);
       setProductos(productosData);
       if (puede('VER_PROVEEDORES')) {
         const proveedoresData = await proveedorService.getAll();
@@ -90,12 +95,26 @@ export function KardexPage() {
     valor:     productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0),
   }), [productos]);
 
+  const stockFinalKardex = useMemo(() => {
+    let stock = 0;
+    for (const m of kardexMovimientos) {
+      if (m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION') {
+        stock += m.cantidad;
+      } else if (m.tipo === 'SALIDA') {
+        stock -= m.cantidad;
+      } else if (m.tipo === 'AJUSTE') {
+        stock += m.cantidad;
+      }
+    }
+    return stock;
+  }, [kardexMovimientos]);
+
   const openKardex = async (producto: ProductoDTO) => {
     setKardexProducto(producto);
     setIsKardexOpen(true);
     setKardexLoading(true);
     try {
-      const data = await movimientoService.getByProducto(producto.id!);
+      const data = await movimientoService.getByProducto(producto.id!, sucursalId);
       // Sort ascending by date so running stock is calculated correctly
       const sorted = [...data].sort((a, b) => {
         const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -359,7 +378,7 @@ export function KardexPage() {
         title="Kardex del producto"
         description={
           kardexProducto
-            ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock actual: ${kardexProducto.stockActual ?? 0}`
+            ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock actual: ${kardexMovimientos.length > 0 ? stockFinalKardex : (kardexProducto.stockActual ?? 0)}`
             : 'Historial de movimientos'
         }
         size="xl"

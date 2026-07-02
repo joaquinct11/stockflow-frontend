@@ -3,9 +3,10 @@ import { API_ENDPOINTS } from '../api/endpoints';
 import type { OrdenCompraDTO, OrdenCompraItemDTO } from '../types';
 
 export const ordenCompraService = {
-  getAll: async (): Promise<OrdenCompraDTO[]> => {
+  getAll: async (sucursalId?: number): Promise<OrdenCompraDTO[]> => {
     const { data } = await axiosInstance.get<OrdenCompraDTO[]>(
-      API_ENDPOINTS.ORDENES_COMPRA.LIST
+      API_ENDPOINTS.ORDENES_COMPRA.LIST,
+      { params: sucursalId ? { sucursalId } : undefined }
     );
     return data;
   },

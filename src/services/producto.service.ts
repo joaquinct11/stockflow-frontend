@@ -6,9 +6,10 @@ export const productoService = {
   /**
    * Obtener todos los productos del tenant actual
    */
-  getAll: async (): Promise<ProductoDTO[]> => {
+  getAll: async (sucursalId?: number): Promise<ProductoDTO[]> => {
+    const params = sucursalId ? { sucursalId } : {};
     const { data } = await axiosInstance.get<ProductoDTO[]>(
-      API_ENDPOINTS.PRODUCTOS.LIST
+      API_ENDPOINTS.PRODUCTOS.LIST, { params }
     );
     return data;
   },

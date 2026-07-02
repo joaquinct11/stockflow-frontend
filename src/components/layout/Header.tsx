@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Moon, Sun, LogOut, User, Menu, ChevronDown, Settings, AlertTriangle, Info, CheckCircle, X, BellOff } from 'lucide-react';
+import { Bell, Moon, Sun, LogOut, User, Menu, ChevronDown, Settings, AlertTriangle, Info, CheckCircle, X, BellOff, Building2, MapPin } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useThemeStore } from '../../store/themeStore';
 import { useAuthStore } from '../../store/authStore';
 import { authService } from '../../services/auth.service';
 import { notificacionService, type NotificacionDTO } from '../../services/notificacion.service';
+import { useSucursalStore } from '../../store/sucursalStore';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -59,9 +60,16 @@ function formatRelativo(fecha: string): string {
 export function Header({ onMenuClick }: HeaderProps) {
   const { isDark, toggleTheme } = useThemeStore();
   const { user, logout } = useAuthStore();
+  const { sucursales, sucursalActual, setSucursalActual } = useSucursalStore();
   const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isSucursalOpen, setIsSucursalOpen] = useState(false);
+  const sucursalRef = useRef<HTMLDivElement>(null);
+
+  const isAdmin = user?.rol === 'ADMIN';
+  const showSucursalSelector = isAdmin && sucursales.length > 1;
+  const showSucursalBadge = !isAdmin && sucursalActual != null && sucursales.length > 0;
 
   // ── Notificaciones ─────────────────────────────────────────────────────────
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -154,6 +162,17 @@ export function Header({ onMenuClick }: HeaderProps) {
     if (isDropdownOpen) document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [isDropdownOpen]);
+
+  // Cerrar dropdown de sucursal al click fuera
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (sucursalRef.current && !sucursalRef.current.contains(e.target as Node)) {
+        setIsSucursalOpen(false);
+      }
+    };
+    if (isSucursalOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isSucursalOpen]);
 
   // ── Auth ────────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
@@ -353,6 +372,62 @@ export function Header({ onMenuClick }: HeaderProps) {
             </div>
           )}
         </div>
+
+        {/* ── Selector de sucursal (solo ADMIN con ≥2 locales) ──────────── */}
+        {showSucursalSelector && (
+          <div className="relative" ref={sucursalRef}>
+            <button
+              onClick={() => setIsSucursalOpen(!isSucursalOpen)}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors text-primary"
+              title="Cambiar sucursal"
+            >
+              <Building2 size={14} className="shrink-0" />
+              <span className="hidden sm:inline max-w-[200px] truncate">
+                {sucursalActual?.nombre ?? 'Sucursal'}
+              </span>
+              <ChevronDown
+                size={13}
+                className={`shrink-0 transition-transform duration-200 ${isSucursalOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {isSucursalOpen && (
+              <div className="absolute right-0 mt-2 w-72 bg-background border rounded-xl shadow-xl shadow-black/10 py-1.5 z-50 overflow-hidden">
+                <p className="px-3 pb-1.5 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b mb-1">
+                  Seleccionar local
+                </p>
+                {sucursales.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => { setSucursalActual(s); setIsSucursalOpen(false); toast.success(`Local: ${s.nombre}`); }}
+                    className={[
+                      'w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors',
+                      sucursalActual?.id === s.id
+                        ? 'bg-primary/10 text-primary font-semibold'
+                        : 'hover:bg-muted text-foreground',
+                    ].join(' ')}
+                  >
+                    <MapPin size={13} className="shrink-0 text-muted-foreground" />
+                    <span className="truncate">{s.nombre}</span>
+                    {s.esPrincipal && (
+                      <span className="ml-auto text-[9px] font-bold uppercase tracking-wide text-primary/60">
+                        Principal
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Badge de sucursal para no-admins */}
+        {showSucursalBadge && (
+          <div className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium border border-border bg-muted/50 text-muted-foreground">
+            <MapPin size={12} className="shrink-0" />
+            <span className="max-w-[180px] truncate">{sucursalActual?.nombre}</span>
+          </div>
+        )}
 
         {/* Separador */}
         <div className="hidden sm:block w-px h-6 bg-border mx-1" />

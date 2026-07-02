@@ -6,9 +6,10 @@ export const usuarioService = {
   /**
    * Obtener todos los usuarios del tenant actual
    */
-  getAll: async (): Promise<Usuario[]> => {
+  getAll: async (silent = false): Promise<Usuario[]> => {
     const { data } = await axiosInstance.get<Usuario[]>(
-      API_ENDPOINTS.USUARIOS.LIST
+      API_ENDPOINTS.USUARIOS.LIST,
+      silent ? { skipForbiddenToast: true } as any : undefined
     );
     return data;
   },

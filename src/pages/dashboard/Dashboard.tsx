@@ -5,14 +5,17 @@ import { productoService } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
 import { movimientoService } from '../../services/movimiento.service';
 import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard, TrendingDown, TrendingUp, Zap, ClipboardList, BarChart2, Wallet } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard, TrendingDown, TrendingUp, Zap, ClipboardList, BarChart2, Wallet, FileText, Award } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { gastoService } from '../../services/gasto.service';
+import { comisionService } from '../../services/comision.service';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { useSucursalStore } from '../../store/sucursalStore';
 
 type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 type TimeFilter = 'HOY' | 'SEMANA' | 'MES' | 'ANUAL';
@@ -94,13 +97,18 @@ export function Dashboard() {
   const { userId } = useCurrentUser();
   const navigate = useNavigate();
   const rol = safeRol(user?.rol);
+  const { config: negocioConfig } = useTenantConfigStore();
+  const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
 
   const [loading, setLoading] = useState(true);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [canLoadVentas, setCanLoadVentas] = useState<boolean>(false);
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('HOY');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('MES');
+  const [totalComisionesMes, setTotalComisionesMes] = useState<number>(0);
 
   const [totalGastosPeriodo, setTotalGastosPeriodo] = useState<number>(0);
 
@@ -156,9 +164,10 @@ export function Dashboard() {
   };
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rol, userId]);
+  }, [sucursalLoaded, rol, userId, sucursalActual?.id]);
 
   // Gastos del período — solo ADMIN
   useEffect(() => {
@@ -166,17 +175,32 @@ export function Dashboard() {
     const now = new Date();
     const inicio = getRangeStart(timeFilter, now);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    gastoService.getTotal(fmt(inicio), fmt(now))
+    const sid = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+    gastoService.getTotal(fmt(inicio), fmt(now), sid)
       .then((t) => setTotalGastosPeriodo(Number(t)))
       .catch(() => setTotalGastosPeriodo(0));
-  }, [timeFilter, rol]);
+  }, [timeFilter, rol, sucursalActual?.id]);
+
+  // Comisiones del mes — solo para dealer
+  useEffect(() => {
+    if (!esServicios || rol !== 'ADMIN') return;
+    comisionService.listar()
+      .then((lista) => {
+        const mesActual = new Date().toISOString().slice(0, 7); // yyyy-MM
+        const total = lista
+          .filter((c) => c.fecha?.startsWith(mesActual))
+          .reduce((s, c) => s + c.monto, 0);
+        setTotalComisionesMes(total);
+      })
+      .catch(() => setTotalComisionesMes(0));
+  }, [esServicios, rol]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
 
-      // ✅ Productos siempre
-      const productosPromise = productoService.getAll();
+      // ✅ Productos siempre (con stock por sucursal si es multi-local)
+      const productosPromise = productoService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined);
 
       // ✅ Movimientos: solo roles con acceso a inventario (VENDEDOR no tiene permiso)
       let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
@@ -198,7 +222,7 @@ export function Dashboard() {
       let ventasPromise: Promise<VentaDTO[]>;
       if (rol === 'ADMIN') {
         setCanLoadVentas(true);
-        ventasPromise = ventaService.getAll();
+        ventasPromise = ventaService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined);
       } else if (rol === 'VENDEDOR') {
         if (!userId) {
           setCanLoadVentas(true);
@@ -251,7 +275,10 @@ export function Dashboard() {
   }, [ventas, timeFilter]);
 
   const stats = useMemo(() => {
-    const bajoStock = productos.filter((p) => p.stockActual <= p.stockMinimo);
+    const productosParaStock = esServicios
+      ? productos.filter((p) => p.tipo === 'PRODUCTO' || !p.tipo)
+      : productos;
+    const bajoStock = productosParaStock.filter((p) => p.stockActual <= p.stockMinimo);
 
     // productos próximos a vencer en 90 días (desde movimientos)
     const ahora = new Date();
@@ -344,6 +371,14 @@ export function Dashboard() {
       return d >= hoyStart;
     }).length;
 
+    // Unidades totales despachadas en el período (suma de cantidades de detalles)
+    const unidadesVendidas = filteredVentas.reduce(
+      (acc, v) => acc + (v.detalles?.reduce((s, d) => s + (d.cantidad ?? 0), 0) ?? 0), 0
+    );
+    const unidadesHoy = ventas
+      .filter((v) => { const d = getVentaDate(v); return d ? d >= hoyStart : false; })
+      .reduce((acc, v) => acc + (v.detalles?.reduce((s, d) => s + (d.cantidad ?? 0), 0) ?? 0), 0);
+
     return {
       totalProductos: productos.length,
       bajoStockCount: bajoStock.length,
@@ -352,8 +387,10 @@ export function Dashboard() {
       totalVentasFiltradas: filteredVentas.length,
       ingresoFiltrado,
       ventasHoy,
+      unidadesVendidas,
+      unidadesHoy,
     };
-  }, [productos, ventas, filteredVentas, movimientos]);
+  }, [productos, ventas, filteredVentas, movimientos, esServicios]);
 
   const gridColsClass =
     rol === 'GESTOR_INVENTARIO'
@@ -541,127 +578,236 @@ export function Dashboard() {
           <Zap size={12} /> Acceso rápido
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {/* Nueva Venta — ADMIN, VENDEDOR */}
-          {(rol === 'ADMIN' || rol === 'VENDEDOR') && (
-            <button
-              onClick={() => navigate('/pos')}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-            >
-              <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
-                <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold leading-none">Nueva Venta</p>
-                <p className="text-xs text-muted-foreground mt-1">Abrir POS</p>
-              </div>
-            </button>
-          )}
 
-          {/* Ajuste de Stock — ADMIN, GESTOR_INVENTARIO */}
-          {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
-            <button
-              onClick={() => navigate('/dashboard/inventario')}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-            >
-              <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
-                <Package size={18} className="text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold leading-none">Ajuste Stock</p>
-                <p className="text-xs text-muted-foreground mt-1">Inventario</p>
-              </div>
-            </button>
-          )}
+          {esServicios ? (
+            /* ── Acciones para EMPRESA_SERVICIOS / Dealer ── */
+            <>
+              <button
+                onClick={() => navigate('/dashboard/ventas')}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+              >
+                <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                  <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-none">Registrar Servicio</p>
+                  <p className="text-xs text-muted-foreground mt-1">Nueva prestación</p>
+                </div>
+              </button>
 
-          {/* Registrar Gasto — ADMIN */}
-          {(rol === 'ADMIN') && (
-            <button
-              onClick={() => navigate('/dashboard/gastos')}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-            >
-              <div className="h-9 w-9 rounded-lg bg-rose-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-rose-500/20 transition-colors">
-                <Wallet size={18} className="text-rose-600 dark:text-rose-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold leading-none">Registrar Gasto</p>
-                <p className="text-xs text-muted-foreground mt-1">Egresos</p>
-              </div>
-            </button>
-          )}
+              <button
+                onClick={() => navigate('/dashboard/comisiones')}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+              >
+                <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                  <Award size={18} className="text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-none">Comisiones</p>
+                  <p className="text-xs text-muted-foreground mt-1">Ingresos de Bitel</p>
+                </div>
+              </button>
 
-          {/* Ver Reportes — ADMIN, GESTOR_INVENTARIO */}
-          {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
-            <button
-              onClick={() => navigate('/dashboard/reportes')}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-            >
-              <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
-                <BarChart2 size={18} className="text-violet-600 dark:text-violet-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold leading-none">Reportes</p>
-                <p className="text-xs text-muted-foreground mt-1">Ver análisis</p>
-              </div>
-            </button>
-          )}
+              <button
+                onClick={() => navigate('/dashboard/facturacion')}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+              >
+                <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                  <FileText size={18} className="text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-none">Facturación</p>
+                  <p className="text-xs text-muted-foreground mt-1">Boletas y facturas</p>
+                </div>
+              </button>
 
-          {/* Orden de Compra — ADMIN, GESTOR_INVENTARIO */}
-          {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
-            <button
-              onClick={() => navigate('/dashboard/compras/ordenes')}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-            >
-              <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
-                <ClipboardList size={18} className="text-amber-600 dark:text-amber-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold leading-none">Nueva OC</p>
-                <p className="text-xs text-muted-foreground mt-1">Orden de compra</p>
-              </div>
-            </button>
+              <button
+                onClick={() => navigate('/dashboard/caja')}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+              >
+                <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-teal-500/20 transition-colors">
+                  <Wallet size={18} className="text-teal-600 dark:text-teal-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-none">Cuadre de Caja</p>
+                  <p className="text-xs text-muted-foreground mt-1">Apertura / cierre</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => navigate('/pos')}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+              >
+                <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                  <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-none">Venta en POS</p>
+                  <p className="text-xs text-muted-foreground mt-1">Punto de venta</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => navigate('/dashboard/reportes')}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+              >
+                <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                  <BarChart2 size={18} className="text-violet-600 dark:text-violet-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-none">Reportes</p>
+                  <p className="text-xs text-muted-foreground mt-1">Ver análisis</p>
+                </div>
+              </button>
+            </>
+          ) : (
+            /* ── Acciones para rubros con inventario ── */
+            <>
+              {(rol === 'ADMIN' || rol === 'VENDEDOR') && (
+                <button
+                  onClick={() => navigate('/pos')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                    <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Nueva Venta</p>
+                    <p className="text-xs text-muted-foreground mt-1">Abrir POS</p>
+                  </div>
+                </button>
+              )}
+              {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
+                <button
+                  onClick={() => navigate('/dashboard/inventario')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                    <Package size={18} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Ajuste Stock</p>
+                    <p className="text-xs text-muted-foreground mt-1">Inventario</p>
+                  </div>
+                </button>
+              )}
+              {rol === 'ADMIN' && (
+                <button
+                  onClick={() => navigate('/dashboard/gastos')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-rose-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-rose-500/20 transition-colors">
+                    <Wallet size={18} className="text-rose-600 dark:text-rose-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Registrar Gasto</p>
+                    <p className="text-xs text-muted-foreground mt-1">Egresos</p>
+                  </div>
+                </button>
+              )}
+              {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
+                <button
+                  onClick={() => navigate('/dashboard/reportes')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                    <BarChart2 size={18} className="text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Reportes</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ver análisis</p>
+                  </div>
+                </button>
+              )}
+              {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
+                <button
+                  onClick={() => navigate('/dashboard/compras/ordenes')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                    <ClipboardList size={18} className="text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Nueva OC</p>
+                    <p className="text-xs text-muted-foreground mt-1">Orden de compra</p>
+                  </div>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
 
       {/* Stats Grid */}
       <div className={`grid gap-4 grid-cols-2 ${gridColsClass} animate-fade-in-up-delay-1`}>
-        {/* Productos */}
-        <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Productos</p>
-            </div>
-            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-              <Package className="h-4.5 w-4.5 text-blue-600 dark:text-blue-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tight">{stats.totalProductos}</div>
-            <p className="text-xs text-muted-foreground mt-1">En inventario activo</p>
-          </CardContent>
-        </Card>
 
-        {/* Bajo stock */}
-        <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-          <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bajo Stock</p>
-            </div>
-            <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
-              <AlertCircle className="text-red-600 dark:text-red-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className={`text-3xl font-bold tracking-tight ${stats.bajoStockCount > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
-              {stats.bajoStockCount}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {stats.bajoStockCount === 0 ? 'Sin alertas 🎉' : 'Requieren reabastecimiento'}
-            </p>
-          </CardContent>
-        </Card>
+        {esServicios ? (
+          /* ── Cards para dealer ── */
+          <>
+            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Unidades Vendidas</p>
+                <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                  <Package className="text-blue-600 dark:text-blue-400" size={18} />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">{stats.unidadesVendidas}</div>
+                <p className="text-xs text-muted-foreground mt-1">+{stats.unidadesHoy} hoy</p>
+              </CardContent>
+            </Card>
+
+            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comisiones del Mes</p>
+                <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                  <Award className="text-amber-600 dark:text-amber-400" size={18} />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">S/.{totalComisionesMes.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground mt-1">Recibido de operadoras</p>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          /* ── Cards para inventario ── */
+          <>
+            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Productos</p>
+                <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                  <Package className="text-blue-600 dark:text-blue-400" size={18} />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-3xl font-bold tracking-tight">{stats.totalProductos}</div>
+                <p className="text-xs text-muted-foreground mt-1">En inventario activo</p>
+              </CardContent>
+            </Card>
+
+            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
+              <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bajo Stock</p>
+                <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="text-red-600 dark:text-red-400" size={18} />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className={`text-3xl font-bold tracking-tight ${stats.bajoStockCount > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                  {stats.bajoStockCount}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.bajoStockCount === 0 ? 'Sin alertas 🎉' : 'Requieren reabastecimiento'}
+                </p>
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         {/* Ventas e Ingresos SOLO para ADMIN/VENDEDOR */}
         {showVentasCards && (
@@ -766,7 +912,7 @@ export function Dashboard() {
         )}
       </div>
 
-      {/* Low Stock Alert */}
+      {/* Low Stock Alert — físicos para dealer, todos los demás para inventario */}
       {stats.bajoStockItems.length > 0 && (
         <Card className="border-0 shadow-sm animate-fade-in-up-delay-2">
           <CardHeader className="pb-3">
@@ -802,8 +948,8 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* Productos próximos a vencer (90 días) */}
-      {stats.productosProximosAVencer.length > 0 && (
+      {/* Productos próximos a vencer — oculto para dealer */}
+      {!esServicios && stats.productosProximosAVencer.length > 0 && (
         <Card className="border-0 shadow-sm animate-fade-in-up-delay-3">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2.5">

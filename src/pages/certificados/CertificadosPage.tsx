@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useSucursalStore } from '../../store/sucursalStore';
 
 // Carnet de sanidad se detecta por texto para mostrar selector de usuario
 const ES_CARNET = (tipo: string) =>
@@ -63,6 +64,9 @@ const FORM_VACIO: CertificadoDTO = {
 
 export function CertificadosPage() {
   const { canCreate, canEdit, canDelete } = usePermissions();
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
 
   const [certificados, setCertificados] = useState<CertificadoDTO[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -81,25 +85,29 @@ export function CertificadosPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>('TODOS');
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     fetchData();
-  }, []);
+  }, [sucursalLoaded, sucursalId]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [certs, users, tiposData] = await Promise.all([
-        certificadoService.listar(),
-        usuarioService.getAll(),
+      const [certs, tiposData] = await Promise.all([
+        certificadoService.listar(sucursalId),
         certificadoService.getTipos(),
       ]);
       setCertificados(certs);
-      setUsuarios(users);
       setTipos(tiposData);
     } catch {
       toast.error('Error al cargar los certificados');
     } finally {
       setLoading(false);
     }
+    // Usuarios: solo ADMIN/GERENTE tienen acceso; ignorar 403 silenciosamente
+    try {
+      const users = await usuarioService.getAll(true);
+      setUsuarios(users);
+    } catch { /* sin permiso */ }
   };
 
   const handleNuevo = () => {
@@ -129,7 +137,7 @@ export function CertificadosPage() {
         await certificadoService.actualizar(editingId, formData);
         toast.success('Certificado actualizado');
       } else {
-        await certificadoService.crear(formData);
+        await certificadoService.crear({ ...formData, sucursalId });
         toast.success('Certificado registrado');
       }
       setIsDialogOpen(false);

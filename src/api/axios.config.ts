@@ -11,16 +11,17 @@ export const axiosInstance = axios.create({
   },
 });
 
-// Interceptor para agregar el accessToken a cada petición
+// Interceptor para agregar el accessToken y sucursal activa a cada petición
 axiosInstance.interceptors.request.use(
   (config) => {
     const accessToken = localStorage.getItem('accessToken');
-
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
-      if (import.meta.env.DEV) {
-        console.log('🔐 Access token agregado al header');
-      }
+    }
+
+    const sucursalId = localStorage.getItem('sucursalActualId');
+    if (sucursalId) {
+      config.headers['X-Sucursal-Id'] = sucursalId;
     }
 
     return config;

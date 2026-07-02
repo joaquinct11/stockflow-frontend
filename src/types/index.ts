@@ -16,6 +16,7 @@ export interface Usuario {
   tipoDocumento?: string;
   numeroDocumento?: string;
   numeroCelular?: string;
+  sucursalId?: number | null;
 }
 
 export interface JwtResponse {
@@ -31,6 +32,8 @@ export interface JwtResponse {
   expiresIn: number;        // Segundos (ej: 900 para 15 min)
   suscripcion?: SuscripcionDTO;  // ✅ AGREGADO
   permisos?: string[];      // Códigos de permisos del usuario (e.g. PRODUCTOS_VER)
+  /** Sucursal fija asignada. null/undefined = ADMIN (ve todas). */
+  sucursalId?: number | null;
 }
 
 // ========================================
@@ -73,6 +76,7 @@ export interface RegistrationRequestDTO {
   tipoDocumento?: string;
   numeroDocumento?: string;
   numeroCelular?: string;
+  rubro?: string;
 }
 
 // ========================================
@@ -135,6 +139,8 @@ export interface ProductoDTO {
   color?: string;
   /** Fecha del lote más próximo a vencer. Solo lectura, calculado por el backend. */
   proximaFechaVencimiento?: string;
+  /** PRODUCTO (default) = tiene stock físico. SERVICIO = sin stock, no genera movimiento. */
+  tipo?: string;
 }
 
 // ========================================
@@ -156,6 +162,7 @@ export interface VentaDTO {
   notaCreditoId?: number;
   clienteId?: number;
   clienteNombre?: string;
+  sucursalId?: number;
   detalles: DetalleVentaDTO[];
 }
 
@@ -356,6 +363,7 @@ export interface MovimientoInventarioDTO {
   fechaVencimiento?: string;
   registroSanitario?: string;
   varianteId?: number;
+  sucursalId?: number;
 }
 
 /** Tipos de movimiento que se muestran en la lista principal de Movimientos Inventario */
@@ -597,6 +605,7 @@ export interface ProductoBajoStockDTO {
   nombre: string;
   stockActual: number;
   stockMinimo: number;
+  tipo?: string;
 }
 
 // ── Top productos vendidos (resumen) ──────────────────────────────────────────
@@ -748,11 +757,13 @@ export interface CajaDTO {
   fechaApertura: string;
   fechaCierre: string | null;
   cerradoPorNombre: string | null;
+  sucursalId?: number | null;
 }
 
 export interface AbrirCajaDTO {
   montoApertura: number;
   observaciones?: string;
+  sucursalId?: number;
 }
 
 export interface CerrarCajaDTO {
@@ -783,6 +794,7 @@ export type CertificadoEstado = 'VIGENTE' | 'POR_VENCER' | 'VENCIDO';
 
 export interface CertificadoDTO {
   id?: number;
+  sucursalId?: number;
   tipo: string; // predefinidos o texto libre personalizado
   descripcion: string;
   usuarioId?: number;

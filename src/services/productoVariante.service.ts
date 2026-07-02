@@ -3,9 +3,11 @@ import { API_ENDPOINTS } from '../api/endpoints';
 import type { ProductoVarianteDTO } from '../types';
 
 export const productoVarianteService = {
-  getByProducto: async (productoId: number): Promise<ProductoVarianteDTO[]> => {
+  getByProducto: async (productoId: number, sucursalId?: number): Promise<ProductoVarianteDTO[]> => {
+    const params = sucursalId ? { sucursalId } : {};
     const { data } = await axiosInstance.get<ProductoVarianteDTO[]>(
-      API_ENDPOINTS.PRODUCTO_VARIANTES.BY_PRODUCTO(productoId)
+      API_ENDPOINTS.PRODUCTO_VARIANTES.BY_PRODUCTO(productoId),
+      { params }
     );
     return data;
   },

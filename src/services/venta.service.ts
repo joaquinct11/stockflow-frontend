@@ -6,9 +6,10 @@ export const ventaService = {
   /**
    * Obtener todas las ventas del tenant actual
    */
-  getAll: async (): Promise<VentaDTO[]> => {
+  getAll: async (sucursalId?: number): Promise<VentaDTO[]> => {
+    const params = sucursalId ? { sucursalId } : {};
     const { data } = await axiosInstance.get<VentaDTO[]>(
-      API_ENDPOINTS.VENTAS.LIST
+      API_ENDPOINTS.VENTAS.LIST, { params }
     );
     return data;
   },

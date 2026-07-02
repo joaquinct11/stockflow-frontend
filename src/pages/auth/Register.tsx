@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
@@ -28,11 +28,12 @@ const selectCls =
 export function Register() {
   const navigate = useNavigate();
   const { setUser } = useAuthStore();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Un solo plan — siempre BASICO
-  const initialPlan: PlanId = 'BASICO';
+  const rawPlan = searchParams.get('plan')?.toUpperCase();
+  const initialPlan: PlanId = rawPlan === 'PRO' ? 'PRO' : 'BASICO';
 
   const [formData, setFormData] = useState<RegistrationRequestDTO>({
     email:         '',
@@ -40,6 +41,7 @@ export function Register() {
     nombre:        '',
     nombreFarmacia:'',
     planId:        initialPlan,
+    rubro:         'OTRO',
   });
   const [tipoDocumento, setTipoDocumento]     = useState<TipoDocumento>('DNI');
   const [numeroDocumento, setNumeroDocumento] = useState('');
@@ -192,6 +194,26 @@ export function Register() {
             </div>
             <p className="text-sm font-bold text-primary shrink-0">S/ 89<span className="font-normal text-muted-foreground">/mes</span></p>
           </div>
+
+          {/* Rubro */}
+          <Field label="Tipo de negocio (rubro)" htmlFor="rubro" hint="Define los módulos que verás al ingresar">
+            <select
+              id="rubro"
+              value={formData.rubro ?? 'OTRO'}
+              onChange={(e) => setFormData({ ...formData, rubro: e.target.value })}
+              className={selectCls}
+            >
+              <option value="BOTICA">Botica</option>
+              <option value="FARMACIA">Farmacia</option>
+              <option value="MINIMARKET">Minimarket</option>
+              <option value="FERRETERIA">Ferretería</option>
+              <option value="RESTAURANTE">Restaurante</option>
+              <option value="TIENDA_ROPA">Tienda de Ropa</option>
+              <option value="TIENDA">Tienda / Bodega</option>
+              <option value="EMPRESA_SERVICIOS">Empresa de Servicios / Dealer</option>
+              <option value="OTRO">Otro</option>
+            </select>
+          </Field>
 
           {/* Separador */}
           <div className="flex items-center gap-2 pt-1">

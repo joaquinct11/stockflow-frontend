@@ -95,6 +95,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           email: profile.email,
           rol: profile.rol,
           tenantId: profile.tenantId,
+          sucursalId: profile.sucursalId ?? null,
         };
         set({ user: updatedUser });
         localStorage.setItem('user', JSON.stringify(updatedUser));

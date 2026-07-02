@@ -37,6 +37,7 @@ export interface UserProfile {
   tipoDocumento?: string;
   numeroDocumento?: string;
   numeroCelular?: string;
+  sucursalId?: number | null;
 }
 
 export const authService = {
