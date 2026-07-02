@@ -184,15 +184,22 @@ export function Register() {
             <div className="flex-1 h-px bg-border/60" />
           </div>
 
-          {/* Plan — único */}
+          {/* Plan */}
           <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-foreground">Plan Básico</p>
+              <p className="text-sm font-semibold text-foreground">
+                {initialPlan === 'PRO' ? 'Plan Pro' : 'Plan Básico'}
+              </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Todo incluido · POS, inventario, compras, facturación, reportes y más
+                {initialPlan === 'PRO'
+                  ? 'Todo incluido · Hasta 5 sucursales independientes'
+                  : 'Todo incluido · POS, inventario, compras, facturación, reportes y más'}
               </p>
             </div>
-            <p className="text-sm font-bold text-primary shrink-0">S/ 89<span className="font-normal text-muted-foreground">/mes</span></p>
+            <p className="text-sm font-bold text-primary shrink-0">
+              S/ {initialPlan === 'PRO' ? '169' : '89'}
+              <span className="font-normal text-muted-foreground">/mes</span>
+            </p>
           </div>
 
           {/* Rubro */}
