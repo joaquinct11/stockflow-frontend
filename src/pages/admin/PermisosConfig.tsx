@@ -75,6 +75,14 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   CREAR_CERTIFICADO:        { label: 'Registrar certificados',           descripcion: 'Agregar nuevos certificados o documentos' },
   EDITAR_CERTIFICADO:       { label: 'Editar certificados',              descripcion: 'Modificar datos de certificados existentes' },
   ELIMINAR_CERTIFICADO:     { label: 'Eliminar certificados',            descripcion: 'Borrar certificados del sistema' },
+  VER_COMISION:             { label: 'Ver comisiones',                   descripcion: 'Acceder al módulo de comisiones' },
+  CREAR_COMISION:           { label: 'Registrar comisiones',             descripcion: 'Agregar nuevas comisiones recibidas' },
+  EDITAR_COMISION:          { label: 'Editar comisiones',                descripcion: 'Modificar comisiones ya registradas' },
+  ELIMINAR_COMISION:        { label: 'Eliminar comisiones',              descripcion: 'Borrar comisiones del sistema' },
+  VER_SERVICIO:             { label: 'Ver catálogo de servicios',        descripcion: 'Acceder al listado de servicios' },
+  CREAR_SERVICIO:           { label: 'Agregar servicios',                descripcion: 'Crear nuevos servicios en el catálogo' },
+  EDITAR_SERVICIO:          { label: 'Editar servicios',                 descripcion: 'Modificar nombre, precio y datos del servicio' },
+  ELIMINAR_SERVICIO:        { label: 'Eliminar servicios',               descripcion: 'Borrar servicios del catálogo' },
 };
 
 // ─── Grupos (orden = sidebar) ─────────────────────────────────────────────────
@@ -99,10 +107,12 @@ const PERMISSION_GROUPS: { label: string; color: string; icon: React.ReactNode; 
   { label: 'Proveedores',      color: 'teal',    icon: <Building2    size={15} />, codes: ['VER_PROVEEDORES','CREAR_PROVEEDOR','EDITAR_PROVEEDOR','CAMBIAR_ESTADO_PROVEEDOR','ELIMINAR_PROVEEDOR'] },
   // ── Inventario ────────────────────────────────────────────────────
   { label: 'Productos',        color: 'pink',    icon: <Package      size={15} />, codes: ['VER_PRODUCTOS','CREAR_PRODUCTO','EDITAR_PRODUCTO','ELIMINAR_PRODUCTO'] },
+  { label: 'Catálogo de Servicios', color: 'sky', icon: <FileText size={15} />, codes: ['VER_SERVICIO','CREAR_SERVICIO','EDITAR_SERVICIO','ELIMINAR_SERVICIO'] },
   { label: 'Movimientos',      color: 'amber',   icon: <Boxes        size={15} />, codes: ['VER_INVENTARIO','CREAR_INVENTARIO'] },
   // ── Usuarios ──────────────────────────────────────────────────────
   { label: 'Usuarios',         color: 'slate',   icon: <Users        size={15} />, codes: ['VER_USUARIOS','CREAR_USUARIO','EDITAR_USUARIO','CAMBIAR_ESTADO_USUARIO','ELIMINAR_USUARIO'] },
   { label: 'Certificados',     color: 'orange',  icon: <Award        size={15} />, codes: ['VER_CERTIFICADOS','CREAR_CERTIFICADO','EDITAR_CERTIFICADO','ELIMINAR_CERTIFICADO'] },
+  { label: 'Comisiones',       color: 'emerald', icon: <BarChart3    size={15} />, codes: ['VER_COMISION','CREAR_COMISION','EDITAR_COMISION','ELIMINAR_COMISION'] },
   // ── Suscripciones ─────────────────────────────────────────────────
   { label: 'Suscripciones',    color: 'violet',  icon: <CreditCard   size={15} />, codes: ['VER_SUSCRIPCIONES'] },
   // ── Reportes ──────────────────────────────────────────────────────
@@ -123,6 +133,7 @@ const COLOR_MAP: Record<string, { bg: string; text: string; border: string; icon
   rose:    { bg: 'bg-rose-50 dark:bg-rose-950/30',       text: 'text-rose-700 dark:text-rose-400',       border: 'border-rose-200 dark:border-rose-800',       iconBg: 'bg-rose-100 dark:bg-rose-900/50' },
   purple:  { bg: 'bg-purple-50 dark:bg-purple-950/30',   text: 'text-purple-700 dark:text-purple-400',   border: 'border-purple-200 dark:border-purple-800',   iconBg: 'bg-purple-100 dark:bg-purple-900/50' },
   slate:   { bg: 'bg-slate-50 dark:bg-slate-950/30',     text: 'text-slate-700 dark:text-slate-400',     border: 'border-slate-200 dark:border-slate-800',     iconBg: 'bg-slate-100 dark:bg-slate-900/50' },
+  sky:     { bg: 'bg-sky-50 dark:bg-sky-950/30',         text: 'text-sky-700 dark:text-sky-400',         border: 'border-sky-200 dark:border-sky-800',         iconBg: 'bg-sky-100 dark:bg-sky-900/50' },
 };
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
@@ -208,11 +219,12 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-const OC_RECEPCIONES_LABELS = ['Órdenes de Compra', 'Recepciones'];
+const DEALER_HIDDEN_GROUP_LABELS  = ['Devoluciones y NC', 'Órdenes de Compra', 'Recepciones'];
+const SERVICIOS_ONLY_GROUP_LABELS = ['Catálogo de Servicios', 'Comisiones'];
 
 export function PermisosConfig() {
   const { config: negocioConfig } = useTenantConfigStore();
-  const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
+  const esDealer = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
 
   const [usuarios, setUsuarios]               = useState<AdminUsuario[]>([]);
   const [permisosCatalog, setPermisosCatalog] = useState<Permiso[]>([]);
@@ -315,13 +327,14 @@ export function PermisosConfig() {
     const byCode = new Map<string, Permiso>();
     for (const p of catalog) { const code = getPermCode(p); if (code) byCode.set(code, p); }
     return PERMISSION_GROUPS
-      .filter(g => !esRopa || !OC_RECEPCIONES_LABELS.includes(g.label))
+      .filter(g => (!esDealer || !DEALER_HIDDEN_GROUP_LABELS.includes(g.label)) &&
+                   (esDealer  || !SERVICIOS_ONLY_GROUP_LABELS.includes(g.label)))
       .map(g => {
         const perms = g.codes
           .map((code, i) => byCode.get(code) ?? ({ id: -(i + 1), nombre: code } as Permiso));
         return { ...g, perms };
       }).filter(g => g.perms.length > 0);
-  }, [permisosCatalog, basePermisos]);
+  }, [permisosCatalog, basePermisos, esDealer]);
 
   const getRolCard = (rolNombre: string) => ROL_CARDS.find(r => r.rol === rolNombre) ?? ROL_CARDS[1];
 

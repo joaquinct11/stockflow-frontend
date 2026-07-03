@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { Dialog } from '../../components/ui/Dialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import {
@@ -17,6 +18,8 @@ import {
   Lock,
   Calendar,
   AlertTriangle,
+  Building2,
+  Zap,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -99,6 +102,8 @@ export function SuscripcionesList() {
     isOpen: false,
     action: null as (() => Promise<void>) | null,
   });
+
+  const [upgradeWarningOpen, setUpgradeWarningOpen] = useState(false);
 
   useEffect(() => {
     fetchSuscripcion();
@@ -184,6 +189,8 @@ export function SuscripcionesList() {
   const esCancelacionPendiente  = suscripcion.estado === 'CANCELACION_PENDIENTE';
   const esCancelableOReactivable = ['CANCELADA', 'SUSPENDIDA'].includes(suscripcion.estado ?? '')
     || esPendiente;
+  const esPro                   = suscripcion.planId?.toUpperCase() === 'PRO';
+  const puedeUpgrade            = !esPro && (esActiva || esTrial);
 
   // Fecha de corte formateada para CANCELACION_PENDIENTE
   const currentPeriodEndRaw = (suscripcion as any).currentPeriodEnd as string | undefined;
@@ -217,7 +224,7 @@ export function SuscripcionesList() {
                 <CreditCard className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <CardTitle>Plan Básico</CardTitle>
+                <CardTitle>{esPro ? 'Plan Pro' : 'Plan Básico'}</CardTitle>
                 <CardDescription>S/. {(suscripcion.precioMensual ?? 89).toFixed(2)} / mes</CardDescription>
               </div>
             </div>
@@ -329,6 +336,34 @@ export function SuscripcionesList() {
             </div>
           )}
 
+          {/* ── Banner upgrade a Pro ── */}
+          {puedeUpgrade && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex items-start gap-3 flex-1">
+                  <Building2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                      ¿Tienes más de un local?
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      El plan Pro te permite gestionar hasta <strong>5 sucursales</strong> con stock independiente por local — S/ 176/mes.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-primary text-primary hover:bg-primary/10 shrink-0"
+                  onClick={() => setUpgradeWarningOpen(true)}
+                >
+                  <Zap className="mr-2 h-4 w-4" />
+                  Mejorar a Plan Pro
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* ── Acciones ── */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             {(esCancelableOReactivable || esCancelacionPendiente) && canToggleState('SUSCRIPCIONES') && (
@@ -349,6 +384,64 @@ export function SuscripcionesList() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal advertencia upgrade a Pro */}
+      <Dialog
+        isOpen={upgradeWarningOpen}
+        onClose={() => setUpgradeWarningOpen(false)}
+        title="Antes de continuar al Plan Pro"
+        size="sm"
+      >
+        <div className="space-y-4 py-1">
+          <div className="flex items-start gap-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
+              Al activar el Plan Pro se creará automáticamente tu{' '}
+              <strong>Sucursal Principal</strong>. Todos los datos que registraste
+              hasta ahora quedarán asociados a ella:
+            </p>
+          </div>
+
+          <ul className="space-y-2 text-sm text-muted-foreground pl-1">
+            {[
+              '📊 Dashboard y métricas',
+              '🛒 Ventas e historial de transacciones',
+              '💸 Gastos registrados',
+              '📦 Inventario y stock de productos',
+              '🧾 Comprobantes y facturación emitida',
+              '📜 Certificados digitales',
+            ].map((item) => (
+              <li key={item} className="flex items-center gap-2">
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+
+          <p className="text-xs text-muted-foreground border-t pt-3">
+            Podrás <strong>cambiar el nombre</strong> de la Sucursal Principal en cualquier momento desde Configuración → Sucursales, y luego agregar hasta 4 locales adicionales.
+          </p>
+
+          <div className="flex gap-3 pt-1">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setUpgradeWarningOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => {
+                setUpgradeWarningOpen(false);
+                navigate('/checkout/culqi?plan=PRO&mode=upgrade');
+              }}
+            >
+              <Zap className="mr-2 h-4 w-4" />
+              Continuar al checkout
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       {/* Confirm cancelar */}
       <ConfirmDialog

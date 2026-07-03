@@ -39,6 +39,7 @@ import {
 } from 'recharts';
 import { reportesService } from '../../services/reportes.service';
 import type { AgrupacionTendencia, MetricaProductos } from '../../services/reportes.service';
+import { comisionService, type ComisionDTO } from '../../services/comision.service';
 import type {
   ReportesResumenDTO,
   VentasTendenciaPuntoDTO,
@@ -63,9 +64,9 @@ import { Badge } from '../../components/ui/Badge';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { usePermissions } from '../../hooks/usePermissions';
-import { usePlan } from '../../hooks/usePlan';
-import { useNavigate } from 'react-router-dom';
-import { Crown } from 'lucide-react';
+
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { useSucursalStore } from '../../store/sucursalStore';
 import toast from 'react-hot-toast';
 
 // ─── Labels de categorías de gasto ───────────────────────────────────────────
@@ -244,19 +245,20 @@ function ChartTooltip({ active, payload, label, isSoles = true }: {
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
 type TabId = 'resumen' | 'ventas' | 'inventario' | 'compras' | 'financiero' | 'clientes';
-const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: 'resumen',     label: 'Resumen',     icon: <BarChart3 className="h-4 w-4" /> },
-  { id: 'ventas',      label: 'Ventas',      icon: <ShoppingCart className="h-4 w-4" /> },
-  { id: 'inventario',  label: 'Inventario',  icon: <Boxes className="h-4 w-4" /> },
-  { id: 'compras',     label: 'Compras',     icon: <Truck className="h-4 w-4" /> },
+const ALL_TABS: { id: TabId; label: string; labelDealer?: string; icon: React.ReactNode; hideForDealer?: boolean }[] = [
+  { id: 'resumen',     label: 'Resumen',     labelDealer: 'Resumen',     icon: <BarChart3 className="h-4 w-4" /> },
+  { id: 'ventas',      label: 'Ventas',      labelDealer: 'Servicios',   icon: <ShoppingCart className="h-4 w-4" /> },
+  { id: 'inventario',  label: 'Inventario',  labelDealer: 'Stock Físico', icon: <Boxes className="h-4 w-4" /> },
+  { id: 'compras',     label: 'Compras',     icon: <Truck className="h-4 w-4" />, hideForDealer: true },
   { id: 'financiero',  label: 'Financiero',  icon: <Wallet className="h-4 w-4" /> },
   { id: 'clientes',    label: 'Clientes',    icon: <Users className="h-4 w-4" /> },
 ];
 
-function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => void }) {
+function TabBar({ active, onChange, esServicios }: { active: TabId; onChange: (id: TabId) => void; esServicios: boolean }) {
+  const tabs = ALL_TABS.filter((t) => !(esServicios && t.hideForDealer));
   return (
     <div className="flex gap-1 border-b overflow-x-auto">
-      {TABS.map((t) => (
+      {tabs.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
@@ -266,7 +268,7 @@ function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => 
               : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
-          {t.icon}{t.label}
+          {t.icon}{esServicios && t.labelDealer ? t.labelDealer : t.label}
         </button>
       ))}
     </div>
@@ -300,10 +302,12 @@ function TabEmpty() {
 
 // ─── Resumen tab ──────────────────────────────────────────────────────────────
 
-function ResumenTab({ loading, error, data, onRetry }: {
+function ResumenTab({ loading, error, data, onRetry, esServicios = false, comisiones = [] }: {
   loading: boolean; error: string | null;
   data: ReportesResumenDTO | null;
   onRetry: () => void;
+  esServicios?: boolean;
+  comisiones?: ComisionDTO[];
 }) {
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
@@ -323,14 +327,19 @@ function ResumenTab({ loading, error, data, onRetry }: {
     : margenPct >= 15 ? 'text-yellow-600'
     : 'text-red-600';
 
-  const bajoStockList: ProductoBajoStockDTO[] = inv?.productosBajoStock ?? [];
+  const bajoStockListRaw: ProductoBajoStockDTO[] = inv?.productosBajoStock ?? [];
+  const bajoStockList = esServicios
+    ? bajoStockListRaw.filter((p) => p.tipo === 'PRODUCTO' || !p.tipo)
+    : bajoStockListRaw;
 
   return (
     <div className="space-y-6">
       {/* KPIs de ventas */}
       {ventas != null && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Ventas del período</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {esServicios ? 'Servicios del período' : 'Ventas del período'}
+          </h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               icon={<DollarSign className="h-5 w-5" />}
@@ -340,7 +349,7 @@ function ResumenTab({ loading, error, data, onRetry }: {
             />
             <StatCard
               icon={<ShoppingCart className="h-5 w-5" />}
-              title="Nº de ventas"
+              title={esServicios ? 'Servicios prestados' : 'Nº de ventas'}
               value={formatNum(ventas.ventasCount)}
               description={ventas.ventasCount != null && ventas.ingresosTotal
                 ? `Ticket prom. ${formatSoles(ventas.ticketPromedio)}`
@@ -362,9 +371,58 @@ function ResumenTab({ loading, error, data, onRetry }: {
         </section>
       )}
 
+      {/* Comisiones — solo dealer */}
+      {esServicios && (() => {
+        const totalCom = comisiones.reduce((s, c) => s + c.monto, 0);
+        const porPagador = comisiones.reduce<Record<string, number>>((acc, c) => {
+          acc[c.pagador] = (acc[c.pagador] ?? 0) + c.monto;
+          return acc;
+        }, {});
+        const topPagadores = Object.entries(porPagador)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 5);
+        return (
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Comisiones del período</h2>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <StatCard icon={<DollarSign className="h-5 w-5" />} title="Total comisiones" value={formatSoles(totalCom)} colorClass="text-amber-600" />
+              <StatCard icon={<ShoppingCart className="h-5 w-5" />} title="Registros" value={formatNum(comisiones.length)} description={comisiones.length > 0 ? `Prom. ${formatSoles(totalCom / comisiones.length)}` : undefined} />
+              <StatCard icon={<Target className="h-5 w-5" />} title="Mayor pagador" value={topPagadores[0]?.[0] ?? '—'} description={topPagadores[0] ? formatSoles(topPagadores[0][1]) : undefined} />
+            </div>
+            {topPagadores.length > 1 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Comisiones por pagador</CardTitle>
+                  <CardDescription>Distribución del total recibido en el período</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {topPagadores.map(([pagador, monto]) => {
+                      const pct = totalCom > 0 ? (monto / totalCom) * 100 : 0;
+                      return (
+                        <div key={pagador} className="flex items-center gap-3">
+                          <span className="text-sm font-medium w-32 shrink-0 truncate">{pagador}</span>
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-amber-500" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-sm text-muted-foreground w-12 text-right shrink-0">{pct.toFixed(0)}%</span>
+                          <span className="text-sm font-medium w-28 text-right shrink-0">{formatSoles(monto)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </section>
+        );
+      })()}
+
       {/* KPIs de inventario */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inventario</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          {esServicios ? 'Stock físico' : 'Inventario'}
+        </h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={<Package className="h-5 w-5" />} title="Total productos" value={formatNum(inv?.totalProductos)} />
           <StatCard icon={<TrendingUp className="h-5 w-5" />} title="Valorización stock" value={formatSoles(inv?.valorizacionStock)} colorClass="text-green-600" />
@@ -379,21 +437,23 @@ function ResumenTab({ loading, error, data, onRetry }: {
         </div>
       </section>
 
-      {/* Recepciones y compras */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recepciones del período</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 [&>*:last-child]:col-span-2 [&>*:last-child]:mx-auto [&>*:last-child]:max-w-[calc(50%-0.5rem)] sm:[&>*:last-child]:col-auto sm:[&>*:last-child]:max-w-none sm:[&>*:last-child]:mx-0">
-          <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(comp?.recepcionesConfirmadasCount)} />
-          <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(comp?.unidadesRecibidas)} />
-          <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto compras est." value={formatSoles(comp?.montoComprasEstimado)} colorClass="text-amber-600" />
-        </div>
-      </section>
+      {/* Recepciones y compras — oculto para dealer */}
+      {!esServicios && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recepciones del período</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 [&>*:last-child]:col-span-2 [&>*:last-child]:mx-auto [&>*:last-child]:max-w-[calc(50%-0.5rem)] sm:[&>*:last-child]:col-auto sm:[&>*:last-child]:max-w-none sm:[&>*:last-child]:mx-0">
+            <StatCard icon={<ClipboardCheck className="h-5 w-5" />} title="Recepciones confirmadas" value={formatNum(comp?.recepcionesConfirmadasCount)} />
+            <StatCard icon={<Package className="h-5 w-5" />} title="Unidades recibidas" value={formatNum(comp?.unidadesRecibidas)} />
+            <StatCard icon={<DollarSign className="h-5 w-5" />} title="Monto compras est." value={formatSoles(comp?.montoComprasEstimado)} colorClass="text-amber-600" />
+          </div>
+        </section>
+      )}
 
-      {/* Top productos */}
+      {/* Top productos / servicios */}
       {(ventas?.topProductosVendidos?.length ?? 0) > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Top productos del período</CardTitle>
+            <CardTitle className="text-base">{esServicios ? 'Top servicios del período' : 'Top productos del período'}</CardTitle>
             <CardDescription>Por ingresos generados</CardDescription>
           </CardHeader>
           <CardContent>
@@ -474,11 +534,12 @@ interface VentasData {
   menosProductos: VentasProductoDTO[];
 }
 
-function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, setMetrica, onRetry }: {
+function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, setMetrica, onRetry, esServicios = false }: {
   loading: boolean; error: string | null; data: VentasData | null;
   agrupacion: AgrupacionTendencia; setAgrupacion: (v: AgrupacionTendencia) => void;
   metrica: MetricaProductos; setMetrica: (v: MetricaProductos) => void;
   onRetry: () => void;
+  esServicios?: boolean;
 }) {
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
@@ -519,8 +580,8 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <CardTitle className="text-base">Tendencia de ingresos</CardTitle>
-              <CardDescription>Evolución de ventas en el período</CardDescription>
+              <CardTitle className="text-base">{esServicios ? 'Tendencia de ingresos por servicios' : 'Tendencia de ingresos'}</CardTitle>
+              <CardDescription>{esServicios ? 'Evolución de servicios prestados en el período' : 'Evolución de ventas en el período'}</CardDescription>
             </div>
             <div className="flex gap-1">
               {(['DIA', 'SEMANA', 'MES'] as AgrupacionTendencia[]).map((a) => (
@@ -561,8 +622,8 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
               <div>
-                <CardTitle className="text-base">Top productos</CardTitle>
-                <CardDescription>Los más vendidos del período</CardDescription>
+                <CardTitle className="text-base">{esServicios ? 'Top servicios' : 'Top productos'}</CardTitle>
+                <CardDescription>{esServicios ? 'Los más facturados del período' : 'Los más vendidos del período'}</CardDescription>
               </div>
               <div className="flex gap-1">
                 {(['UNIDADES', 'INGRESOS'] as MetricaProductos[]).map((m) => (
@@ -620,7 +681,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
       {vendedorChart.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Performance por vendedor</CardTitle>
+            <CardTitle className="text-base">{esServicios ? 'Performance por asesor' : 'Performance por vendedor'}</CardTitle>
             <CardDescription>Ingresos generados en el período</CardDescription>
           </CardHeader>
           <CardContent>
@@ -638,8 +699,8 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Vendedor</TableHead>
-                    <TableHead className="text-center">Ventas</TableHead>
+                    <TableHead>{esServicios ? 'Asesor' : 'Vendedor'}</TableHead>
+                    <TableHead className="text-center">{esServicios ? 'Servicios' : 'Ventas'}</TableHead>
                     <TableHead className="text-right">Ingresos</TableHead>
                     <TableHead className="text-right">Ticket prom.</TableHead>
                   </TableRow>
@@ -653,6 +714,7 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
                       <TableCell className="text-right">{formatSoles(v.ticketPromedio)}</TableCell>
                     </TableRow>
                   ))}
+
                 </TableBody>
               </Table>
             </div>
@@ -695,9 +757,9 @@ function VentasTab({ loading, error, data, agrupacion, setAgrupacion, metrica, s
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <TrendingDown className="h-4 w-4 text-red-500" />
-              Productos con menor desempeño
+              {esServicios ? 'Servicios con menor movimiento' : 'Productos con menor desempeño'}
             </CardTitle>
-            <CardDescription>Considera revisar su rotación o precio</CardDescription>
+            <CardDescription>{esServicios ? 'Servicios poco solicitados en el período' : 'Considera revisar su rotación o precio'}</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -754,8 +816,8 @@ function coberturaTextColor(dias: number | null | undefined): string {
   return 'text-green-600';
 }
 
-function InventarioTab({ loading, error, data, onRetry }: {
-  loading: boolean; error: string | null; data: InventarioData | null; onRetry: () => void;
+function InventarioTab({ loading, error, data, onRetry, esServicios = false }: {
+  loading: boolean; error: string | null; data: InventarioData | null; onRetry: () => void; esServicios?: boolean;
 }) {
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
@@ -780,8 +842,8 @@ function InventarioTab({ loading, error, data, onRetry }: {
   return (
     <div className="space-y-6">
 
-      {/* ── Capital en riesgo de vencimiento ── */}
-      {venc && (venc.lotesVencidos > 0 || venc.lotesRiesgo7d > 0 || venc.lotesRiesgo30d > 0 || venc.lotesRiesgo90d > 0) && (
+      {/* ── Capital en riesgo de vencimiento — oculto para dealer ── */}
+      {!esServicios && venc && (venc.lotesVencidos > 0 || venc.lotesRiesgo7d > 0 || venc.lotesRiesgo30d > 0 || venc.lotesRiesgo90d > 0) && (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
             <FlaskConical className="h-4 w-4 text-red-500" />
@@ -1131,18 +1193,22 @@ function PLRow({
   );
 }
 
-function FinancieroTab({ loading, error, data, onRetry }: {
+function FinancieroTab({ loading, error, data, onRetry, comisiones = [] }: {
   loading: boolean; error: string | null;
   data: FinancieroDTO | null;
   onRetry: () => void;
+  comisiones?: ComisionDTO[];
 }) {
   if (loading) return <TabLoading />;
   if (error)   return <TabError message={error} onRetry={onRetry} />;
   if (!data)   return <TabEmpty />;
 
+  const totalComisiones = comisiones.reduce((s, c) => s + c.monto, 0);
+  const esDealer = comisiones.length > 0 || totalComisiones > 0;
+
   const margenBrutoColor  = (data.margenBruto ?? 0) >= 30 ? 'text-green-600' : (data.margenBruto ?? 0) >= 15 ? 'text-yellow-600' : 'text-red-600';
   const margenNetoColor   = (data.margenNeto  ?? 0) >= 15 ? 'text-green-600' : (data.margenNeto  ?? 0) >= 5  ? 'text-yellow-600' : 'text-red-600';
-  const utilidadNetaColor = (data.utilidadNeta ?? 0) >= 0  ? 'text-green-600' : 'text-red-600';
+  const utilidadNetaColor = ((data.utilidadNeta ?? 0) + totalComisiones) >= 0 ? 'text-green-600' : 'text-red-600';
 
   const catChart = data.gastosPorCategoria.slice(0, 8).map(g => ({
     name: GASTO_LABELS[g.categoria] ?? g.categoria,
@@ -1201,7 +1267,10 @@ function FinancieroTab({ loading, error, data, onRetry }: {
         </CardHeader>
         <CardContent>
           <div className="space-y-1">
-            <PLRow label="Ingresos por ventas" value={data.ingresosVentas} colorClass="text-green-600" bold />
+            <PLRow label={esDealer ? 'Ingresos por servicios' : 'Ingresos por ventas'} value={data.ingresosVentas} colorClass="text-green-600" bold />
+            {esDealer && totalComisiones > 0 && (
+              <PLRow label="Comisiones de operadora" value={totalComisiones} colorClass="text-amber-600" indent />
+            )}
             <PLRow label="Costo de ventas" value={data.costoVentas} colorClass="text-red-400" indent
               sub={data.ingresosVentas > 0 ? `${((data.costoVentas / data.ingresosVentas) * 100).toFixed(1)}% de ingresos` : undefined} />
             <PLRow label="Utilidad bruta" value={data.utilidadBruta}
@@ -1210,8 +1279,10 @@ function FinancieroTab({ loading, error, data, onRetry }: {
             <PLRow label={`Gastos operativos (${data.gastosCount} registros)`} value={data.gastosTotales}
               colorClass="text-red-400" indent
               sub={data.ingresosVentas > 0 ? `${((data.gastosTotales / data.ingresosVentas) * 100).toFixed(1)}% de ingresos` : undefined} />
-            <PLRow label="Utilidad neta" value={data.utilidadNeta}
-              sub={data.margenNeto != null ? `Margen ${formatPct(data.margenNeto)}` : undefined}
+            <PLRow
+              label={esDealer && totalComisiones > 0 ? 'Utilidad neta (incl. comisiones)' : 'Utilidad neta'}
+              value={(data.utilidadNeta ?? 0) + totalComisiones}
+              sub={data.margenNeto != null ? `Margen base ${formatPct(data.margenNeto)}` : undefined}
               colorClass={utilidadNetaColor} bold separator bg />
           </div>
         </CardContent>
@@ -1305,10 +1376,11 @@ function FinancieroTab({ loading, error, data, onRetry }: {
 
 // ─── Clientes tab ─────────────────────────────────────────────────────────────
 
-function ClientesTab({ loading, error, data, onRetry }: {
+function ClientesTab({ loading, error, data, onRetry, esServicios = false }: {
   loading: boolean; error: string | null;
   data: ClienteReporteDTO[] | null;
   onRetry: () => void;
+  esServicios?: boolean;
 }) {
   if (loading) return <TabLoading />;
   if (error)   return <TabError message={error} onRetry={onRetry} />;
@@ -1331,15 +1403,15 @@ function ClientesTab({ loading, error, data, onRetry }: {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard icon={<Users className="h-5 w-5" />} title="Clientes únicos" value={formatNum(data.length)} />
-        <StatCard icon={<DollarSign className="h-5 w-5" />} title="Compra total" value={formatSoles(totalComprado)} colorClass="text-green-600" />
+        <StatCard icon={<DollarSign className="h-5 w-5" />} title={esServicios ? 'Total facturado' : 'Compra total'} value={formatSoles(totalComprado)} colorClass="text-green-600" />
         <StatCard icon={<Target className="h-5 w-5" />} title="Ticket promedio" value={formatSoles(ticketPromGral)} />
       </div>
 
       {/* Gráfico top 8 clientes */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Top clientes por monto comprado</CardTitle>
-          <CardDescription>Los 8 mejores compradores del período</CardDescription>
+          <CardTitle className="text-base">{esServicios ? 'Top clientes por servicios contratados' : 'Top clientes por monto comprado'}</CardTitle>
+          <CardDescription>{esServicios ? 'Los 8 mejores clientes del período' : 'Los 8 mejores compradores del período'}</CardDescription>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={220}>
@@ -1366,10 +1438,10 @@ function ClientesTab({ loading, error, data, onRetry }: {
                 <TableRow>
                   <TableHead>#</TableHead>
                   <TableHead>Cliente</TableHead>
-                  <TableHead className="text-center">Compras</TableHead>
-                  <TableHead className="text-right">Total gastado</TableHead>
+                  <TableHead className="text-center">{esServicios ? 'Servicios' : 'Compras'}</TableHead>
+                  <TableHead className="text-right">{esServicios ? 'Total facturado' : 'Total gastado'}</TableHead>
                   <TableHead className="text-right">Ticket prom.</TableHead>
-                  <TableHead className="text-right">Última compra</TableHead>
+                  <TableHead className="text-right">{esServicios ? 'Última visita' : 'Última compra'}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1417,17 +1489,17 @@ const QUICK_RANGES = [
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-const MAX_DIAS_BASICO = 30;
-
 export function ReportesPage() {
   const { canView } = usePermissions();
-  const { isBasico } = usePlan();
-  const navigate = useNavigate();
+  const { config: negocioConfig } = useTenantConfigStore();
+  const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
   const hasAccess = canView('REPORTES');
 
-  const minimoFechaBasico = daysAgo(MAX_DIAS_BASICO);
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
 
-  const [desde, setDesde] = useState<string>(daysAgo(30));
+  const [desde, setDesde] = useState<string>(startOfMonth());
   const [hasta, setHasta] = useState<string>(toDateString(new Date()));
   const [activeTab, setActiveTab] = useState<TabId>('resumen');
 
@@ -1457,12 +1529,14 @@ export function ReportesPage() {
   const [clientesError, setClientesError] = useState<string | null>(null);
   const [clientesData, setClientesData] = useState<ClienteReporteDTO[] | null>(null);
 
+  const [comisionesData, setComisionesData] = useState<ComisionDTO[]>([]);
+
   const [exporting, setExporting] = useState(false);
 
   const fetchResumen = async (d = desde, h = hasta) => {
     try {
       setResumenLoading(true); setResumenError(null);
-      setResumenData(await reportesService.getResumen(d, h));
+      setResumenData(await reportesService.getResumen(d, h, sucursalId));
     } catch { setResumenError('Error al cargar el resumen.'); toast.error('Error al cargar el resumen.');
     } finally { setResumenLoading(false); }
   };
@@ -1470,12 +1544,12 @@ export function ReportesPage() {
   const fetchVentas = async (d = desde, h = hasta, ag = agrupacion, met = metrica) => {
     try { setVentasLoading(true); setVentasError(null);
       const [tendencia, porVendedor, porCategoria, porMetodoPago, topProductos, menosProductos] = await Promise.all([
-        reportesService.getVentasTendencia(d, h, ag),
-        reportesService.getVentasPorVendedor(d, h),
-        reportesService.getVentasPorCategoria(d, h),
-        reportesService.getVentasPorMetodoPago(d, h),
-        reportesService.getVentasProductos(d, h, 10, 'MAS', met),
-        reportesService.getVentasProductos(d, h, 10, 'MENOS', met),
+        reportesService.getVentasTendencia(d, h, ag, sucursalId),
+        reportesService.getVentasPorVendedor(d, h, 20, sucursalId),
+        reportesService.getVentasPorCategoria(d, h, 20, sucursalId),
+        reportesService.getVentasPorMetodoPago(d, h, sucursalId),
+        reportesService.getVentasProductos(d, h, 10, 'MAS', met, sucursalId),
+        reportesService.getVentasProductos(d, h, 10, 'MENOS', met, sucursalId),
       ]);
       setVentasData({ tendencia, porVendedor, porCategoria, porMetodoPago, topProductos, menosProductos });
     } catch { setVentasError('Error al cargar datos de ventas.'); toast.error('Error al cargar datos de ventas.');
@@ -1485,9 +1559,9 @@ export function ReportesPage() {
   const fetchInventario = async () => {
     try { setInventarioLoading(true); setInventarioError(null);
       const [abc, slowMovers, cobertura, vencimientos] = await Promise.all([
-        reportesService.getInventarioABC(desde, hasta),
+        reportesService.getInventarioABC(desde, hasta, 50, sucursalId),
         reportesService.getInventarioSlowMovers(30),
-        reportesService.getInventarioCobertura(desde, hasta),
+        reportesService.getInventarioCobertura(desde, hasta, 20, sucursalId),
         reportesService.getVencimientosRiesgo().catch(() => null),
       ]);
       setInventarioData({ abc, slowMovers, cobertura, vencimientos });
@@ -1497,21 +1571,31 @@ export function ReportesPage() {
 
   const fetchCompras = async () => {
     try { setComprasLoading(true); setComprasError(null);
-      setComprasData(await reportesService.getComprasPorProveedor(desde, hasta));
+      setComprasData(await reportesService.getComprasPorProveedor(desde, hasta, 20, sucursalId));
     } catch { setComprasError('Error al cargar datos de compras.'); toast.error('Error al cargar datos de compras.');
     } finally { setComprasLoading(false); }
   };
 
   const fetchFinanciero = async (d = desde, h = hasta) => {
     try { setFinancieroLoading(true); setFinancieroError(null);
-      setFinancieroData(await reportesService.getFinanciero(d, h));
+      setFinancieroData(await reportesService.getFinanciero(d, h, sucursalId));
     } catch { setFinancieroError('Error al cargar datos financieros.'); toast.error('Error al cargar datos financieros.');
     } finally { setFinancieroLoading(false); }
   };
 
+  const fetchComisiones = async (d = desde, h = hasta) => {
+    if (!esServicios) return;
+    try {
+      const all = await comisionService.listar();
+      setComisionesData(all.filter((c) => c.fecha >= d && c.fecha <= h));
+    } catch {
+      setComisionesData([]);
+    }
+  };
+
   const fetchClientes = async (d = desde, h = hasta) => {
     try { setClientesLoading(true); setClientesError(null);
-      setClientesData(await reportesService.getTopClientes(d, h, 30));
+      setClientesData(await reportesService.getTopClientes(d, h, 30, sucursalId));
     } catch { setClientesError('Error al cargar datos de clientes.'); toast.error('Error al cargar datos de clientes.');
     } finally { setClientesLoading(false); }
   };
@@ -1519,28 +1603,21 @@ export function ReportesPage() {
   const handleActualizar = (d = desde, h = hasta) => {
     if (!d || !h) { toast.error('Selecciona un rango de fechas'); return; }
     if (d > h) { toast.error('La fecha "Desde" no puede ser mayor a "Hasta"'); return; }
-    // Clamp para plan BÁSICO: no se puede ir más atrás de 30 días
-    if (isBasico && d < minimoFechaBasico) {
-      toast('Plan Básico: el rango máximo es 30 días. Actualiza a Pro para ver historial completo.', {
-        icon: '👑',
-        style: { background: '#fffbeb', color: '#92400e', border: '1px solid #fcd34d' },
-      });
-      d = minimoFechaBasico;
-      setDesde(d);
-    }
     fetchResumen(d, h);
     fetchVentas(d, h, agrupacion, metrica);
     fetchInventario();
     fetchCompras();
     fetchFinanciero(d, h);
     fetchClientes(d, h);
+    fetchComisiones(d, h);
   };
 
-  // Auto-carga al montar con el rango por defecto (últimos 30 días)
+  // Auto-carga al montar y cuando cambia la sucursal activa
   useEffect(() => {
+    if (!sucursalLoaded) return;
     handleActualizar(desde, hasta);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sucursalLoaded, sucursalActual?.id]);
 
   const handleQuickRange = (rango: typeof QUICK_RANGES[0]) => {
     const d = rango.desde();
@@ -1616,29 +1693,10 @@ export function ReportesPage() {
     return <EmptyState icon={Lock} title="Sin acceso" description="No tienes permisos para ver el módulo de Reportes." />;
   }
 
-  // Para BÁSICO, solo mostrar rangos de ≤30 días
-  const visibleRanges = isBasico
-    ? QUICK_RANGES.filter((r) => r.label === '7d' || r.label === '30d' || r.label === 'Este mes' || r.label === 'Mes anterior')
-    : QUICK_RANGES;
+  const visibleRanges = QUICK_RANGES;
 
   return (
     <div className="space-y-6">
-      {/* Banner plan BÁSICO */}
-      {isBasico && (
-        <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3">
-          <Crown className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-200 flex-1">
-            <span className="font-semibold">Plan Básico</span> — los reportes están limitados a los últimos 30 días.
-          </p>
-          <button
-            onClick={() => navigate('/checkout?plan=PRO')}
-            className="text-xs font-semibold text-amber-700 dark:text-amber-300 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100 shrink-0"
-          >
-            Actualizar a Pro
-          </button>
-        </div>
-      )}
-
       {/* Header + filtros integrados */}
       <div className="flex flex-col gap-4">
         {/* Título */}
@@ -1688,15 +1746,6 @@ export function ReportesPage() {
                 </button>
               );
             })}
-            {isBasico && (
-              <button
-                onClick={() => navigate('/checkout?plan=PRO')}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all"
-              >
-                <Crown className="h-3 w-3" />
-                90d / Año
-              </button>
-            )}
           </div>
 
           {/* Separador vertical */}
@@ -1712,7 +1761,7 @@ export function ReportesPage() {
                 id="rpt-desde"
                 type="date"
                 value={desde}
-                min={isBasico ? minimoFechaBasico : undefined}
+
                 onChange={(e) => setDesde(e.target.value)}
                 className="h-9 w-full sm:w-36 text-sm"
               />
@@ -1750,13 +1799,13 @@ export function ReportesPage() {
         </div>
       </div>
 
-      <TabBar active={activeTab} onChange={setActiveTab} />
+      <TabBar active={activeTab} onChange={setActiveTab} esServicios={esServicios} />
 
       <div>
         {activeTab === 'resumen' && (
           <ResumenTab
             loading={resumenLoading} error={resumenError} data={resumenData}
-            onRetry={fetchResumen}
+            onRetry={fetchResumen} esServicios={esServicios} comisiones={comisionesData}
           />
         )}
         {activeTab === 'ventas' && (
@@ -1764,11 +1813,11 @@ export function ReportesPage() {
             loading={ventasLoading} error={ventasError} data={ventasData}
             agrupacion={agrupacion} setAgrupacion={handleAgrupacion}
             metrica={metrica} setMetrica={handleMetrica}
-            onRetry={() => fetchVentas()}
+            onRetry={() => fetchVentas()} esServicios={esServicios}
           />
         )}
         {activeTab === 'inventario' && (
-          <InventarioTab loading={inventarioLoading} error={inventarioError} data={inventarioData} onRetry={fetchInventario} />
+          <InventarioTab loading={inventarioLoading} error={inventarioError} data={inventarioData} onRetry={fetchInventario} esServicios={esServicios} />
         )}
         {activeTab === 'compras' && (
           <ComprasTab loading={comprasLoading} error={comprasError} data={comprasData} onRetry={fetchCompras} />
@@ -1778,12 +1827,13 @@ export function ReportesPage() {
             loading={financieroLoading} error={financieroError}
             data={financieroData}
             onRetry={() => fetchFinanciero()}
+            comisiones={comisionesData}
           />
         )}
         {activeTab === 'clientes' && (
           <ClientesTab
             loading={clientesLoading} error={clientesError}
-            data={clientesData} onRetry={() => fetchClientes()}
+            data={clientesData} onRetry={() => fetchClientes()} esServicios={esServicios}
           />
         )}
       </div>

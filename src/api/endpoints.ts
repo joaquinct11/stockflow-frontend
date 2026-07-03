@@ -223,6 +223,7 @@ export const API_ENDPOINTS = {
   CULQI: {
     CONFIG:       '/culqi/config',
     SUSCRIBIR:    '/culqi/suscribir',
+    UPGRADE_PRO:  '/culqi/upgrade-pro',
     CREAR_PLAN:   '/culqi/admin/crear-plan',
   },
 

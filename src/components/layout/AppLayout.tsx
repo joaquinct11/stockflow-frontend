@@ -6,19 +6,39 @@ import { Breadcrumb } from './Breadcrumb';
 import { tenantConfigService } from '../../services/tenantConfig.service';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useAuthStore } from '../../store/authStore';
+import { sucursalService } from '../../services/sucursal.service';
+import { useSucursalStore } from '../../store/sucursalStore';
 
 export function AppLayout() {
-  const [sidebarOpen, setSidebarOpen]     = useState(false);   // móvil
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // desktop
+  const [sidebarOpen, setSidebarOpen]     = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { setConfig } = useTenantConfigStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
+  const { setSucursales, setSucursalActual, clearSucursales, setLoading: setSucursalLoading } = useSucursalStore();
 
-  // Cargar config del negocio al montar (una sola vez por sesión)
+  // Cargar config del negocio al montar
   useEffect(() => {
     if (!isAuthenticated) return;
     tenantConfigService.getConfig()
       .then(setConfig)
-      .catch(() => { /* silencioso — no bloquear el layout */ });
+      .catch(() => { /* silencioso */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  // Cargar sucursales al montar — solo tenants PRO tendrán datos; BÁSICO recibirá []
+  useEffect(() => {
+    if (!isAuthenticated) { clearSucursales(); return; }
+    setSucursalLoading(true);
+    sucursalService.listar()
+      .then((sucursales) => {
+        setSucursales(sucursales);
+        // Si el usuario tiene sucursal fija (VENDEDOR/GESTOR), bloquearlo a ella
+        if (user?.sucursalId) {
+          const fija = sucursales.find((s) => s.id === user.sucursalId);
+          if (fija) setSucursalActual(fija);
+        }
+      })
+      .catch(() => setSucursales([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 

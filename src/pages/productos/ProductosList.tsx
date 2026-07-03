@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { categoriaService } from '../../services/categoria.service';
@@ -35,11 +36,13 @@ import {
   Layers,
   ArrowUpAZ,
   ArrowDownAZ,
+  TrendingUp,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
+import { useSucursalStore } from '../../store/sucursalStore';
 
 
 export function ProductosList() {
@@ -47,7 +50,15 @@ export function ProductosList() {
   const hasViewPermission = canView('PRODUCTOS');
   const { user } = useAuthStore();
   const { config: negocioConfig } = useTenantConfigStore();
-  const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const [searchParams] = useSearchParams();
+  const tipoParam = searchParams.get('tipo'); // 'SERVICIO' | 'PRODUCTO' | null
+  const esRopa       = negocioConfig?.rubro === 'TIENDA_ROPA';
+  const esFarmacia   = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
+  // Para dealer: ?tipo=PRODUCTO fuerza modo productos; ?tipo=SERVICIO o sin param => modo servicios
+  const esServicios  = tipoParam === 'SERVICIO' || (negocioConfig?.rubro === 'EMPRESA_SERVICIOS' && tipoParam !== 'PRODUCTO');
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
@@ -150,12 +161,14 @@ export function ProductosList() {
     tenantId: user?.tenantId ?? '',
     unidadMedidaId: 0,
     esGenerico: false,
+    tipo: 'PRODUCTO',
     unidadesPorCaja: undefined,
     talla: undefined,
     color: undefined,
   });
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     if (hasViewPermission) {
       fetchData();
     } else if (canCreate('PRODUCTOS')) {
@@ -165,7 +178,7 @@ export function ProductosList() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasViewPermission]);
+  }, [sucursalLoaded, hasViewPermission, sucursalId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -215,7 +228,7 @@ export function ProductosList() {
     try {
       setLoading(true);
 
-      const productosData = await productoService.getAll();
+      const productosData = await productoService.getAll(sucursalId);
       setProductos(productosData);
 
       setLoadingUnidades(true);
@@ -340,6 +353,7 @@ export function ProductosList() {
       imagenUrl: producto.imagenUrl,
       componentes: producto.componentes,
       esGenerico: producto.esGenerico ?? false,
+      tipo: producto.tipo ?? 'PRODUCTO',
       unidadesPorCaja: producto.unidadesPorCaja,
       talla: producto.talla,
       color: producto.color,
@@ -374,6 +388,7 @@ export function ProductosList() {
       tenantId: user?.tenantId ?? '',
       unidadMedidaId: unidadesMedida.length > 0 ? unidadesMedida[0].id : 0,
       esGenerico: false,
+      tipo: tipoParam === 'PRODUCTO' ? 'PRODUCTO' : (esServicios ? 'SERVICIO' : 'PRODUCTO'),
       unidadesPorCaja: undefined,
       talla: undefined,
       color: undefined,
@@ -394,7 +409,7 @@ export function ProductosList() {
     setVarianteForm({ productoId: producto.id!, talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '', activo: true });
     try {
       setLoadingVariantes(true);
-      const vars = await productoVarianteService.getByProducto(producto.id!);
+      const vars = await productoVarianteService.getByProducto(producto.id!, sucursalId);
       setProductoVariantes(vars);
     } catch { toast.error('Error al cargar variantes'); }
     finally { setLoadingVariantes(false); }
@@ -416,7 +431,7 @@ export function ProductosList() {
         await productoVarianteService.create(dto);
         toast.success('Variante agregada');
       }
-      const vars = await productoVarianteService.getByProducto(selectedProductoVariantes.id!);
+      const vars = await productoVarianteService.getByProducto(selectedProductoVariantes.id!, sucursalId);
       setProductoVariantes(vars);
       setEditingVarianteId(null);
       setVarianteForm({ productoId: selectedProductoVariantes.id!, talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '', activo: true });
@@ -436,7 +451,7 @@ export function ProductosList() {
     try {
       await productoVarianteService.delete(id);
       toast.success('Variante eliminada');
-      const vars = await productoVarianteService.getByProducto(selectedProductoVariantes.id!);
+      const vars = await productoVarianteService.getByProducto(selectedProductoVariantes.id!, sucursalId);
       setProductoVariantes(vars);
       await fetchData();
     } catch { toast.error('Error al eliminar variante'); }
@@ -481,6 +496,12 @@ export function ProductosList() {
   // Filtrado por búsqueda
   const filteredProductos = productos
     .filter((p) => {
+      // Filtrar por tipo si viene en URL
+      if (tipoParam === 'SERVICIO') return p.tipo === 'SERVICIO';
+      if (tipoParam === 'PRODUCTO') return p.tipo === 'PRODUCTO' || !p.tipo;
+      return true;
+    })
+    .filter((p) => {
       const q = searchTerm.toLowerCase();
       return (
         p.nombre.toLowerCase().includes(q) ||
@@ -499,22 +520,37 @@ export function ProductosList() {
   const endIndex = startIndex + itemsPerPage;
   const currentProductos = filteredProductos.slice(startIndex, endIndex);
 
-  const totalProductos = productos.length;
-  const productosConStockBajo = productos.filter((p) => (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)).length;
+  // Lista base para stats: filtrada por tipo si hay URL param
+  const productosPorTipo = tipoParam === 'SERVICIO'
+    ? productos.filter((p) => p.tipo === 'SERVICIO')
+    : tipoParam === 'PRODUCTO'
+    ? productos.filter((p) => p.tipo === 'PRODUCTO' || !p.tipo)
+    : productos;
 
-  // ✅ Valor inventario: usa costoUnitario (valorización real)
-  const valorTotalInventario = productos.reduce((sum, p) => {
+  const totalProductos = productosPorTipo.length;
+  const productosConStockBajo = productosPorTipo.filter((p) => (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)).length;
+
+  // Stats para rubro EMPRESA_SERVICIOS
+  const categoriasUnicas = new Set(productosPorTipo.map((p) => p.categoriaNombre).filter(Boolean)).size;
+  const precioPromedio   = totalProductos > 0
+    ? productosPorTipo.reduce((s, p) => s + (p.precioVenta ?? 0), 0) / totalProductos
+    : 0;
+  const precioMaximo     = totalProductos > 0
+    ? Math.max(...productosPorTipo.map((p) => p.precioVenta ?? 0))
+    : 0;
+
+  // Valor inventario: usa costoUnitario (valorización real)
+  const valorTotalInventario = productosPorTipo.reduce((sum, p) => {
     const stock = p.stockActual ?? 0;
     const costo = p.costoUnitario ?? 0;
     return sum + stock * costo;
   }, 0);
 
-  // ✅ NUEVO card (en vez de “Productos sin stock”):
   // Productos con precio inválido (precio <= costo) => pérdida o margen cero
-  const productosConPrecioRiesgoso = productos.filter((p) => {
+  const productosConPrecioRiesgoso = productosPorTipo.filter((p) => {
     const costo = p.costoUnitario ?? 0;
     const precio = p.precioVenta ?? 0;
-    if (costo <= 0) return false; // sin costo no podemos evaluar riesgo
+    if (costo <= 0) return false;
     return precio <= costo;
   }).length;
 
@@ -527,13 +563,17 @@ export function ProductosList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Productos</h1>
-          <p className="text-muted-foreground">Gestiona tu inventario de productos</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {esServicios ? 'Catálogo de Servicios' : 'Productos'}
+          </h1>
+          <p className="text-muted-foreground">
+            {esServicios ? 'Gestiona tus servicios y planes' : 'Gestiona tu inventario de productos'}
+          </p>
         </div>
         {canCreate('PRODUCTOS') && (
           <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
-            Nuevo Producto
+            {esServicios ? 'Nuevo Servicio' : 'Nuevo Producto'}
           </Button>
         )}
       </div>
@@ -548,62 +588,123 @@ export function ProductosList() {
         <>
           {/* Stats */}
           <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-            <Card className="relative overflow-hidden border-0 shadow-sm">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Productos</p>
-                <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                  <Package className="text-blue-600 dark:text-blue-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-3xl font-bold tracking-tight">{totalProductos}</div>
-                <p className="text-xs text-muted-foreground mt-1">En inventario activo</p>
-              </CardContent>
-            </Card>
+            {esServicios ? (
+              <>
+                <Card className="relative overflow-hidden border-0 shadow-sm">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Servicios</p>
+                    <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                      <Package className="text-blue-600 dark:text-blue-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight">{totalProductos}</div>
+                    <p className="text-xs text-muted-foreground mt-1">En catálogo activo</p>
+                  </CardContent>
+                </Card>
 
-            <Card className="relative overflow-hidden border-0 shadow-sm">
-              <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stock Bajo</p>
-                <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                  <AlertTriangle className="text-amber-600 dark:text-amber-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-3xl font-bold tracking-tight">{productosConStockBajo}</div>
-                <p className="text-xs text-muted-foreground mt-1">Requieren atención</p>
-              </CardContent>
-            </Card>
+                <Card className="relative overflow-hidden border-0 shadow-sm">
+                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Categorías</p>
+                    <div className="h-9 w-9 rounded-xl bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                      <Tag className="text-violet-600 dark:text-violet-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight">{categoriasUnicas}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Tipos de servicio</p>
+                  </CardContent>
+                </Card>
 
-            <Card className="relative overflow-hidden border-0 shadow-sm">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor Inventario</p>
-                <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                  <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-3xl font-bold tracking-tight">S/.{valorTotalInventario.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground mt-1">Valorizado al costo</p>
-              </CardContent>
-            </Card>
+                <Card className="relative overflow-hidden border-0 shadow-sm">
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Precio Promedio</p>
+                    <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                      <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight">S/.{precioPromedio.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Promedio del catálogo</p>
+                  </CardContent>
+                </Card>
 
-            {/* ✅ Card nuevo: Riesgo de precios */}
-            <Card className="relative overflow-hidden border-0 shadow-sm">
-              <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Precios en riesgo</p>
-                <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                  <Timer className="text-red-600 dark:text-red-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">{productosConPrecioRiesgoso}</div>
-                <p className="text-xs text-muted-foreground mt-1">Precio ≤ costo</p>
-              </CardContent>
-            </Card>
+                <Card className="relative overflow-hidden border-0 shadow-sm">
+                  <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Precio Máximo</p>
+                    <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                      <TrendingUp className="text-amber-600 dark:text-amber-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight">S/.{precioMaximo.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Servicio más caro</p>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <>
+                <Card className="relative overflow-hidden border-0 shadow-sm">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Productos</p>
+                    <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                      <Package className="text-blue-600 dark:text-blue-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight">{totalProductos}</div>
+                    <p className="text-xs text-muted-foreground mt-1">En inventario activo</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="relative overflow-hidden border-0 shadow-sm">
+                  <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stock Bajo</p>
+                    <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                      <AlertTriangle className="text-amber-600 dark:text-amber-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight">{productosConStockBajo}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Requieren atención</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="relative overflow-hidden border-0 shadow-sm">
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor Inventario</p>
+                    <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                      <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight">S/.{valorTotalInventario.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Valorizado al costo</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="relative overflow-hidden border-0 shadow-sm">
+                  <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Precios en riesgo</p>
+                    <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                      <Timer className="text-red-600 dark:text-red-400" size={18} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">{productosConPrecioRiesgoso}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Precio ≤ costo</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
 
           {/* Búsqueda */}
@@ -628,12 +729,12 @@ export function ProductosList() {
           {/* Table */}
           <Card className="border-0 shadow-sm">
             <CardHeader>
-              <CardTitle>Lista de Productos</CardTitle>
-              <CardDescription>{filteredProductos.length} producto(s) encontrado(s)</CardDescription>
+              <CardTitle>{esServicios ? 'Catálogo de Servicios' : 'Lista de Productos'}</CardTitle>
+              <CardDescription>{filteredProductos.length} {esServicios ? 'servicio(s)' : 'producto(s)'} encontrado(s)</CardDescription>
             </CardHeader>
             <CardContent>
               {filteredProductos.length === 0 ? (
-                <EmptyState icon={Package} title="Todavía no hay productos" description="Agrega productos con precio, stock y categoría para empezar a vender y controlar tu inventario en tiempo real." />
+                <EmptyState icon={Package} title={esServicios ? 'Todavía no hay servicios' : 'Todavía no hay productos'} description={esServicios ? 'Agrega los servicios que ofreces (activación SIM, planes, portabilidad) para poder facturarlos.' : 'Agrega productos con precio, stock y categoría para empezar a vender y controlar tu inventario en tiempo real.'} />
               ) : (
                 <>
                   <div className="overflow-x-auto rounded-lg border">
@@ -645,15 +746,15 @@ export function ProductosList() {
                               onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
                               className="flex items-center gap-1 font-semibold uppercase tracking-wider text-xs hover:text-primary transition-colors"
                             >
-                              Producto
+                              {esServicios ? 'Servicio' : 'Producto'}
                               {sortOrder === 'asc' ? <ArrowUpAZ className="h-3.5 w-3.5" /> : <ArrowDownAZ className="h-3.5 w-3.5" />}
                             </button>
                           </TableHead>
-                          <TableHead>Código</TableHead>
+                          {!esServicios && <TableHead>Código</TableHead>}
                           <TableHead>Categoría</TableHead>
-                          <TableHead>Unidad</TableHead>
-                          <TableHead>Stock</TableHead>
-                          <TableHead>Costo Unitario</TableHead>
+                          {!esServicios && <TableHead>Unidad</TableHead>}
+                          {!esServicios && <TableHead>Stock</TableHead>}
+                          {!esServicios && <TableHead>Costo Unitario</TableHead>}
                           <TableHead>Precio</TableHead>
                           <TableHead>Estado</TableHead>
                           <TableHead className="text-right">Acciones</TableHead>
@@ -671,29 +772,33 @@ export function ProductosList() {
                               <TableCell>
                                 <p className="font-medium">{producto.nombre}</p>
                               </TableCell>
-                              <TableCell className="font-mono text-sm">{producto.codigoBarras}</TableCell>
+                              {!esServicios && <TableCell className="font-mono text-sm">{producto.codigoBarras}</TableCell>}
                               <TableCell>
                                 <Badge variant="outline">
                                   {producto.categoriaNombre || '-'}
                                 </Badge>
                               </TableCell>
-                              <TableCell>
-                                <span className="text-sm text-muted-foreground">{unidadLabel}</span>
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant={
-                                    (producto.stockActual ?? 0) <= (producto.stockMinimo ?? 0)
-                                      ? 'destructive'
-                                      : (producto.stockActual ?? 0) <= (producto.stockMinimo ?? 0) * 1.5
-                                        ? 'warning'
-                                        : 'success'
-                                  }
-                                >
-                                  {producto.stockActual ?? 0}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-semibold">S/.{producto.costoUnitario.toFixed(2)}</TableCell>
+                              {!esServicios && (
+                                <TableCell>
+                                  <span className="text-sm text-muted-foreground">{unidadLabel}</span>
+                                </TableCell>
+                              )}
+                              {!esServicios && (
+                                <TableCell>
+                                  <Badge
+                                    variant={
+                                      (producto.stockActual ?? 0) <= (producto.stockMinimo ?? 0)
+                                        ? 'destructive'
+                                        : (producto.stockActual ?? 0) <= (producto.stockMinimo ?? 0) * 1.5
+                                          ? 'warning'
+                                          : 'success'
+                                    }
+                                  >
+                                    {producto.stockActual ?? 0}
+                                  </Badge>
+                                </TableCell>
+                              )}
+                              {!esServicios && <TableCell className="font-semibold">S/.{producto.costoUnitario.toFixed(2)}</TableCell>}
                               <TableCell className="font-semibold">S/.{producto.precioVenta.toFixed(2)}</TableCell>
                               <TableCell>
                                 <Badge variant={producto.activo ? 'success' : 'secondary'}>
@@ -759,8 +864,8 @@ export function ProductosList() {
       <Dialog
         isOpen={isDialogOpen}
         onClose={resetForm}
-        title={editingId ? 'Editar Producto' : 'Nuevo Producto'}
-        description={editingId ? 'Actualiza la información del producto' : 'Agrega un nuevo producto al inventario'}
+        title={editingId ? (esServicios ? 'Editar Servicio' : 'Editar Producto') : (esServicios ? 'Nuevo Servicio' : 'Nuevo Producto')}
+        description={editingId ? 'Actualiza la información' : (esServicios ? 'Agrega un nuevo servicio al catálogo' : 'Agrega un nuevo producto al inventario')}
         size="xl"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -824,6 +929,7 @@ export function ProductosList() {
                 </div>
               </div>
 
+              {!esServicios && (
               <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Código de Barras <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
@@ -838,6 +944,7 @@ export function ProductosList() {
                   />
                 </div>
               </div>
+              )}
 
               {/* ── Categoría: select + botón crear ── */}
               <div className="space-y-2">
@@ -908,7 +1015,30 @@ export function ProductosList() {
                 )}
               </div>
 
-              {/* ── Unidad de medida: select + botón crear ── */}
+              {/* ── Precio de venta inline — solo en modo servicios ── */}
+              {esServicios && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Precio <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={formData.precioVenta === 0 ? '' : formData.precioVenta}
+                      onChange={(e) => setFormData({ ...formData, precioVenta: parseFloat(e.target.value || '0') })}
+                      placeholder="0.00"
+                      className="pl-10 h-11"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ── Unidad de medida: select + botón crear (oculto en servicios) ── */}
+              {!esServicios && (
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium">
                   Unidad de Medida <span className="text-red-500">*</span>
@@ -976,10 +1106,14 @@ export function ProductosList() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           </div>
 
-          {/* Sección: Inventario */}
+          {/* En modo servicios el tipo siempre es SERVICIO — sin mostrar toggle */}
+
+          {/* Sección: Inventario — oculto para servicios */}
+          {(formData.tipo !== 'SERVICIO') && (
           <div className="rounded-lg border bg-muted/30 p-4">
             <div className="mb-3">
               <p className="text-sm font-semibold">Parámetros de inventario</p>
@@ -1034,8 +1168,10 @@ export function ProductosList() {
               </div>
             </div>
           </div>
+          )}
 
-          {/* Sección: Precios */}
+          {/* Sección: Precios — oculto en servicios porque está inline en Identificación */}
+          {!esServicios && (
           <div className="rounded-lg border bg-muted/30 p-4">
             <div className="mb-3">
               <p className="text-sm font-semibold">Precio de venta</p>
@@ -1061,6 +1197,7 @@ export function ProductosList() {
               </div>
             </div>
           </div>
+          )}
 
           {/* Sección: Variantes de ropa — solo TIENDA_ROPA */}
           {esRopa && (
@@ -1126,8 +1263,8 @@ export function ProductosList() {
             </div>
           )}
 
-          {/* Sección: Clasificación — solo farmacia/general (oculto para ropa) */}
-          {!esRopa && (
+          {/* Sección: Clasificación — solo farmacia/botica */}
+          {esFarmacia && (
             <div className="rounded-lg border bg-muted/30 p-4">
               <div className="mb-3">
                 <p className="text-sm font-semibold">Clasificación</p>
@@ -1160,8 +1297,8 @@ export function ProductosList() {
             </div>
           )}
 
-          {/* Sección: Composición — solo farmacia/general */}
-          {!esRopa && (
+          {/* Sección: Composición — solo farmacia/botica */}
+          {esFarmacia && (
             <div className="rounded-lg border bg-muted/30 p-4">
               <div className="mb-3">
                 <p className="text-sm font-semibold">Composición / Contenido</p>

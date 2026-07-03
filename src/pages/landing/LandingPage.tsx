@@ -335,21 +335,22 @@ export function LandingPage() {
         <div className="landing-container">
           <div className="landing-section-header">
             <span className="landing-section-label">Precio</span>
-            <h2 className="landing-section-title">Un solo plan, todo incluido</h2>
+            <h2 className="landing-section-title">Planes simples, sin sorpresas</h2>
             <p className="landing-section-subtitle">
-              Sin versión recortada. Sin sorpresas. Todo lo que necesita tu negocio desde el primer día.
+              14 días de prueba gratuita en cualquier plan. Sin tarjeta hasta que decidas quedarte.
             </p>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <div className="landing-pricing-card featured" style={{ maxWidth: '480px', width: '100%' }}>
-              <div className="landing-pricing-badge">✅ Todo incluido</div>
+          <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'stretch' }}>
+
+            {/* Plan Básico */}
+            <div className="landing-pricing-card" style={{ maxWidth: '440px', width: '100%' }}>
               <div className="landing-pricing-plan">Plan Básico</div>
               <div className="landing-pricing-price">
                 <span>S/</span>89<sub>/mes</sub>
               </div>
               <p className="landing-pricing-description">
-                14 días de prueba gratuita. Sin tarjeta hasta que decidas quedarte. Cancela cuando quieras.
+                Todo lo que necesitas para gestionar tu negocio desde el primer día.
               </p>
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
@@ -358,25 +359,49 @@ export function LandingPage() {
                 <li><span className="check">✓</span> Control de lotes y fechas de vencimiento</li>
                 <li><span className="check">✓</span> Órdenes de compra y recepciones a proveedores</li>
                 <li><span className="check">✓</span> Devoluciones y notas de crédito aplicables en POS</li>
-                <li><span className="check">✓</span> <strong>Facturación electrónica integrada</strong> — boletas y facturas a SUNAT sin configuraciones adicionales</li>
-                <li><span className="check">✓</span> CDR oficial, descarga de XML y PDF por comprobante</li>
+                <li><span className="check">✓</span> <strong>Facturación electrónica</strong> — boletas y facturas a SUNAT</li>
+                <li><span className="check">✓</span> CDR oficial, descarga de XML y PDF</li>
                 <li><span className="check">✓</span> Reportes históricos sin límite de fecha</li>
                 <li><span className="check">✓</span> Exportación a Excel y PDF</li>
                 <li><span className="check">✓</span> Roles con permisos configurables por usuario</li>
                 <li><span className="check">✓</span> Hasta 10 usuarios</li>
                 <li><span className="check">✓</span> Soporte por WhatsApp en español</li>
               </ul>
-              <Link to="/plan" className="landing-pricing-cta primary">
-                Contratar Plan Básico — S/ 89/mes
-              </Link>
-              <Link to="/register?plan=BASICO" className="landing-pricing-cta" style={{ marginTop: '10px', background: 'transparent', border: '1px solid currentColor', opacity: 0.75 }}>
+              <Link to="/register?plan=BASICO" className="landing-pricing-cta primary">
                 Probar 14 días gratis
               </Link>
             </div>
+
+            {/* Plan Pro */}
+            <div className="landing-pricing-card featured" style={{ maxWidth: '440px', width: '100%' }}>
+              <div className="landing-pricing-badge">⭐ Más popular</div>
+              <div className="landing-pricing-plan">Plan Pro</div>
+              <div className="landing-pricing-price">
+                <span>S/</span>169<sub>/mes</sub>
+              </div>
+              <p className="landing-pricing-description">
+                Todo el Plan Básico más gestión multilocal para negocios con varias sucursales.
+              </p>
+              <div className="landing-pricing-divider" />
+              <ul className="landing-pricing-features">
+                <li><span className="check">✓</span> <strong>Todo lo del Plan Básico</strong></li>
+                <li><span className="check">✓</span> <strong>Hasta 5 sucursales</strong> — cada una completamente independiente</li>
+                <li><span className="check">✓</span> Stock, caja y POS por sucursal</li>
+                <li><span className="check">✓</span> Ventas y reportes filtrados por local</li>
+                <li><span className="check">✓</span> Movimientos de inventario entre locales</li>
+                <li><span className="check">✓</span> Usuarios y permisos por sucursal</li>
+                <li><span className="check">✓</span> Usuarios ilimitados</li>
+                <li><span className="check">✓</span> Soporte prioritario por WhatsApp</li>
+              </ul>
+              <Link to="/register?plan=PRO" className="landing-pricing-cta primary">
+                Probar 14 días gratis
+              </Link>
+            </div>
+
           </div>
 
           <p className="landing-pricing-note">
-            ¿Más de 10 usuarios o necesidades especiales?{' '}
+            ¿Necesidades especiales o volumen mayor?{' '}
             <a href="mailto:contacto@fluxus.pe">Contáctanos</a> para un plan a medida.
           </p>
         </div>

@@ -48,13 +48,14 @@ export function CheckoutCulqiPage() {
   const scriptLoaded = useRef(false);
   const resolveToken = useRef<((tokenId: string) => void) | null>(null);
 
-  // Leer planId de query param (ej: /checkout/culqi?plan=BASICO)
-  const planParam = searchParams.get('plan') ?? 'BASICO';
+  // Leer planId y modo de query params
+  const planParam   = searchParams.get('plan') ?? 'BASICO';
+  const isUpgrade   = searchParams.get('mode') === 'upgrade';
 
   // 1. Cargar configuración del backend ─────────────────────────────────────
   useEffect(() => {
     culqiService
-      .getConfig()
+      .getConfig(planParam)
       .then(setConfig)
       .catch(() => setConfigError('No se pudo cargar la configuración de pago. Intenta nuevamente.'))
       .finally(() => setLoadingConfig(false));
@@ -132,8 +133,9 @@ export function CheckoutCulqiPage() {
     setProcessing(true);
 
     try {
-      const response = await culqiService.suscribir(tokenId, planParam);
-      // Actualizar el estado de suscripción en el store global
+      const response = isUpgrade
+        ? await culqiService.upgradePro(tokenId)
+        : await culqiService.suscribir(tokenId, planParam);
       setSuscripcionEstado(response.estado as 'ACTIVA' | 'CANCELADA' | 'TRIAL' | 'EXPIRADA' | 'SIN_SUSCRIPCION');
       setSuccess(true);
     } catch (err: unknown) {
@@ -184,9 +186,13 @@ export function CheckoutCulqiPage() {
                 <CheckCircle2 className="h-10 w-10 text-emerald-600" />
               </div>
             </div>
-            <CardTitle className="text-xl">¡Suscripción activada!</CardTitle>
+            <CardTitle className="text-xl">
+              {isUpgrade ? '¡Upgrade a Pro exitoso!' : '¡Suscripción activada!'}
+            </CardTitle>
             <CardDescription>
-              Tu plan {config.nombrePlan} está activo. Ahora tienes acceso completo a Fluxus.
+              {isUpgrade
+                ? 'Tu plan Pro está activo. Ya puedes gestionar hasta 5 sucursales desde el menú lateral.'
+                : `Tu plan ${config.nombrePlan} está activo. Ahora tienes acceso completo a Fluxus.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -194,8 +200,8 @@ export function CheckoutCulqiPage() {
               Tu tarjeta será cobrada automáticamente cada mes por{' '}
               <strong>S/ {Number(config.precioMensual).toFixed(2)}</strong>.
             </div>
-            <Button className="w-full" onClick={() => navigate('/dashboard', { replace: true })}>
-              Ir al dashboard
+            <Button className="w-full" onClick={() => navigate('/dashboard/sucursales', { replace: true })}>
+              {isUpgrade ? 'Ir a Sucursales' : 'Ir al dashboard'}
             </Button>
           </CardContent>
         </Card>
@@ -225,7 +231,9 @@ export function CheckoutCulqiPage() {
               <Badge variant="secondary">{config.nombrePlan}</Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              Todo incluido: POS, inventario, compras, facturación, roles y reportes sin límite.
+              {planParam === 'PRO'
+                ? 'Todo lo del plan Básico + gestión de hasta 5 sucursales, stock por local y reportes consolidados.'
+                : 'Todo incluido: POS, inventario, compras, facturación, roles y reportes sin límite.'}
             </p>
             <div className="flex items-end justify-between border-t pt-3">
               <span className="text-sm text-muted-foreground">Cobro mensual recurrente</span>

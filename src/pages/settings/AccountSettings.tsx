@@ -232,8 +232,8 @@ export function AccountSettings() {
                           <label className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground"><Building2 size={13} />Tipo de negocio (rubro)</label>
                           <select
                             value={form.rubro ?? 'OTRO'}
-                            onChange={(e) => setForm(p => ({ ...p, rubro: e.target.value }))}
-                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm h-10"
+                            disabled
+                            className="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm h-10 cursor-not-allowed opacity-60"
                           >
                             <option value="BOTICA">Botica</option>
                             <option value="FARMACIA">Farmacia</option>
@@ -242,18 +242,12 @@ export function AccountSettings() {
                             <option value="RESTAURANTE">Restaurante</option>
                             <option value="TIENDA_ROPA">Tienda de Ropa</option>
                             <option value="TIENDA">Tienda / Bodega</option>
+                            <option value="EMPRESA_SERVICIOS">Empresa de Servicios / Dealer</option>
                             <option value="OTRO">Otro</option>
                           </select>
-                          {(form.rubro === 'BOTICA' || form.rubro === 'FARMACIA') && (
-                            <p className="text-xs text-blue-600 dark:text-blue-400">
-                              En recepciones se requerirá lote, fecha de vencimiento y registro sanitario.
-                            </p>
-                          )}
-                          {form.rubro === 'TIENDA_ROPA' && (
-                            <p className="text-xs text-violet-600 dark:text-violet-400">
-                              Los productos mostrarán campos de talla y color.
-                            </p>
-                          )}
+                          <p className="text-xs text-muted-foreground">
+                            El rubro se define al crear la cuenta. Contacta a soporte para cambiarlo.
+                          </p>
                         </div>
                       </div>
 

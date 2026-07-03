@@ -8,9 +8,11 @@ export interface CorregirCierreDTO {
 }
 
 export const cajaService = {
-  getActiva: async (): Promise<CajaDTO | null> => {
+  getActiva: async (sucursalId?: number): Promise<CajaDTO | null> => {
     try {
-      const { data } = await axiosInstance.get<CajaDTO>(API_ENDPOINTS.CAJAS.ACTIVA);
+      const { data } = await axiosInstance.get<CajaDTO>(API_ENDPOINTS.CAJAS.ACTIVA, {
+        params: sucursalId ? { sucursalId } : undefined,
+      });
       return data;
     } catch (err: any) {
       if (err?.response?.status === 404) return null;
@@ -18,8 +20,10 @@ export const cajaService = {
     }
   },
 
-  getAll: async (): Promise<CajaDTO[]> => {
-    const { data } = await axiosInstance.get<CajaDTO[]>(API_ENDPOINTS.CAJAS.LIST);
+  getAll: async (sucursalId?: number): Promise<CajaDTO[]> => {
+    const { data } = await axiosInstance.get<CajaDTO[]>(API_ENDPOINTS.CAJAS.LIST, {
+      params: sucursalId ? { sucursalId } : undefined,
+    });
     return data;
   },
 

@@ -53,6 +53,8 @@ import { POSPage } from './pages/pos/POSPage';
 import { CajaPage } from './pages/caja/CajaPage';
 import { NotasCreditoPage } from './pages/notasCredito/NotasCreditoPage';
 import { GastosList } from './pages/gastos/GastosList';
+import { SucursalesPage } from './pages/sucursales/SucursalesPage';
+import { ComisionesPage } from './pages/comisiones/ComisionesPage';
 const CertificadosPage = lazy(() => import('./pages/certificados/CertificadosPage').then(m => ({ default: m.CertificadosPage })));
 
 function App() {
@@ -333,6 +335,30 @@ function App() {
                 </SubscripcionGuard>
               }
             />
+            {/* Comisiones — rubro EMPRESA_SERVICIOS */}
+            <Route
+              path="comisiones"
+              element={
+                <SubscripcionGuard>
+                  <RoleProtectedRoute allowedRoles={['ADMIN']} anyPermission={['VER_COMISIONES']}>
+                    <ComisionesPage />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
+              }
+            />
+
+            {/* Sucursales — solo ADMIN plan PRO */}
+            <Route
+              path="sucursales"
+              element={
+                <SubscripcionGuard>
+                  <RoleProtectedRoute allowedRoles={['ADMIN']}>
+                    <SucursalesPage />
+                  </RoleProtectedRoute>
+                </SubscripcionGuard>
+              }
+            />
+
             {/* Certificados */}
             <Route
               path="certificados"

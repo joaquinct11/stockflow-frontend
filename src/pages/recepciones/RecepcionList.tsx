@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useSucursalStore } from '../../store/sucursalStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 type Option = { id: number | string; label: string; subtitle?: string };
@@ -116,6 +117,9 @@ function Stepper({ items, comprobante }: { items: RecepcionItemDTO[]; comprobant
 
 export function RecepcionList() {
   const { canCreate, canView, canEdit, puede } = usePermissions();
+  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const isMultiLocal = sucursales.length > 1;
+  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
   const rubro = useTenantConfigStore((s) => s.config?.rubro ?? 'OTRO');
   const esFarmacia = rubro === 'BOTICA' || rubro === 'FARMACIA';
 
@@ -200,11 +204,12 @@ export function RecepcionList() {
   });
 
   useEffect(() => {
+    if (!sucursalLoaded) return;
     if (hasViewPermission) fetchData();
     else if (canCreateRecep) fetchFormData();
     else setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasViewPermission]);
+  }, [sucursalLoaded, hasViewPermission, sucursalId]);
 
   useEffect(() => { setCurrentPage(1); }, [searchTerm, estadoFilter, fechaDesde, fechaHasta]);
 
@@ -228,13 +233,13 @@ export function RecepcionList() {
     setLoading(true);
     try {
       const [recDataRaw, prodData] = await Promise.all([
-        recepcionService.getAll(),
+        recepcionService.getAll(sucursalId),
         productoService.getAll().catch(() => []),
       ]);
       setRecepciones((recDataRaw as any[]).map(normalizeRecepcion));
       setProductos(prodData);
       if (puede('VER_OC') || puede('CREAR_RECEPCION')) {
-        const ocData = await ordenCompraService.getAll().catch(() => []);
+        const ocData = await ordenCompraService.getAll(sucursalId).catch(() => []);
         setOcs(ocData);
       }
       if (puede('VER_PROVEEDORES') || puede('CREAR_RECEPCION')) {

@@ -3,9 +3,10 @@ import { API_ENDPOINTS } from '../api/endpoints';
 import type { NotaCreditoDTO, ValidarNotaCreditoResponseDTO } from '../types';
 
 export const notaCreditoService = {
-  getAll: async (): Promise<NotaCreditoDTO[]> => {
+  getAll: async (sucursalId?: number): Promise<NotaCreditoDTO[]> => {
     const { data } = await axiosInstance.get<NotaCreditoDTO[]>(
-      API_ENDPOINTS.NOTAS_CREDITO.LIST
+      API_ENDPOINTS.NOTAS_CREDITO.LIST,
+      { params: sucursalId ? { sucursalId } : undefined }
     );
     return data;
   },
