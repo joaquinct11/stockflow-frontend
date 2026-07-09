@@ -785,17 +785,37 @@ export function ProductosList() {
                               )}
                               {!esServicios && (
                                 <TableCell>
-                                  <Badge
-                                    variant={
-                                      (producto.stockActual ?? 0) <= (producto.stockMinimo ?? 0)
-                                        ? 'destructive'
-                                        : (producto.stockActual ?? 0) <= (producto.stockMinimo ?? 0) * 1.5
-                                          ? 'warning'
-                                          : 'success'
-                                    }
-                                  >
-                                    {producto.stockActual ?? 0}
-                                  </Badge>
+                                  {esFarmacia && producto.stockVigente != null ? (
+                                    <div className="flex flex-col gap-0.5">
+                                      <Badge
+                                        variant={
+                                          producto.stockVigente <= (producto.stockMinimo ?? 0)
+                                            ? 'destructive'
+                                            : producto.stockVigente <= (producto.stockMinimo ?? 0) * 1.5
+                                              ? 'warning'
+                                              : 'success'
+                                        }
+                                        title="Stock vigente (no vencido)"
+                                      >
+                                        {producto.stockVigente}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground" title="Stock físico total">
+                                        Físico: {producto.stockActual ?? 0}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <Badge
+                                      variant={
+                                        (producto.stockActual ?? 0) <= (producto.stockMinimo ?? 0)
+                                          ? 'destructive'
+                                          : (producto.stockActual ?? 0) <= (producto.stockMinimo ?? 0) * 1.5
+                                            ? 'warning'
+                                            : 'success'
+                                      }
+                                    >
+                                      {producto.stockActual ?? 0}
+                                    </Badge>
+                                  )}
                                 </TableCell>
                               )}
                               {!esServicios && <TableCell className="font-semibold">S/.{producto.costoUnitario.toFixed(2)}</TableCell>}

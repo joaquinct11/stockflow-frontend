@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productoService } from '../../services/producto.service';
+import { sucursalService } from '../../services/sucursal.service';
 import { ventaService } from '../../services/venta.service';
 import { cajaService } from '../../services/caja.service';
 import { notaCreditoService } from '../../services/notaCredito.service';
@@ -53,11 +54,20 @@ export function POSPage() {
   const location = useLocation();
   const { user } = useAuthStore();
   const { config: negocio } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const { sucursalActual, sucursales, loaded: sucursalLoaded, setSucursales } = useSucursalStore();
   const isMultiLocal = sucursales.length > 1;
   const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
   const esRopa = negocio?.rubro === 'TIENDA_ROPA';
   const esFarmacia = negocio?.rubro === 'BOTICA' || negocio?.rubro === 'FARMACIA';
+
+  // El POS está fuera del AppLayout — si se carga directo vía F5, las sucursales
+  // no están cargadas todavía. Las cargamos aquí para que el guard de productos pase.
+  useEffect(() => {
+    if (sucursalLoaded) return;
+    sucursalService.listar()
+      .then(setSucursales)
+      .catch(() => setSucursales([]));
+  }, [sucursalLoaded, setSucursales]);
 
   // ── Lotes por producto (solo farmacia) ───────────────────────────────────
   const [proximoVencimientoMap, setProximoVencimientoMap] = useState<Map<number, LoteVencimientoDTO>>(new Map());
@@ -74,6 +84,7 @@ export function POSPage() {
   const [ultimaVentaId, setUltimaVentaId] = useState<number | null>(null);
   const [ultimaVenta, setUltimaVenta] = useState<VentaDTO | null>(null);
   const [todosProductos, setTodosProductos] = useState<ProductoDTO[]>([]);
+  const [cargandoProductos, setCargandoProductos] = useState(true);
 
   // ── Selector de variantes ──────────────────────────────────────────────────
   const [variantePickerOpen, setVariantePickerOpen] = useState(false);
@@ -134,7 +145,21 @@ export function POSPage() {
   // ── Cargar todos los productos al montar ──────────────────────────────────
   useEffect(() => {
     if (!sucursalLoaded) return;
-    productoService.getAll(sucursalId).then(setTodosProductos).catch(() => {});
+    let cancelado = false;
+    const cargar = () => {
+      productoService.getAll(sucursalId)
+        .then(productos => {
+          if (!cancelado) {
+            setTodosProductos(productos);
+            setCargandoProductos(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelado) setTimeout(cargar, 2000);
+        });
+    };
+    cargar();
+    return () => { cancelado = true; };
   }, [sucursalLoaded, sucursalId]);
 
   useEffect(() => {
@@ -165,6 +190,9 @@ export function POSPage() {
     }).catch(() => {});
   }, [esFarmacia]);
 
+  // Retorna el stock disponible: usa stockVigente (sin vencidos) si existe, si no stockActual
+  const getStockDisponible = (p: ProductoDTO) => p.stockVigente ?? p.stockActual ?? 0;
+
   // ── Precargar carrito desde venta anulada (via navigate state) ────────────
   useEffect(() => {
     const ventaOrigen = location.state?.cargarVenta;
@@ -181,7 +209,7 @@ export function POSPage() {
         noEncontrados.push(detalle.productoNombre || `#${detalle.productoId}`);
         continue;
       }
-      if ((producto.stockActual ?? 0) <= 0) {
+      if (getStockDisponible(producto) <= 0) {
         sinStock.push(producto.nombre);
         continue;
       }
@@ -359,7 +387,7 @@ export function POSPage() {
     const limite = new Date(hoy); limite.setDate(limite.getDate() + 90);
 
     return todosProductos
-      .filter(p => p.activo !== false && (p.stockActual ?? 0) > 0)
+      .filter(p => p.activo !== false && getStockDisponible(p) > 0)
       .filter(p => !soloGenerico || p.esGenerico === true)
       .sort((a, b) => {
         const fvA = a.proximaFechaVencimiento ? new Date(a.proximaFechaVencimiento + 'T00:00:00') : null;
@@ -475,8 +503,8 @@ export function POSPage() {
       finally { setLoadingVariantes(false); }
     }
 
-    if ((producto.stockActual ?? 0) <= 0) {
-      toast.error(`Sin stock: ${producto.nombre}`);
+    if (getStockDisponible(producto) <= 0) {
+      toast.error(`Sin stock disponible: ${producto.nombre}`);
       return;
     }
     agregarItemAlCarrito(producto, undefined, undefined, switchToCart);
@@ -495,8 +523,8 @@ export function POSPage() {
         const newCart = [...prev];
         const item = newCart[idx];
         const stockMax = varianteId
-          ? (variantesDisponibles.find(v => v.id === varianteId)?.stockActual ?? producto.stockActual ?? 0)
-          : (producto.stockActual ?? 0);
+          ? (variantesDisponibles.find(v => v.id === varianteId)?.stockActual ?? getStockDisponible(producto))
+          : getStockDisponible(producto);
         if (item.cantidad >= stockMax) {
           toast.error(`Stock máximo disponible: ${stockMax}`);
           return prev;
@@ -734,7 +762,14 @@ export function POSPage() {
       setTodosProductos(prev => prev.map(p => {
         const item = cart.find(i => i.producto.id === p.id);
         if (!item) return p;
-        return { ...p, stockActual: Math.max(0, (p.stockActual ?? 0) - item.cantidad) };
+        const vendido = item.cantidad;
+        return {
+          ...p,
+          stockActual: Math.max(0, (p.stockActual ?? 0) - vendido),
+          stockVigente: p.stockVigente != null
+            ? Math.max(0, p.stockVigente - vendido)
+            : undefined,
+        };
       }));
 
       // Emitir comprobante si se eligió boleta o factura
@@ -1411,7 +1446,7 @@ export function POSPage() {
                             return (
                               <>
                                 {lote?.lote && <span className="mr-2">Lote: {lote.lote}</span>}
-                                Stock: <span className={p.stockActual! <= 0 ? 'text-red-400' : 'text-gray-400'}>{p.stockActual}</span>
+                                Stock: <span className={getStockDisponible(p) <= 0 ? 'text-red-400' : 'text-gray-400'}>{getStockDisponible(p)}</span>
                                 {lote && (
                                   <span className={`ml-2 ${colorFecha}`}>
                                     · {vencido ? '⚠ Vencido' : `Vence ${lote.fechaVencimiento}`}
@@ -1422,7 +1457,7 @@ export function POSPage() {
                           })() : (
                             <>
                               {p.codigoBarras && <span className="mr-2">{p.codigoBarras}</span>}
-                              Stock: <span className={p.stockActual! <= 0 ? 'text-red-400' : 'text-gray-400'}>{p.stockActual}</span>
+                              Stock: <span className={getStockDisponible(p) <= 0 ? 'text-red-400' : 'text-gray-400'}>{getStockDisponible(p)}</span>
                               {p.unidadesPorCaja && <span className="ml-2 text-gray-600">· {p.unidadesPorCaja} u/caja</span>}
                             </>
                           )}
@@ -1442,13 +1477,20 @@ export function POSPage() {
             )}
             {/* Grid rápido */}
             {resultados.length === 0 && query === '' && productosDisponibles.length === 0 && (
-              <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
-                <div className="h-16 w-16 rounded-2xl bg-gray-800 flex items-center justify-center mb-1">
-                  <span className="text-3xl">📦</span>
+              cargandoProductos ? (
+                <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+                  <p className="text-gray-500 text-sm">Cargando productos...</p>
                 </div>
-                <p className="text-gray-300 font-medium">Sin productos con stock</p>
-                <p className="text-gray-500 text-sm max-w-xs">Ve a <strong>Inventario → Productos</strong> para agregar productos y asignarles stock antes de usar el POS.</p>
-              </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
+                  <div className="h-16 w-16 rounded-2xl bg-gray-800 flex items-center justify-center mb-1">
+                    <span className="text-3xl">📦</span>
+                  </div>
+                  <p className="text-gray-300 font-medium">Sin productos con stock</p>
+                  <p className="text-gray-500 text-sm max-w-xs">Ve a <strong>Inventario → Productos</strong> para agregar productos y asignarles stock antes de usar el POS.</p>
+                </div>
+              )
             )}
             {resultados.length === 0 && query === '' && productosDisponibles.length > 0 && (
               <div className="flex-1 overflow-y-auto p-3">
@@ -1486,7 +1528,7 @@ export function POSPage() {
                         <div className="p-2.5">
                           <p className="text-xs font-medium leading-snug line-clamp-2 mb-1">{p.nombre}</p>
                           <p className="text-sm font-bold text-primary">{fmt(p.precioVenta ?? 0)}</p>
-                          <p className="text-[10px] text-gray-600 mt-0.5">Stock: {p.stockActual}</p>
+                          <p className="text-[10px] text-gray-600 mt-0.5">Stock: {getStockDisponible(p)}</p>
                           {porVencer && (
                             <p className={`text-[9px] font-semibold mt-0.5 ${critico ? 'text-red-400' : 'text-amber-400'}`}>
                               Vence {fv!.toLocaleDateString('es-PE', { day:'2-digit', month:'short' })}
@@ -1549,7 +1591,7 @@ export function POSPage() {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button onClick={() => cambiarCantidad(cartItemKey(item), -1)} className="w-6 h-6 rounded-md bg-gray-800 hover:bg-red-500/20 hover:text-red-400 border border-gray-700 hover:border-red-500/40 flex items-center justify-center transition-colors"><Minus size={11} /></button>
                       <span className="w-6 text-center text-sm font-bold text-white">{item.cantidad}</span>
-                      <button onClick={() => cambiarCantidad(cartItemKey(item), 1)} disabled={item.cantidad >= (item.producto.stockActual ?? 0)} className="w-6 h-6 rounded-md bg-gray-800 hover:bg-primary/20 hover:text-primary border border-gray-700 hover:border-primary/40 disabled:opacity-30 flex items-center justify-center transition-colors"><Plus size={11} /></button>
+                      <button onClick={() => cambiarCantidad(cartItemKey(item), 1)} disabled={item.cantidad >= getStockDisponible(item.producto)} className="w-6 h-6 rounded-md bg-gray-800 hover:bg-primary/20 hover:text-primary border border-gray-700 hover:border-primary/40 disabled:opacity-30 flex items-center justify-center transition-colors"><Plus size={11} /></button>
                     </div>
                     <div className="text-right min-w-[52px] flex-shrink-0">
                       <p className="text-xs font-bold">{fmt(item.cantidad * item.precioUnitario)}</p>
@@ -1660,7 +1702,7 @@ export function POSPage() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{p.nombre}</p>
                             <p className="text-xs text-gray-500">
-                              Stock: <span className={p.stockActual! <= 0 ? 'text-red-400' : 'text-gray-400'}>{p.stockActual}</span>
+                              Stock: <span className={getStockDisponible(p) <= 0 ? 'text-red-400' : 'text-gray-400'}>{getStockDisponible(p)}</span>
                             </p>
                             {p.componentes && (
                               <p className="text-[10px] text-gray-600 truncate" title={p.componentes}>
@@ -1682,7 +1724,7 @@ export function POSPage() {
                   <div className="flex-1 overflow-y-auto p-3">
                     <p className="text-xs text-gray-600 uppercase tracking-wider mb-2 px-1">Toca para agregar</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {todosProductos.filter(p => p.activo !== false && (p.stockActual ?? 0) > 0).slice(0, 16).map(p => (
+                      {todosProductos.filter(p => p.activo !== false && getStockDisponible(p) > 0).slice(0, 16).map(p => (
                         <button key={p.id}
                           onClick={() => agregarAlCarrito(p)}
                           className="flex flex-col rounded-xl bg-gray-900 active:bg-gray-700 border border-gray-800 text-left transition-all overflow-hidden"
@@ -1698,7 +1740,7 @@ export function POSPage() {
                           <div className="p-2.5">
                             <p className="text-xs font-medium leading-snug line-clamp-2 mb-1">{p.nombre}</p>
                             <p className="text-base font-bold text-primary">{fmt(p.precioVenta ?? 0)}</p>
-                            <p className="text-[10px] text-gray-600 mt-0.5">Stock: {p.stockActual}</p>
+                            <p className="text-[10px] text-gray-600 mt-0.5">Stock: {getStockDisponible(p)}</p>
                           </div>
                         </button>
                       ))}
@@ -1774,7 +1816,7 @@ export function POSPage() {
                           </button>
                           <span className="w-7 text-center text-sm font-bold">{item.cantidad}</span>
                           <button onClick={() => cambiarCantidad(cartItemKey(item), 1)}
-                            disabled={item.cantidad >= (item.producto.stockActual ?? 0)}
+                            disabled={item.cantidad >= getStockDisponible(item.producto)}
                             className="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-30 flex items-center justify-center">
                             <Plus size={13} />
                           </button>
