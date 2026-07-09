@@ -87,6 +87,11 @@ export function InventarioList() {
   // Lotes
   const [lotes, setLotes] = useState<LoteVencimientoDTO[]>([]);
   const [lotesLoading, setLotesLoading] = useState(false);
+
+  // Lotes del producto seleccionado para ajuste (solo farmacia)
+  const [lotesDelProducto, setLotesDelProducto] = useState<LoteVencimientoDTO[]>([]);
+  const [loadingLotesProducto, setLoadingLotesProducto] = useState(false);
+  const [ajusteLoteMovimientoId, setAjusteLoteMovimientoId] = useState<number | null>(null);
   const [lotesFiltro, setLotesFiltro] = useState<'todos' | 'vencidos' | 'proximos30' | 'proximos90'>('todos');
   const [lotesSearch, setLotesSearch] = useState('');
 
@@ -284,6 +289,12 @@ export function InventarioList() {
       return;
     }
 
+    // Para FARMACIA con ajuste de stock: si el producto tiene lotes, requerir selección de lote
+    if (esFarmacia && formData.tipo === 'AJUSTE' && tipoAjuste === 'STOCK' && lotesDelProducto.length > 0 && !ajusteLoteMovimientoId) {
+      toast.error('Selecciona el lote al que aplica el ajuste');
+      return;
+    }
+
     // Resolver tipo real para AJUSTE según sub-tipo seleccionado
     const tipoReal = (formData.tipo === 'AJUSTE' && tipoAjuste === 'PRECIO')
       ? 'AJUSTE_PRECIO'
@@ -304,6 +315,8 @@ export function InventarioList() {
             costoUnitario: (formData.tipo === 'AJUSTE') ? formData.costoUnitario : undefined,
             precioVenta:   (formData.tipo === 'AJUSTE') ? formData.precioVenta   : undefined,
             sucursalId,
+            ajusteLoteMovimientoId: (formData.tipo === 'AJUSTE' && tipoAjuste === 'STOCK' && ajusteLoteMovimientoId)
+              ? ajusteLoteMovimientoId : undefined,
           };
 
     try {
@@ -337,6 +350,8 @@ export function InventarioList() {
     setSelectedProveedorMov(null);
     setVariantesProducto([]);
     setSelectedVarianteId(null);
+    setLotesDelProducto([]);
+    setAjusteLoteMovimientoId(null);
     setIsDialogOpen(false);
   };
 
@@ -743,6 +758,7 @@ export function InventarioList() {
                             <TableHead>Fecha venc.</TableHead>
                             {esFarmacia && <TableHead>Reg. Sanitario</TableHead>}
                             <TableHead className="text-center">Cant. recibida</TableHead>
+                            <TableHead className="text-center">Stock actual</TableHead>
                             <TableHead className="text-center">Días restantes</TableHead>
                             <TableHead className="text-center">Estado</TableHead>
                           </TableRow>
@@ -800,6 +816,15 @@ export function InventarioList() {
                                   {l.cantidad}
                                 </TableCell>
                                 <TableCell className="text-center text-sm font-semibold">
+                                  <span className={
+                                    l.stockActual === 0 ? 'text-red-500' :
+                                    (l.stockActual ?? 0) <= 5 ? 'text-amber-600' :
+                                    'text-emerald-600'
+                                  }>
+                                    {l.stockActual ?? '—'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-center text-sm font-semibold">
                                   <span className={vencido ? 'text-red-600' : critico ? 'text-red-500' : proximo90 ? 'text-amber-600' : 'text-emerald-600'}>
                                     {vencido ? `Hace ${Math.abs(dias)} días` : `${dias} días`}
                                   </span>
@@ -850,6 +875,8 @@ export function InventarioList() {
                   onChange={async (option) => {
                     setVariantesProducto([]);
                     setSelectedVarianteId(null);
+                    setLotesDelProducto([]);
+                    setAjusteLoteMovimientoId(null);
                     if (option) {
                       const producto = productos.find((p) => p.id === option.id);
                       if (producto) {
@@ -862,6 +889,15 @@ export function InventarioList() {
                             setVariantesProducto(vars.filter(v => v.activo !== false));
                           } catch { /* sin variantes */ }
                           finally { setLoadingVariantes(false); }
+                        }
+                        // Si es farmacia y el producto tiene lotes, cargarlos para el selector de ajuste
+                        if (esFarmacia && producto.stockVigente != null) {
+                          setLoadingLotesProducto(true);
+                          try {
+                            const lotesData = await movimientoService.getLotesPorProducto(producto.id!);
+                            setLotesDelProducto(lotesData.filter(l => l.diasRestantes != null && (l.stockActual ?? 0) > 0));
+                          } catch { /* sin lotes */ }
+                          finally { setLoadingLotesProducto(false); }
                         }
                       }
                     } else {
@@ -1110,6 +1146,41 @@ export function InventarioList() {
               {/* Sub-tipo de AJUSTE — todos los campos van dentro del bloque */}
               {formData.tipo === 'AJUSTE' && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4 space-y-4">
+                  {/* Selector de lote — solo farmacia con lotes registrados y subtipo Stock */}
+                  {esFarmacia && tipoAjuste === 'STOCK' && (loadingLotesProducto || lotesDelProducto.length > 0) && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        Lote a ajustar <span className="text-red-500">*</span>
+                      </label>
+                      {loadingLotesProducto ? (
+                        <p className="text-xs text-muted-foreground">Cargando lotes...</p>
+                      ) : (
+                        <select
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={ajusteLoteMovimientoId ?? ''}
+                          onChange={(e) => setAjusteLoteMovimientoId(e.target.value ? Number(e.target.value) : null)}
+                        >
+                          <option value="">— Selecciona el lote —</option>
+                          {lotesDelProducto.map((l) => (
+                            <option key={l.movimientoId} value={l.movimientoId}>
+                              {l.lote ?? 'Sin código'} | Vence: {l.fechaVencimiento}
+                              {l.diasRestantes < 0 ? ' ⚠️ VENCIDO' : ` (${l.diasRestantes}d)`}
+                              {' | Stock actual: '}{l.stockActual ?? 0}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {ajusteLoteMovimientoId && (() => {
+                        const lote = lotesDelProducto.find(l => l.movimientoId === ajusteLoteMovimientoId);
+                        return lote ? (
+                          <p className="text-xs text-muted-foreground">
+                            Stock actual del lote: <strong>{lote.stockActual ?? 0}</strong> unidades.
+                          </p>
+                        ) : null;
+                      })()}
+                    </div>
+                  )}
+
                   <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider">Tipo de ajuste</p>
                   <div className="grid grid-cols-3 gap-2">
                     {([
@@ -1160,9 +1231,12 @@ export function InventarioList() {
 
                   {tipoAjuste === 'STOCK' && (
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Cantidad <span className="text-red-500">*</span></label>
+                      <label className="text-sm font-medium">
+                        {ajusteLoteMovimientoId ? 'Nueva cantidad del lote' : 'Cantidad'}
+                        <span className="text-red-500"> *</span>
+                      </label>
                       <Input
-                        type="number" min="1"
+                        type="number" min="0"
                         value={formData.cantidad === 0 ? '' : formData.cantidad}
                         onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
                         placeholder="0"
@@ -1357,7 +1431,7 @@ export function InventarioList() {
 
                     if (esEntrada) stockAcumulado += m.cantidad;
                     else if (esSalida) stockAcumulado -= m.cantidad;
-                    else if (esAjuste) stockAcumulado += m.cantidad;
+                    else if (esAjuste) stockAcumulado = m.cantidad;
 
                     const costoUnitario = m.costoUnitario ?? 0;
                     const costoTotal = costoUnitario > 0 ? costoUnitario * m.cantidad : undefined;

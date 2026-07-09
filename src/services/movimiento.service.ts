@@ -10,6 +10,7 @@ export interface LoteVencimientoDTO {
   lote?: string;
   fechaVencimiento: string; // yyyy-MM-dd
   cantidad: number;
+  stockActual?: number;
   diasRestantes: number; // negativo = ya vencido
   registroSanitario?: string;
 }
@@ -102,6 +103,16 @@ export const movimientoService = {
    */
   getLotes: async (): Promise<LoteVencimientoDTO[]> => {
     const { data } = await axiosInstance.get<LoteVencimientoDTO[]>(API_ENDPOINTS.MOVIMIENTOS.LOTES);
+    return data;
+  },
+
+  /**
+   * Obtener los lotes de un producto específico — para el selector de lote en ajustes.
+   */
+  getLotesPorProducto: async (productoId: number): Promise<LoteVencimientoDTO[]> => {
+    const { data } = await axiosInstance.get<LoteVencimientoDTO[]>(
+      API_ENDPOINTS.MOVIMIENTOS.LOTES_POR_PRODUCTO(productoId)
+    );
     return data;
   },
 };
