@@ -141,6 +141,9 @@ export interface ProductoDTO {
   proximaFechaVencimiento?: string;
   /** PRODUCTO (default) = tiene stock físico. SERVICIO = sin stock, no genera movimiento. */
   tipo?: string;
+  /** Stock vigente (no vencido). Solo presente si el producto tiene lotes con fechaVencimiento.
+   *  El POS debe usar este valor cuando no es undefined, en lugar de stockActual. */
+  stockVigente?: number;
 }
 
 // ========================================
@@ -364,6 +367,8 @@ export interface MovimientoInventarioDTO {
   registroSanitario?: string;
   varianteId?: number;
   sucursalId?: number;
+  /** movimientoId del lote a ajustar — solo para AJUSTE en productos con lotes */
+  ajusteLoteMovimientoId?: number;
 }
 
 /** Tipos de movimiento que se muestran en la lista principal de Movimientos Inventario */
