@@ -119,7 +119,8 @@ export function SuscripcionesList() {
         return;
       }
       setSuscripcionEstado(estado.estado);
-      const precioReal = estado.precioMensual ?? 89;
+      const pid = (estado.planId ?? '').toUpperCase();
+      const precioReal = pid.includes('PRO') ? 169 : pid.includes('BASICO') ? 89 : (estado.precioMensual ?? 89);
       setSuscripcion({
         planId: estado.planId,
         precioMensual: precioReal,
