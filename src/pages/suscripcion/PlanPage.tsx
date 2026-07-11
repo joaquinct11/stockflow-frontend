@@ -30,9 +30,9 @@ const PRECIO_BASICO_SIN_IGV = 75.42;
 const PRECIO_BASICO_IGV     = 13.58;
 const PRECIO_BASICO_TOTAL   = 89.00;
 
-const PRECIO_PRO_SIN_IGV    = 149.15;
-const PRECIO_PRO_IGV        = 26.85;
-const PRECIO_PRO_TOTAL      = 176.00;
+const PRECIO_PRO_SIN_IGV    = 143.22;
+const PRECIO_PRO_IGV        = 25.78;
+const PRECIO_PRO_TOTAL      = 169.00;
 
 export function PlanPage() {
   return (
