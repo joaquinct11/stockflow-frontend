@@ -347,7 +347,7 @@ export function SuscripcionesList() {
                       ¿Tienes más de un local?
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      El plan Pro te permite gestionar hasta <strong>5 sucursales</strong> con stock independiente por local — S/ 176/mes.
+                      El plan Pro te permite gestionar hasta <strong>5 sucursales</strong> con stock independiente por local — S/ 169/mes.
                     </p>
                   </div>
                 </div>
