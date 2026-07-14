@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { Upload, Download, CheckCircle2, XCircle, AlertCircle, FileSpreadsheet, ArrowRight, RotateCcw, Info, FlaskConical } from 'lucide-react';
+import { Upload, Download, CheckCircle2, XCircle, AlertCircle, FileSpreadsheet, ArrowRight, RotateCcw, Info, FlaskConical, Shirt } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import axiosInstance from '../../api/axios.config';
@@ -16,13 +16,21 @@ interface ProductoImportRow {
   categoria?: string;
   precioVenta: number;
   costoUnitario?: number;
+  // Básico / farmacia
   stockActual?: number;
   stockMinimo?: number;
   stockMaximo?: number;
   unidadMedida?: string;
+  // Farmacia/Botica
   lote?: string;
-  fechaVencimiento?: string;   // 'YYYY-MM-DD'
+  fechaVencimiento?: string;
   registroSanitario?: string;
+  // Tienda (variantes)
+  talla?: string;
+  color?: string;
+  skuVariante?: string;
+  stockVariante?: number;
+  stockMinimoVariante?: number;
 }
 
 interface FilaError {
@@ -44,6 +52,18 @@ interface Props {
   onClose: () => void;
   onSuccess: () => void;
   unidadesMedida?: { nombre: string }[];
+  sucursalId?: number;
+  rubro?: string;
+}
+
+// ── Helpers de rubro ──────────────────────────────────────────────────────────
+
+function esFarmaciaRubro(rubro?: string) {
+  return rubro === 'FARMACIA' || rubro === 'BOTICA';
+}
+
+function esTiendaRubro(rubro?: string) {
+  return rubro === 'TIENDA_ROPA';
 }
 
 // ── Mapeo flexible de columnas ────────────────────────────────────────────────
@@ -65,7 +85,7 @@ const COLUMN_MAP: Record<string, keyof ProductoImportRow> = {
   stock_max: 'stockMaximo', maximo: 'stockMaximo',
   unidad_medida: 'unidadMedida', unidadmedida: 'unidadMedida',
   unidad: 'unidadMedida', unit: 'unidadMedida', um: 'unidadMedida',
-  // Campos de lote
+  // Farmacia
   lote: 'lote', numero_lote: 'lote', num_lote: 'lote', nro_lote: 'lote', batch: 'lote', lot: 'lote',
   fecha_vencimiento: 'fechaVencimiento', fechavencimiento: 'fechaVencimiento',
   vencimiento: 'fechaVencimiento', vence: 'fechaVencimiento', expiry: 'fechaVencimiento',
@@ -73,10 +93,17 @@ const COLUMN_MAP: Record<string, keyof ProductoImportRow> = {
   registro_sanitario: 'registroSanitario', registrosanitario: 'registroSanitario',
   rs: 'registroSanitario', reg_san: 'registroSanitario', regsanitario: 'registroSanitario',
   reg_sanitario: 'registroSanitario',
+  // Tienda/variantes
+  talla: 'talla', size: 'talla', talle: 'talla',
+  color: 'color', colour: 'color',
+  sku_variante: 'skuVariante', skuvariante: 'skuVariante', sku_var: 'skuVariante',
+  stock_variante: 'stockVariante', stockvariante: 'stockVariante', cantidad_variante: 'stockVariante',
+  stock_min_variante: 'stockMinimoVariante', stockminvariante: 'stockMinimoVariante',
 };
 
 const STRING_FIELDS: Array<keyof ProductoImportRow> = [
-  'nombre', 'codigoBarras', 'categoria', 'unidadMedida', 'lote', 'registroSanitario',
+  'nombre', 'codigoBarras', 'categoria', 'unidadMedida',
+  'lote', 'registroSanitario', 'talla', 'color', 'skuVariante',
 ];
 
 function stripAccents(s: string): string {
@@ -94,14 +121,11 @@ function normalizeName(s: string): string {
   return stripAccents(s.toLowerCase().trim());
 }
 
-// Convierte varios formatos de fecha a 'YYYY-MM-DD'
 function parseDateValue(value: unknown): string | undefined {
   if (!value && value !== 0) return undefined;
-  // JS Date (cuando cellDates:true está activo)
   if (value instanceof Date && !isNaN(value.getTime())) {
     return value.toISOString().slice(0, 10);
   }
-  // Serial numérico de Excel
   if (typeof value === 'number') {
     try {
       const info = XLSX.SSF.parse_date_code(value);
@@ -112,9 +136,7 @@ function parseDateValue(value: unknown): string | undefined {
   }
   const s = String(value).trim();
   if (!s) return undefined;
-  // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  // DD/MM/YYYY
   if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
     const [d, m, y] = s.split('/');
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
@@ -125,7 +147,7 @@ function parseDateValue(value: unknown): string | undefined {
 function parseSheet(workbook: XLSX.WorkBook): ProductoImportRow[] {
   const sheetName = workbook.SheetNames.find(n => n !== 'Referencia') ?? workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
-  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', cellDates: true });
 
   return raw.map((row) => {
     const parsed: Partial<ProductoImportRow> = {};
@@ -148,38 +170,68 @@ function parseSheet(workbook: XLSX.WorkBook): ProductoImportRow[] {
   }).filter(r => r.nombre);
 }
 
-// ── Generar plantilla ─────────────────────────────────────────────────────────
+// ── Generar plantilla por rubro ───────────────────────────────────────────────
 
 function descargarPlantilla(
   categorias: { nombre: string }[],
   unidades: { nombre: string }[],
+  rubro?: string,
 ) {
   const wb = XLSX.utils.book_new();
-
-  const headers = [[
-    'nombre*', 'codigo_barras', 'categoria', 'precio_venta*', 'costo_unitario',
-    'stock_actual', 'stock_minimo', 'stock_maximo', 'unidad_medida',
-    'lote', 'fecha_vencimiento', 'registro_sanitario',
-  ]];
-
-  const cat1 = categorias[0]?.nombre ?? 'Medicamentos';
+  const cat1 = categorias[0]?.nombre ?? 'Categoría 1';
   const cat2 = categorias[1]?.nombre ?? cat1;
-  const um1  = unidades[0]?.nombre  ?? 'Unidad';
-  const um2  = unidades[1]?.nombre  ?? um1;
+  const um1  = unidades[0]?.nombre ?? 'Unidad';
 
-  const ejemplos = [
-    // Producto sin lote
-    ['Ibuprofeno 400mg', 'COD-001', cat1, 8.00, 5.00, 100, 20, 500, um1, '', '', ''],
-    // Mismo producto con 2 lotes distintos
-    ['Panadol 500mg', 'COD-002', cat2, 5.50, 3.20, 25, 10, 200, um1, 'LOTE-A', '2026-01-31', 'RS-12345'],
-    ['Panadol 500mg', 'COD-002', cat2, 5.50, 3.20, 25, 10, 200, um1, 'LOTE-B', '2026-06-30', 'RS-12345'],
-    // Producto sin código de barras
-    ['Vitamina C 1g',  '',        cat1, 12.00, 7.50, 60, 10, 300, um2, 'VIT-2025', '2025-12-31', ''],
-  ];
+  let headers: string[];
+  let ejemplos: (string | number)[][];
+  let sheetName: string;
 
-  const wsProductos = XLSX.utils.aoa_to_sheet([...headers, ...ejemplos]);
-  wsProductos['!cols'] = [22, 14, 16, 13, 13, 12, 12, 12, 14, 14, 18, 18].map(w => ({ wch: w }));
-  XLSX.utils.book_append_sheet(wb, wsProductos, 'Productos');
+  if (esFarmaciaRubro(rubro)) {
+    // ── Farmacia / Botica ──────────────────────────────────────────
+    headers = [
+      'nombre*', 'codigo_barras', 'categoria', 'precio_venta*', 'costo_unitario',
+      'stock_actual', 'stock_minimo', 'stock_maximo', 'unidad_medida',
+      'lote', 'fecha_vencimiento', 'registro_sanitario',
+    ];
+    ejemplos = [
+      ['Ibuprofeno 400mg', 'COD-001', cat1, 8.00, 5.00, 100, 20, 500, um1, '', '', ''],
+      ['Panadol 500mg', 'COD-002', cat2, 5.50, 3.20, 25, 10, 200, um1, 'LOTE-A', '2026-01-31', 'RS-12345'],
+      ['Panadol 500mg', 'COD-002', cat2, 5.50, 3.20, 25, 10, 200, um1, 'LOTE-B', '2026-06-30', 'RS-12345'],
+      ['Vitamina C 1g', '', cat1, 12.00, 7.50, 60, 10, 300, um1, 'VIT-2025', '2025-12-31', ''],
+    ];
+    sheetName = 'Productos';
+  } else if (esTiendaRubro(rubro)) {
+    // ── Tienda (variantes) ─────────────────────────────────────────
+    headers = [
+      'nombre*', 'codigo_barras', 'categoria', 'precio_venta*', 'costo_unitario',
+      'unidad_medida', 'talla', 'color', 'sku_variante', 'stock_variante', 'stock_min_variante',
+    ];
+    ejemplos = [
+      ['Polo básico blanco', 'POL-001', cat1, 35.00, 18.00, um1, 'S', 'Blanco', 'POL-001-S-BLA', 10, 3],
+      ['Polo básico blanco', 'POL-001', cat1, 35.00, 18.00, um1, 'M', 'Blanco', 'POL-001-M-BLA', 15, 3],
+      ['Polo básico blanco', 'POL-001', cat1, 35.00, 18.00, um1, 'L', 'Blanco', 'POL-001-L-BLA', 8,  3],
+      ['Jean slim negro',    'JEA-002', cat2, 89.90, 45.00, um1, '30', 'Negro', 'JEA-002-30-NEG', 5, 2],
+      ['Jean slim negro',    'JEA-002', cat2, 89.90, 45.00, um1, '32', 'Negro', 'JEA-002-32-NEG', 7, 2],
+    ];
+    sheetName = 'Productos';
+  } else {
+    // ── Básico (minimarket, ferretería, etc.) ──────────────────────
+    headers = [
+      'nombre*', 'codigo_barras', 'categoria', 'precio_venta*', 'costo_unitario',
+      'stock_actual', 'stock_minimo', 'stock_maximo', 'unidad_medida',
+    ];
+    ejemplos = [
+      ['Coca-Cola 500ml', 'COD-001', cat1, 2.50, 1.50, 100, 20, 500, um1],
+      ['Detergente Ariel 1kg', 'COD-002', cat2, 12.00, 7.00, 50, 10, 200, um1],
+      ['Aceite Primor 1L', '', cat1, 8.50, 5.00, 80, 15, 300, um1],
+    ];
+    sheetName = 'Productos';
+  }
+
+  const wsProductos = XLSX.utils.aoa_to_sheet([[...headers], ...ejemplos]);
+  const colWidths = headers.map(h => ({ wch: Math.max(h.length + 2, 14) }));
+  wsProductos['!cols'] = colWidths;
+  XLSX.utils.book_append_sheet(wb, wsProductos, sheetName);
 
   // Hoja de referencia
   const maxLen = Math.max(categorias.length, unidades.length, 1);
@@ -201,7 +253,7 @@ function descargarPlantilla(
 
 type Step = 'upload' | 'preview' | 'result';
 
-export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMedida = [] }: Props) {
+export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMedida = [], sucursalId, rubro }: Props) {
   const [step, setStep]           = useState<Step>('upload');
   const [rows, setRows]           = useState<ProductoImportRow[]>([]);
   const [fileName, setFileName]   = useState('');
@@ -210,6 +262,9 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
   const [dragOver, setDragOver]   = useState(false);
   const [categorias, setCategorias] = useState<{ nombre: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const esFarmacia = esFarmaciaRubro(rubro);
+  const esTienda   = esTiendaRubro(rubro);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -255,7 +310,6 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
     reader.onload = (e) => {
       try {
         const data = e.target?.result;
-        // cellDates:true hace que las fechas de Excel vengan como Date objects
         const wb = XLSX.read(data, { type: 'binary', cellDates: true });
         const parsed = parseSheet(wb);
         if (parsed.length === 0) {
@@ -287,7 +341,10 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
   const ejecutarImportacion = async () => {
     setImporting(true);
     try {
-      const { data } = await axiosInstance.post<ImportResult>(API_ENDPOINTS.PRODUCTOS.IMPORTAR, rows);
+      const url = sucursalId
+        ? `${API_ENDPOINTS.PRODUCTOS.IMPORTAR}?sucursalId=${sucursalId}`
+        : API_ENDPOINTS.PRODUCTOS.IMPORTAR;
+      const { data } = await axiosInstance.post<ImportResult>(url, rows);
       setResult(data);
       setStep('result');
     } catch {
@@ -298,12 +355,24 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
   };
 
   // Contadores para el preview
+  const productosUnicos = new Set(rows.map(r => r.codigoBarras || r.nombre)).size;
+  const esMultiFila     = rows.length > productosUnicos;
+  // Filas con datos de lote (farmacia)
+  const filasConLote    = rows.filter(r => r.lote || r.fechaVencimiento).length;
+  // Filas con variante (tienda)
+  const filasConVariante = rows.filter(r => r.talla || r.color || r.skuVariante).length;
+  const filasSinPrecio  = rows.filter(r => !r.precioVenta || r.precioVenta <= 0).length;
   const unidadesInvalidas = rows.filter(r => r.unidadMedida && unidadStatus(r.unidadMedida) === 'error').length;
   const categoriasNuevas  = rows.filter(r => r.categoria && categoriaStatus(r.categoria) === 'nuevo').length;
-  const filasSinPrecio    = rows.filter(r => !r.precioVenta || r.precioVenta <= 0).length;
-  const productosUnicos   = new Set(rows.map(r => r.codigoBarras || r.nombre)).size;
-  const filasConLote      = rows.filter(r => r.lote || r.fechaVencimiento).length;
-  const esMultiLote       = rows.length > productosUnicos;
+
+  // Icono y etiqueta del modo activo
+  const ModoIcon = esFarmacia ? FlaskConical : esTienda ? Shirt : FileSpreadsheet;
+  const modoLabel = esFarmacia ? 'Farmacia / Botica' : esTienda ? 'Tienda' : 'General';
+  const modoCls   = esFarmacia
+    ? 'text-purple-600 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800'
+    : esTienda
+    ? 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800'
+    : 'text-muted-foreground bg-muted/30 border-border';
 
   return (
     <Dialog isOpen={isOpen} onClose={handleClose} title="Importar productos" size="xl">
@@ -327,6 +396,11 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
               </div>
             );
           })}
+          {/* Modo activo */}
+          <div className={`ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${modoCls}`}>
+            <ModoIcon size={12} />
+            {modoLabel}
+          </div>
         </div>
 
         {/* ── PASO 1: Upload ── */}
@@ -350,18 +424,21 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
             <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
               <FileSpreadsheet size={20} className="text-green-600 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Descarga la plantilla con tus datos</p>
+                <p className="text-sm font-medium">Descarga la plantilla para tu rubro</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Incluye ejemplos de multi-lote y una hoja <strong>Referencia</strong> con las categorías y unidades de tu sistema.
+                  {esFarmacia && 'Incluye columnas de lote, fecha de vencimiento y registro sanitario.'}
+                  {esTienda && 'Incluye columnas de talla, color y SKU de variante. Sin stock general ni lotes.'}
+                  {!esFarmacia && !esTienda && 'Incluye los campos básicos de producto y stock.'}
+                  {' '}La hoja <strong>Referencia</strong> lista tus categorías y unidades.
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => descargarPlantilla(categorias, unidadesMedida)} className="shrink-0">
+              <Button variant="outline" size="sm" onClick={() => descargarPlantilla(categorias, unidadesMedida, rubro)} className="shrink-0">
                 <Download size={14} className="mr-1.5" />
                 Plantilla
               </Button>
             </div>
 
-            {/* Info columnas */}
+            {/* Info columnas según rubro */}
             <div className="rounded-lg border p-4 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Columnas reconocidas
@@ -372,21 +449,40 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                 <div><span className="font-medium text-red-500">precio_venta*</span> — Precio de venta</div>
                 <div><span className="font-medium">costo_unitario</span> — Costo de compra</div>
                 <div><span className="font-medium">categoria</span> — Nombre exacto de la categoría</div>
-                <div><span className="font-medium">unidad_medida</span> — Nombre exacto de la unidad</div>
-                <div><span className="font-medium">stock_actual</span> — Cantidad de este lote</div>
-                <div><span className="font-medium">stock_minimo / stock_maximo</span></div>
-                <div><span className="font-medium text-purple-600">lote</span> — Número de lote</div>
-                <div><span className="font-medium text-purple-600">fecha_vencimiento</span> — YYYY-MM-DD o DD/MM/YYYY</div>
-                <div><span className="font-medium text-purple-600">registro_sanitario</span> — RS del lote</div>
+                {!esTienda && <div><span className="font-medium">unidad_medida</span> — Nombre exacto de la unidad</div>}
+                {!esTienda && <div><span className="font-medium">stock_actual</span> — Cantidad inicial</div>}
+                {!esTienda && <div><span className="font-medium">stock_minimo / stock_maximo</span></div>}
+                {esFarmacia && <>
+                  <div><span className="font-medium text-purple-600">lote</span> — Número de lote</div>
+                  <div><span className="font-medium text-purple-600">fecha_vencimiento</span> — YYYY-MM-DD o DD/MM/YYYY</div>
+                  <div><span className="font-medium text-purple-600">registro_sanitario</span> — RS del lote</div>
+                </>}
+                {esTienda && <>
+                  <div><span className="font-medium text-blue-600">talla</span> — Talla/tamaño (S, M, L, 30, 32…)</div>
+                  <div><span className="font-medium text-blue-600">color</span> — Color de la variante</div>
+                  <div><span className="font-medium text-blue-600">sku_variante</span> — SKU único por variante</div>
+                  <div><span className="font-medium text-blue-600">stock_variante</span> — Cantidad de esta variante</div>
+                  <div><span className="font-medium text-blue-600">stock_min_variante</span> — Stock mínimo por variante</div>
+                </>}
               </div>
 
-              {/* Tip multi-lote */}
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
-                <FlaskConical size={14} className="text-purple-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-purple-800 dark:text-purple-200">
-                  <strong>Multi-lote:</strong> Para un mismo producto con varios lotes, agrega una fila por lote con el mismo nombre/código. El stock se sumará automáticamente y cada lote quedará con su trazabilidad independiente.
-                </p>
-              </div>
+              {/* Tips por rubro */}
+              {esFarmacia && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
+                  <FlaskConical size={14} className="text-purple-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-purple-800 dark:text-purple-200">
+                    <strong>Multi-lote:</strong> Para un mismo producto con varios lotes, agrega una fila por lote con el mismo nombre/código. El stock se sumará y cada lote tendrá su trazabilidad independiente.
+                  </p>
+                </div>
+              )}
+              {esTienda && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                  <Shirt size={14} className="text-blue-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-blue-800 dark:text-blue-200">
+                    <strong>Multi-variante:</strong> Para un mismo producto con varias tallas/colores, agrega una fila por variante con el mismo nombre/código. El stock total se calculará automáticamente.
+                  </p>
+                </div>
+              )}
 
               <p className="text-xs text-muted-foreground">
                 💡 Si el <strong>codigo_barras</strong> ya existe, el producto se <strong>actualiza</strong>. Si no, se <strong>crea nuevo</strong>.
@@ -405,7 +501,7 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                   </div>
                 </div>
               )}
-              {unidadesMedida.length > 0 && (
+              {!esTienda && unidadesMedida.length > 0 && (
                 <div className="pt-2 border-t space-y-1">
                   <p className="text-xs font-medium flex items-center gap-1.5">
                     <Info size={12} className="text-primary" />
@@ -433,14 +529,23 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                 <p className="font-medium">{fileName}</p>
                 <p className="text-sm text-muted-foreground">
                   {rows.length} fila(s)
-                  {esMultiLote && (
-                    <span className="ml-1.5 inline-flex items-center gap-1 text-purple-600 font-medium">
-                      <FlaskConical size={12} />
-                      {productosUnicos} productos únicos — {rows.length - productosUnicos} fila(s) multi-lote
+                  {esMultiFila && esTienda && (
+                    <span className="ml-1.5 inline-flex items-center gap-1 text-blue-600 font-medium">
+                      <Shirt size={12} />
+                      {productosUnicos} productos únicos — {rows.length - productosUnicos} variante(s) adicional(es)
                     </span>
                   )}
-                  {!esMultiLote && filasConLote > 0 && (
+                  {esMultiFila && esFarmacia && (
+                    <span className="ml-1.5 inline-flex items-center gap-1 text-purple-600 font-medium">
+                      <FlaskConical size={12} />
+                      {productosUnicos} productos únicos — {rows.length - productosUnicos} lote(s) adicional(es)
+                    </span>
+                  )}
+                  {!esMultiFila && filasConLote > 0 && (
                     <span className="ml-1.5 text-purple-600 font-medium">· {filasConLote} con lote/vencimiento</span>
+                  )}
+                  {!esMultiFila && filasConVariante > 0 && (
+                    <span className="ml-1.5 text-blue-600 font-medium">· {filasConVariante} con variante</span>
                   )}
                 </p>
               </div>
@@ -452,7 +557,7 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
             {/* Tabla preview */}
             <div className="border rounded-lg overflow-hidden">
               <div className="max-h-72 overflow-y-auto overflow-x-auto">
-                <table className="w-full text-xs min-w-[900px]">
+                <table className="w-full text-xs min-w-[800px]">
                   <thead className="bg-muted sticky top-0">
                     <tr>
                       <th className="px-3 py-2 text-left font-medium">#</th>
@@ -461,10 +566,18 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                       <th className="px-3 py-2 text-left font-medium">Categoría</th>
                       <th className="px-3 py-2 text-right font-medium">P. Venta</th>
                       <th className="px-3 py-2 text-right font-medium">Costo</th>
-                      <th className="px-3 py-2 text-right font-medium">Stock</th>
-                      <th className="px-3 py-2 text-left font-medium">Unidad</th>
-                      <th className="px-3 py-2 text-left font-medium text-purple-600">Lote</th>
-                      <th className="px-3 py-2 text-left font-medium text-purple-600">Vencimiento</th>
+                      {esTienda ? <>
+                        <th className="px-3 py-2 text-left font-medium text-blue-600">Talla</th>
+                        <th className="px-3 py-2 text-left font-medium text-blue-600">Color</th>
+                        <th className="px-3 py-2 text-right font-medium text-blue-600">Stock var.</th>
+                      </> : <>
+                        <th className="px-3 py-2 text-right font-medium">Stock</th>
+                        <th className="px-3 py-2 text-left font-medium">Unidad</th>
+                        {esFarmacia && <>
+                          <th className="px-3 py-2 text-left font-medium text-purple-600">Lote</th>
+                          <th className="px-3 py-2 text-left font-medium text-purple-600">Vencimiento</th>
+                        </>}
+                      </>}
                     </tr>
                   </thead>
                   <tbody>
@@ -472,14 +585,21 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                       const errorFila = !row.nombre || !row.precioVenta || row.precioVenta <= 0;
                       const catSt = categoriaStatus(row.categoria);
                       const uniSt = unidadStatus(row.unidadMedida);
-                      // Detectar si es fila multi-lote (mismo código/nombre que una fila anterior)
                       const clave = row.codigoBarras || row.nombre;
-                      const esLoteAdicional = rows.slice(0, i).some(r => (r.codigoBarras || r.nombre) === clave);
+                      const esFilaAdicional = rows.slice(0, i).some(r => (r.codigoBarras || r.nombre) === clave);
+                      const rowCls = errorFila
+                        ? 'bg-red-50 dark:bg-red-950/20'
+                        : esFilaAdicional
+                          ? esTienda
+                            ? 'bg-blue-50/40 dark:bg-blue-950/10'
+                            : 'bg-purple-50/40 dark:bg-purple-950/10'
+                          : 'hover:bg-muted/30';
                       return (
-                        <tr key={i} className={`border-t ${errorFila ? 'bg-red-50 dark:bg-red-950/20' : esLoteAdicional ? 'bg-purple-50/40 dark:bg-purple-950/10' : 'hover:bg-muted/30'}`}>
+                        <tr key={i} className={`border-t ${rowCls}`}>
                           <td className="px-3 py-2 text-muted-foreground">
                             {i + 1}
-                            {esLoteAdicional && <FlaskConical size={10} className="inline ml-1 text-purple-500" />}
+                            {esFilaAdicional && esTienda   && <Shirt size={10} className="inline ml-1 text-blue-500" />}
+                            {esFilaAdicional && esFarmacia && <FlaskConical size={10} className="inline ml-1 text-purple-500" />}
                           </td>
                           <td className={`px-3 py-2 font-medium ${errorFila ? 'text-red-600' : ''}`}>
                             {row.nombre || <span className="italic text-red-500">vacío</span>}
@@ -487,8 +607,9 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                           <td className="px-3 py-2 text-muted-foreground font-mono">{row.codigoBarras || '—'}</td>
                           <td className="px-3 py-2">
                             {!row.categoria ? <span className="text-muted-foreground">—</span>
-                              : catSt === 'ok' ? <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400"><CheckCircle2 size={11} />{row.categoria}</span>
-                              : <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400" title="Se creará"><AlertCircle size={11} />{row.categoria}</span>}
+                              : catSt === 'ok'
+                                ? <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400"><CheckCircle2 size={11} />{row.categoria}</span>
+                                : <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400" title="Se creará"><AlertCircle size={11} />{row.categoria}</span>}
                           </td>
                           <td className={`px-3 py-2 text-right ${!row.precioVenta || row.precioVenta <= 0 ? 'text-red-500' : ''}`}>
                             {row.precioVenta ? `S/ ${Number(row.precioVenta).toFixed(2)}` : <span className="text-red-500">—</span>}
@@ -496,18 +617,27 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                           <td className="px-3 py-2 text-right text-muted-foreground">
                             {row.costoUnitario ? `S/ ${Number(row.costoUnitario).toFixed(2)}` : '—'}
                           </td>
-                          <td className="px-3 py-2 text-right font-medium">{row.stockActual ?? 0}</td>
-                          <td className="px-3 py-2">
-                            {!row.unidadMedida ? <span className="text-muted-foreground">—</span>
-                              : uniSt === 'ok' ? <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400"><CheckCircle2 size={11} />{row.unidadMedida}</span>
-                              : <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400" title="No existe"><XCircle size={11} />{row.unidadMedida}</span>}
-                          </td>
-                          <td className="px-3 py-2 text-purple-700 dark:text-purple-300 font-mono text-[11px]">
-                            {row.lote || '—'}
-                          </td>
-                          <td className="px-3 py-2 text-purple-700 dark:text-purple-300 text-[11px]">
-                            {row.fechaVencimiento || '—'}
-                          </td>
+                          {esTienda ? <>
+                            <td className="px-3 py-2 text-blue-700 dark:text-blue-300 font-medium">{row.talla || '—'}</td>
+                            <td className="px-3 py-2 text-blue-700 dark:text-blue-300">{row.color || '—'}</td>
+                            <td className="px-3 py-2 text-right font-medium">{row.stockVariante ?? 0}</td>
+                          </> : <>
+                            <td className="px-3 py-2 text-right font-medium">{row.stockActual ?? 0}</td>
+                            <td className="px-3 py-2">
+                              {!row.unidadMedida ? <span className="text-muted-foreground">—</span>
+                                : uniSt === 'ok'
+                                  ? <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400"><CheckCircle2 size={11} />{row.unidadMedida}</span>
+                                  : <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400" title="No existe"><XCircle size={11} />{row.unidadMedida}</span>}
+                            </td>
+                            {esFarmacia && <>
+                              <td className="px-3 py-2 text-purple-700 dark:text-purple-300 font-mono text-[11px]">
+                                {row.lote || '—'}
+                              </td>
+                              <td className="px-3 py-2 text-purple-700 dark:text-purple-300 text-[11px]">
+                                {row.fechaVencimiento || '—'}
+                              </td>
+                            </>}
+                          </>}
                         </tr>
                       );
                     })}
@@ -521,15 +651,24 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
               <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-green-600" /> Reconocido</span>
               <span className="flex items-center gap-1"><AlertCircle size={11} className="text-blue-500" /> Categoría nueva (se creará)</span>
               <span className="flex items-center gap-1"><XCircle size={11} className="text-red-500" /> Unidad no encontrada</span>
-              {esMultiLote && <span className="flex items-center gap-1"><FlaskConical size={11} className="text-purple-500" /> Lote adicional (suma al stock)</span>}
+              {esMultiFila && esFarmacia && <span className="flex items-center gap-1"><FlaskConical size={11} className="text-purple-500" /> Lote adicional</span>}
+              {esMultiFila && esTienda   && <span className="flex items-center gap-1"><Shirt size={11} className="text-blue-500" /> Variante adicional</span>}
             </div>
 
             {/* Advertencias */}
-            {esMultiLote && (
+            {esMultiFila && esFarmacia && (
               <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 text-sm">
                 <FlaskConical size={15} className="text-purple-600 mt-0.5 shrink-0" />
                 <span className="text-purple-800 dark:text-purple-200">
-                  Se detectaron <strong>{rows.length - productosUnicos} fila(s) multi-lote</strong>. El stock de cada fila adicional se <strong>sumará</strong> al del mismo producto y se guardará con su propia trazabilidad (lote, vencimiento, RS).
+                  Se detectaron <strong>{rows.length - productosUnicos} lote(s) adicional(es)</strong>. El stock se sumará y cada lote quedará con su trazabilidad independiente.
+                </span>
+              </div>
+            )}
+            {esMultiFila && esTienda && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-sm">
+                <Shirt size={15} className="text-blue-600 mt-0.5 shrink-0" />
+                <span className="text-blue-800 dark:text-blue-200">
+                  Se detectaron <strong>{rows.length - productosUnicos} variante(s) adicional(es)</strong>. El stock total del producto se calculará sumando todas las variantes.
                 </span>
               </div>
             )}
@@ -596,7 +735,7 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                 <CheckCircle2 size={16} />
                 <span>
                   <strong>{result.creados}</strong> productos creados
-                  {result.actualizados > 0 && <> y <strong>{result.actualizados}</strong> actualizados (incluye lotes adicionales)</>}.
+                  {result.actualizados > 0 && <> y <strong>{result.actualizados}</strong> actualizados</>}.
                 </span>
               </div>
             ) : (

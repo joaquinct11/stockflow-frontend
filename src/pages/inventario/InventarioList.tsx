@@ -1499,6 +1499,8 @@ export function InventarioList() {
         onClose={() => setIsImportOpen(false)}
         onSuccess={fetchData}
         unidadesMedida={unidadesMedida}
+        sucursalId={sucursalId}
+        rubro={negocioConfig?.rubro}
       />
     </div>
   );
