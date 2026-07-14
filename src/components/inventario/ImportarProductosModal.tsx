@@ -147,7 +147,7 @@ function parseDateValue(value: unknown): string | undefined {
 function parseSheet(workbook: XLSX.WorkBook): ProductoImportRow[] {
   const sheetName = workbook.SheetNames.find(n => n !== 'Referencia') ?? workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
-  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', cellDates: true });
+  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
 
   return raw.map((row) => {
     const parsed: Partial<ProductoImportRow> = {};
