@@ -283,11 +283,11 @@ export function UsuariosList() {
   const handleDelete = (id: number) => {
     setConfirmDialog({
       isOpen: true,
-      type: 'warning',
-      title: 'Desactivar Usuario',
+      type: 'danger',
+      title: 'Eliminar Usuario',
       description:
-        'El usuario será desactivado y no podrá iniciar sesión. Su historial de ventas y movimientos se conserva. Puedes reactivarlo desde el listado.',
-      confirmText: 'Desactivar',
+        'El usuario será eliminado permanentemente de la base de datos. Su historial de ventas, movimientos y cajas se conservará con el campo de usuario en blanco. Esta acción no se puede deshacer.',
+      confirmText: 'Eliminar',
       action: async () => {
         try {
           await usuarioService.delete(id);
