@@ -4,7 +4,7 @@ import {
   ScanLine, X, Plus, Minus, Trash2, ShoppingCart,
   Banknote, CreditCard, Smartphone, CheckCircle2,
   ArrowLeft, RotateCcw, Loader2, Search, Wallet, Lock, Tag, User, UserPlus,
-  Camera, CameraOff, Printer, FileText, Download,
+  Camera, CameraOff, Printer, FileText, Download, Edit2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productoService } from '../../services/producto.service';
@@ -91,6 +91,7 @@ export function POSPage() {
   const [variantePickerProducto, setVariantePickerProducto] = useState<ProductoDTO | null>(null);
   const [variantesDisponibles, setVariantesDisponibles] = useState<ProductoVarianteDTO[]>([]);
   const [loadingVariantes, setLoadingVariantes] = useState(false);
+  const [variantePrecioOverrides, setVariantePrecioOverrides] = useState<Record<number, string>>({});
 
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [mobileTab, setMobileTab] = useState<'productos' | 'carrito'>('productos');
@@ -126,6 +127,23 @@ export function POSPage() {
   const [tipoComprobante, setTipoComprobante] = useState<TipoComprobante>('TICKET');
   const [receptor, setReceptor] = useState({ docTipo: 'DNI', docNumero: '', nombre: '', direccion: '' });
   const [ultimoComprobanteId, setUltimoComprobanteId] = useState<number | null>(null);
+
+  // ── Precio editable (solo TIENDA_ROPA) ───────────────────────────────
+  const [editandoPrecio, setEditandoPrecio] = useState<{ key: string; valor: string } | null>(null);
+
+  const iniciarEditarPrecio = (key: string, precioActual: number) => {
+    setEditandoPrecio({ key, valor: String(precioActual) });
+  };
+
+  const confirmarPrecio = (key: string) => {
+    const nuevo = parseFloat(editandoPrecio?.valor ?? '');
+    if (!isNaN(nuevo) && nuevo > 0) {
+      setCart(prev => prev.map(item =>
+        cartItemKey(item) === key ? { ...item, precioUnitario: nuevo } : item
+      ));
+    }
+    setEditandoPrecio(null);
+  };
 
   // ── Estado de cámara ─────────────────────────────────────────────────
   const [showCameraScanner, setShowCameraScanner] = useState(false);
@@ -495,6 +513,9 @@ export function POSPage() {
         if (activas.length > 0) {
           setVariantePickerProducto(producto);
           setVariantesDisponibles(activas);
+          const overrides: Record<number, string> = {};
+          activas.forEach(v => { overrides[v.id!] = (producto.precioVenta ?? 0).toFixed(2); });
+          setVariantePrecioOverrides(overrides);
           setVariantePickerOpen(true);
           setLoadingVariantes(false);
           return;
@@ -515,6 +536,7 @@ export function POSPage() {
     varianteId?: number,
     varianteDescripcion?: string,
     switchToCart = false,
+    precioOverride?: number,
   ) => {
     setCart(prev => {
       const key = cartItemKey({ producto, varianteId });
@@ -532,7 +554,8 @@ export function POSPage() {
         newCart[idx] = { ...item, cantidad: item.cantidad + 1 };
         return newCart;
       }
-      return [...prev, { producto, cantidad: 1, precioUnitario: producto.precioVenta ?? 0, varianteId, varianteDescripcion }];
+      const precio = (precioOverride != null && precioOverride > 0) ? precioOverride : (producto.precioVenta ?? 0);
+      return [...prev, { producto, cantidad: 1, precioUnitario: precio, varianteId, varianteDescripcion }];
     });
     if (switchToCart) setMobileTab('carrito');
     refocus();
@@ -963,14 +986,18 @@ export function POSPage() {
               )}
             </div>
             <div className="bg-gray-900 rounded-xl p-4 space-y-2 text-sm">
-              <div className="flex justify-between text-gray-500">
-                <span>Base imponible</span>
-                <span>{fmt(baseImponible)}</span>
-              </div>
-              <div className="flex justify-between text-gray-500">
-                <span>IGV (18%)</span>
-                <span>{fmt(igvIncluido)}</span>
-              </div>
+              {!esRopa && (
+                <>
+                  <div className="flex justify-between text-gray-500">
+                    <span>Base imponible</span>
+                    <span>{fmt(baseImponible)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-500">
+                    <span>IGV (18%)</span>
+                    <span>{fmt(igvIncluido)}</span>
+                  </div>
+                </>
+              )}
               <div className="border-t border-gray-800 pt-2 flex justify-between">
                 <span className="text-gray-400">Total cobrado</span>
                 <span className="font-bold text-white">{fmt(total)}</span>
@@ -1042,20 +1069,24 @@ export function POSPage() {
               </button>
             </div>
 
-            {/* Resumen con desglose IGV */}
+            {/* Resumen */}
             <div className="bg-gray-800 rounded-xl p-4 space-y-2">
               <div className="flex justify-between text-xs text-gray-500">
                 <span>{cart.reduce((s, i) => s + i.cantidad, 0)} producto(s)</span>
                 <span>{cart.length} línea(s)</span>
               </div>
-              <div className="flex justify-between text-sm text-gray-400">
-                <span>Base imponible</span>
-                <span>{fmt(baseImponible)}</span>
-              </div>
-              <div className="flex justify-between text-sm text-gray-400">
-                <span>IGV (18%)</span>
-                <span>{fmt(igvIncluido)}</span>
-              </div>
+              {!esRopa && (
+                <>
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>Base imponible</span>
+                    <span>{fmt(baseImponible)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>IGV (18%)</span>
+                    <span>{fmt(igvIncluido)}</span>
+                  </div>
+                </>
+              )}
               <div className="border-t border-gray-700 pt-2 flex justify-between items-baseline">
                 <span className="text-gray-300 font-medium">Total</span>
                 <span className="text-3xl font-bold text-white">{fmt(total)}</span>
@@ -1586,7 +1617,34 @@ export function POSPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium leading-tight truncate">{item.producto.nombre}</p>
                       {item.varianteDescripcion && <p className="text-xs text-violet-400 leading-tight">{item.varianteDescripcion}</p>}
-                      <p className="text-xs text-gray-500 mt-0.5">{fmt(item.precioUnitario)} c/u</p>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {esRopa && editandoPrecio?.key === cartItemKey(item) ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            autoFocus
+                            value={editandoPrecio.valor}
+                            onChange={e => setEditandoPrecio({ key: cartItemKey(item), valor: e.target.value })}
+                            onBlur={() => confirmarPrecio(cartItemKey(item))}
+                            onKeyDown={e => { if (e.key === 'Enter') confirmarPrecio(cartItemKey(item)); if (e.key === 'Escape') setEditandoPrecio(null); }}
+                            className="w-20 text-xs bg-gray-700 border border-primary rounded px-1.5 py-0.5 text-white focus:outline-none font-mono"
+                          />
+                        ) : (
+                          <>
+                            <span className="text-xs text-gray-500">{fmt(item.precioUnitario)} c/u</span>
+                            {esRopa && (
+                              <button
+                                onClick={() => iniciarEditarPrecio(cartItemKey(item), item.precioUnitario)}
+                                className="text-gray-600 hover:text-primary transition-colors"
+                                title="Editar precio"
+                              >
+                                <Edit2 size={10} />
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button onClick={() => cambiarCantidad(cartItemKey(item), -1)} className="w-6 h-6 rounded-md bg-gray-800 hover:bg-red-500/20 hover:text-red-400 border border-gray-700 hover:border-red-500/40 flex items-center justify-center transition-colors"><Minus size={11} /></button>
@@ -1807,7 +1865,34 @@ export function POSPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium leading-tight truncate">{item.producto.nombre}</p>
                           {item.varianteDescripcion && <p className="text-xs text-violet-400 leading-tight">{item.varianteDescripcion}</p>}
-                          <p className="text-xs text-gray-500 mt-0.5">{fmt(item.precioUnitario)} c/u</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {esRopa && editandoPrecio?.key === cartItemKey(item) ? (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                autoFocus
+                                value={editandoPrecio.valor}
+                                onChange={e => setEditandoPrecio({ key: cartItemKey(item), valor: e.target.value })}
+                                onBlur={() => confirmarPrecio(cartItemKey(item))}
+                                onKeyDown={e => { if (e.key === 'Enter') confirmarPrecio(cartItemKey(item)); if (e.key === 'Escape') setEditandoPrecio(null); }}
+                                className="w-24 text-xs bg-gray-700 border border-primary rounded px-1.5 py-0.5 text-white focus:outline-none font-mono"
+                              />
+                            ) : (
+                              <>
+                                <span className="text-xs text-gray-500">{fmt(item.precioUnitario)} c/u</span>
+                                {esRopa && (
+                                  <button
+                                    onClick={() => iniciarEditarPrecio(cartItemKey(item), item.precioUnitario)}
+                                    className="text-gray-600 hover:text-primary transition-colors"
+                                    title="Editar precio"
+                                  >
+                                    <Edit2 size={11} />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <button onClick={() => cambiarCantidad(cartItemKey(item), -1)}
@@ -2045,27 +2130,62 @@ export function POSPage() {
             ) : variantesDisponibles.map(v => {
               const desc = [v.talla, v.color].filter(Boolean).join(' / ');
               const sinStock = (v.stockActual ?? 0) <= 0;
+              const precioVal = variantePrecioOverrides[v.id!] ?? '';
+              const handleAgregar = () => {
+                const p = parseFloat(precioVal);
+                agregarItemAlCarrito(variantePickerProducto!, v.id!, desc, true, (!isNaN(p) && p > 0) ? p : undefined);
+                setVariantePickerOpen(false);
+              };
               return (
-                <button
+                <div
                   key={v.id}
-                  disabled={sinStock}
-                  onClick={() => {
-                    agregarItemAlCarrito(variantePickerProducto, v.id!, desc, true);
-                    setVariantePickerOpen(false);
-                  }}
-                  className={`w-full flex items-center justify-between rounded-xl border px-4 py-3 transition-all text-left
+                  className={`w-full flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-all
                     ${sinStock
-                      ? 'border-gray-800 opacity-40 cursor-not-allowed bg-gray-900/40'
-                      : 'border-gray-700 hover:border-violet-500 hover:bg-violet-500/10 bg-gray-800/50 hover:shadow-sm hover:shadow-violet-500/10 active:scale-[0.98]'}`}
+                      ? 'border-gray-800 opacity-40 bg-gray-900/40'
+                      : 'border-gray-700 bg-gray-800/50'}`}
                 >
-                  <div>
-                    <p className="font-semibold text-sm text-white">{desc || v.sku || `Variante #${v.id}`}</p>
+                  {/* Info variante — clic agrega al carrito */}
+                  <button
+                    disabled={sinStock}
+                    onClick={handleAgregar}
+                    className="flex-1 text-left min-w-0 disabled:cursor-not-allowed"
+                  >
+                    <p className="font-semibold text-sm text-white leading-tight">{desc || v.sku || `Variante #${v.id}`}</p>
                     {v.sku && <p className="text-xs text-gray-400 mt-0.5">SKU: {v.sku}</p>}
+                  </button>
+
+                  {/* Precio editable */}
+                  {!sinStock && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="text-xs text-gray-500">S/</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={precioVal}
+                        onChange={e => setVariantePrecioOverrides(prev => ({ ...prev, [v.id!]: e.target.value }))}
+                        onClick={e => e.stopPropagation()}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAgregar(); }}
+                        className="w-24 bg-gray-700 border border-gray-600 focus:border-primary rounded-lg px-2 py-1 text-sm text-white text-right focus:outline-none font-mono"
+                      />
+                    </div>
+                  )}
+
+                  {/* Stock + botón agregar */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${sinStock ? 'bg-gray-800 text-gray-600' : 'bg-emerald-900/40 text-emerald-400 border border-emerald-800/50'}`}>
+                      {v.stockActual ?? 0} uds
+                    </span>
+                    {!sinStock && (
+                      <button
+                        onClick={handleAgregar}
+                        className="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors active:scale-95"
+                      >
+                        + Agregar
+                      </button>
+                    )}
                   </div>
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${sinStock ? 'bg-gray-800 text-gray-600' : 'bg-emerald-900/40 text-emerald-400 border border-emerald-800/50'}`}>
-                    {v.stockActual ?? 0} uds
-                  </span>
-                </button>
+                </div>
               );
             })}
           </div>

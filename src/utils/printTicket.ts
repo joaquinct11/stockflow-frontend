@@ -99,6 +99,7 @@ export function printVentaTicket(
     ? new Date(venta.createdAt).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : '—';
 
+  const esRopa = config?.rubro === 'TIENDA_ROPA';
   const total  = venta.detalles.reduce((s, d) => s + d.cantidad * Number(d.precioUnitario), 0);
   const igvAmt = total * igvPct / 100 / (1 + igvPct / 100);
   const base   = total - igvAmt;
@@ -158,10 +159,10 @@ ${clienteBlock}
 </table>
 <div class="sep-solid"></div>
 
-<table class="totales">
+${!esRopa ? `<table class="totales">
   <tr><td>Total Gravado (S/):</td><td class="right">${base.toFixed(2)}</td></tr>
   <tr><td>IGV ${igvPct}.00% (S/):</td><td class="right">${igvAmt.toFixed(2)}</td></tr>
-</table>
+</table>` : ''}
 <div class="total-final">
   <span>Total (S/):</span><span>${total.toFixed(2)}</span>
 </div>
@@ -249,12 +250,13 @@ function fmt(v: number | null | undefined): string {
 }
 
 function buildTicketHtml(c: ComprobanteDTO, cfg?: TenantConfigDTO | null): string {
-  const empresa = cfg?.nombreNegocio ?? 'Mi Empresa';
-  const ruc     = cfg?.ruc ?? '';
-  const dir     = cfg?.direccion ?? '';
-  const tel     = cfg?.telefono ?? '';
-  const pie     = cfg?.piePaginaPdf ?? '';
-  const igvPct  = cfg?.igvPorcentaje ?? 18;
+  const empresa  = cfg?.nombreNegocio ?? 'Mi Empresa';
+  const ruc      = cfg?.ruc ?? '';
+  const dir      = cfg?.direccion ?? '';
+  const tel      = cfg?.telefono ?? '';
+  const pie      = cfg?.piePaginaPdf ?? '';
+  const igvPct   = cfg?.igvPorcentaje ?? 18;
+  const esRopa   = cfg?.rubro === 'TIENDA_ROPA';
 
   const tipoLabel = c.tipo === 'BOLETA' ? 'BOLETA DE VENTA' : 'FACTURA ELECTRÓNICA';
   const numero    = (c.numero ?? '—').replace('-', ' - ');
@@ -352,10 +354,10 @@ ${receptorDoc ? `<p><span class="lbl">${receptorTipo}:</span> ${receptorDoc}</p>
 </table>
 <div class="sep-solid"></div>
 
-<table class="totales">
+${!esRopa ? `<table class="totales">
   <tr><td>Total Gravado (S/):</td><td class="right">${fmt(c.subtotal)}</td></tr>
   <tr><td>IGV ${igvPct}.00% (S/):</td><td class="right">${fmt(c.igv)}</td></tr>
-</table>
+</table>` : ''}
 <div class="total-final">
   <span>Total (S/):</span><span>${fmt(c.total)}</span>
 </div>
