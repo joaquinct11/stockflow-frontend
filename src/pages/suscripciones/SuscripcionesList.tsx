@@ -376,6 +376,16 @@ export function SuscripcionesList() {
                 {esPendiente ? 'Completar pago' : esCancelacionPendiente ? 'Renovar suscripción' : 'Reactivar suscripción'}
               </Button>
             )}
+            {(esActiva || suscripcion.estado === 'SUSPENDIDA') && canToggleState('SUSCRIPCIONES') && (
+              <Button
+                variant="outline"
+                className="sm:flex-1"
+                onClick={() => navigate('/checkout/culqi?mode=cambiar-tarjeta')}
+              >
+                <CreditCard className="mr-2 h-4 w-4" />
+                Cambiar tarjeta
+              </Button>
+            )}
             {esActiva && canToggleState('SUSCRIPCIONES') && (
               <Button variant="destructive" className="sm:flex-1" onClick={handleCancelar}>
                 <XCircle className="mr-2 h-4 w-4" />
