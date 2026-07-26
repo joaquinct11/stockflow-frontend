@@ -55,4 +55,12 @@ export const culqiService = {
     );
     return data;
   },
+
+  cambiarTarjeta: async (tokenId: string): Promise<{ mensaje: string }> => {
+    const { data } = await axiosInstance.post<{ mensaje: string }>(
+      API_ENDPOINTS.CULQI.CAMBIAR_TARJETA,
+      { tokenId },
+    );
+    return data;
+  },
 };

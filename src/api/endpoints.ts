@@ -222,10 +222,11 @@ export const API_ENDPOINTS = {
   },
 
   CULQI: {
-    CONFIG:       '/culqi/config',
-    SUSCRIBIR:    '/culqi/suscribir',
-    UPGRADE_PRO:  '/culqi/upgrade-pro',
-    CREAR_PLAN:   '/culqi/admin/crear-plan',
+    CONFIG:          '/culqi/config',
+    SUSCRIBIR:       '/culqi/suscribir',
+    UPGRADE_PRO:     '/culqi/upgrade-pro',
+    CAMBIAR_TARJETA: '/culqi/cambiar-tarjeta',
+    CREAR_PLAN:      '/culqi/admin/crear-plan',
   },
 
   NOTIFICACIONES: {
