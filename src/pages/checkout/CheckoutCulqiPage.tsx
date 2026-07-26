@@ -49,8 +49,9 @@ export function CheckoutCulqiPage() {
   const resolveToken = useRef<((tokenId: string) => void) | null>(null);
 
   // Leer planId y modo de query params
-  const planParam   = searchParams.get('plan') ?? 'BASICO';
-  const isUpgrade   = searchParams.get('mode') === 'upgrade';
+  const planParam        = searchParams.get('plan') ?? 'BASICO';
+  const isUpgrade        = searchParams.get('mode') === 'upgrade';
+  const isCambiarTarjeta = searchParams.get('mode') === 'cambiar-tarjeta';
 
   // 1. Cargar configuración del backend ─────────────────────────────────────
   useEffect(() => {
@@ -133,10 +134,14 @@ export function CheckoutCulqiPage() {
     setProcessing(true);
 
     try {
-      const response = isUpgrade
-        ? await culqiService.upgradePro(tokenId)
-        : await culqiService.suscribir(tokenId, planParam);
-      setSuscripcionEstado(response.estado as 'ACTIVA' | 'CANCELADA' | 'TRIAL' | 'EXPIRADA' | 'SIN_SUSCRIPCION');
+      if (isCambiarTarjeta) {
+        await culqiService.cambiarTarjeta(tokenId);
+      } else {
+        const response = isUpgrade
+          ? await culqiService.upgradePro(tokenId)
+          : await culqiService.suscribir(tokenId, planParam);
+        setSuscripcionEstado(response.estado as 'ACTIVA' | 'CANCELADA' | 'TRIAL' | 'EXPIRADA' | 'SIN_SUSCRIPCION');
+      }
       setSuccess(true);
     } catch (err: unknown) {
       const msg =
@@ -187,21 +192,25 @@ export function CheckoutCulqiPage() {
               </div>
             </div>
             <CardTitle className="text-xl">
-              {isUpgrade ? '¡Upgrade a Pro exitoso!' : '¡Suscripción activada!'}
+              {isCambiarTarjeta ? '¡Tarjeta actualizada!' : isUpgrade ? '¡Upgrade a Pro exitoso!' : '¡Suscripción activada!'}
             </CardTitle>
             <CardDescription>
-              {isUpgrade
+              {isCambiarTarjeta
+                ? 'Tu nueva tarjeta quedó registrada. Los próximos cobros se realizarán con ella.'
+                : isUpgrade
                 ? 'Tu plan Pro está activo. Ya puedes gestionar hasta 5 sucursales desde el menú lateral.'
                 : `Tu plan ${config.nombrePlan} está activo. Ahora tienes acceso completo a Fluxus.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-              Tu tarjeta será cobrada automáticamente cada mes por{' '}
-              <strong>S/ {Number(config.precioMensual).toFixed(2)}</strong>.
-            </div>
-            <Button className="w-full" onClick={() => navigate('/dashboard/sucursales', { replace: true })}>
-              {isUpgrade ? 'Ir a Sucursales' : 'Ir al dashboard'}
+            {!isCambiarTarjeta && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                Tu tarjeta será cobrada automáticamente cada mes por{' '}
+                <strong>S/ {Number(config.precioMensual).toFixed(2)}</strong>.
+              </div>
+            )}
+            <Button className="w-full" onClick={() => navigate(isCambiarTarjeta ? '/dashboard/suscripciones' : isUpgrade ? '/dashboard/sucursales' : '/dashboard', { replace: true })}>
+              {isCambiarTarjeta ? 'Volver a mi suscripción' : isUpgrade ? 'Ir a Sucursales' : 'Ir al dashboard'}
             </Button>
           </CardContent>
         </Card>
@@ -216,10 +225,12 @@ export function CheckoutCulqiPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5 text-primary" />
-            Activar suscripción
+            {isCambiarTarjeta ? 'Cambiar método de pago' : 'Activar suscripción'}
           </CardTitle>
           <CardDescription>
-            Paga de forma segura con tarjeta o Yape. Sin redirecciones externas.
+            {isCambiarTarjeta
+              ? 'Ingresa tu nueva tarjeta. No se cancelará tu suscripción actual.'
+              : 'Paga de forma segura con tarjeta o Yape. Sin redirecciones externas.'}
           </CardDescription>
         </CardHeader>
 
