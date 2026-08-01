@@ -42,7 +42,6 @@ export function LandingPage() {
         <div className="landing-hero-grid" aria-hidden="true" />
         <div className="landing-hero-content">
 
-          {/* Left: Copy */}
           <div className="landing-hero-text">
             <div className="landing-hero-badge">
               <span className="landing-hero-badge-dot" />
@@ -50,15 +49,14 @@ export function LandingPage() {
             </div>
 
             <h1 className="landing-hero-title">
-              Vende más, pierde menos{' '}
-              <span className="landing-hero-title-highlight">y lleva el control</span>
-              {' '}de todo en un solo lugar
+              Vende, compra y factura{' '}
+              <span className="landing-hero-title-highlight">todo desde un solo sistema</span>
             </h1>
 
             <p className="landing-hero-subtitle">
-              POS con caja integrada, inventario en tiempo real, compras, devoluciones,
-              notas de crédito y <strong>facturación electrónica integrada</strong> que envía tus
-              boletas y facturas directo a SUNAT. Sin apps separadas, sin Excel.
+              POS con caja integrada, inventario en tiempo real, compras, devoluciones, notas de crédito,
+              gestión de clientes y proveedores, <strong>facturación electrónica directa a SUNAT</strong> y
+              mucho más. Sin apps separadas, sin Excel.
             </p>
 
             <div className="landing-hero-actions">
@@ -66,7 +64,7 @@ export function LandingPage() {
                 Probar 14 días gratis
               </Link>
               <a href="#features" className="btn-hero-secondary">
-                Ver módulos
+                Ver todos los módulos
               </a>
             </div>
 
@@ -80,58 +78,54 @@ export function LandingPage() {
             </div>
           </div>
 
-          {/* Right: Dashboard Mockup */}
+          {/* Right: Dashboard Screenshot */}
           <div className="landing-hero-visual">
-            <div className="landing-dashboard-mockup">
-              <div className="landing-mockup-bar">
-                <span className="landing-mockup-dot red" />
-                <span className="landing-mockup-dot yellow" />
-                <span className="landing-mockup-dot green" />
-              </div>
-              <div className="landing-mockup-body">
-                <div className="landing-mockup-stats">
-                  <div className="landing-stat-card">
-                    <div className="landing-stat-value">S/12.4K</div>
-                    <div className="landing-stat-label">Ventas hoy</div>
-                  </div>
-                  <div className="landing-stat-card">
-                    <div className="landing-stat-value">348</div>
-                    <div className="landing-stat-label">Productos</div>
-                  </div>
-                  <div className="landing-stat-card">
-                    <div className="landing-stat-value" style={{ color: '#ff5050' }}>5</div>
-                    <div className="landing-stat-label">Stock bajo</div>
-                  </div>
+            <div className="landing-browser-frame">
+              <div className="landing-browser-bar">
+                <div className="landing-browser-dots">
+                  <span className="landing-mockup-dot red" />
+                  <span className="landing-mockup-dot yellow" />
+                  <span className="landing-mockup-dot green" />
                 </div>
+                <div className="landing-browser-url">
+                  <span className="landing-browser-lock">🔒</span>
+                  <span>fluxus.pe/dashboard</span>
+                </div>
+              </div>
+              <div className="landing-browser-content">
+                <img
+                  src="/dashboard-preview.png"
+                  alt="Dashboard de Fluxus"
+                  className="landing-browser-screenshot"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-                <div className="landing-mockup-table">
-                  <div className="landing-mockup-row header">
-                    <span className="landing-mockup-cell header">Producto</span>
-                    <span className="landing-mockup-cell header">Stock</span>
-                    <span className="landing-mockup-cell header">Estado</span>
-                  </div>
-                  <div className="landing-mockup-row">
-                    <span className="landing-mockup-cell name">Polo Básico Blanco M</span>
-                    <span className="landing-mockup-cell">84</span>
-                    <span className="landing-stock-badge ok">OK</span>
-                  </div>
-                  <div className="landing-mockup-row">
-                    <span className="landing-mockup-cell name">Zapatillas Runner 42</span>
-                    <span className="landing-mockup-cell">12</span>
-                    <span className="landing-stock-badge low">BAJO</span>
-                  </div>
-                  <div className="landing-mockup-row">
-                    <span className="landing-mockup-cell name">Paracetamol 500mg</span>
-                    <span className="landing-mockup-cell">210</span>
-                    <span className="landing-stock-badge ok">OK</span>
-                  </div>
-                  <div className="landing-mockup-row">
-                    <span className="landing-mockup-cell name">Tornillo Hexagonal 3/8"</span>
-                    <span className="landing-mockup-cell">3</span>
-                    <span className="landing-stock-badge critical">CRÍTICO</span>
-                  </div>
-                </div>
-              </div>
+      {/* ===== STATS BAR ===== */}
+      <section className="landing-stats-bar">
+        <div className="landing-container">
+          <div className="landing-stats-grid">
+            <div className="landing-stats-item">
+              <span className="landing-stats-number">12+</span>
+              <span className="landing-stats-label">Módulos integrados</span>
+            </div>
+            <div className="landing-stats-divider" />
+            <div className="landing-stats-item">
+              <span className="landing-stats-number">SUNAT</span>
+              <span className="landing-stats-label">Facturación electrónica</span>
+            </div>
+            <div className="landing-stats-divider" />
+            <div className="landing-stats-item">
+              <span className="landing-stats-number">14 días</span>
+              <span className="landing-stats-label">Prueba gratuita</span>
+            </div>
+            <div className="landing-stats-divider" />
+            <div className="landing-stats-item">
+              <span className="landing-stats-number">S/ 89</span>
+              <span className="landing-stats-label">Desde por mes</span>
             </div>
           </div>
         </div>
@@ -153,7 +147,7 @@ export function LandingPage() {
               <div className="landing-flow-number">1</div>
               <div className="landing-flow-content">
                 <h4>Orden de compra</h4>
-                <p>Genera OCs a tus proveedores con cantidades y precios pactados.</p>
+                <p>Genera OCs a tus proveedores con cantidades, precios y seguimiento de estado.</p>
               </div>
             </div>
             <div className="landing-flow-arrow">→</div>
@@ -161,7 +155,7 @@ export function LandingPage() {
               <div className="landing-flow-number">2</div>
               <div className="landing-flow-content">
                 <h4>Recepción</h4>
-                <p>Registra lo que llega. El stock sube automáticamente al guardar.</p>
+                <p>Registra lo que llega, incluyendo lotes y fechas de vencimiento. El stock sube automáticamente.</p>
               </div>
             </div>
             <div className="landing-flow-arrow">→</div>
@@ -193,7 +187,7 @@ export function LandingPage() {
               Todo lo que necesita tu negocio, en un solo sistema
             </h2>
             <p className="landing-section-subtitle">
-              Nueve módulos integrados que trabajan juntos. Sin apps separadas, sin doble ingreso.
+              Doce módulos integrados que trabajan juntos. Sin apps separadas, sin doble ingreso de datos.
             </p>
           </div>
 
@@ -204,7 +198,7 @@ export function LandingPage() {
               <h3 className="landing-feature-title">Punto de Venta (POS)</h3>
               <p className="landing-feature-desc">
                 POS ágil con búsqueda instantánea por nombre o código de barras, atajos de teclado
-                (F2 cobrar, F4 limpiar) y cálculo automático de vuelto.
+                (F2 cobrar, F4 limpiar), cobro mixto y cálculo automático de vuelto.
               </p>
             </div>
 
@@ -219,10 +213,10 @@ export function LandingPage() {
 
             <div className="landing-feature-card">
               <div className="landing-feature-icon">🧾</div>
-              <h3 className="landing-feature-title">Facturación electrónica integrada</h3>
+              <h3 className="landing-feature-title">Facturación electrónica</h3>
               <p className="landing-feature-desc">
-                Emite boletas y facturas directamente desde cada venta. Fluxus las envía a SUNAT
-                de forma automática y descarga el CDR oficial, XML y PDF sin pasos extra.
+                Emite boletas y facturas directamente desde cada venta. Envío automático a SUNAT,
+                descarga del CDR oficial, XML y PDF. Notas de crédito electrónicas incluidas.
               </p>
             </div>
 
@@ -230,8 +224,8 @@ export function LandingPage() {
               <div className="landing-feature-icon">📦</div>
               <h3 className="landing-feature-title">Inventario en tiempo real</h3>
               <p className="landing-feature-desc">
-                Stock actualizado con cada compra y venta. Alertas de mínimo,
-                kardex completo y control por lote y fecha de vencimiento.
+                Stock actualizado con cada compra y venta. Alertas de stock mínimo, kardex completo,
+                control por lote, fecha de vencimiento y ajustes de inventario manuales.
               </p>
             </div>
 
@@ -240,7 +234,7 @@ export function LandingPage() {
               <h3 className="landing-feature-title">Compras y recepciones</h3>
               <p className="landing-feature-desc">
                 Órdenes de compra con estados (borrador → enviada → recibida), recepciones
-                parciales y actualización automática del costo al inventario.
+                parciales, importación masiva desde Excel y actualización automática de costos.
               </p>
             </div>
 
@@ -248,26 +242,35 @@ export function LandingPage() {
               <div className="landing-feature-icon">🔄</div>
               <h3 className="landing-feature-title">Devoluciones y notas de crédito</h3>
               <p className="landing-feature-desc">
-                Registra devoluciones totales o parciales con reposición de stock automática.
-                Emite notas de crédito aplicables como descuento directamente en el POS.
+                Devoluciones totales o parciales con reposición automática de stock.
+                Emite notas de crédito electrónicas aplicables como descuento en el POS.
               </p>
             </div>
 
             <div className="landing-feature-card">
-              <div className="landing-feature-icon">🛒</div>
+              <div className="landing-feature-icon">📋</div>
               <h3 className="landing-feature-title">Historial de ventas</h3>
               <p className="landing-feature-desc">
-                Registro completo por vendedor y período. Anula ventas con un clic y revierte
-                el stock automáticamente. Filtra por fecha, método de pago o estado.
+                Registro completo por vendedor, período y método de pago. Anula ventas con un clic
+                y revierte el stock automáticamente. Exporta a Excel o imprime ticket.
               </p>
             </div>
 
             <div className="landing-feature-card">
               <div className="landing-feature-icon">👥</div>
+              <h3 className="landing-feature-title">Clientes y proveedores</h3>
+              <p className="landing-feature-desc">
+                Registro de clientes con RUC/DNI, historial de compras y saldo de notas de crédito.
+                Gestión de proveedores con contacto y condiciones de pago.
+              </p>
+            </div>
+
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon">🔐</div>
               <h3 className="landing-feature-title">Roles y permisos</h3>
               <p className="landing-feature-desc">
-                Administrador, Gerente, Vendedor y más. Configura exactamente a qué módulos
-                y acciones tiene acceso cada usuario de tu equipo.
+                Administrador, Gerente, Vendedor, Almacenero y más. Configura exactamente a qué
+                módulos y acciones tiene acceso cada usuario. Cada uno ve solo lo suyo.
               </p>
             </div>
 
@@ -275,8 +278,26 @@ export function LandingPage() {
               <div className="landing-feature-icon">📊</div>
               <h3 className="landing-feature-title">Reportes y métricas</h3>
               <p className="landing-feature-desc">
-                Ingresos por período, ticket promedio, productos más vendidos, rotación
-                de inventario, kardex y exportación a Excel y PDF.
+                Ingresos por período, ticket promedio, productos más vendidos, rotación de inventario,
+                kardex valorizado y exportación a Excel y PDF.
+              </p>
+            </div>
+
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon">📥</div>
+              <h3 className="landing-feature-title">Importación desde Excel</h3>
+              <p className="landing-feature-desc">
+                Carga tu catálogo completo desde un archivo Excel. Validación fila por fila,
+                preview de errores antes de confirmar y actualización de precios masiva.
+              </p>
+            </div>
+
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon">💊</div>
+              <h3 className="landing-feature-title">DIGEMID / OPPF</h3>
+              <p className="landing-feature-desc">
+                Para farmacias y boticas: vincula tus productos al catálogo DIGEMID (18 000+ registros),
+                gestiona registro sanitario y genera el reporte OPPF mensual en formato ZIP para DIGEMID.
               </p>
             </div>
 
@@ -291,7 +312,7 @@ export function LandingPage() {
             <span className="landing-section-label">¿Para quién es?</span>
             <h2 className="landing-section-title">Diseñado para negocios que mueven producto</h2>
             <p className="landing-section-subtitle">
-              Fluxus se adapta a tu rubro. Cada tipo de negocio ve solo lo que necesita.
+              Fluxus se adapta a tu rubro. Cada tipo de negocio ve solo los módulos que necesita.
             </p>
           </div>
 
@@ -299,7 +320,7 @@ export function LandingPage() {
             <div className="landing-audience-card">
               <div className="landing-audience-icon">💊</div>
               <h4>Farmacias y boticas</h4>
-              <p>Control de lotes, fechas de vencimiento, registro sanitario y alertas de stock crítico por producto.</p>
+              <p>Control de lotes, fechas de vencimiento, registro sanitario, DIGEMID y reporte OPPF mensual automático.</p>
             </div>
             <div className="landing-audience-card">
               <div className="landing-audience-icon">👗</div>
@@ -309,22 +330,22 @@ export function LandingPage() {
             <div className="landing-audience-card">
               <div className="landing-audience-icon">🏪</div>
               <h4>Tiendas y bodegas</h4>
-              <p>POS rápido con caja integrada, historial diario de ventas y control de proveedores.</p>
+              <p>POS rápido con caja integrada, historial diario de ventas, control de proveedores y alertas de stock.</p>
             </div>
             <div className="landing-audience-card">
               <div className="landing-audience-icon">🔧</div>
               <h4>Ferreterías y distribuidoras</h4>
-              <p>OCs a varios proveedores, recepciones parciales y costos de compra actualizados en tiempo real.</p>
+              <p>OCs a varios proveedores, recepciones parciales, costos de compra actualizados y kardex por producto.</p>
             </div>
             <div className="landing-audience-card">
               <div className="landing-audience-icon">🛒</div>
               <h4>Minimarkets</h4>
-              <p>Manejo de múltiples categorías, POS por código de barras y control de merma y vencimientos.</p>
+              <p>Manejo de múltiples categorías, POS por código de barras, control de merma y vencimientos.</p>
             </div>
             <div className="landing-audience-card">
               <div className="landing-audience-icon">📦</div>
               <h4>Almacenes y depósitos</h4>
-              <p>Movimientos de inventario, kardex completo y reportes de valorización de stock.</p>
+              <p>Movimientos de inventario, kardex completo, ajustes manuales y reportes de valorización de stock.</p>
             </div>
           </div>
         </div>
@@ -355,16 +376,18 @@ export function LandingPage() {
               <div className="landing-pricing-divider" />
               <ul className="landing-pricing-features">
                 <li><span className="check">✓</span> <strong>POS</strong> con caja integrada (efectivo, tarjeta, Yape/Plin)</li>
-                <li><span className="check">✓</span> Inventario en tiempo real con alertas de stock mínimo</li>
+                <li><span className="check">✓</span> Inventario en tiempo real con alertas de stock</li>
                 <li><span className="check">✓</span> Control de lotes y fechas de vencimiento</li>
                 <li><span className="check">✓</span> Órdenes de compra y recepciones a proveedores</li>
                 <li><span className="check">✓</span> Devoluciones y notas de crédito aplicables en POS</li>
                 <li><span className="check">✓</span> <strong>Facturación electrónica</strong> — boletas y facturas a SUNAT</li>
-                <li><span className="check">✓</span> CDR oficial, descarga de XML y PDF</li>
-                <li><span className="check">✓</span> Reportes históricos sin límite de fecha</li>
-                <li><span className="check">✓</span> Exportación a Excel y PDF</li>
-                <li><span className="check">✓</span> Roles con permisos configurables por usuario</li>
-                <li><span className="check">✓</span> Hasta 10 usuarios</li>
+                <li><span className="check">✓</span> CDR oficial, XML y PDF descargables</li>
+                <li><span className="check">✓</span> Gestión de clientes y proveedores</li>
+                <li><span className="check">✓</span> Importación masiva desde Excel</li>
+                <li><span className="check">✓</span> Reportes históricos + exportación a Excel y PDF</li>
+                <li><span className="check">✓</span> Roles con permisos configurables</li>
+                <li><span className="check">✓</span> <strong>Hasta 5 usuarios</strong></li>
+                <li><span className="check">✓</span> <strong>Hasta 2,000 productos</strong></li>
                 <li><span className="check">✓</span> Soporte por WhatsApp en español</li>
               </ul>
               <Link to="/register?plan=BASICO" className="landing-pricing-cta primary">
@@ -388,9 +411,10 @@ export function LandingPage() {
                 <li><span className="check">✓</span> <strong>Hasta 5 sucursales</strong> — cada una completamente independiente</li>
                 <li><span className="check">✓</span> Stock, caja y POS por sucursal</li>
                 <li><span className="check">✓</span> Ventas y reportes filtrados por local</li>
-                <li><span className="check">✓</span> Movimientos de inventario entre locales</li>
-                <li><span className="check">✓</span> Usuarios y permisos por sucursal</li>
-                <li><span className="check">✓</span> Usuarios ilimitados</li>
+                <li><span className="check">✓</span> Movimientos de inventario entre sucursales</li>
+                <li><span className="check">✓</span> Usuarios y permisos configurables por sucursal</li>
+                <li><span className="check">✓</span> <strong>Hasta 15 usuarios</strong></li>
+                <li><span className="check">✓</span> <strong>Hasta 5,000 productos</strong></li>
                 <li><span className="check">✓</span> Soporte prioritario por WhatsApp</li>
               </ul>
               <Link to="/register?plan=PRO" className="landing-pricing-cta primary">
@@ -401,8 +425,8 @@ export function LandingPage() {
           </div>
 
           <p className="landing-pricing-note">
-            ¿Necesidades especiales o volumen mayor?{' '}
-            <a href="mailto:contacto@fluxus.pe">Contáctanos</a> para un plan a medida.
+            ¿Necesitas más usuarios, productos o sucursales?{' '}
+            <a href="https://wa.me/51994198710?text=Hola%2C%20necesito%20un%20plan%20a%20medida%20en%20Fluxus." target="_blank" rel="noopener noreferrer">Escríbenos</a> para un plan a medida.
           </p>
         </div>
       </section>
@@ -440,8 +464,8 @@ export function LandingPage() {
               <span className="landing-logo-text">Fluxus</span>
             </Link>
             <p>
-              Mini‑ERP para negocios peruanos. POS, inventario, compras, devoluciones
-              y facturación electrónica integrada con SUNAT en una sola plataforma.
+              Mini‑ERP para negocios peruanos. POS, inventario, compras, devoluciones,
+              clientes, proveedores y facturación electrónica integrada con SUNAT.
             </p>
             <p style={{ fontSize: '11px', marginTop: '8px', opacity: 0.6, lineHeight: 1.6 }}>
               Joaquin Castillo Tello · RUC: 10769109566<br />

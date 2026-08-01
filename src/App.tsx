@@ -56,6 +56,7 @@ import { GastosList } from './pages/gastos/GastosList';
 import { SucursalesPage } from './pages/sucursales/SucursalesPage';
 import { ComisionesPage } from './pages/comisiones/ComisionesPage';
 const CertificadosPage = lazy(() => import('./pages/certificados/CertificadosPage').then(m => ({ default: m.CertificadosPage })));
+import { DigemidOppfPage } from './pages/digemid/DigemidOppfPage';
 
 function App() {
   const { initialize, isAuthenticated, setSuscripcionEstado } = useAuthStore();
@@ -355,6 +356,16 @@ function App() {
                   <RoleProtectedRoute allowedRoles={['ADMIN']}>
                     <SucursalesPage />
                   </RoleProtectedRoute>
+                </SubscripcionGuard>
+              }
+            />
+
+            {/* DIGEMID / OPPF — solo BOTICA/FARMACIA */}
+            <Route
+              path="digemid"
+              element={
+                <SubscripcionGuard>
+                  <DigemidOppfPage />
                 </SubscripcionGuard>
               }
             />
