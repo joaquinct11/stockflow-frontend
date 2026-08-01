@@ -56,7 +56,9 @@ import { GastosList } from './pages/gastos/GastosList';
 import { SucursalesPage } from './pages/sucursales/SucursalesPage';
 import { ComisionesPage } from './pages/comisiones/ComisionesPage';
 const CertificadosPage = lazy(() => import('./pages/certificados/CertificadosPage').then(m => ({ default: m.CertificadosPage })));
-import { DigemidOppfPage } from './pages/digemid/DigemidOppfPage';
+import { DigemidOppfPage }       from './pages/digemid/DigemidOppfPage';
+import { SuperAdminLoginPage }   from './pages/superadmin/SuperAdminLoginPage';
+import { SuperAdminDashboard }   from './pages/superadmin/SuperAdminDashboard';
 
 function App() {
   const { initialize, isAuthenticated, setSuscripcionEstado } = useAuthStore();
@@ -99,6 +101,10 @@ function App() {
 
           {/* Página de plan / compra (carrito) - Pública */}
           <Route path="/plan" element={<PlanPage />} />
+
+          {/* Super Admin — completamente independiente */}
+          <Route path="/superadmin/login" element={<SuperAdminLoginPage />} />
+          <Route path="/superadmin" element={<SuperAdminDashboard />} />
 
           {/* Auth Routes - Públicas */}
           <Route path="/login" element={<Login />} />
