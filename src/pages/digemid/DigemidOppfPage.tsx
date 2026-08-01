@@ -1,10 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Search, Link2, Link2Off, Download, FileArchive, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Link2, Link2Off, FileArchive, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { digemidService, type ProductoDigemidDTO, type CatalogoDigemidDTO } from '../../services/digemid.service';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
@@ -107,7 +106,7 @@ function BuscarModal({ productoId, productoNombre, onVincular, onClose }: Buscar
         <div className="flex-1 overflow-y-auto">
           {buscando ? (
             <div className="flex items-center justify-center py-10">
-              <LoadingSpinner size="sm" />
+              <LoadingSpinner />
               <span className="ml-2 text-sm text-muted-foreground">Buscando...</span>
             </div>
           ) : resultados.length === 0 && query.trim().length >= 2 ? (
@@ -154,7 +153,7 @@ function BuscarModal({ productoId, productoNombre, onVincular, onClose }: Buscar
                       className="flex-shrink-0"
                     >
                       {vinculando === item.codProd ? (
-                        <LoadingSpinner size="sm" />
+                        <LoadingSpinner />
                       ) : (
                         <>
                           <Link2 size={14} className="mr-1" />
@@ -374,7 +373,7 @@ export function DigemidOppfPage() {
               className="flex-shrink-0 gap-2"
             >
               {exportando ? (
-                <LoadingSpinner size="sm" />
+                <LoadingSpinner />
               ) : (
                 <FileArchive size={16} />
               )}
@@ -497,7 +496,7 @@ export function DigemidOppfPage() {
                               className="text-xs h-7 px-2 text-rose-600 border-rose-300 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-700 dark:hover:bg-rose-900/20"
                             >
                               {desvinculando === p.id ? (
-                                <LoadingSpinner size="sm" />
+                                <LoadingSpinner />
                               ) : (
                                 <><Link2Off size={12} className="mr-1" />Desvincular</>
                               )}
