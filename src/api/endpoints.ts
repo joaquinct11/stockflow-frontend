@@ -229,6 +229,14 @@ export const API_ENDPOINTS = {
     CREAR_PLAN:      '/culqi/admin/crear-plan',
   },
 
+  DIGEMID: {
+    CATALOGO_BUSCAR: (q: string) => `/digemid/catalogo/buscar?q=${encodeURIComponent(q)}`,
+    PRODUCTOS: '/digemid/productos',
+    VINCULAR: (id: number) => `/digemid/productos/${id}/vincular`,
+    DESVINCULAR: (id: number) => `/digemid/productos/${id}/vincular`,
+    OPPF_EXPORTAR: (codEst: string) => `/digemid/oppf/exportar?codEstablecimiento=${encodeURIComponent(codEst)}`,
+  },
+
   NOTIFICACIONES: {
     LIST: '/notificaciones',
     NO_LEIDAS_COUNT: '/notificaciones/no-leidas-count',

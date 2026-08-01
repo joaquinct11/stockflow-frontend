@@ -14,7 +14,7 @@ const FEATURES_BASICO = [
   'Devoluciones y notas de crédito',
   'Facturación electrónica: boletas y facturas SUNAT',
   'Reportes históricos + exportación a Excel y PDF',
-  'Roles y permisos granulares (hasta 10 usuarios)',
+  'Roles y permisos granulares (hasta 5 usuarios)',
   'Soporte por WhatsApp en español',
 ];
 

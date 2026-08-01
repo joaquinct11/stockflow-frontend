@@ -12,8 +12,8 @@ export interface PlanInfo {
   };
 }
 
-const LIMITES_BASICO = { usuarios: 3,    productos: 500  };
-const LIMITES_PRO    = { usuarios: 9999, productos: 9999 };
+const LIMITES_BASICO = { usuarios: 5,    productos: 2000 };
+const LIMITES_PRO    = { usuarios: 15,   productos: 5000 };
 
 export function usePlan(): PlanInfo {
   const { user } = useAuthStore();
