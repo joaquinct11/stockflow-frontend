@@ -1263,6 +1263,137 @@
   font-weight: 600;
 }
 
+/* ===========================
+   Browser Frame (hero screenshot)
+   =========================== */
+.landing-browser-frame {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 24px 80px rgba(0, 0, 0, 0.6),
+    0 0 60px rgba(108, 99, 255, 0.18);
+  animation: float 6s ease-in-out infinite;
+}
+
+.landing-browser-bar {
+  background: #1a1a26;
+  border-bottom: 1px solid var(--border-light);
+  padding: 0.65rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.landing-browser-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.landing-browser-url {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: 'Space Mono', monospace;
+  max-width: 260px;
+  margin: 0 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.landing-browser-lock {
+  font-size: 0.65rem;
+  opacity: 0.6;
+}
+
+.landing-browser-content {
+  overflow: hidden;
+  line-height: 0;
+}
+
+.landing-browser-screenshot {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 560px;
+  object-fit: cover;
+  object-position: top left;
+}
+
+/* ===========================
+   Stats Bar
+   =========================== */
+.landing-stats-bar {
+  background: rgba(108, 99, 255, 0.06);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 2rem 1.5rem;
+}
+
+.landing-stats-grid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+
+.landing-stats-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 3rem;
+}
+
+.landing-stats-number {
+  font-family: 'Space Mono', monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--primary-light), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.landing-stats-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: 'Space Mono', monospace;
+}
+
+.landing-stats-divider {
+  width: 1px;
+  height: 40px;
+  background: var(--border-light);
+}
+
+@media (max-width: 640px) {
+  .landing-stats-grid {
+    gap: 1rem;
+  }
+  .landing-stats-item {
+    padding: 0.5rem 1.25rem;
+  }
+  .landing-stats-divider {
+    display: none;
+  }
+}
+
 /* ===== Mobile header actions: "Iniciar Sesión" al lado de "Empezar Gratis" ===== */
 @media (max-width: 640px) {
   /* Evita que el logo se coma el espacio */

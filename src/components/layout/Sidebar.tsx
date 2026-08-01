@@ -25,6 +25,7 @@ import {
   Receipt,
   Award,
   Boxes,
+  FlaskConical,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -88,6 +89,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const { isPro } = usePlan();
   const esRopa       = negocioConfig?.rubro === 'TIENDA_ROPA';
   const esServicios  = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
+  const esBoticaFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
   const esPro        = isPro || sucursales.length > 0;
 
   const isPathActive = (href: string) => {
@@ -267,6 +269,15 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         ],
       },
 
+      // ── DIGEMID / OPPF (solo BOTICA/FARMACIA) ────────────────────
+      {
+        type: 'item',
+        title: 'DIGEMID / OPPF',
+        href: '/dashboard/digemid',
+        icon: FlaskConical,
+        show: esBoticaFarmacia,
+      },
+
       // ── Certificados (solo BOTICA/FARMACIA, oculto para servicios) ─
       {
         type: 'item',
@@ -308,7 +319,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         show: true,
       },
     ],
-    [canAccess, isAdmin, puede, user?.rol, esPro, esServicios]
+    [canAccess, isAdmin, puede, user?.rol, esPro, esServicios, esBoticaFarmacia]
   );
 
   const defaultExpanded = useMemo(() => {
