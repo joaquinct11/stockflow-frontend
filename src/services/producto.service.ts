@@ -6,8 +6,10 @@ export const productoService = {
   /**
    * Obtener todos los productos del tenant actual
    */
-  getAll: async (sucursalId?: number): Promise<ProductoDTO[]> => {
-    const params = sucursalId ? { sucursalId } : {};
+  getAll: async (sucursalId?: number, incluirInactivos = false): Promise<ProductoDTO[]> => {
+    const params: Record<string, unknown> = {};
+    if (sucursalId) params.sucursalId = sucursalId;
+    if (incluirInactivos) params.incluirInactivos = true;
     const { data } = await axiosInstance.get<ProductoDTO[]>(
       API_ENDPOINTS.PRODUCTOS.LIST, { params }
     );
@@ -57,10 +59,11 @@ export const productoService = {
   /**
    * Crear producto
    */
-  create: async (producto: Omit<ProductoDTO, 'id' | 'tenantId'>): Promise<ProductoDTO> => {
+  create: async (producto: Omit<ProductoDTO, 'id' | 'tenantId'>, sucursalId?: number): Promise<ProductoDTO> => {
     const { data } = await axiosInstance.post<ProductoDTO>(
       API_ENDPOINTS.PRODUCTOS.CREATE,
-      producto
+      producto,
+      { params: sucursalId ? { sucursalId } : undefined }
     );
     return data;
   },
@@ -81,5 +84,16 @@ export const productoService = {
    */
   delete: async (id: number): Promise<void> => {
     await axiosInstance.delete(API_ENDPOINTS.PRODUCTOS.DELETE(id));
+  },
+
+  /**
+   * Activar o desactivar producto (solo ADMIN)
+   */
+  toggleActivo: async (id: number, activo: boolean): Promise<ProductoDTO> => {
+    const { data } = await axiosInstance.patch<ProductoDTO>(
+      `/productos/${id}/activo`,
+      { activo }
+    );
+    return data;
   },
 };
