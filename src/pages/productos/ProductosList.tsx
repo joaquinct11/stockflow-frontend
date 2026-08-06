@@ -37,6 +37,8 @@ import {
   ArrowUpAZ,
   ArrowDownAZ,
   TrendingUp,
+  EyeOff,
+  Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -78,6 +80,8 @@ export function ProductosList() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [mostrarInactivos, setMostrarInactivos] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -169,6 +173,11 @@ export function ProductosList() {
 
   useEffect(() => {
     if (!sucursalLoaded) return;
+    if (hasViewPermission) fetchData();
+  }, [mostrarInactivos]);
+
+  useEffect(() => {
+    if (!sucursalLoaded) return;
     if (hasViewPermission) {
       fetchData();
     } else if (canCreate('PRODUCTOS')) {
@@ -228,7 +237,7 @@ export function ProductosList() {
     try {
       setLoading(true);
 
-      const productosData = await productoService.getAll(sucursalId);
+      const productosData = await productoService.getAll(sucursalId, mostrarInactivos);
       setProductos(productosData);
 
       setLoadingUnidades(true);
@@ -278,7 +287,7 @@ export function ProductosList() {
 
         toast.success('Producto actualizado');
       } else {
-        const nuevoProducto = await productoService.create(formData);
+        const nuevoProducto = await productoService.create(formData, sucursalId);
 
         // Guardar variantes borrador en CREATE
         if (esRopa && variantesBorrador.length > 0 && nuevoProducto.id) {
@@ -297,6 +306,7 @@ export function ProductosList() {
               descripcion: 'Saldo inicial',
               usuarioId: user?.usuarioId ?? undefined,
               costoUnitario: formData.costoUnitario > 0 ? formData.costoUnitario : undefined,
+              sucursalId: sucursalId,
             });
           } catch (movErr) {
             if (import.meta.env.DEV) console.warn('⚠️ No se pudo crear el movimiento de saldo inicial:', movErr);
@@ -334,6 +344,19 @@ export function ProductosList() {
         }
       },
     });
+  };
+
+  const handleToggleActivo = async (id: number, activo: boolean) => {
+    setTogglingId(id);
+    try {
+      await productoService.toggleActivo(id, activo);
+      toast.success(activo ? 'Producto activado' : 'Producto desactivado');
+      await fetchData();
+    } catch {
+      toast.error('Error al cambiar estado del producto');
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   const handleEdit = async (producto: ProductoDTO) => {
@@ -721,6 +744,19 @@ export function ProductosList() {
                       className="pl-9 h-10"
                     />
                   </div>
+                  {canEdit('PRODUCTOS') && (
+                    <button
+                      onClick={() => setMostrarInactivos(v => !v)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                        mostrarInactivos
+                          ? 'bg-muted text-muted-foreground border-border'
+                          : 'bg-background text-muted-foreground border-border hover:border-primary hover:text-primary'
+                      }`}
+                    >
+                      {mostrarInactivos ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      {mostrarInactivos ? 'Ocultar inactivos' : 'Ver inactivos'}
+                    </button>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -768,7 +804,7 @@ export function ProductosList() {
                             '-';
 
                           return (
-                            <TableRow key={producto.id}>
+                            <TableRow key={producto.id} className={!producto.activo ? 'opacity-50' : ''}>
                               <TableCell>
                                 <p className="font-medium">{producto.nombre}</p>
                               </TableCell>
@@ -840,6 +876,23 @@ export function ProductosList() {
                                   {canEdit('PRODUCTOS') && (
                                     <Button variant="ghost" size="icon" onClick={() => handleEdit(producto)} title="Editar">
                                       <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+
+                                  {canEdit('PRODUCTOS') && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleToggleActivo(producto.id!, !producto.activo)}
+                                      title={producto.activo ? 'Desactivar producto' : 'Activar producto'}
+                                      disabled={togglingId === producto.id}
+                                    >
+                                      {togglingId === producto.id
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : producto.activo
+                                          ? <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                          : <Eye className="h-4 w-4 text-green-600" />
+                                      }
                                     </Button>
                                   )}
 
