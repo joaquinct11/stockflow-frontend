@@ -57,6 +57,7 @@ export function InventarioList() {
   const hasViewPermission = canView('INVENTARIO');
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
+  const [productosForm, setProductosForm] = useState<ProductoDTO[]>([]);
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,10 +156,11 @@ export function InventarioList() {
   const fetchFormData = async () => {
     try {
       const [productosData, unidadesData] = await Promise.all([
-        productoService.getAll(sucursalId),
+        productoService.getAll(),
         unidadMedidaService.getAll(),
       ]);
       setProductos(productosData);
+      setProductosForm(productosData);
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
       if (puede('VER_PROVEEDORES')) {
         const proveedoresData = await proveedorService.getAll();
@@ -173,11 +175,13 @@ export function InventarioList() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [productosData, unidadesData] = await Promise.all([
+      const [productosData, todosProdData, unidadesData] = await Promise.all([
         productoService.getAll(sucursalId),
+        productoService.getAll(),
         unidadMedidaService.getAll(),
       ]);
       setProductos(productosData);
+      setProductosForm(todosProdData);
       setUnidadesMedida(unidadesData.filter((u) => u.activo !== false));
       if (puede('VER_PROVEEDORES')) {
         const proveedoresData = await proveedorService.getAll();
@@ -204,14 +208,27 @@ export function InventarioList() {
   }, [proveedores]);
 
   // Para dealer: movimientos solo aplica a productos físicos (tipo PRODUCTO)
+  // Para la TABLA: solo productos de la sucursal actual (Option B)
   const productosFisicos = esServicios
     ? productos.filter((p) => p.tipo === 'PRODUCTO' || !p.tipo)
     : productos;
 
-  const productosOptions = productosFisicos.map((p) => ({
+  // Para el FORMULARIO: todos los productos del tenant (para poder asignar stock a cualquiera)
+  const productosFisicosForm = esServicios
+    ? productosForm.filter((p) => p.tipo === 'PRODUCTO' || !p.tipo)
+    : productosForm;
+
+  // Mapa id → stock en la sucursal actual (solo los productos que ya tienen stock/movimientos ahí)
+  const stockEnSucursal = useMemo(() => {
+    const m = new Map<number, number>();
+    productos.forEach((p) => { if (p.id != null) m.set(p.id, p.stockActual ?? 0); });
+    return m;
+  }, [productos]);
+
+  const productosOptions = productosFisicosForm.map((p) => ({
     id: p.id!,
     label: `${p.nombre}`,
-    subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock: ${p.stockActual ?? 0} | Categoría: ${p.categoriaNombre || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
+    subtitle: `Código: ${p.codigoBarras || 'N/A'} | Stock en sucursal: ${stockEnSucursal.get(p.id!) ?? 0} | Categoría: ${p.categoriaNombre || 'N/A'} | UM: ${unidadById.get(p.unidadMedidaId)?.nombre ?? '-'}`,
     searchText: [p.componentes, p.codigoBarras].filter(Boolean).join(' '),
   }));
 
@@ -878,7 +895,7 @@ export function InventarioList() {
                     setLotesDelProducto([]);
                     setAjusteLoteMovimientoId(null);
                     if (option) {
-                      const producto = productos.find((p) => p.id === option.id);
+                      const producto = productosForm.find((p) => p.id === option.id);
                       if (producto) {
                         setSelectedProducto(option);
                         setFormData({ ...formData, productoId: producto.id! });
