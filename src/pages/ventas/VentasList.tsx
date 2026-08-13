@@ -146,6 +146,42 @@ export function VentasList() {
   const [isEmitirComprobanteOpen, setIsEmitirComprobanteOpen] = useState(false);
   const [emitirForm, setEmitirForm] = useState<EmitirComprobanteForm>(emptyForm());
   const [emitirSubmitting, setEmitirSubmitting] = useState(false);
+  const [emitirClienteEncontrado, setEmitirClienteEncontrado] = useState<ClienteDTO | null>(null);
+  const [emitirBuscando, setEmitirBuscando] = useState(false);
+
+  // Búsqueda debounced por documento en el modal Emitir Comprobante
+  useEffect(() => {
+    if (!isEmitirComprobanteOpen) return;
+    const doc = emitirForm.receptor?.numeroDocumento?.trim() ?? '';
+    if (doc.length < 6) {
+      setEmitirClienteEncontrado(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setEmitirBuscando(true);
+      try {
+        const resultados = await clienteService.buscarPorDocumento(doc);
+        const encontrado = resultados[0] ?? null;
+        setEmitirClienteEncontrado(encontrado);
+        if (encontrado) {
+          setEmitirForm(prev => ({
+            ...prev,
+            receptor: {
+              ...prev.receptor,
+              tipoDocumento: (encontrado.tipoDocumento as 'DNI' | 'RUC') ?? prev.receptor?.tipoDocumento ?? 'DNI',
+              razonSocial: encontrado.nombre ?? prev.receptor?.razonSocial ?? '',
+              direccion: prev.receptor?.direccion || encontrado.direccion || '',
+            },
+          }));
+        }
+      } catch {
+        setEmitirClienteEncontrado(null);
+      } finally {
+        setEmitirBuscando(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [emitirForm.receptor?.numeroDocumento, emitirForm.tipo, isEmitirComprobanteOpen]);
 
   useEffect(() => {
     if (!sucursalLoaded) return;
@@ -243,8 +279,9 @@ export function VentasList() {
       setRegistrarOpen(false);
       resetRegistrarDialog();
       fetchData();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? 'Error al registrar');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message ?? 'Error al registrar');
     } finally {
       setRegistrarSaving(false);
     }
@@ -261,8 +298,8 @@ export function VentasList() {
   };
 
   const handleOpenEmitirComprobante = (venta: VentaDTO) => {
-    // Si la venta tiene cliente registrado, pre-llenar los datos del receptor
     const cliente = venta.clienteId ? clienteById.get(venta.clienteId) : null;
+    setEmitirClienteEncontrado(cliente ?? null);
     setEmitirForm({
       ventaId: venta.id!,
       tipo: 'BOLETA',
@@ -286,6 +323,48 @@ export function VentasList() {
     }
     try {
       setEmitirSubmitting(true);
+
+      // Resolver el clienteId para luego asociarlo a la venta
+      let clienteIdParaVenta: number | undefined = emitirClienteEncontrado?.id;
+
+      if (emitirClienteEncontrado?.id) {
+        // Cliente existe — actualizar si cambió nombre o dirección
+        const nombreNuevo = emitirForm.receptor?.razonSocial?.trim() || '';
+        const direccionNueva = emitirForm.receptor?.direccion?.trim() || '';
+        const cambiaNombre = nombreNuevo && nombreNuevo !== emitirClienteEncontrado.nombre;
+        const cambiaDireccion = direccionNueva !== (emitirClienteEncontrado.direccion ?? '');
+        if (cambiaNombre || cambiaDireccion) {
+          try {
+            await clienteService.update(emitirClienteEncontrado.id, {
+              ...emitirClienteEncontrado,
+              nombre: nombreNuevo || emitirClienteEncontrado.nombre,
+              direccion: direccionNueva || undefined,
+            });
+          } catch { /* no bloquear */ }
+        }
+      } else if (emitirForm.receptor?.numeroDocumento?.trim() && emitirForm.receptor?.razonSocial?.trim()) {
+        // Cliente nuevo — crear y capturar su id
+        try {
+          const creado = await clienteService.create({
+            nombre: emitirForm.receptor.razonSocial.trim(),
+            tipoDocumento: emitirForm.receptor.tipoDocumento ?? (emitirForm.tipo === 'FACTURA' ? 'RUC' : 'DNI'),
+            numeroDocumento: emitirForm.receptor.numeroDocumento.trim(),
+            direccion: emitirForm.receptor.direccion?.trim() || undefined,
+          });
+          clienteIdParaVenta = creado.id;
+        } catch { /* ignorar si ya existe */ }
+      }
+
+      // Asociar el cliente a la venta si aún no lo tiene
+      if (clienteIdParaVenta) {
+        const ventaActual = ventas.find(v => v.id === emitirForm.ventaId);
+        if (!ventaActual?.clienteId) {
+          try {
+            await ventaService.asignarCliente(emitirForm.ventaId, clienteIdParaVenta);
+          } catch { /* no bloquear */ }
+        }
+      }
+
       const payload: EmitirComprobanteRequest = {
         ventaId: emitirForm.ventaId,
         tipo: emitirForm.tipo,
@@ -297,6 +376,8 @@ export function VentasList() {
       const result = await facturacionService.emitirComprobante(payload);
       toast.success(`Comprobante emitido: ${result.numero ?? 'OK'}`);
       setIsEmitirComprobanteOpen(false);
+      setEmitirClienteEncontrado(null);
+      await fetchData();
     } catch (error: unknown) {
       const err = error as { response?: { status?: number; data?: { mensaje?: string } } };
       if (err?.response?.status === 403) toast.error('No tienes permiso para emitir comprobantes');
@@ -320,8 +401,9 @@ export function VentasList() {
           toast.success(`Venta #${venta.id} anulada`);
           await fetchData();
           setConfirmDialog({ ...confirmDialog, isOpen: false });
-        } catch (err: any) {
-          toast.error(err?.response?.data?.mensaje || 'Error al anular la venta');
+        } catch (err: unknown) {
+          const e = err as { response?: { data?: { mensaje?: string } } };
+          toast.error(e?.response?.data?.mensaje || 'Error al anular la venta');
         }
       },
     });
@@ -1302,10 +1384,11 @@ export function VentasList() {
       {/* Dialog - Emitir Comprobante desde Venta */}
       <Dialog
         isOpen={isEmitirComprobanteOpen}
-        onClose={() => setIsEmitirComprobanteOpen(false)}
+        onClose={() => { setIsEmitirComprobanteOpen(false); setEmitirClienteEncontrado(null); }}
         title="Emitir Comprobante"
         description={emitirForm.ventaId ? `Para Venta #${emitirForm.ventaId}` : ''}
         size="md"
+        noBackdrop={isDetailDialogOpen}
       >
         <form onSubmit={handleEmitirComprobante} className="space-y-4">
           <div className="space-y-1">
@@ -1326,7 +1409,8 @@ export function VentasList() {
                     type="radio"
                     className="sr-only"
                     checked={emitirForm.tipo === tipo}
-                    onChange={() =>
+                    onChange={() => {
+                      setEmitirClienteEncontrado(null);
                       setEmitirForm((prev) => ({
                         ...prev,
                         tipo,
@@ -1334,8 +1418,8 @@ export function VentasList() {
                           tipo === 'BOLETA'
                             ? { tipoDocumento: 'DNI' as const, numeroDocumento: '', razonSocial: '', direccion: '' }
                             : { tipoDocumento: 'RUC' as const, numeroDocumento: '', razonSocial: '', direccion: '' },
-                      }))
-                    }
+                      }));
+                    }}
                   />
                   {tipo}
                   <span className="text-xs text-muted-foreground font-normal">
@@ -1350,24 +1434,38 @@ export function VentasList() {
             <p className="text-sm font-medium">
               Datos del receptor {emitirForm.tipo === 'FACTURA' && <span className="text-destructive">*</span>}
             </p>
+            {/* Badge cliente encontrado */}
+            {emitirClienteEncontrado && (
+              <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md px-3 py-1.5">
+                <User size={12} />
+                <span>Cliente encontrado: <strong>{emitirClienteEncontrado.nombre}</strong></span>
+              </div>
+            )}
+
             {emitirForm.tipo === 'FACTURA' ? (
               <>
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground font-medium">
                     RUC <span className="text-destructive">*</span>
                   </label>
-                  <Input
-                    placeholder="20xxxxxxxxx (11 dígitos)"
-                    maxLength={11}
-                    value={emitirForm.receptor?.numeroDocumento ?? ''}
-                    onChange={(e) =>
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        receptor: { ...prev.receptor, tipoDocumento: 'RUC' as const, numeroDocumento: e.target.value },
-                      }))
-                    }
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      placeholder="20xxxxxxxxx (11 dígitos)"
+                      maxLength={11}
+                      value={emitirForm.receptor?.numeroDocumento ?? ''}
+                      onChange={(e) => {
+                        setEmitirClienteEncontrado(null);
+                        setEmitirForm((prev) => ({
+                          ...prev,
+                          receptor: { ...prev.receptor, tipoDocumento: 'RUC' as const, numeroDocumento: e.target.value, razonSocial: '', direccion: '' },
+                        }));
+                      }}
+                      required
+                    />
+                    {emitirBuscando && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground animate-pulse">buscando...</span>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground font-medium">
@@ -1390,17 +1488,23 @@ export function VentasList() {
               <>
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground font-medium">DNI (opcional)</label>
-                  <Input
-                    placeholder="DNI del cliente"
-                    maxLength={8}
-                    value={emitirForm.receptor?.numeroDocumento ?? ''}
-                    onChange={(e) =>
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        receptor: { ...prev.receptor, tipoDocumento: 'DNI' as const, numeroDocumento: e.target.value },
-                      }))
-                    }
-                  />
+                  <div className="relative">
+                    <Input
+                      placeholder="DNI del cliente"
+                      maxLength={8}
+                      value={emitirForm.receptor?.numeroDocumento ?? ''}
+                      onChange={(e) => {
+                        setEmitirClienteEncontrado(null);
+                        setEmitirForm((prev) => ({
+                          ...prev,
+                          receptor: { ...prev.receptor, tipoDocumento: 'DNI' as const, numeroDocumento: e.target.value, razonSocial: '', direccion: '' },
+                        }));
+                      }}
+                    />
+                    {emitirBuscando && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground animate-pulse">buscando...</span>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground font-medium">Nombre (opcional)</label>
