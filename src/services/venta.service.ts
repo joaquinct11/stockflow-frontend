@@ -73,4 +73,9 @@ export const ventaService = {
     const { data } = await axiosInstance.patch<VentaDTO>(API_ENDPOINTS.VENTAS.ANULAR(id));
     return data;
   },
+
+  asignarCliente: async (id: number, clienteId: number): Promise<VentaDTO> => {
+    const { data } = await axiosInstance.patch<VentaDTO>(API_ENDPOINTS.VENTAS.ASIGNAR_CLIENTE(id), { clienteId });
+    return data;
+  },
 };

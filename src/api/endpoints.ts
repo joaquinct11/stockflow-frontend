@@ -63,6 +63,7 @@ export const API_ENDPOINTS = {
     CREATE: '/ventas',
     UPDATE: (id: number) => `/ventas/${id}`,
     ANULAR: (id: number) => `/ventas/${id}/anular`,
+    ASIGNAR_CLIENTE: (id: number) => `/ventas/${id}/cliente`,
   },
   
   SUSCRIPCIONES: {

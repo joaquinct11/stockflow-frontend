@@ -10,9 +10,10 @@ interface DialogProps {
   description?: string;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  noBackdrop?: boolean;
 }
 
-export function Dialog({ isOpen, onClose, title, description, children, size = 'md' }: DialogProps) {
+export function Dialog({ isOpen, onClose, title, description, children, size = 'md', noBackdrop = false }: DialogProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape' && isOpen) onClose(); };
     document.addEventListener('keydown', handleEscape);
@@ -37,10 +38,12 @@ export function Dialog({ isOpen, onClose, title, description, children, size = '
   return (
     <div className="fixed inset-0 z-50">
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in"
-        onClick={onClose}
-      />
+      {!noBackdrop && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in"
+          onClick={onClose}
+        />
+      )}
 
       {/* Contenedor centrado */}
       <div className="fixed inset-0 top-16 flex items-center justify-center p-4 pointer-events-none">

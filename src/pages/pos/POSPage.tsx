@@ -670,6 +670,7 @@ export function POSPage() {
         // Pre-llenar el formulario de registro con el query si parece documento
         if (resultados.length === 0 && /^\d+$/.test(q)) {
           setNuevoClienteForm(prev => ({ ...prev, numeroDocumento: q }));
+          setReceptor(r => ({ ...r, docNumero: q }));
         }
       } catch {
         setClienteResultados([]);
@@ -713,6 +714,24 @@ export function POSPage() {
     setNuevoClienteForm({ nombre: '', tipoDocumento: 'DNI', numeroDocumento: '' });
   };
 
+  const handleRegistrarReceptor = async () => {
+    if (!receptor.nombre.trim()) { toast.error('El nombre es requerido'); return; }
+    setGuardandoCliente(true);
+    try {
+      const creado = await clienteService.create({
+        nombre: receptor.nombre.trim(),
+        tipoDocumento: tipoComprobante === 'FACTURA' ? 'RUC' : (receptor.docTipo || 'DNI'),
+        numeroDocumento: receptor.docNumero.trim() || undefined,
+      });
+      seleccionarClienteComoReceptor(creado);
+      toast.success(`Cliente "${creado.nombre}" registrado`);
+    } catch {
+      toast.error('Error al registrar el cliente');
+    } finally {
+      setGuardandoCliente(false);
+    }
+  };
+
   const handleRegistrarCliente = async () => {
     if (!nuevoClienteForm.nombre.trim()) {
       toast.error('El nombre del cliente es requerido');
@@ -746,6 +765,19 @@ export function POSPage() {
     }
     setCobrando(true);
     try {
+      // Auto-crear cliente si se escribió nombre + documento sin seleccionar uno existente
+      let clienteIdParaVenta = clienteSeleccionado?.id;
+      if (!clienteSeleccionado && receptor.nombre.trim() && receptor.docNumero.trim()) {
+        try {
+          const creado = await clienteService.create({
+            nombre: receptor.nombre.trim(),
+            tipoDocumento: tipoComprobante === 'FACTURA' ? 'RUC' : (receptor.docTipo || 'DNI'),
+            numeroDocumento: receptor.docNumero.trim(),
+          });
+          clienteIdParaVenta = creado.id;
+        } catch { /* no bloquea la venta si falla */ }
+      }
+
       const detalles: DetalleVentaDTO[] = cart.map(item => ({
         productoId: item.producto.id!,
         cantidad: item.cantidad,
@@ -762,7 +794,7 @@ export function POSPage() {
         estado: 'COMPLETADA',
         cajaId: cajaActiva?.id,
         notaCreditoCodigo: ncInfo?.valida ? ncCodigo : undefined,
-        clienteId: clienteSeleccionado?.id,
+        clienteId: clienteIdParaVenta,
         sucursalId: sucursalActual?.id,
         detalles,
       });
@@ -807,8 +839,13 @@ export function POSPage() {
           }
           const { data: comp } = await axiosInstance.post('/facturacion/comprobantes', body);
           setUltimoComprobanteId(comp.id ?? null);
-        } catch {
-          toast.error('Venta registrada, pero no se pudo emitir el comprobante. Emítelo desde Facturación.');
+        } catch (err: any) {
+          const backendMsg = err?.response?.data?.mensaje || err?.response?.data?.message || err?.message || '';
+          const displayMsg = backendMsg
+            ? `No se pudo emitir el comprobante: ${backendMsg}. Emítelo desde Facturación.`
+            : 'Venta registrada, pero no se pudo emitir el comprobante. Emítelo desde Facturación.';
+          toast.error(displayMsg);
+          console.error('[comprobante]', err?.response?.status, err?.response?.data);
         }
       }
 
@@ -1214,7 +1251,7 @@ export function POSPage() {
                 </div>
               )}
 
-              {/* BOLETA / FACTURA: búsqueda de cliente que rellena el receptor */}
+              {/* BOLETA / FACTURA: un solo campo DNI que busca y auto-completa */}
               {(tipoComprobante === 'BOLETA' || tipoComprobante === 'FACTURA') && (
                 <div className="space-y-2 pt-1">
                   <p className="text-xs text-gray-600 flex items-center gap-1.5">
@@ -1222,7 +1259,6 @@ export function POSPage() {
                     {tipoComprobante === 'FACTURA' ? 'Datos del receptor (RUC)' : 'Datos del receptor (DNI)'}
                   </p>
 
-                  {/* Cliente seleccionado → chip con datos del receptor */}
                   {clienteSeleccionado ? (
                     <div className="flex items-center gap-2 bg-blue-900/30 border border-blue-700/50 rounded-lg px-3 py-2">
                       <User size={14} className="text-blue-400 flex-shrink-0" />
@@ -1236,19 +1272,33 @@ export function POSPage() {
                     </div>
                   ) : (
                     <>
-                      {/* Buscar cliente existente */}
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder={tipoComprobante === 'FACTURA' ? 'Buscar por RUC o razón social...' : 'Buscar cliente por DNI o nombre...'}
-                          value={clienteQuery}
-                          onChange={e => { setClienteQuery(e.target.value); setShowRegistrarCliente(false); }}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600 pr-8"
-                        />
-                        {buscandoCliente && <Loader2 size={13} className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />}
+                      {/* Input DNI/RUC — dispara búsqueda automáticamente */}
+                      <div className="flex gap-2">
+                        {tipoComprobante === 'BOLETA' && (
+                          <select value={receptor.docTipo} onChange={e => setReceptor(r => ({ ...r, docTipo: e.target.value }))}
+                            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-sm text-white focus:outline-none focus:border-primary w-20 flex-shrink-0">
+                            <option value="DNI">DNI</option>
+                            <option value="CE">CE</option>
+                          </select>
+                        )}
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            placeholder={tipoComprobante === 'FACTURA' ? 'RUC del cliente...' : 'DNI del cliente...'}
+                            value={receptor.docNumero}
+                            maxLength={tipoComprobante === 'FACTURA' ? 11 : undefined}
+                            onChange={e => {
+                              const v = e.target.value;
+                              setReceptor(r => ({ ...r, docNumero: v, nombre: '' }));
+                              setClienteQuery(v);
+                            }}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600 font-mono pr-8"
+                          />
+                          {buscandoCliente && <Loader2 size={13} className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />}
+                        </div>
                       </div>
 
-                      {/* Resultados: al elegir uno rellena receptor automáticamente */}
+                      {/* Dropdown cuando hay resultados */}
                       {clienteResultados.length > 0 && (
                         <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-700/50">
                           {clienteResultados.slice(0, 5).map(c => (
@@ -1264,34 +1314,28 @@ export function POSPage() {
                         </div>
                       )}
 
-                      {/* Sin resultados o sin búsqueda: entrada manual */}
-                      {!clienteResultados.length && (
-                        <div className="space-y-2">
-                          {tipoComprobante === 'BOLETA' ? (
-                            <div className="flex gap-2">
-                              <select value={receptor.docTipo} onChange={e => setReceptor(r => ({ ...r, docTipo: e.target.value }))}
-                                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-sm text-white focus:outline-none focus:border-primary w-20 flex-shrink-0">
-                                <option value="DNI">DNI</option><option value="CE">CE</option>
-                              </select>
-                              <input type="text" placeholder="Nro. documento (opcional)" value={receptor.docNumero}
-                                onChange={e => setReceptor(r => ({ ...r, docNumero: e.target.value }))}
-                                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600" />
-                            </div>
-                          ) : (
-                            <input type="text" placeholder="RUC *" value={receptor.docNumero} maxLength={11}
-                              onChange={e => setReceptor(r => ({ ...r, docNumero: e.target.value }))}
-                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600 font-mono" />
-                          )}
-                          <input type="text"
-                            placeholder={tipoComprobante === 'FACTURA' ? 'Razón social *' : 'Nombre (opcional)'}
+                      {/* Nombre + registro: aparece cuando escribiste el doc y no hay resultados */}
+                      {!buscandoCliente && !clienteResultados.length && receptor.docNumero.trim() && (
+                        <div className="bg-gray-800 border border-dashed border-gray-600 rounded-lg p-3 space-y-2">
+                          <p className="text-xs text-amber-400 flex items-center gap-1.5"><UserPlus size={12} /> Cliente no encontrado — registrar</p>
+                          <input
+                            type="text"
+                            placeholder={tipoComprobante === 'FACTURA' ? 'Razón social *' : 'Nombre completo *'}
                             value={receptor.nombre}
                             onChange={e => setReceptor(r => ({ ...r, nombre: e.target.value }))}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600" />
+                            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-500"
+                          />
                           {tipoComprobante === 'FACTURA' && (
                             <input type="text" placeholder="Dirección (opcional)" value={receptor.direccion}
                               onChange={e => setReceptor(r => ({ ...r, direccion: e.target.value }))}
-                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-600" />
+                              className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-primary placeholder-gray-500" />
                           )}
+                          <button type="button" onClick={handleRegistrarReceptor}
+                            disabled={guardandoCliente || !receptor.nombre.trim()}
+                            className="w-full py-2 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
+                            {guardandoCliente ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                            Registrar y seleccionar
+                          </button>
                         </div>
                       )}
                     </>
