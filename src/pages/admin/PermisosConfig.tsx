@@ -140,50 +140,103 @@ const COLOR_MAP: Record<string, { bg: string; text: string; border: string; icon
 const ROL_CARDS = [
   {
     rol: 'ADMIN', label: 'Administrador',
-    descripcion: 'Acceso total sin restricciones.',
-    colors: { ring: 'ring-rose-200 dark:ring-rose-800', bg: 'bg-rose-50 dark:bg-rose-950/30', badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300', icon: 'bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400' },
+    descripcion: 'Acceso total sin restricciones a todos los módulos.',
+    colors: {
+      ring: 'ring-rose-200 dark:ring-rose-800',
+      bg: 'bg-rose-50 dark:bg-rose-950/30',
+      badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300',
+      icon: 'bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400',
+      pill: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+      pillNo: 'bg-muted/50 text-muted-foreground/40 line-through',
+      countBg: 'bg-rose-500 text-white',
+    },
     icon: <Crown size={18} />,
-    accesos: [
-      { icon: <ShoppingCart size={12} />, label: 'Ventas y POS',  ok: true },
-      { icon: <Wallet       size={12} />, label: 'Caja',          ok: true },
-      { icon: <Boxes        size={12} />, label: 'Inventario',    ok: true },
-      { icon: <Truck        size={12} />, label: 'Compras',       ok: true },
-      { icon: <Users        size={12} />, label: 'Usuarios',      ok: true },
-      { icon: <BarChart3    size={12} />, label: 'Reportes',      ok: true },
-      { icon: <FileText     size={12} />, label: 'Facturación',   ok: true },
-      { icon: <Settings2    size={12} />, label: 'Configuración', ok: true },
+    totalPermisos: 'Todos',
+    secciones: [
+      {
+        titulo: 'Acceso completo',
+        items: [
+          { icon: <ShoppingCart size={11} />, label: 'Ventas y POS' },
+          { icon: <Wallet       size={11} />, label: 'Caja' },
+          { icon: <Boxes        size={11} />, label: 'Inventario' },
+          { icon: <Truck        size={11} />, label: 'Compras y OC' },
+          { icon: <Users        size={11} />, label: 'Usuarios' },
+          { icon: <BarChart3    size={11} />, label: 'Reportes' },
+          { icon: <FileText     size={11} />, label: 'Facturación' },
+          { icon: <Package      size={11} />, label: 'Productos' },
+          { icon: <Building2    size={11} />, label: 'Proveedores' },
+          { icon: <Settings2    size={11} />, label: 'Configuración' },
+        ],
+      },
     ],
+    sinAcceso: [],
   },
   {
     rol: 'VENDEDOR', label: 'Vendedor',
     descripcion: 'Vende, cobra, emite comprobantes y atiende clientes.',
-    colors: { ring: 'ring-emerald-200 dark:ring-emerald-800', bg: 'bg-emerald-50 dark:bg-emerald-950/30', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300', icon: 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400' },
+    colors: {
+      ring: 'ring-emerald-200 dark:ring-emerald-800',
+      bg: 'bg-emerald-50 dark:bg-emerald-950/30',
+      badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300',
+      icon: 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400',
+      pill: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+      pillNo: 'bg-muted/50 text-muted-foreground/40',
+      countBg: 'bg-emerald-500 text-white',
+    },
     icon: <ShoppingCart size={18} />,
-    accesos: [
-      { icon: <ShoppingCart size={12} />, label: 'Ventas y POS',  ok: true  },
-      { icon: <Wallet       size={12} />, label: 'Caja',          ok: true  },
-      { icon: <Users        size={12} />, label: 'Clientes',      ok: true  },
-      { icon: <RotateCcw    size={12} />, label: 'Devoluciones',  ok: true  },
-      { icon: <FileText     size={12} />, label: 'Facturación',   ok: true  },
-      { icon: <Package      size={12} />, label: 'Ver productos', ok: true  },
-      { icon: <Boxes        size={12} />, label: 'Inventario',    ok: false },
-      { icon: <Truck        size={12} />, label: 'Compras',       ok: false },
+    totalPermisos: '21 permisos',
+    secciones: [
+      {
+        titulo: 'Tiene acceso',
+        items: [
+          { icon: <ShoppingCart size={11} />, label: 'Ventas y POS' },
+          { icon: <Wallet       size={11} />, label: 'Caja' },
+          { icon: <Users        size={11} />, label: 'Clientes' },
+          { icon: <RotateCcw    size={11} />, label: 'Devoluciones' },
+          { icon: <FileText     size={11} />, label: 'Facturación' },
+          { icon: <Package      size={11} />, label: 'Ver productos' },
+        ],
+      },
+    ],
+    sinAcceso: [
+      { icon: <Boxes     size={11} />, label: 'Inventario' },
+      { icon: <Truck     size={11} />, label: 'Compras' },
+      { icon: <BarChart3 size={11} />, label: 'Reportes' },
+      { icon: <Settings2 size={11} />, label: 'Configuración' },
     ],
   },
   {
     rol: 'GESTOR_INVENTARIO', label: 'Almacenero',
     descripcion: 'Gestiona stock, recibe mercadería y maneja compras.',
-    colors: { ring: 'ring-amber-200 dark:ring-amber-800', bg: 'bg-amber-50 dark:bg-amber-950/30', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300', icon: 'bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400' },
+    colors: {
+      ring: 'ring-amber-200 dark:ring-amber-800',
+      bg: 'bg-amber-50 dark:bg-amber-950/30',
+      badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+      icon: 'bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400',
+      pill: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+      pillNo: 'bg-muted/50 text-muted-foreground/40',
+      countBg: 'bg-amber-500 text-white',
+    },
     icon: <Boxes size={18} />,
-    accesos: [
-      { icon: <Boxes          size={12} />, label: 'Inventario',   ok: true  },
-      { icon: <Truck          size={12} />, label: 'Compras',      ok: true  },
-      { icon: <ClipboardCheck size={12} />, label: 'Recepciones',  ok: true  },
-      { icon: <Package        size={12} />, label: 'Productos',    ok: true  },
-      { icon: <Building2      size={12} />, label: 'Proveedores',  ok: true  },
-      { icon: <BarChart3      size={12} />, label: 'Reportes',     ok: true  },
-      { icon: <ShoppingCart   size={12} />, label: 'Ventas y POS', ok: false },
-      { icon: <Users          size={12} />, label: 'Clientes',     ok: false },
+    totalPermisos: '18 permisos',
+    secciones: [
+      {
+        titulo: 'Tiene acceso',
+        items: [
+          { icon: <Boxes          size={11} />, label: 'Inventario' },
+          { icon: <Truck          size={11} />, label: 'Compras y OC' },
+          { icon: <ClipboardCheck size={11} />, label: 'Recepciones' },
+          { icon: <Package        size={11} />, label: 'Productos' },
+          { icon: <Building2      size={11} />, label: 'Proveedores' },
+          { icon: <BarChart3      size={11} />, label: 'Reportes' },
+        ],
+      },
+    ],
+    sinAcceso: [
+      { icon: <ShoppingCart size={11} />, label: 'Ventas y POS' },
+      { icon: <Users        size={11} />, label: 'Clientes' },
+      { icon: <FileText     size={11} />, label: 'Facturación' },
+      { icon: <Settings2    size={11} />, label: 'Configuración' },
     ],
   },
 ];
@@ -363,24 +416,51 @@ export function PermisosConfig() {
       {/* ── Tarjetas de roles ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {ROL_CARDS.map(card => (
-          <div key={card.rol} className={`rounded-2xl border p-4 ${card.colors.bg} ring-1 ${card.colors.ring}`}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${card.colors.icon}`}>
+          <div key={card.rol} className={`rounded-2xl border p-4 space-y-4 ${card.colors.bg} ring-1 ${card.colors.ring}`}>
+
+            {/* Header */}
+            <div className="flex items-start gap-3">
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${card.colors.icon}`}>
                 {card.icon}
               </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-sm">{card.label}</p>
-                <p className="text-[11px] text-muted-foreground leading-tight truncate">{card.descripcion}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold text-sm">{card.label}</p>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${card.colors.countBg}`}>
+                    {card.totalPermisos}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">{card.descripcion}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-y-1.5 gap-x-2">
-              {card.accesos.map(a => (
-                <div key={a.label} className="flex items-center gap-1.5">
-                  <span className={a.ok ? 'text-green-500' : 'text-muted-foreground/30'}>{a.icon}</span>
-                  <span className={`text-[11px] truncate ${a.ok ? 'text-foreground/80' : 'text-muted-foreground/40'}`}>{a.label}</span>
+
+            {/* Secciones con acceso */}
+            {card.secciones.map(sec => (
+              <div key={sec.titulo}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">{sec.titulo}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {sec.items.map(item => (
+                    <span key={item.label} className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg ${card.colors.pill}`}>
+                      {item.icon}{item.label}
+                    </span>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
+
+            {/* Sin acceso */}
+            {card.sinAcceso.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Sin acceso</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {card.sinAcceso.map(item => (
+                    <span key={item.label} className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg ${card.colors.pillNo}`}>
+                      {item.icon}{item.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -505,17 +585,20 @@ export function PermisosConfig() {
                     <span className="text-xs text-muted-foreground">(no editables)</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {card.accesos.map(a => (
-                      <div
-                        key={a.label}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                          a.ok
-                            ? 'bg-background border-green-200 dark:border-green-800 text-foreground'
-                            : 'bg-muted/20 border-transparent text-muted-foreground/40'
-                        }`}
+                    {card.secciones.flatMap(sec => sec.items).map(item => (
+                      <div key={item.label}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-background border-green-200 dark:border-green-800 text-foreground"
                       >
-                        <span className={a.ok ? 'text-green-500' : 'text-muted-foreground/30'}>{a.icon}</span>
-                        {a.label}
+                        <span className="text-green-500">{item.icon}</span>
+                        {item.label}
+                      </div>
+                    ))}
+                    {card.sinAcceso.map(item => (
+                      <div key={item.label}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-muted/20 border-transparent text-muted-foreground/40"
+                      >
+                        <span className="text-muted-foreground/30">{item.icon}</span>
+                        {item.label}
                       </div>
                     ))}
                   </div>
