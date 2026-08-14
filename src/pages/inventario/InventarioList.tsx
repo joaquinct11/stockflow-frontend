@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { movimientoService } from '../../services/movimiento.service';
 import type { LoteVencimientoDTO } from '../../services/movimiento.service';
 import { productoService } from '../../services/producto.service';
@@ -48,6 +49,7 @@ import { ImportarProductosModal } from '../../components/inventario/ImportarProd
 export function InventarioList() {
   const { userId, tenantId } = useCurrentUser();
   const { canCreate, canView, puede } = usePermissions();
+  const location = useLocation();
   const { config: negocioConfig } = useTenantConfigStore();
   const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
   const isMultiLocal = sucursales.length > 1;
@@ -63,6 +65,15 @@ export function InventarioList() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [movStep, setMovStep] = useState<1 | 2 | 3>(1);
+
+  // Auto-abrir dialog si viene desde acceso rápido del dashboard
+  useEffect(() => {
+    if ((location.state as { openDialog?: boolean } | null)?.openDialog) {
+      setIsDialogOpen(true);
+      window.history.replaceState({}, '');
+    }
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
@@ -332,7 +343,7 @@ export function InventarioList() {
             costoUnitario: (formData.tipo === 'AJUSTE') ? formData.costoUnitario : undefined,
             precioVenta:   (formData.tipo === 'AJUSTE') ? formData.precioVenta   : undefined,
             sucursalId,
-            ajusteLoteMovimientoId: (formData.tipo === 'AJUSTE' && tipoAjuste === 'STOCK' && ajusteLoteMovimientoId)
+            ajusteLoteMovimientoId: (formData.tipo === 'AJUSTE' && tipoAjuste !== 'PRECIO' && ajusteLoteMovimientoId)
               ? ajusteLoteMovimientoId : undefined,
           };
 
@@ -359,6 +370,7 @@ export function InventarioList() {
       tenantId,
       proveedorId: undefined,
       costoUnitario: undefined,
+      precioVenta: undefined,
       lote: '',
       fechaVencimiento: undefined,
       registroSanitario: '',
@@ -369,6 +381,7 @@ export function InventarioList() {
     setSelectedVarianteId(null);
     setLotesDelProducto([]);
     setAjusteLoteMovimientoId(null);
+    setMovStep(1);
     setIsDialogOpen(false);
   };
 
@@ -871,21 +884,71 @@ export function InventarioList() {
         description="Registra una entrada de stock, ajuste o devolución"
         size="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="rounded-lg border bg-card">
-            <div className="border-b px-4 py-3">
-              <h3 className="text-sm font-semibold">Datos del movimiento</h3>
-              <p className="text-xs text-muted-foreground">
-                Completa la información requerida para registrar el movimiento
-              </p>
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Stepper indicator */}
+          <div className="flex items-center">
+            {(['Tipo', 'Producto', 'Detalles'] as const).map((label, i) => {
+              const n = (i + 1) as 1 | 2 | 3;
+              const done = movStep > n;
+              const active = movStep === n;
+              return (
+                <div key={label} className="flex items-center" style={{ flex: i < 2 ? 1 : undefined }}>
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium border transition-colors ${done ? 'bg-primary border-primary text-primary-foreground' : active ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
+                      {done ? '✓' : n}
+                    </div>
+                    <span className={`text-xs ${active ? 'font-medium text-primary' : done ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
+                  </div>
+                  {i < 2 && <div className="flex-1 h-px bg-border mx-2" />}
+                </div>
+              );
+            })}
+          </div>
 
-            <div className="p-4 space-y-5">
-              {/* 1) Producto */}
+          {/* ── Paso 1: Tipo ── */}
+          {movStep === 1 && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">¿Qué tipo de movimiento vas a registrar?</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {([
+                  { key: 'ENTRADA',   title: 'Ingresar stock',      subtitle: 'Compra / entrada',   icon: <TrendingUp className="h-4 w-4 text-green-600" /> },
+                  { key: 'AJUSTE',    title: 'Ajustar inventario',  subtitle: 'Cantidad o precios', icon: <RotateCcw className="h-4 w-4 text-blue-600" /> },
+                  { key: 'DEVOLUCION',title: 'Devolución',          subtitle: 'Del cliente',        icon: <ArrowLeftRight className="h-4 w-4 text-orange-600" /> },
+                ] as const).map((t) => {
+                  const active = formData.tipo === t.key;
+                  return (
+                    <button key={t.key} type="button"
+                      onClick={() => {
+                        setTipoAjuste('STOCK');
+                        setFormData(prev => ({
+                          ...prev,
+                          tipo: t.key as MovimientoInventarioDTO['tipo'],
+                          ...(t.key !== 'ENTRADA' && { proveedorId: undefined, costoUnitario: undefined, lote: '', fechaVencimiento: undefined, registroSanitario: '' }),
+                        }));
+                        setSelectedProveedorMov(null);
+                      }}
+                      className={`w-full rounded-lg border p-4 text-left transition ${active ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:border-primary/40 hover:bg-muted/40'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {t.icon}
+                        <div>
+                          <div className="text-sm font-semibold">{t.title}</div>
+                          <div className="text-xs text-muted-foreground">{t.subtitle}</div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Paso 2: Producto + Cantidad ── */}
+          {movStep === 2 && (
+            <div className="space-y-4">
+              {/* Producto */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Producto <span className="text-red-500">*</span>
-                </label>
+                <label className="text-sm font-medium">Producto <span className="text-red-500">*</span></label>
                 <Autocomplete
                   options={productosOptions}
                   value={selectedProducto}
@@ -898,7 +961,7 @@ export function InventarioList() {
                       const producto = productosForm.find((p) => p.id === option.id);
                       if (producto) {
                         setSelectedProducto(option);
-                        setFormData({ ...formData, productoId: producto.id! });
+                        setFormData(prev => ({ ...prev, productoId: producto.id!, precioVenta: producto.precioVenta ?? undefined }));
                         if (esRopa) {
                           setLoadingVariantes(true);
                           try {
@@ -919,18 +982,15 @@ export function InventarioList() {
                       }
                     } else {
                       setSelectedProducto(null);
-                      setFormData({ ...formData, productoId: 0 });
+                      setFormData(prev => ({ ...prev, productoId: 0, precioVenta: undefined }));
                     }
                   }}
                   placeholder="Buscar producto por nombre..."
                   emptyMessage="No se encontró el producto"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Selecciona el producto al que se le aplicará el movimiento.
-                </p>
               </div>
 
-              {/* 1b) Variante — solo TIENDA_ROPA cuando el producto tiene variantes */}
+              {/* Variantes — solo TIENDA_ROPA */}
               {esRopa && (loadingVariantes || variantesProducto.length > 0) && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
@@ -947,9 +1007,7 @@ export function InventarioList() {
                         const desc = [v.talla, v.color].filter(Boolean).join(' / ') || v.sku || `#${v.id}`;
                         const active = selectedVarianteId === v.id;
                         return (
-                          <button
-                            key={v.id}
-                            type="button"
+                          <button key={v.id} type="button"
                             onClick={() => setSelectedVarianteId(active ? null : v.id!)}
                             className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${active ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}
                           >
@@ -965,217 +1023,55 @@ export function InventarioList() {
                 </div>
               )}
 
-              {/* 2) Tipo Movimiento */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Tipo de Movimiento <span className="text-red-500">*</span>
-                </label>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {(
-                    [
-                      {
-                        key: 'ENTRADA',
-                        title: 'Entrada',
-                        subtitle: 'Stock / Compra',
-                        icon: <TrendingUp className="h-4 w-4 text-green-600" />,
-                      },
-                      {
-                        key: 'AJUSTE',
-                        title: 'Ajuste',
-                        subtitle: 'Inventario',
-                        icon: <RotateCcw className="h-4 w-4 text-blue-600" />,
-                      },
-                      {
-                        key: 'DEVOLUCION',
-                        title: 'Devolución',
-                        subtitle: 'Cliente',
-                        icon: <ArrowLeftRight className="h-4 w-4 text-orange-600" />,
-                      },
-                    ] as const
-                  ).map((t) => {
-                    const active = formData.tipo === t.key;
-                    return (
-                      <button
-                        key={t.key}
-                        type="button"
-                        onClick={() => {
-                          const nuevoTipo = t.key as MovimientoInventarioDTO['tipo'];
-                          setTipoAjuste('STOCK');
-                          setFormData({
-                            ...formData,
-                            tipo: nuevoTipo,
-                            ...(nuevoTipo !== 'ENTRADA' && {
-                              proveedorId: undefined,
-                              costoUnitario: undefined,
-                              lote: '',
-                              fechaVencimiento: undefined,
-                              registroSanitario: '',
-                            }),
-                          });
-                          setSelectedProveedorMov(null);
-                        }}
-                        className={[
-                          'w-full rounded-lg border p-3 text-left transition',
-                          active
-                            ? 'border-primary bg-primary/10 shadow-sm'
-                            : 'border-border hover:border-primary/40 hover:bg-muted/40',
-                        ].join(' ')}
-                        aria-pressed={active}
-                      >
-                        <div className="flex items-center gap-2">
-                          {t.icon}
-                          <div className="flex-1">
-                            <div className="text-sm font-semibold">{t.title}</div>
-                            <div className="text-xs text-muted-foreground">{t.subtitle}</div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* input hidden para mantener "required" */}
-                <select
-                  value={formData.tipo}
-                  onChange={(e) => {
-                    const nuevoTipo = e.target.value as MovimientoInventarioDTO['tipo'];
-                    setFormData({
-                      ...formData,
-                      tipo: nuevoTipo,
-                      ...(nuevoTipo !== 'ENTRADA' && {
-                        proveedorId: undefined,
-                        costoUnitario: undefined,
-                        lote: '',
-                        fechaVencimiento: undefined,
-                        registroSanitario: '',
-                      }),
-                    });
-                    setSelectedProveedorMov(null);
-                  }}
-                  className="hidden"
-                  required
-                >
-                  <option value="ENTRADA">ENTRADA</option>
-                  <option value="AJUSTE">AJUSTE</option>
-                  <option value="DEVOLUCION">DEVOLUCION</option>
-                </select>
-              </div>
-
-              {/* Campos adicionales para ENTRADA */}
-              {formData.tipo === 'ENTRADA' && (
-                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 p-4 space-y-4">
-                  <p className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider">Datos de entrada de stock</p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Proveedor */}
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-sm font-medium">Proveedor</label>
-                      <Autocomplete
-                        options={proveedores.filter(p => p.activo !== false).map(p => ({
-                          id: p.id!,
-                          label: p.nombre,
-                          subtitle: p.ruc ? `RUC: ${p.ruc}` : undefined,
-                        }))}
-                        value={(() => {
-                          const p = proveedores.find(p => p.id === formData.proveedorId);
-                          return p ? { id: p.id!, label: p.nombre } : null;
-                        })()}
-                        onChange={(option) => {
-                          setSelectedProveedorMov(option);
-                          setFormData({ ...formData, proveedorId: option?.id ? Number(option.id) : undefined });
-                        }}
-                        placeholder="Seleccionar proveedor (opcional)"
-                        emptyMessage="No se encontró el proveedor"
-                      />
-                    </div>
-
-                    {/* Costo unitario (siempre) + Precio de venta (solo no-ropa) */}
-                    <div className={`grid gap-3 ${esRopa ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Costo unitario</label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.costoUnitario ?? ''}
-                          onChange={(e) => setFormData({ ...formData, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined })}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      {!esRopa && (
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Precio de venta</label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={formData.precioVenta ?? ''}
-                            onChange={(e) => setFormData({ ...formData, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined })}
-                            placeholder="0.00"
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Lote / N° Pedido */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">{esRopa ? 'N° Pedido / Referencia' : 'Lote'}</label>
-                      <Input
-                        type="text"
-                        value={formData.lote ?? ''}
-                        onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
-                        placeholder={esRopa ? 'Ej: PED-2025-001' : 'Ej: LOT-2025-001'}
-                      />
-                    </div>
-
-                    {/* Fecha de vencimiento — solo farmacia/general (no ropa ni dealer) */}
-                    {!esRopa && !esServicios && (
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-sm font-medium">Fecha de vencimiento</label>
-                        <Input
-                          type="date"
-                          value={formData.fechaVencimiento ?? ''}
-                          onChange={(e) => setFormData({ ...formData, fechaVencimiento: e.target.value || undefined })}
-                        />
-                      </div>
-                    )}
-
-                    {/* Registro sanitario — solo para BOTICA/FARMACIA */}
-                    {esFarmacia && (
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-sm font-medium">
-                          Registro Sanitario <span className="text-red-500">*</span>
-                        </label>
-                        <Input
-                          type="text"
-                          value={formData.registroSanitario ?? ''}
-                          onChange={(e) => setFormData({ ...formData, registroSanitario: e.target.value })}
-                          placeholder="Ej: D.G.S.P. N° 23456-2024"
-                        />
-                        <p className="text-xs text-muted-foreground">Requerido por DIGEMID para productos farmacéuticos.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Sub-tipo de AJUSTE — todos los campos van dentro del bloque */}
+              {/* Tipo ajuste — solo AJUSTE */}
               {formData.tipo === 'AJUSTE' && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4 space-y-4">
-                  {/* Selector de lote — solo farmacia con lotes registrados y subtipo Stock */}
-                  {esFarmacia && tipoAjuste === 'STOCK' && (loadingLotesProducto || lotesDelProducto.length > 0) && (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium">Tipo de ajuste</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { key: 'STOCK', label: 'Stock', desc: 'Ajusta la cantidad' },
+                      { key: 'PRECIO', label: 'Precios', desc: 'Actualiza costo y precio' },
+                      { key: 'AMBOS', label: 'Ambos', desc: 'Stock y precios' },
+                    ] as const).map((opt) => (
+                      <button key={opt.key} type="button"
+                        onClick={() => {
+                          setTipoAjuste(opt.key);
+                          const prod = productosForm.find(p => p.id === formData.productoId);
+                          setFormData(prev => {
+                            const keepPrices = opt.key !== 'STOCK';
+                            const costo  = keepPrices ? (prev.costoUnitario  ?? (prod?.costoUnitario  != null ? Number(prod.costoUnitario)  : undefined)) : undefined;
+                            const precio = keepPrices ? (prev.precioVenta    ?? (prod?.precioVenta    != null ? Number(prod.precioVenta)    : undefined)) : undefined;
+                            return {
+                              ...prev,
+                              ...(opt.key === 'PRECIO' && { cantidad: 0 }),
+                              costoUnitario: costo,
+                              precioVenta:   precio,
+                            };
+                          });
+                        }}
+                        className={`rounded-lg border p-2.5 text-left transition text-sm ${tipoAjuste === opt.key ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/40' : 'border-border hover:border-blue-300 bg-background'}`}
+                      >
+                        <p className="font-medium">{opt.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                  {esFarmacia && tipoAjuste !== 'PRECIO' && (loadingLotesProducto || lotesDelProducto.length > 0) && (
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Lote a ajustar <span className="text-red-500">*</span>
-                      </label>
+                      <label className="text-sm font-medium">Lote a ajustar <span className="text-red-500">*</span></label>
                       {loadingLotesProducto ? (
                         <p className="text-xs text-muted-foreground">Cargando lotes...</p>
                       ) : (
-                        <select
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                           value={ajusteLoteMovimientoId ?? ''}
-                          onChange={(e) => setAjusteLoteMovimientoId(e.target.value ? Number(e.target.value) : null)}
+                          onChange={(e) => {
+                            const id = e.target.value ? Number(e.target.value) : null;
+                            setAjusteLoteMovimientoId(id);
+                            if (id) {
+                              const lote = lotesDelProducto.find(l => l.movimientoId === id);
+                              if (lote) setFormData(prev => ({ ...prev, cantidad: lote.stockActual ?? 0 }));
+                            }
+                          }}
                         >
                           <option value="">— Selecciona el lote —</option>
                           {lotesDelProducto.map((l) => (
@@ -1189,188 +1085,254 @@ export function InventarioList() {
                       )}
                       {ajusteLoteMovimientoId && (() => {
                         const lote = lotesDelProducto.find(l => l.movimientoId === ajusteLoteMovimientoId);
-                        return lote ? (
-                          <p className="text-xs text-muted-foreground">
-                            Stock actual del lote: <strong>{lote.stockActual ?? 0}</strong> unidades.
-                          </p>
-                        ) : null;
+                        return lote ? <p className="text-xs text-muted-foreground">Stock actual del lote: <strong>{lote.stockActual ?? 0}</strong> unidades.</p> : null;
                       })()}
                     </div>
                   )}
+                </div>
+              )}
 
-                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider">Tipo de ajuste</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {([
-                      { key: 'STOCK', label: 'Stock', desc: 'Ajusta la cantidad' },
-                      { key: 'PRECIO', label: 'Precios', desc: 'Actualiza costo y precio' },
-                      { key: 'AMBOS', label: 'Ambos', desc: 'Stock y precios' },
-                    ] as const).map((opt) => (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => {
-                          setTipoAjuste(opt.key);
-                          setFormData({ ...formData, costoUnitario: undefined, precioVenta: undefined, cantidad: 0 });
-                        }}
-                        className={`rounded-lg border p-2.5 text-left transition text-sm ${tipoAjuste === opt.key ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/40' : 'border-border hover:border-blue-300 bg-background'}`}
-                      >
-                        <p className="font-medium">{opt.label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
-                      </button>
-                    ))}
+              {/* Cantidad */}
+              {(formData.tipo !== 'AJUSTE' || tipoAjuste === 'STOCK' || tipoAjuste === 'AMBOS') && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {formData.tipo === 'AJUSTE' && ajusteLoteMovimientoId ? 'Nueva cantidad del lote' : 'Cantidad'}
+                    <span className="text-red-500"> *</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <button type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, cantidad: Math.max(0, (prev.cantidad || 0) - 1) }))}
+                      className="h-9 w-9 rounded-lg border border-border bg-muted hover:bg-muted/80 flex items-center justify-center text-lg font-medium"
+                    >−</button>
+                    <Input type="number" min="0"
+                      value={formData.cantidad === 0 ? '' : formData.cantidad}
+                      onChange={(e) => setFormData(prev => ({ ...prev, cantidad: parseInt(e.target.value) || 0 }))}
+                      placeholder="0" className="text-center font-semibold text-lg w-24" required
+                    />
+                    <button type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, cantidad: (prev.cantidad || 0) + 1 }))}
+                      className="h-9 w-9 rounded-lg border border-border bg-muted hover:bg-muted/80 flex items-center justify-center text-lg font-medium"
+                    >+</button>
+                    {selectedProducto && formData.tipo === 'ENTRADA' && formData.cantidad > 0 && (() => {
+                      const prod = productosForm.find(p => p.id === selectedProducto.id);
+                      const cur = prod ? (stockEnSucursal.get(prod.id!) ?? prod.stockActual ?? 0) : 0;
+                      return <span className="text-sm text-emerald-600 font-medium">→ {cur + formData.cantidad} en stock</span>;
+                    })()}
+                    {formData.tipo === 'AJUSTE' && ajusteLoteMovimientoId && formData.cantidad >= 0 && (() => {
+                      const lote = lotesDelProducto.find(l => l.movimientoId === ajusteLoteMovimientoId);
+                      const prod = productosForm.find(p => p.id === formData.productoId);
+                      const totalActual = prod ? (stockEnSucursal.get(prod.id!) ?? prod.stockActual ?? 0) : 0;
+                      const stockOtros = totalActual - (lote?.stockActual ?? 0);
+                      return <span className="text-sm text-blue-600 font-medium">→ {stockOtros + formData.cantidad} total ({stockOtros} otros lotes + {formData.cantidad} este lote)</span>;
+                    })()}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
 
-                  {/* Campos según sub-tipo */}
-                  {tipoAjuste === 'PRECIO' && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Nuevo costo unitario</label>
-                        <Input
-                          type="number" min="0" step="0.01"
-                          value={formData.costoUnitario ?? ''}
-                          onChange={(e) => setFormData({ ...formData, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined })}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      {!esRopa && (
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Nuevo precio de venta</label>
-                          <Input
-                            type="number" min="0" step="0.01"
-                            value={formData.precioVenta ?? ''}
-                            onChange={(e) => setFormData({ ...formData, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined })}
-                            placeholder="0.00"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
+          {/* ── Paso 3: Detalles ── */}
+          {movStep === 3 && (
+            <div className="space-y-4">
 
-                  {tipoAjuste === 'STOCK' && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        {ajusteLoteMovimientoId ? 'Nueva cantidad del lote' : 'Cantidad'}
-                        <span className="text-red-500"> *</span>
-                      </label>
-                      <Input
-                        type="number" min="0"
-                        value={formData.cantidad === 0 ? '' : formData.cantidad}
-                        onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
-                        placeholder="0"
-                        className="font-semibold"
-                        required
+              {/* ENTRADA */}
+              {formData.tipo === 'ENTRADA' && (<>
+                <div className="rounded-lg border bg-card p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Costos</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Costo unitario (compra)</label>
+                      <Input type="number" min="0" step="0.01"
+                        value={formData.costoUnitario ?? ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                        placeholder="0.00"
                       />
+                      <p className="text-xs text-muted-foreground">Lo que pagaste al proveedor</p>
                     </div>
-                  )}
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Precio de venta</label>
+                      <Input type="number" min="0" step="0.01"
+                        value={formData.precioVenta ?? ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                        placeholder="0.00"
+                        className={formData.precioVenta ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20' : ''}
+                      />
+                      {formData.precioVenta && <p className="text-xs text-emerald-600">Pre-llenado del producto — editable</p>}
+                    </div>
+                  </div>
+                </div>
 
-                  {tipoAjuste === 'AMBOS' && (
-                    <div className={`grid gap-3 ${esRopa ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Costo unitario</label>
-                        <Input
-                          type="number" min="0" step="0.01"
-                          value={formData.costoUnitario ?? ''}
-                          onChange={(e) => setFormData({ ...formData, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined })}
-                          placeholder="0.00"
+                {esFarmacia && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">Trazabilidad DIGEMID</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Lote <span className="text-red-500">*</span></label>
+                        <Input type="text" value={formData.lote ?? ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, lote: e.target.value }))}
+                          placeholder="LOT-2025-001" required
                         />
                       </div>
-                      {!esRopa && (
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Precio de venta</label>
-                          <Input
-                            type="number" min="0" step="0.01"
-                            value={formData.precioVenta ?? ''}
-                            onChange={(e) => setFormData({ ...formData, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined })}
-                            placeholder="0.00"
-                          />
-                        </div>
-                      )}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Cantidad <span className="text-red-500">*</span></label>
-                        <Input
-                          type="number" min="1"
-                          value={formData.cantidad === 0 ? '' : formData.cantidad}
-                          onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
-                          placeholder="0"
-                          className="font-semibold"
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Fecha de vencimiento <span className="text-red-500">*</span></label>
+                        <Input type="date" value={formData.fechaVencimiento ?? ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, fechaVencimiento: e.target.value || undefined }))}
                           required
                         />
                       </div>
                     </div>
-                  )}
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Registro sanitario <span className="text-red-500">*</span></label>
+                      <Input type="text" value={formData.registroSanitario ?? ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, registroSanitario: e.target.value }))}
+                        placeholder="D.G.S.P. N° 23456-2024" required
+                      />
+                    </div>
+                  </div>
+                )}
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Referencia</label>
-                    <Input
-                      type="text"
-                      placeholder="Documento / nota / código interno"
-                      value={formData.referencia}
-                      onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
+                {!esFarmacia && !esRopa && !esServicios && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Lote <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                      <Input type="text" value={formData.lote ?? ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, lote: e.target.value }))}
+                        placeholder="LOT-2025-001"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Fecha de vencimiento <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                      <Input type="date" value={formData.fechaVencimiento ?? ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, fechaVencimiento: e.target.value || undefined }))}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {esRopa && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">N° Pedido / Referencia <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                    <Input type="text" value={formData.lote ?? ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, lote: e.target.value }))}
+                      placeholder="PED-2025-001"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Proveedor <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                  <Autocomplete
+                    options={proveedores.filter(p => p.activo !== false).map(p => ({ id: p.id!, label: p.nombre, subtitle: p.ruc ? `RUC: ${p.ruc}` : undefined }))}
+                    value={(() => { const p = proveedores.find(p => p.id === formData.proveedorId); return p ? { id: p.id!, label: p.nombre } : null; })()}
+                    onChange={(option) => { setSelectedProveedorMov(option); setFormData(prev => ({ ...prev, proveedorId: option?.id ? Number(option.id) : undefined })); }}
+                    placeholder="Seleccionar proveedor (opcional)"
+                    emptyMessage="No se encontró el proveedor"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Referencia <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                    <Input type="text" placeholder="Documento / nota / código interno"
+                      value={formData.referencia} onChange={(e) => setFormData(prev => ({ ...prev, referencia: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Descripción <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                    <Input type="text" placeholder="Motivo o detalles del movimiento"
+                      value={formData.descripcion} onChange={(e) => setFormData(prev => ({ ...prev, descripcion: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </>)}
+
+              {/* AJUSTE */}
+              {formData.tipo === 'AJUSTE' && (<>
+                {(tipoAjuste === 'PRECIO' || tipoAjuste === 'AMBOS') && (
+                  <div className="rounded-lg border bg-card p-4 space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nuevos precios</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Nuevo costo unitario</label>
+                        <Input type="number" min="0" step="0.01"
+                          value={formData.costoUnitario ?? ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Nuevo precio de venta</label>
+                        <Input type="number" min="0" step="0.01"
+                          value={formData.precioVenta ?? ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Referencia <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                    <Input type="text" placeholder="Documento / nota / código interno"
+                      value={formData.referencia} onChange={(e) => setFormData(prev => ({ ...prev, referencia: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Descripción <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                    <Input type="text" placeholder="Motivo o detalles del movimiento"
+                      value={formData.descripcion} onChange={(e) => setFormData(prev => ({ ...prev, descripcion: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </>)}
+
+              {/* DEVOLUCIÓN */}
+              {formData.tipo === 'DEVOLUCION' && (
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Referencia <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                    <Input type="text" placeholder="Documento / nota / código interno"
+                      value={formData.referencia} onChange={(e) => setFormData(prev => ({ ...prev, referencia: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Descripción <span className="text-xs text-muted-foreground">(opcional)</span></label>
+                    <Input type="text" placeholder="Motivo de la devolución"
+                      value={formData.descripcion} onChange={(e) => setFormData(prev => ({ ...prev, descripcion: e.target.value }))}
                     />
                   </div>
                 </div>
               )}
-
-              {/* 3) Cantidad y Referencia — solo para no-AJUSTE */}
-              {formData.tipo !== 'AJUSTE' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      Cantidad <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={formData.cantidad === 0 ? '' : formData.cantidad}
-                      onChange={(e) => setFormData({ ...formData, cantidad: parseInt(e.target.value) || 0 })}
-                      placeholder="0"
-                      className="font-semibold"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Referencia</label>
-                    <Input
-                      type="text"
-                      placeholder="Documento / nota / código interno"
-                      value={formData.referencia}
-                      onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* 4) Descripción */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Descripción
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Motivo o detalles del movimiento (opcional)"
-                  value={formData.descripcion}
-                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Ej: Ajuste por conteo físico / Devolución por producto dañado.
-                </p>
-              </div>
             </div>
-          </div>
+          )}
 
-          {/* Acciones */}
-          <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end pt-2 border-t">
-            <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              className="w-full sm:w-auto"
-              disabled={formData.productoId === 0 || (formData.cantidad <= 0 && !(formData.tipo === 'AJUSTE' && tipoAjuste === 'PRECIO'))}
-            >
-              Registrar Movimiento
-            </Button>
+          {/* Navegación */}
+          <div className="flex flex-col-reverse sm:flex-row gap-2 justify-between pt-3 border-t">
+            {movStep === 1 ? (
+              <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">Cancelar</Button>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => setMovStep(s => (s - 1) as 1 | 2 | 3)} className="w-full sm:w-auto">← Atrás</Button>
+            )}
+            {movStep < 3 ? (
+              <Button type="button" className="w-full sm:w-auto"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (movStep === 1) { setMovStep(2); return; }
+                  if (formData.productoId === 0) { toast.error('Debes seleccionar un producto'); return; }
+                  if (esRopa && variantesProducto.length > 0 && !selectedVarianteId) { toast.error('Selecciona una variante'); return; }
+                  if (formData.tipo !== 'AJUSTE' && formData.cantidad <= 0) { toast.error('La cantidad debe ser mayor a 0'); return; }
+                  if (formData.tipo === 'AJUSTE' && tipoAjuste !== 'PRECIO' && formData.cantidad <= 0) { toast.error('La cantidad debe ser mayor a 0'); return; }
+                  if (esFarmacia && formData.tipo === 'AJUSTE' && tipoAjuste !== 'PRECIO' && lotesDelProducto.length > 0 && !ajusteLoteMovimientoId) { toast.error('Selecciona el lote'); return; }
+                  setMovStep(3);
+                }}
+              >Siguiente →</Button>
+            ) : (
+              <Button type="submit" className="w-full sm:w-auto">Registrar movimiento</Button>
+            )}
           </div>
         </form>
       </Dialog>

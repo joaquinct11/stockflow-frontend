@@ -5,7 +5,7 @@ import { productoService } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
 import { movimientoService } from '../../services/movimiento.service';
 import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard, TrendingDown, TrendingUp, Zap, ClipboardList, BarChart2, Wallet, FileText, Award } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard, TrendingDown, TrendingUp, Zap, ClipboardList, BarChart2, Wallet, FileText, Award, Users, ArrowRightLeft, PlusSquare } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { gastoService } from '../../services/gasto.service';
 import { comisionService } from '../../services/comision.service';
@@ -663,75 +663,162 @@ export function Dashboard() {
           ) : (
             /* ── Acciones para rubros con inventario ── */
             <>
-              {(rol === 'ADMIN' || rol === 'VENDEDOR') && (
-                <button
-                  onClick={() => navigate('/pos')}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-                >
-                  <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
-                    <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold leading-none">Nueva Venta</p>
-                    <p className="text-xs text-muted-foreground mt-1">Abrir POS</p>
-                  </div>
-                </button>
-              )}
-              {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
-                <button
-                  onClick={() => navigate('/dashboard/inventario')}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-                >
-                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
-                    <Package size={18} className="text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold leading-none">Ajuste Stock</p>
-                    <p className="text-xs text-muted-foreground mt-1">Inventario</p>
-                  </div>
-                </button>
-              )}
+              {/* ADMIN */}
               {rol === 'ADMIN' && (
-                <button
-                  onClick={() => navigate('/dashboard/gastos')}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-                >
-                  <div className="h-9 w-9 rounded-lg bg-rose-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-rose-500/20 transition-colors">
-                    <Wallet size={18} className="text-rose-600 dark:text-rose-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold leading-none">Registrar Gasto</p>
-                    <p className="text-xs text-muted-foreground mt-1">Egresos</p>
-                  </div>
-                </button>
+                <>
+                  <button
+                    onClick={() => navigate('/pos')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                      <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Nueva Venta</p>
+                      <p className="text-xs text-muted-foreground mt-1">Abrir POS</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/inventario', { state: { openDialog: true } })}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                      <ArrowRightLeft size={18} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Ingresar Stock</p>
+                      <p className="text-xs text-muted-foreground mt-1">Entrada / ajuste</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/productos', { state: { openDialog: true } })}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                      <PlusSquare size={18} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Nuevo Producto</p>
+                      <p className="text-xs text-muted-foreground mt-1">Crear producto</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/inventario')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                      <ClipboardList size={18} className="text-violet-600 dark:text-violet-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Ver Movimientos</p>
+                      <p className="text-xs text-muted-foreground mt-1">Historial stock</p>
+                    </div>
+                  </button>
+                </>
               )}
-              {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
-                <button
-                  onClick={() => navigate('/dashboard/reportes')}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-                >
-                  <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
-                    <BarChart2 size={18} className="text-violet-600 dark:text-violet-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold leading-none">Reportes</p>
-                    <p className="text-xs text-muted-foreground mt-1">Ver análisis</p>
-                  </div>
-                </button>
+
+              {/* VENDEDOR */}
+              {rol === 'VENDEDOR' && (
+                <>
+                  <button
+                    onClick={() => navigate('/pos')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                      <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Nueva Venta</p>
+                      <p className="text-xs text-muted-foreground mt-1">Abrir POS</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/ventas')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                      <FileText size={18} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Mis Ventas</p>
+                      <p className="text-xs text-muted-foreground mt-1">Ver historial</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/clientes')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                      <Users size={18} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Clientes</p>
+                      <p className="text-xs text-muted-foreground mt-1">Ver / buscar</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/productos')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                      <Package size={18} className="text-violet-600 dark:text-violet-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Productos</p>
+                      <p className="text-xs text-muted-foreground mt-1">Ver stock</p>
+                    </div>
+                  </button>
+                </>
               )}
-              {(rol === 'ADMIN' || rol === 'GESTOR_INVENTARIO') && (
-                <button
-                  onClick={() => navigate('/dashboard/compras/ordenes')}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-                >
-                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
-                    <ClipboardList size={18} className="text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold leading-none">Nueva OC</p>
-                    <p className="text-xs text-muted-foreground mt-1">Orden de compra</p>
-                  </div>
-                </button>
+
+              {/* GESTOR_INVENTARIO */}
+              {rol === 'GESTOR_INVENTARIO' && (
+                <>
+                  <button
+                    onClick={() => navigate('/dashboard/inventario', { state: { openDialog: true } })}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                      <ArrowRightLeft size={18} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Ingresar Stock</p>
+                      <p className="text-xs text-muted-foreground mt-1">Entrada / ajuste</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/inventario')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                      <ClipboardList size={18} className="text-violet-600 dark:text-violet-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Ver Movimientos</p>
+                      <p className="text-xs text-muted-foreground mt-1">Historial stock</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/compras/ordenes')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                      <ClipboardList size={18} className="text-green-600 dark:text-green-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Nueva OC</p>
+                      <p className="text-xs text-muted-foreground mt-1">Orden de compra</p>
+                    </div>
+                  </button>
+                </>
               )}
             </>
           )}
