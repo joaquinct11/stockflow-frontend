@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { categoriaService } from '../../services/categoria.service';
@@ -53,6 +53,7 @@ export function ProductosList() {
   const { user } = useAuthStore();
   const { config: negocioConfig } = useTenantConfigStore();
   const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const location = useLocation();
   const isMultiLocal = sucursales.length > 1;
   const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
   const [searchParams] = useSearchParams();
@@ -85,6 +86,14 @@ export function ProductosList() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Auto-abrir dialog si viene desde acceso rápido del dashboard
+  useEffect(() => {
+    if ((location.state as { openDialog?: boolean } | null)?.openDialog) {
+      setIsDialogOpen(true);
+      window.history.replaceState({}, '');
+    }
+  }, []);
 
   // Sugerencias de nombre duplicado
   const [nombreSugerencias, setNombreSugerencias] = useState<ProductoDTO[]>([]);
@@ -941,410 +950,259 @@ export function ProductosList() {
         description={editingId ? 'Actualiza la información' : (esServicios ? 'Agrega un nuevo servicio al catálogo' : 'Agrega un nuevo producto al inventario')}
         size="xl"
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">{editingId ? 'Editar producto' : 'Registrar producto'}</p>
-              <p className="text-xs text-muted-foreground">Completa la información. Los campos con * son obligatorios.</p>
-            </div>
-            <Badge variant={editingId ? 'secondary' : 'success'} className="w-fit">
-              {editingId ? 'Edición' : 'Nuevo'}
-            </Badge>
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
 
-          {/* Sección: Identidad */}
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <div className="mb-3">
-              <p className="text-sm font-semibold">Identificación</p>
-              <p className="text-xs text-muted-foreground">Nombre, código y clasificación.</p>
+          {/* ── Sección: Identificación ── */}
+          <div className="rounded-xl border overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/40">
+              <Package size={14} className="text-muted-foreground" />
+              <p className="text-sm font-medium">Identificación</p>
+              <Badge variant={editingId ? 'secondary' : 'success'} className="ml-auto text-xs py-0.5">
+                {editingId ? 'Edición' : 'Nuevo'}
+              </Badge>
             </div>
+            <div className="p-4 space-y-3">
+              {/* Imagen + Nombre */}
+              <div className="flex gap-4 items-start">
+                <div
+                  className="w-16 h-16 rounded-xl bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 border cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => imgInputRef.current?.click()}
+                  title="Subir foto del producto"
+                >
+                  {imgPreview
+                    ? <img src={imgPreview} alt="Preview" className="w-full h-full object-cover" />
+                    : <span className="text-2xl font-bold text-muted-foreground select-none">
+                        {formData.nombre?.charAt(0)?.toUpperCase() || <Upload size={20} className="text-muted-foreground" />}
+                      </span>
+                  }
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <label className="text-sm font-medium">
+                    Nombre <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Package className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Nombre del producto"
+                      value={formData.nombre}
+                      onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                      onFocus={() => nombreSugerencias.length > 0 && setMostrarSugerencias(true)}
+                      onBlur={() => setTimeout(() => setMostrarSugerencias(false), 150)}
+                      className="pl-10 h-10"
+                      required
+                      minLength={3}
+                    />
+                    {mostrarSugerencias && nombreSugerencias.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 z-[200] mt-1 rounded-lg shadow-xl overflow-hidden border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900">
+                        <p className="px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border-b border-amber-200 dark:border-amber-800 flex items-center gap-1.5">
+                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                          Ya existen productos con nombre similar
+                        </p>
+                        {nombreSugerencias.map((p) => (
+                          <button key={p.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setMostrarSugerencias(false)}
+                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800 last:border-0 cursor-default">
+                            <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.nombre}</span>
+                            {p.codigoBarras && <span className="ml-auto text-xs text-muted-foreground shrink-0 font-mono">{p.codigoBarras}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1">
+                    <button type="button" onClick={() => imgInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                      <Upload size={11} />
+                      {imgPreview ? 'Cambiar foto' : 'Subir foto'}
+                    </button>
+                    {imgPreview && (
+                      <button type="button"
+                        onClick={() => { setImgPreview(null); setFormData(p => ({ ...p, imagenUrl: undefined })); if (imgInputRef.current) imgInputRef.current.value = ''; }}
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors">
+                        <X size={11} /> Quitar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium">
-                  Nombre <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Package className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Nombre del producto"
-                    value={formData.nombre}
-                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                    onFocus={() => nombreSugerencias.length > 0 && setMostrarSugerencias(true)}
-                    onBlur={() => setTimeout(() => setMostrarSugerencias(false), 150)}
-                    className="pl-10 h-11"
-                    required
-                    minLength={3}
-                  />
-                  {mostrarSugerencias && nombreSugerencias.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 z-[200] mt-1 rounded-lg shadow-xl overflow-hidden border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900">
-                      <p className="px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border-b border-amber-200 dark:border-amber-800 flex items-center gap-1.5">
-                        <AlertTriangle className="h-3 w-3 shrink-0" />
-                        Ya existen productos con nombre similar
-                      </p>
-                      {nombreSugerencias.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => setMostrarSugerencias(false)}
-                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800 last:border-0 cursor-default"
-                        >
-                          <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.nombre}</span>
-                          {p.codigoBarras && (
-                            <span className="ml-auto text-xs text-muted-foreground shrink-0 font-mono">{p.codigoBarras}</span>
-                          )}
+              {/* Código + Categoría */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {!esServicios && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">
+                      Código de barras <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+                    </label>
+                    <div className="relative">
+                      <Barcode className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="123456789" value={formData.codigoBarras}
+                        onChange={(e) => setFormData({ ...formData, codigoBarras: e.target.value })}
+                        className="pl-10 h-10" />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Categoría <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Tag className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <select value={formData.categoriaId || ''}
+                        onChange={(e) => setFormData({ ...formData, categoriaId: Number(e.target.value) })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        required disabled={loadingUnidades}>
+                        <option value="" disabled>{loadingUnidades ? 'Cargando...' : 'Seleccione categoría'}</option>
+                        {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}{c.esGlobal ? '' : ' ✓'}</option>)}
+                      </select>
+                    </div>
+                    <button type="button" onClick={() => setNuevaCategoriaOpen(true)} title="Nueva categoría"
+                      className="h-10 w-10 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors flex-shrink-0">
+                      <Plus size={15} />
+                    </button>
+                  </div>
+                  {nuevaCategoriaOpen && (
+                    <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-primary">Nueva categoría</p>
+                        <button type="button" onClick={() => { setNuevaCategoriaOpen(false); setNuevaCategoriaNombre(''); }} className="text-muted-foreground hover:text-foreground"><X size={14} /></button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input type="text" autoFocus value={nuevaCategoriaNombre} onChange={e => setNuevaCategoriaNombre(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCrearCategoria())}
+                          placeholder="Ej: Lácteos, Snacks..."
+                          className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                        <button type="button" onClick={handleCrearCategoria} disabled={!nuevaCategoriaNombre.trim() || savingCategoria}
+                          className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors flex items-center gap-1">
+                          {savingCategoria ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Crear
                         </button>
-                      ))}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
+              {/* Unidad + Unidades por caja (farmacia) */}
               {!esServicios && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Código de Barras <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
-                </label>
-                <div className="relative">
-                  <Barcode className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="123456789"
-                    value={formData.codigoBarras}
-                    onChange={(e) => setFormData({ ...formData, codigoBarras: e.target.value })}
-                    className="pl-10 h-11"
-                  />
+                <div className={`grid gap-3 ${esFarmacia ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Unidad de medida <span className="text-red-500">*</span></label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Scale className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <select value={formData.unidadMedidaId || ''}
+                          onChange={(e) => setFormData({ ...formData, unidadMedidaId: Number(e.target.value) })}
+                          className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          required disabled={loadingUnidades}>
+                          <option value="" disabled>{loadingUnidades ? 'Cargando...' : 'Seleccione unidad'}</option>
+                          {unidadesMedida.map((u) => <option key={u.id} value={u.id}>{u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}</option>)}
+                        </select>
+                      </div>
+                      <button type="button" onClick={() => setNuevaUnidadOpen(true)} title="Nueva unidad"
+                        className="h-10 w-10 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors flex-shrink-0">
+                        <Plus size={15} />
+                      </button>
+                    </div>
+                    {nuevaUnidadOpen && (
+                      <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-primary">Nueva unidad de medida</p>
+                          <button type="button" onClick={() => { setNuevaUnidadOpen(false); setNuevaUnidadNombre(''); }} className="text-muted-foreground hover:text-foreground"><X size={14} /></button>
+                        </div>
+                        <div className="flex gap-2">
+                          <input type="text" autoFocus value={nuevaUnidadNombre} onChange={e => setNuevaUnidadNombre(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCrearUnidad())}
+                            placeholder="Ej: Caja, Docena, Litro..."
+                            className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                          <button type="button" onClick={handleCrearUnidad} disabled={!nuevaUnidadNombre.trim() || savingUnidad}
+                            className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors flex items-center gap-1">
+                            {savingUnidad ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Crear
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {esFarmacia && (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Unidades por caja</label>
+                      <div className="relative">
+                        <Boxes className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input type="number" min="1"
+                          value={formData.unidadesPorCaja === undefined || formData.unidadesPorCaja === 0 ? '' : formData.unidadesPorCaja}
+                          onChange={(e) => setFormData(p => ({ ...p, unidadesPorCaja: e.target.value ? parseInt(e.target.value) : undefined }))}
+                          placeholder="Ej: 100 tabletas/caja"
+                          className="pl-10 h-10" />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
               )}
 
-              {/* ── Categoría: select + botón crear ── */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Categoría <span className="text-red-500">*</span>
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Tag className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                    <select
-                      value={formData.categoriaId || ''}
-                      onChange={(e) => setFormData({ ...formData, categoriaId: Number(e.target.value) })}
-                      className="flex h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      required
-                      disabled={loadingUnidades}
-                    >
-                      <option value="" disabled>
-                        {loadingUnidades ? 'Cargando...' : 'Seleccione categoría'}
-                      </option>
-                      {categorias.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nombre}{c.esGlobal ? '' : ' ✓'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setNuevaCategoriaOpen(true)}
-                    title="Agregar nueva categoría"
-                    className="h-11 w-11 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors flex-shrink-0"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-
-                {/* Mini-panel nueva categoría */}
-                {nuevaCategoriaOpen && (
-                  <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-primary">Nueva categoría</p>
-                      <button type="button" onClick={() => { setNuevaCategoriaOpen(false); setNuevaCategoriaNombre(''); }}
-                        className="text-muted-foreground hover:text-foreground">
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        autoFocus
-                        value={nuevaCategoriaNombre}
-                        onChange={e => setNuevaCategoriaNombre(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCrearCategoria())}
-                        placeholder="Ej: Lácteos, Snacks, Ferretería..."
-                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleCrearCategoria}
-                        disabled={!nuevaCategoriaNombre.trim() || savingCategoria}
-                        className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors flex items-center gap-1"
-                      >
-                        {savingCategoria ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                        Crear
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Precio de venta inline — solo en modo servicios ── */}
+              {/* Precio inline — solo servicios */}
               {esServicios && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Precio <span className="text-red-500">*</span>
-                  </label>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Precio <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
+                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input type="number" step="0.01" min="0.01"
                       value={formData.precioVenta === 0 ? '' : formData.precioVenta}
                       onChange={(e) => setFormData({ ...formData, precioVenta: parseFloat(e.target.value || '0') })}
-                      placeholder="0.00"
-                      className="pl-10 h-11"
-                      required
-                    />
+                      placeholder="0.00" className="pl-10 h-10" required />
                   </div>
                 </div>
-              )}
-
-              {/* ── Unidad de medida: select + botón crear (oculto en servicios) ── */}
-              {!esServicios && (
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium">
-                  Unidad de Medida <span className="text-red-500">*</span>
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Scale className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                    <select
-                      value={formData.unidadMedidaId || ''}
-                      onChange={(e) => setFormData({ ...formData, unidadMedidaId: Number(e.target.value) })}
-                      className="flex h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      required
-                      disabled={loadingUnidades}
-                    >
-                      <option value="" disabled>
-                        {loadingUnidades ? 'Cargando...' : 'Seleccione unidad de medida'}
-                      </option>
-                      {unidadesMedida.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setNuevaUnidadOpen(true)}
-                    title="Agregar nueva unidad de medida"
-                    className="h-11 w-11 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors flex-shrink-0"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-
-                {/* Mini-panel nueva unidad */}
-                {nuevaUnidadOpen && (
-                  <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-primary">Nueva unidad de medida</p>
-                      <button type="button" onClick={() => { setNuevaUnidadOpen(false); setNuevaUnidadNombre(''); }}
-                        className="text-muted-foreground hover:text-foreground">
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        autoFocus
-                        value={nuevaUnidadNombre}
-                        onChange={e => setNuevaUnidadNombre(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCrearUnidad())}
-                        placeholder="Ej: Caja, Docena, Litro..."
-                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleCrearUnidad}
-                        disabled={!nuevaUnidadNombre.trim() || savingUnidad}
-                        className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors flex items-center gap-1"
-                      >
-                        {savingUnidad ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                        Crear
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
               )}
             </div>
           </div>
 
-          {/* En modo servicios el tipo siempre es SERVICIO — sin mostrar toggle */}
-
-          {/* Sección: Inventario — oculto para servicios */}
-          {(formData.tipo !== 'SERVICIO') && (
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <div className="mb-3">
-              <p className="text-sm font-semibold">Parámetros de inventario</p>
-              <p className="text-xs text-muted-foreground">Mínimos/máximos para control de stock.</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Stock actual</label>
-                <div className="relative">
-                  <Boxes className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="number"
-                    min="0"
-                    disabled
-                    value={formData.stockActual}
-                    onChange={(e) => setFormData({ ...formData, stockActual: parseInt(e.target.value || '0') })}
-                    className="pl-10 h-11"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">Se registrará como “Saldo inicial” al crear.</p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Stock mínimo <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={formData.stockMinimo === 0 ? '' : formData.stockMinimo}
-                  onChange={(e) => setFormData({ ...formData, stockMinimo: parseInt(e.target.value || '0') })}
-                  placeholder="0"
-                  className="h-11"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Stock máximo <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={formData.stockMaximo === 0 ? '' : formData.stockMaximo}
-                  onChange={(e) => setFormData({ ...formData, stockMaximo: parseInt(e.target.value || '0') })}
-                  placeholder="0"
-                  className="h-11"
-                  required
-                />
-              </div>
-            </div>
-          </div>
-          )}
-
-          {/* Sección: Precios — oculto en servicios porque está inline en Identificación */}
+          {/* ── Sección: Precio e inventario — oculto para servicios ── */}
           {!esServicios && (
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <div className="mb-3">
-              <p className="text-sm font-semibold">Precio de venta</p>
-              <p className="text-xs text-muted-foreground">El costo se actualiza automáticamente al registrar entradas de stock.</p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Precio de venta <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={formData.precioVenta === 0 ? '' : formData.precioVenta}
-                  onChange={(e) => setFormData({ ...formData, precioVenta: parseFloat(e.target.value || '0') })}
-                  placeholder="0.00"
-                  className="pl-10 h-11"
-                  required
-                />
+            <div className="rounded-xl border overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/40">
+                <DollarSign size={14} className="text-muted-foreground" />
+                <p className="text-sm font-medium">Precio e inventario</p>
               </div>
-            </div>
-          </div>
-          )}
-
-          {/* Sección: Variantes de ropa — solo TIENDA_ROPA */}
-          {esRopa && (
-            <div className="rounded-lg border border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-800 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-violet-800 dark:text-violet-300">Variantes de ropa</p>
-                  <p className="text-xs text-muted-foreground">Agrega cada combinación de talla y color con su stock.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={addVarianteBorrador}
-                  className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 transition-colors"
-                >
-                  <Plus size={13} /> Agregar variante
-                </button>
-              </div>
-
-              {variantesBorrador.length === 0 ? (
-                <div className="text-center py-4 text-xs text-muted-foreground border border-dashed border-violet-300 dark:border-violet-700 rounded-lg">
-                  Aún no hay variantes. Haz clic en "+ Agregar variante" para comenzar.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 px-1">
-                    {['Talla', 'Color', 'SKU (opcional)', ''].map(h => (
-                      <span key={h} className="text-xs font-medium text-muted-foreground">{h}</span>
-                    ))}
-                  </div>
-                  {variantesBorrador.map((v, idx) => (
-                    <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
-                      <select
-                        value={v.talla}
-                        onChange={e => updateVarianteBorrador(idx, 'talla', e.target.value)}
-                        className="rounded-md border border-input bg-background px-2 py-1.5 text-sm h-9"
-                      >
-                        <option value="">Sin talla</option>
-                        {['XS','S','M','L','XL','XXL','XXXL','28','30','32','34','36','38','40','42','44','UNICA'].map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <Input
-                        value={v.color}
-                        onChange={e => updateVarianteBorrador(idx, 'color', e.target.value)}
-                        placeholder="Ej: Negro, Azul..."
-                        className="h-9 text-sm"
-                      />
-                      <Input
-                        value={v.sku}
-                        onChange={e => updateVarianteBorrador(idx, 'sku', e.target.value)}
-                        placeholder="Ej: VEST-NEG-S"
-                        className="h-9 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeVarianteBorrador(idx)}
-                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+              <div className="p-4 space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Precio de venta <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input type="number" step="0.01" min="0.01"
+                        value={formData.precioVenta === 0 ? '' : formData.precioVenta}
+                        onChange={(e) => setFormData({ ...formData, precioVenta: parseFloat(e.target.value || '0') })}
+                        placeholder="0.00" className="pl-10 h-10" required />
                     </div>
-                  ))}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Stock mínimo <span className="text-red-500">*</span></label>
+                    <Input type="number" min="0"
+                      value={formData.stockMinimo === 0 ? '' : formData.stockMinimo}
+                      onChange={(e) => setFormData({ ...formData, stockMinimo: parseInt(e.target.value || '0') })}
+                      placeholder="0" className="h-10" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Stock máximo <span className="text-red-500">*</span></label>
+                    <Input type="number" min="0"
+                      value={formData.stockMaximo === 0 ? '' : formData.stockMaximo}
+                      onChange={(e) => setFormData({ ...formData, stockMaximo: parseInt(e.target.value || '0') })}
+                      placeholder="0" className="h-10" required />
+                  </div>
                 </div>
-              )}
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <AlertTriangle size={11} className="shrink-0" />
+                  El costo y el stock se actualizan al registrar entradas de inventario.
+                </p>
+              </div>
             </div>
           )}
 
-          {/* Sección: Clasificación — solo farmacia/botica */}
+          {/* ── Sección: Datos farmacéuticos — solo farmacia ── */}
           {esFarmacia && (
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <div className="mb-3">
-                <p className="text-sm font-semibold">Clasificación</p>
-                <p className="text-xs text-muted-foreground">Datos para búsqueda y presentación del producto.</p>
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30">
+                <Package size={14} className="text-emerald-700 dark:text-emerald-400" />
+                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">Datos farmacéuticos</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 p-3 rounded-lg border bg-background cursor-pointer"
+              <div className="p-4 space-y-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg border bg-background cursor-pointer select-none"
                   onClick={() => setFormData(p => ({ ...p, esGenerico: !p.esGenerico }))}>
                   <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${formData.esGenerico ? 'bg-primary border-primary' : 'border-muted-foreground'}`}>
                     {formData.esGenerico && <svg viewBox="0 0 12 10" className="w-3 h-3 text-primary-foreground fill-current"><path d="M1 5l3.5 3.5L11 1"/></svg>}
@@ -1354,79 +1212,83 @@ export function ProductosList() {
                     <p className="text-xs text-muted-foreground">Permite filtrar genéricos en el POS</p>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Unidades por caja</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={formData.unidadesPorCaja === undefined || formData.unidadesPorCaja === 0 ? '' : formData.unidadesPorCaja}
-                    onChange={(e) => setFormData(p => ({ ...p, unidadesPorCaja: e.target.value ? parseInt(e.target.value) : undefined }))}
-                    placeholder="Ej: 100 (tabletas/caja)"
-                    className="h-11"
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">
+                    Composición / Principios activos <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+                  </label>
+                  <textarea
+                    placeholder="Ej: paracetamol 500mg, amoxicilina 250mg, vitamina C..."
+                    value={formData.componentes ?? ''}
+                    onChange={e => setFormData(p => ({ ...p, componentes: e.target.value || undefined }))}
+                    rows={2}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                  <p className="text-xs text-muted-foreground">Cuántas unidades trae la caja o presentación.</p>
+                  <p className="text-xs text-muted-foreground">Permite encontrar este producto al buscar por ingrediente en el POS.</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Sección: Composición — solo farmacia/botica */}
-          {esFarmacia && (
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <div className="mb-3">
-                <p className="text-sm font-semibold">Composición / Contenido</p>
-                <p className="text-xs text-muted-foreground">Opcional. Lista los componentes o principios activos (ej: paracetamol 500mg, amoxicilina 250mg). Permite encontrar este producto al buscar por ingrediente en el POS.</p>
+          {/* ── Sección: Variantes — solo TIENDA_ROPA ── */}
+          {esRopa && (
+            <div className="rounded-xl border border-violet-200 dark:border-violet-800 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/20">
+                <div className="flex items-center gap-2">
+                  <Layers size={14} className="text-violet-600 dark:text-violet-400" />
+                  <p className="text-sm font-medium text-violet-800 dark:text-violet-300">Variantes</p>
+                  {variantesBorrador.length > 0 && (
+                    <span className="text-xs font-medium bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">
+                      {variantesBorrador.length}
+                    </span>
+                  )}
+                </div>
+                <button type="button" onClick={addVarianteBorrador}
+                  className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 transition-colors">
+                  <Plus size={12} /> Agregar
+                </button>
               </div>
-              <textarea
-                placeholder="Ej: paracetamol 500mg, amoxicilina 250mg, vitamina C..."
-                value={formData.componentes ?? ''}
-                onChange={e => setFormData(p => ({ ...p, componentes: e.target.value || undefined }))}
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+              <div className="p-4">
+                {variantesBorrador.length === 0 ? (
+                  <div className="text-center py-5 text-xs text-muted-foreground border border-dashed border-violet-300 dark:border-violet-700 rounded-lg">
+                    Haz clic en "+ Agregar" para añadir combinaciones de talla y color.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_28px] gap-2 px-1 mb-1">
+                      {['Talla', 'Color', 'SKU (opcional)', ''].map(h => (
+                        <span key={h} className="text-xs font-medium text-muted-foreground">{h}</span>
+                      ))}
+                    </div>
+                    {variantesBorrador.map((v, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_28px] gap-2 items-center">
+                        <select value={v.talla} onChange={e => updateVarianteBorrador(idx, 'talla', e.target.value)}
+                          className="rounded-md border border-input bg-background px-2 py-1.5 text-sm h-9">
+                          <option value="">Sin talla</option>
+                          {['XS','S','M','L','XL','XXL','XXXL','28','30','32','34','36','38','40','42','44','UNICA'].map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <Input value={v.color} onChange={e => updateVarianteBorrador(idx, 'color', e.target.value)} placeholder="Negro, Azul..." className="h-9 text-sm" />
+                        <Input value={v.sku} onChange={e => updateVarianteBorrador(idx, 'sku', e.target.value)} placeholder="VEST-NEG-S" className="h-9 text-sm" />
+                        <button type="button" onClick={() => removeVarianteBorrador(idx)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Sección: Imagen */}
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <div className="mb-3">
-              <p className="text-sm font-semibold">Imagen del producto</p>
-              <p className="text-xs text-muted-foreground">Opcional. Se mostrará en el POS para facilitar la identificación.</p>
-            </div>
-            <div className="flex gap-4 items-center">
-              {/* Vista previa */}
-              <div className="w-20 h-20 rounded-xl bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 border">
-                {imgPreview
-                  ? <img src={imgPreview} alt="Preview" className="w-full h-full object-cover" />
-                  : <span className="text-3xl font-bold text-muted-foreground">{formData.nombre?.charAt(0)?.toUpperCase() || '?'}</span>
-                }
-              </div>
-              {/* Controles */}
-              <div className="flex flex-col gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => imgInputRef.current?.click()}>
-                  <Upload size={13} className="mr-2" />
-                  {imgPreview ? 'Cambiar foto' : 'Subir foto'}
-                </Button>
-                {imgPreview && (
-                  <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive"
-                    onClick={() => { setImgPreview(null); setFormData(p => ({ ...p, imagenUrl: undefined })); if (imgInputRef.current) imgInputRef.current.value = ''; }}>
-                    <X size={13} className="mr-2" /> Quitar imagen
-                  </Button>
-                )}
-                <p className="text-xs text-muted-foreground">JPG, PNG o WebP · máx. 2.5 MB</p>
-              </div>
-            </div>
-            <input ref={imgInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleImageChange} />
-          </div>
-
-          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2 border-t">
-            <Button type="button" variant="outline" onClick={resetForm} className="h-11">
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-1 border-t">
+            <Button type="button" variant="outline" onClick={resetForm} className="h-10">
               Cancelar
             </Button>
-            <Button type="submit" disabled={formData.nombre.length < 3} className="h-11">
-              {editingId ? 'Actualizar' : 'Crear'} Producto
+            <Button type="submit" disabled={formData.nombre.length < 3} className="h-10">
+              {editingId ? 'Actualizar' : 'Crear'} {esServicios ? 'Servicio' : 'Producto'}
             </Button>
           </div>
+
+          <input ref={imgInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleImageChange} />
         </form>
       </Dialog>
 

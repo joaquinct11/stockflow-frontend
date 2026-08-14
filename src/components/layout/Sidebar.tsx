@@ -275,7 +275,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         title: 'DIGEMID / OPPF',
         href: '/dashboard/digemid',
         icon: FlaskConical,
-        show: esBoticaFarmacia,
+        show: esBoticaFarmacia && isAdmin,
       },
 
       // ── Certificados (solo BOTICA/FARMACIA, oculto para servicios) ─

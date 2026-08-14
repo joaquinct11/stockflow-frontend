@@ -25,6 +25,10 @@ export function Breadcrumb() {
     caja:            'Caja',
     'notas-credito': 'Notas de Crédito',
     gastos:          'Gastos y Egresos',
+    digemid:         'DIGEMID / OPPF',
+    certificados:    'Certificados',
+    comisiones:      'Comisiones',
+    sucursales:      'Sucursales',
   };
 
   // Segmentos que son solo agrupadores de ruta y no deben aparecer en el breadcrumb
