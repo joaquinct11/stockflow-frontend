@@ -16,6 +16,8 @@ import { useAuthStore } from '../../store/authStore';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useSucursalStore } from '../../store/sucursalStore';
+import { useOseConfigured } from '../../hooks/useOseConfigured';
+import { OseBanner } from '../../components/shared/OseBanner';
 
 type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
 type TimeFilter = 'HOY' | 'SEMANA' | 'MES' | 'ANUAL';
@@ -101,6 +103,7 @@ export function Dashboard() {
   const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
   const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
   const isMultiLocal = sucursales.length > 1;
+  const oseConfigured = useOseConfigured();
 
   const [loading, setLoading] = useState(true);
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
@@ -535,6 +538,9 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Banner OSE / facturación */}
+      {oseConfigured === false && <OseBanner />}
 
       {/* Header personalizado */}
       <div className="animate-fade-in-up flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">

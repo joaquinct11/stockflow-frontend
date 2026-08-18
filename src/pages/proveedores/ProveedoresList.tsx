@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { proveedorService } from '../../services/proveedor.service';
+import { refreshOnboarding } from '../../utils/onboardingEvents';
 import type { ProveedorDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -92,6 +93,7 @@ export function ProveedoresList() {
       } else {
         await proveedorService.create(formData);
         toast.success('Proveedor creado exitosamente');
+        refreshOnboarding();
       }
       resetForm();
       await fetchProveedores();

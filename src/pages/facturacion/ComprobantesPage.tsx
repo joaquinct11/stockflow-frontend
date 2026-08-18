@@ -20,6 +20,8 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useSucursalStore } from '../../store/sucursalStore';
+import { useOseConfigured } from '../../hooks/useOseConfigured';
+import { OseBanner } from '../../components/shared/OseBanner';
 
 const TIPO_OPTIONS: TipoComprobante[] = ['BOLETA', 'FACTURA'];
 // const ESTADO_OPTIONS = ['EMITIDO', 'ANULADO'];
@@ -54,6 +56,7 @@ export function ComprobantesPage() {
   const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
   const isMultiLocal = sucursales.length > 1;
   const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const oseConfigured = useOseConfigured();
 
   const canView = canAccess('FACTURACION');
   const canEmitir = puede('EMITIR_COMPROBANTE') || canCreate('FACTURACION');
@@ -402,6 +405,9 @@ export function ComprobantesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Banner OSE / facturación */}
+      {oseConfigured === false && <OseBanner />}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
