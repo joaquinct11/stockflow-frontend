@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { movimientoService } from '../../services/movimiento.service';
+import { refreshOnboarding } from '../../utils/onboardingEvents';
 import type { LoteVencimientoDTO } from '../../services/movimiento.service';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
@@ -350,6 +351,7 @@ export function InventarioList() {
     try {
       await movimientoService.create(payload);
       toast.success(`Movimiento de ${formData.tipo} registrado`);
+      refreshOnboarding();
       resetForm();
       await fetchData();
     } catch (error: any) {

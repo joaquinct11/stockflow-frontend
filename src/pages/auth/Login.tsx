@@ -7,6 +7,7 @@ import { Input } from '../../components/ui/Input';
 import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+
 export function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -39,60 +40,82 @@ export function Login() {
 
   return (
     <AuthShell>
-      <AuthCard
-        title="Bienvenido de nuevo"
-        description="Ingresa tus credenciales para continuar"
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Field label="Correo electrónico" htmlFor="email">
-            <Input
-              id="email"
-              type="email"
-              placeholder="tu@email.com"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              required
-              className="h-11"
-            />
-          </Field>
+      <div className="mx-auto w-full max-w-sm">
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label htmlFor="password" className="text-sm font-medium">
-                Contraseña
-              </label>
-              <Link
-                to="/forgot-password"
-                className="text-xs text-muted-foreground hover:text-primary transition-colors"
+        {/* Card */}
+        <div className="rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg shadow-slate-200/60 dark:shadow-black/50 overflow-hidden">
+
+<div className="p-6 sm:p-8">
+
+            {/* Header */}
+            <div className="mb-6">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Bienvenido de nuevo</h1>
+              <p className="text-sm text-muted-foreground mt-1">Ingresa tus credenciales para continuar</p>
+
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label htmlFor="email" className="text-sm font-medium">Correo electrónico</label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="tu@empresa.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
+                  className="h-11"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className="text-sm font-medium">Contraseña</label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
+                <PasswordInput
+                  id="password"
+                  value={formData.contraseña}
+                  show={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
+                  onChange={(v) => setFormData({ ...formData, contraseña: v })}
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-11 font-semibold text-sm"
+                disabled={loading}
               >
-                ¿Olvidaste tu contraseña?
+                {loading ? <Spinner label="Ingresando..." /> : 'Iniciar sesión'}
+              </Button>
+            </form>
+
+            {/* Register CTA */}
+            <div className="mt-5 pt-5 border-t border-border/60 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">¿No tienes cuenta?</p>
+              <Link
+                to="/register"
+                className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
+              >
+                Regístrate gratis →
               </Link>
             </div>
-            <PasswordInput
-              id="password"
-              value={formData.contraseña}
-              show={showPassword}
-              onToggle={() => setShowPassword((v) => !v)}
-              onChange={(v) => setFormData({ ...formData, contraseña: v })}
-            />
+
           </div>
+        </div>
 
-          <Button
-            type="submit"
-            className="w-full h-11 font-semibold text-sm mt-2"
-            disabled={loading}
-          >
-            {loading ? <Spinner label="Ingresando..." /> : 'Iniciar sesión'}
-          </Button>
-        </form>
-
-        <AuthFooter>
-          ¿No tienes cuenta?{' '}
-          <Link to="/register" className="text-primary hover:text-primary/80 font-semibold transition-colors">
-            Regístrate gratis
-          </Link>
-        </AuthFooter>
-      </AuthCard>
+        {/* Footer */}
+        <p className="mt-6 text-center text-[11px] text-muted-foreground/40">
+          © 2026 Fluxus · Todos los derechos reservados
+        </p>
+      </div>
     </AuthShell>
   );
 }
@@ -137,11 +160,6 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
 
         {/* Card */}
         <div className="w-full">{children}</div>
-
-        {/* Footer */}
-        <p className="mt-8 text-[11px] text-muted-foreground/40">
-          © 2026 Fluxus · Todos los derechos reservados
-        </p>
       </div>
     </div>
   );
