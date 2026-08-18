@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { productoService } from '../../services/producto.service';
+import { refreshOnboarding } from '../../utils/onboardingEvents';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { categoriaService } from '../../services/categoria.service';
 import { movimientoService } from '../../services/movimiento.service';
@@ -323,6 +324,7 @@ export function ProductosList() {
         }
 
         toast.success('Producto creado');
+        refreshOnboarding();
       }
 
       resetForm();

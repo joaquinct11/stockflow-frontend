@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { Breadcrumb } from './Breadcrumb';
+import { OnboardingChecklist } from '../shared/OnboardingChecklist';
 import { tenantConfigService } from '../../services/tenantConfig.service';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useAuthStore } from '../../store/authStore';
@@ -65,7 +66,7 @@ export function AppLayout() {
         </main>
       </div>
 
-
+      <OnboardingChecklist />
     </div>
   );
 }

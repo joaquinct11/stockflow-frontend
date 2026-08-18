@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cajaService } from '../../services/caja.service';
+import { refreshOnboarding } from '../../utils/onboardingEvents';
 import type { CorregirCierreDTO } from '../../services/caja.service';
 import type { CajaDTO, CerrarCajaDTO, RegistrarRetiroDTO } from '../../types';
 import { useAuthStore } from '../../store/authStore';
@@ -173,6 +174,7 @@ export function CajaPage() {
       const monto = parseFloat(montoApertura) || 0;
       await cajaService.abrir({ montoApertura: monto, sucursalId });
       toast.success('Caja abierta correctamente');
+      refreshOnboarding();
       setIsAbrirOpen(false);
       setMontoApertura('');
       fetchCajas();

@@ -19,6 +19,7 @@ import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useSucursalStore } from '../../store/sucursalStore';
 import type { ProductoDTO, DetalleVentaDTO, CajaDTO, ValidarNotaCreditoResponseDTO, VentaDTO, ProductoVarianteDTO } from '../../types';
 import { printVentaTicket } from '../../utils/printTicket';
+import { refreshOnboarding } from '../../utils/onboardingEvents';
 import { productoVarianteService } from '../../services/productoVariante.service';
 import { axiosInstance } from '../../api/axios.config';
 import { movimientoService } from '../../services/movimiento.service';
@@ -607,6 +608,7 @@ export function POSPage() {
       setCajaActiva(caja);
       setShowAbrirCaja(false);
       toast.success('Caja abierta. ¡Listo para vender!');
+      refreshOnboarding();
     } catch (err: any) {
       toast.error(err?.response?.data?.mensaje || 'Error al abrir caja');
     } finally {
@@ -800,6 +802,7 @@ export function POSPage() {
       });
 
       setUltimaVentaId(venta.id ?? null);
+      refreshOnboarding();
       setUltimaVenta({
         ...venta,
         vendedorNombre: user?.nombre ?? undefined,
