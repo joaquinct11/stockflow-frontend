@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   Circle,
@@ -316,7 +316,6 @@ function StockModal({ onClose }: { onClose: () => void }) {
 export function OnboardingChecklist() {
   const { user } = useAuthStore();
   const navigate  = useNavigate();
-  const location  = useLocation();
 
   const dismissedKey   = `onboarding_dismissed_${user?.tenantId ?? 'default'}`;
   const welcomedKey    = `onboarding_welcomed_${user?.tenantId ?? 'default'}`;
