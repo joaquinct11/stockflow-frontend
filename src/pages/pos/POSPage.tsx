@@ -856,7 +856,7 @@ export function POSPage() {
             ? `No se pudo emitir el comprobante: ${backendMsg}. Emítelo desde Facturación.`
             : 'Venta registrada, pero no se pudo emitir el comprobante. Emítelo desde Facturación.';
           toast.error(displayMsg);
-          console.error('[comprobante]', err?.response?.status, err?.response?.data);
+          if (import.meta.env.DEV) { console.error('[comprobante]', err?.response?.status, err?.response?.data); }
         }
       }
 

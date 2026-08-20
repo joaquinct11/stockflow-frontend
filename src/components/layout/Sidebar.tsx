@@ -27,7 +27,7 @@ import {
   Boxes,
   FlaskConical,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
@@ -347,6 +347,9 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   }, [location.pathname, location.search]);
 
   const [openGroups, setOpenGroups] = useState(defaultExpanded);
+  const [collapsedPopover, setCollapsedPopover] = useState<{ key: string; top: number } | null>(null);
+
+  useEffect(() => { setCollapsedPopover(null); }, [location.pathname]);
 
   useMemo(() => {
     setOpenGroups((prev) => ({ ...prev, ...defaultExpanded }));
@@ -370,6 +373,14 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
 
   return (
     <>
+      {/* Overlay flyout colapsado */}
+      {collapsed && collapsedPopover && (
+        <div
+          className="fixed inset-0 z-[65]"
+          onClick={() => setCollapsedPopover(null)}
+        />
+      )}
+
       {/* Overlay móvil */}
       {isOpen && (
         <div
@@ -387,7 +398,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
           'lg:translate-x-0',
           collapsed ? 'lg:w-16' : 'lg:w-64',
           isOpen ? 'translate-x-0' : '-translate-x-full',
-          'w-64 lg:z-40'
+          !isOpen && 'max-lg:pointer-events-none',
+          'w-64 lg:z-20'
         )}
       >
         {/* ── Logo ──────────────────────────────────────────────── */}
@@ -423,9 +435,11 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
           <button
             onClick={() => onCollapsedChange(!collapsed)}
             className={cn(
-              'hidden lg:flex items-center justify-center rounded-md p-1.5',
-              'text-slate-300/70 hover:text-white hover:bg-white/10',
-              collapsed && 'absolute -right-3 top-5 bg-[#0f1117] border border-white/[0.08] shadow-md'
+              'hidden lg:flex items-center justify-center transition-colors',
+              'text-slate-400 hover:text-white',
+              collapsed
+                ? 'absolute -right-5 top-1/2 -translate-y-1/2 h-10 w-5 bg-[#0f1117] border border-white/[0.12] shadow-lg rounded-r-lg rounded-l-none hover:bg-white/10'
+                : 'rounded-md p-1.5 hover:bg-white/10'
             )}
             aria-label={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
           >
@@ -489,11 +503,20 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                 <div key={entry.key} className="space-y-0.5">
                   <button
                     type="button"
-                    onClick={() => (collapsed ? undefined : toggleGroup(entry.key))}
+                    onClick={(e) => {
+                      if (collapsed) {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setCollapsedPopover((prev) =>
+                          prev?.key === entry.key ? null : { key: entry.key, top: rect.top }
+                        );
+                      } else {
+                        toggleGroup(entry.key);
+                      }
+                    }}
                     className={cn(
                       'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                       collapsed && 'justify-center px-2',
-                      groupActive
+                      groupActive || (collapsed && collapsedPopover?.key === entry.key)
                         ? 'bg-primary/15 text-primary'
                         : 'text-slate-300/70 hover:text-white hover:bg-white/10'
                     )}
@@ -561,6 +584,45 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
           </div>
         )}
       </aside>
+
+      {/* Flyout de grupos — fuera del aside para escapar su transform/stacking context */}
+      {collapsed && collapsedPopover && (() => {
+        const entry = menu
+          .filter((e) => e.show)
+          .find((e) => e.type === 'group' && (e as GroupItem).key === collapsedPopover.key) as GroupItem | undefined;
+        if (!entry) return null;
+        const children = entry.items.filter((it) => it.show);
+        return (
+          <div
+            className="fixed left-16 z-[70] min-w-[200px] bg-[#0f1117] border border-white/[0.1] rounded-lg shadow-2xl py-1.5 overflow-hidden"
+            style={{ top: collapsedPopover.top }}
+          >
+            <div className="px-3 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 border-b border-white/[0.06]">
+              {entry.title}
+            </div>
+            {children.map((it) => {
+              const Icon = it.icon;
+              const active = isPathActive(it.href);
+              return (
+                <Link
+                  key={it.href}
+                  to={it.href}
+                  onClick={() => { onClose(); setCollapsedPopover(null); }}
+                  className={cn(
+                    'flex items-center gap-2.5 px-3 py-2 text-sm transition-all',
+                    active
+                      ? 'text-white bg-white/10 font-semibold'
+                      : 'text-slate-300/70 hover:text-white hover:bg-white/10'
+                  )}
+                >
+                  <Icon size={15} className="flex-shrink-0" />
+                  <span>{it.title}</span>
+                </Link>
+              );
+            })}
+          </div>
+        );
+      })()}
     </>
   );
 }

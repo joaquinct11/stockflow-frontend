@@ -52,6 +52,11 @@ export function KardexPage() {
   const [kardexProducto, setKardexProducto] = useState<ProductoDTO | null>(null);
   const [kardexMovimientos, setKardexMovimientos] = useState<MovimientoInventarioDTO[]>([]);
 
+  const defaultKardexDesde = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
+  const defaultKardexHasta = new Date().toISOString().slice(0, 10);
+  const [kardexDesde, setKardexDesde] = useState(defaultKardexDesde);
+  const [kardexHasta, setKardexHasta] = useState(defaultKardexHasta);
+
   useEffect(() => {
     if (!sucursalLoaded) return;
     if (hasViewPermission) {
@@ -95,27 +100,12 @@ export function KardexPage() {
     valor:     productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0),
   }), [productos]);
 
-  const stockFinalKardex = useMemo(() => {
-    let stock = 0;
-    for (const m of kardexMovimientos) {
-      if (m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION') {
-        stock += m.cantidad;
-      } else if (m.tipo === 'SALIDA') {
-        stock -= m.cantidad;
-      } else if (m.tipo === 'AJUSTE') {
-        stock += m.cantidad;
-      }
-    }
-    return stock;
-  }, [kardexMovimientos]);
-
-  const openKardex = async (producto: ProductoDTO) => {
-    setKardexProducto(producto);
-    setIsKardexOpen(true);
+  const fetchKardex = async (producto: ProductoDTO, desde: string, hasta: string) => {
     setKardexLoading(true);
     try {
-      const data = await movimientoService.getByProducto(producto.id!, sucursalId);
-      // Sort ascending by date so running stock is calculated correctly
+      const desdeISO = new Date(desde + 'T00:00:00').toISOString().slice(0, 19);
+      const hastaISO = new Date(hasta + 'T23:59:59').toISOString().slice(0, 19);
+      const data = await movimientoService.getByProducto(producto.id!, sucursalId, desdeISO, hastaISO);
       const sorted = [...data].sort((a, b) => {
         const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -123,11 +113,19 @@ export function KardexPage() {
       });
       setKardexMovimientos(sorted);
     } catch (e) {
-      if (import.meta.env.DEV) { console.error(e);}
+      if (import.meta.env.DEV) { console.error(e); }
       toast.error('Error al cargar Kardex');
     } finally {
       setKardexLoading(false);
     }
+  };
+
+  const openKardex = async (producto: ProductoDTO) => {
+    setKardexProducto(producto);
+    setKardexDesde(defaultKardexDesde);
+    setKardexHasta(defaultKardexHasta);
+    setIsKardexOpen(true);
+    await fetchKardex(producto, defaultKardexDesde, defaultKardexHasta);
   };
 
   const closeKardex = () => {
@@ -375,20 +373,43 @@ export function KardexPage() {
       <Dialog
         isOpen={isKardexOpen}
         onClose={closeKardex}
-        title="Kardex del producto"
+        title="Detalle del producto (Kardex)"
         description={
           kardexProducto
-            ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock actual: ${kardexMovimientos.length > 0 ? stockFinalKardex : (kardexProducto.stockActual ?? 0)}`
+            ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock actual: ${kardexProducto.stockActual ?? 0}`
             : 'Historial de movimientos'
         }
         size="xl"
       >
+        {/* Filtro de fechas */}
+        <div className="flex flex-wrap items-end gap-2 pb-4 border-b mb-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Desde</label>
+            <input type="date" value={kardexDesde} onChange={e => setKardexDesde(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Hasta</label>
+            <input type="date" value={kardexHasta} onChange={e => setKardexHasta(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+          </div>
+          <Button size="sm" onClick={() => { if (kardexProducto) fetchKardex(kardexProducto, kardexDesde, kardexHasta); }}>
+            Filtrar
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => { setKardexDesde(defaultKardexDesde); setKardexHasta(defaultKardexHasta); if (kardexProducto) fetchKardex(kardexProducto, defaultKardexDesde, defaultKardexHasta); }}>
+            Últimos 90 días
+          </Button>
+          <span className="text-xs text-muted-foreground self-end pb-1">
+            {kardexMovimientos.length} movimiento(s)
+          </span>
+        </div>
+
         {kardexLoading ? (
           <LoadingSpinner />
         ) : kardexMovimientos.length === 0 ? (
           <EmptyState
             title="Sin movimientos"
-            description="Este producto no tiene movimientos registrados"
+            description="No hay movimientos en el período seleccionado"
           />
         ) : (
           <div className="overflow-x-auto">
@@ -407,7 +428,13 @@ export function KardexPage() {
               </TableHeader>
               <TableBody>
                 {(() => {
-                  let stockAcumulado = 0;
+                  const netChange = kardexMovimientos.reduce((acc, m) => {
+                    if (m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION') return acc + m.cantidad;
+                    if (m.tipo === 'SALIDA') return acc - m.cantidad;
+                    if (m.tipo === 'AJUSTE') return acc + m.cantidad;
+                    return acc;
+                  }, 0);
+                  let stockAcumulado = (kardexProducto?.stockActual ?? 0) - netChange;
                   return kardexMovimientos.map((m) => {
                     const esEntrada =
                       m.tipo === 'ENTRADA' ||
