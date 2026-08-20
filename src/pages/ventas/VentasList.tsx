@@ -110,8 +110,16 @@ export function VentasList() {
   const [metodoPagoFilter, setMetodoPagoFilter] = useState<MetodoPagoFilter>('TODOS');
   const [estadoVentaFilter, setEstadoVentaFilter] = useState<EstadoVentaFilter>('TODOS');
 
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const defaultFechaDesde = (() => {
+    const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10);
+  })();
+  const defaultFechaHasta = new Date().toISOString().slice(0, 10);
+  // draft: lo que el usuario está editando en el drawer (no dispara fetch)
+  const [fechaDesde, setFechaDesde] = useState(defaultFechaDesde);
+  const [fechaHasta, setFechaHasta] = useState(defaultFechaHasta);
+  // applied: lo que se envía a la API (se actualiza solo al confirmar o limpiar)
+  const [appliedFechaDesde, setAppliedFechaDesde] = useState(defaultFechaDesde);
+  const [appliedFechaHasta, setAppliedFechaHasta] = useState(defaultFechaHasta);
 
   const [devolucionVenta, setDevolucionVenta] = useState<VentaDTO | null>(null);
   const [showDevolucion, setShowDevolucion] = useState(false);
@@ -184,12 +192,10 @@ export function VentasList() {
   }, [emitirForm.receptor?.numeroDocumento, emitirForm.tipo, isEmitirComprobanteOpen]);
 
   useEffect(() => {
-    if (!sucursalLoaded) return;
-    if (userId) {
-      fetchData();
-    }
+    if (!sucursalLoaded || !userId) return;
+    fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sucursalLoaded, userId, rol, sucursalActual?.id]);
+  }, [sucursalLoaded, userId, rol, sucursalActual?.id, appliedFechaDesde, appliedFechaHasta]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -201,9 +207,14 @@ export function VentasList() {
 
       const hasViewPermission = canViewAll('VENTAS') || canViewOwn('VENTAS');
 
+      const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+      const desde = appliedFechaDesde || defaultFechaDesde;
+      const hasta = appliedFechaHasta || defaultFechaHasta;
+      const inicioISO = new Date(desde + 'T00:00:00').toISOString().slice(0, 19);
+      const finISO    = new Date(hasta + 'T23:59:59').toISOString().slice(0, 19);
       const ventasPromise = (() => {
-        if (canViewAll('VENTAS')) return ventaService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined);
-        if (canViewOwn('VENTAS')) return ventaService.getByVendor(userId!);
+        if (canViewAll('VENTAS')) return ventaService.getByPeriod(inicioISO, finISO, sucId);
+        if (canViewOwn('VENTAS')) return ventaService.getByVendorAndPeriod(userId!, inicioISO, finISO);
         return Promise.resolve([] as VentaDTO[]);
       })();
 
@@ -540,8 +551,10 @@ export function VentasList() {
   const limpiarFiltros = () => {
     setMetodoPagoFilter('TODOS');
     setEstadoVentaFilter('TODOS');
-    setFechaDesde('');
-    setFechaHasta('');
+    setFechaDesde(defaultFechaDesde);
+    setFechaHasta(defaultFechaHasta);
+    setAppliedFechaDesde(defaultFechaDesde);
+    setAppliedFechaHasta(defaultFechaHasta);
   };
 
   const handleExportExcel = () => {
@@ -910,7 +923,11 @@ export function VentasList() {
           </button>
           <button
             type="button"
-            onClick={() => setShowFilterDrawer(false)}
+            onClick={() => {
+              setAppliedFechaDesde(fechaDesde);
+              setAppliedFechaHasta(fechaHasta);
+              setShowFilterDrawer(false);
+            }}
             className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-lg shadow-blue-500/20"
           >
             Ver {filteredVentas.length} resultado{filteredVentas.length !== 1 ? 's' : ''}
