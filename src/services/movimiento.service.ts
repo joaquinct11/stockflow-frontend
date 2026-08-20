@@ -27,6 +27,15 @@ export const movimientoService = {
     return data;
   },
 
+  getRecientes: async (dias: number, sucursalId?: number): Promise<MovimientoInventarioDTO[]> => {
+    const params: Record<string, unknown> = { dias };
+    if (sucursalId) params.sucursalId = sucursalId;
+    const { data } = await axiosInstance.get<MovimientoInventarioDTO[]>(
+      API_ENDPOINTS.MOVIMIENTOS.LIST, { params }
+    );
+    return data;
+  },
+
   /**
    * Obtener movimiento por ID
    */
