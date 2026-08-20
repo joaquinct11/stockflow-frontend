@@ -45,10 +45,10 @@ export const ventaService = {
   /**
    * Obtener ventas por período
    */
-  getByPeriod: async (inicio: string, fin: string): Promise<VentaDTO[]> => {
-    const { data } = await axiosInstance.get<VentaDTO[]>(
-      `/ventas/periodo?inicio=${inicio}&fin=${fin}`
-    );
+  getByPeriod: async (inicio: string, fin: string, sucursalId?: number): Promise<VentaDTO[]> => {
+    const params: Record<string, unknown> = { inicio, fin };
+    if (sucursalId) params.sucursalId = sucursalId;
+    const { data } = await axiosInstance.get<VentaDTO[]>('/ventas/periodo', { params });
     return data;
   },
 

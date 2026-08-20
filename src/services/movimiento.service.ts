@@ -36,6 +36,14 @@ export const movimientoService = {
     return data;
   },
 
+  getProximosAVencer: async (ventanaDias = 90): Promise<MovimientoInventarioDTO[]> => {
+    const { data } = await axiosInstance.get<MovimientoInventarioDTO[]>(
+      `${API_ENDPOINTS.MOVIMIENTOS.LIST}/proximos-vencer`,
+      { params: { ventanaDias } }
+    );
+    return data;
+  },
+
   /**
    * Obtener movimiento por ID
    */

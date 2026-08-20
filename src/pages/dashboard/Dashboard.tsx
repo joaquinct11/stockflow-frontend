@@ -210,10 +210,13 @@ export function Dashboard() {
       const yearStart = startOfYear(now);
       const fmt = (d: Date) => d.toISOString().slice(0, 19); // formato LocalDateTime
 
-      // ✅ Movimientos: solo últimos 30 días (el dashboard solo muestra actividad reciente)
+      // ✅ Movimientos: solo últimos 30 días (actividad reciente) +
+      //    llamada separada para próximos a vencer (sin límite de días creado)
       let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
+      let proximosVencerPromise: Promise<MovimientoInventarioDTO[]>;
       if (rol === 'VENDEDOR') {
         movimientosPromise = Promise.resolve([]);
+        proximosVencerPromise = Promise.resolve([]);
       } else {
         const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
         movimientosPromise = movimientoService
@@ -222,6 +225,9 @@ export function Dashboard() {
             if (import.meta.env.DEV) { console.warn('⚠️ Error cargando movimientos:', err); }
             return [];
           });
+        proximosVencerPromise = movimientoService
+          .getProximosAVencer(90)
+          .catch(() => []);
       }
 
       // ✅ Ventas según rol — siempre filtradas por año en curso para evitar timeouts
@@ -242,19 +248,24 @@ export function Dashboard() {
         ventasPromise = Promise.resolve([]);
       }
 
-      const [productosData, ventasData, movimientosData] = await Promise.all([
+      const [productosData, ventasData, movimientosData, proximosVencerData] = await Promise.all([
         productosPromise,
         ventasPromise,
         movimientosPromise,
+        proximosVencerPromise,
       ]);
 
       if (import.meta.env.DEV) { console.log('✅ Productos:', productosData.length);}
       if (import.meta.env.DEV) { console.log('✅ Ventas:', ventasData.length);}
-      if (import.meta.env.DEV) { console.log('✅ Movimientos:', movimientosData?.length ?? 0, movimientosData);}
+      if (import.meta.env.DEV) { console.log('✅ Movimientos:', movimientosData?.length ?? 0);}
+      if (import.meta.env.DEV) { console.log('✅ Próximos a vencer:', proximosVencerData?.length ?? 0);}
 
       setProductos(productosData);
       setVentas(ventasData);
-      setMovimientos(movimientosData ?? []);
+      // Combina movimientos recientes + próximos a vencer (sin duplicados por id)
+      const movimientosIds = new Set((movimientosData ?? []).map(m => m.id));
+      const extra = (proximosVencerData ?? []).filter(m => !movimientosIds.has(m.id));
+      setMovimientos([...(movimientosData ?? []), ...extra]);
     } catch (error: any) {
       if (error?.response?.status === 403) {
         setVentas([]);
