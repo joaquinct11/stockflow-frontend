@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { productoService } from '../../services/producto.service';
@@ -111,6 +111,7 @@ export function Dashboard() {
   const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [canLoadVentas, setCanLoadVentas] = useState<boolean>(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('MES');
+  const isInitialLoad = useRef(true);
   const [totalComisionesMes, setTotalComisionesMes] = useState<number>(0);
 
   const [totalGastosPeriodo, setTotalGastosPeriodo] = useState<number>(0);
@@ -168,9 +169,26 @@ export function Dashboard() {
 
   useEffect(() => {
     if (!sucursalLoaded) return;
+    isInitialLoad.current = true;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursalLoaded, rol, userId, sucursalActual?.id]);
+
+  // Re-fetcha solo ventas cuando cambia el tab (no en el mount inicial)
+  useEffect(() => {
+    if (isInitialLoad.current) { isInitialLoad.current = false; return; }
+    if (!canLoadVentas) return;
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 19);
+    const rangeStart = getRangeStart(timeFilter, now);
+    const promise = rol === 'ADMIN'
+      ? ventaService.getByPeriod(fmt(rangeStart), fmt(now))
+      : (userId ? ventaService.getByVendorAndPeriod(userId, fmt(rangeStart), fmt(now)) : Promise.resolve([] as VentaDTO[]));
+    promise
+      .then(setVentas)
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeFilter]);
 
   // Gastos del período — solo ADMIN
   useEffect(() => {
@@ -205,13 +223,10 @@ export function Dashboard() {
       // ✅ Productos siempre (con stock por sucursal si es multi-local)
       const productosPromise = productoService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined);
 
-      // ✅ Rango del año en curso — suficiente para los filtros HOY/SEMANA/MES/ANUAL del dashboard
       const now = new Date();
-      const yearStart = startOfYear(now);
-      const fmt = (d: Date) => d.toISOString().slice(0, 19); // formato LocalDateTime
+      const fmt = (d: Date) => d.toISOString().slice(0, 19);
 
-      // ✅ Movimientos: solo últimos 30 días (actividad reciente) +
-      //    llamada separada para próximos a vencer (sin límite de días creado)
+      // Movimientos: 30 días de actividad + endpoint dedicado para próximos a vencer
       let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
       let proximosVencerPromise: Promise<MovimientoInventarioDTO[]>;
       if (rol === 'VENDEDOR') {
@@ -225,26 +240,20 @@ export function Dashboard() {
             if (import.meta.env.DEV) { console.warn('⚠️ Error cargando movimientos:', err); }
             return [];
           });
-        proximosVencerPromise = movimientoService
-          .getProximosAVencer(90)
-          .catch(() => []);
+        proximosVencerPromise = movimientoService.getProximosAVencer(90).catch(() => []);
       }
 
-      // ✅ Ventas según rol — siempre filtradas por año en curso para evitar timeouts
+      // Ventas: carga según el tab activo (timeFilter)
+      const rangeStart = getRangeStart(timeFilter, now);
       let ventasPromise: Promise<VentaDTO[]>;
       if (rol === 'ADMIN') {
         setCanLoadVentas(true);
-        ventasPromise = ventaService.getByPeriod(fmt(yearStart), fmt(now));
-      } else if (rol === 'VENDEDOR') {
-        if (!userId) {
-          setCanLoadVentas(true);
-          ventasPromise = Promise.resolve([]);
-        } else {
-          setCanLoadVentas(true);
-          ventasPromise = ventaService.getByVendorAndPeriod(userId, fmt(yearStart), fmt(now));
-        }
+        ventasPromise = ventaService.getByPeriod(fmt(rangeStart), fmt(now));
+      } else if (rol === 'VENDEDOR' && userId) {
+        setCanLoadVentas(true);
+        ventasPromise = ventaService.getByVendorAndPeriod(userId, fmt(rangeStart), fmt(now));
       } else {
-        setCanLoadVentas(false);
+        setCanLoadVentas(rol === 'VENDEDOR');
         ventasPromise = Promise.resolve([]);
       }
 
@@ -254,11 +263,6 @@ export function Dashboard() {
         movimientosPromise,
         proximosVencerPromise,
       ]);
-
-      if (import.meta.env.DEV) { console.log('✅ Productos:', productosData.length);}
-      if (import.meta.env.DEV) { console.log('✅ Ventas:', ventasData.length);}
-      if (import.meta.env.DEV) { console.log('✅ Movimientos:', movimientosData?.length ?? 0);}
-      if (import.meta.env.DEV) { console.log('✅ Próximos a vencer:', proximosVencerData?.length ?? 0);}
 
       setProductos(productosData);
       setVentas(ventasData);

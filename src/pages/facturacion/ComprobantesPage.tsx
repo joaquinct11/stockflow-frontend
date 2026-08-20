@@ -69,8 +69,15 @@ export function ComprobantesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTipo, setFilterTipo] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const defaultFechaDesde = (() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
+  })();
+  const defaultFechaHasta = new Date().toISOString().slice(0, 10);
+
+  const [fechaDesde, setFechaDesde] = useState(defaultFechaDesde);
+  const [fechaHasta, setFechaHasta] = useState(defaultFechaHasta);
+  const [appliedFechaDesde, setAppliedFechaDesde] = useState(defaultFechaDesde);
+  const [appliedFechaHasta, setAppliedFechaHasta] = useState(defaultFechaHasta);
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -103,18 +110,19 @@ export function ComprobantesPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sucursalLoaded, canView, filterTipo, filterEstado, fechaDesde, fechaHasta, sucursalId]);
+  }, [sucursalLoaded, canView, filterTipo, filterEstado, appliedFechaDesde, appliedFechaHasta, sucursalId]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterTipo, filterEstado, fechaDesde, fechaHasta]);
+  }, [searchTerm, filterTipo, filterEstado, appliedFechaDesde, appliedFechaHasta]);
 
   const fetchVentas = async () => {
     try {
-      // VENDEDOR solo puede ver sus propias ventas (VER_MIS_VENTAS)
+      const inicioISO = new Date(appliedFechaDesde + 'T00:00:00').toISOString().slice(0, 19);
+      const finISO    = new Date(appliedFechaHasta + 'T23:59:59').toISOString().slice(0, 19);
       const data = isVendedor && user?.usuarioId
-        ? await ventaService.getByVendor(user.usuarioId)
-        : await ventaService.getAll(sucursalId);
+        ? await ventaService.getByVendorAndPeriod(user.usuarioId, inicioISO, finISO)
+        : await ventaService.getByPeriod(inicioISO, finISO, sucursalId);
       setVentas(data);
     } catch { /* no bloquear si falla */ }
   };
@@ -125,8 +133,8 @@ export function ComprobantesPage() {
       const data = await facturacionService.listComprobantes({
         tipo: filterTipo || undefined,
         estado: filterEstado || undefined,
-        fechaDesde: fechaDesde || undefined,
-        fechaHasta: fechaHasta || undefined,
+        fechaDesde: appliedFechaDesde || undefined,
+        fechaHasta: appliedFechaHasta || undefined,
         sucursalId,
       });
       setComprobantes(data);
@@ -151,20 +159,20 @@ export function ComprobantesPage() {
 
   const filteredComprobantes = comprobantesBase.filter((c) => {
     // ✅ 1) filtro fechas (createdAt)
-    if (fechaDesde || fechaHasta) {
+    if (appliedFechaDesde || appliedFechaHasta) {
       const created = c.createdAt ? new Date(c.createdAt) : null;
       if (!created || Number.isNaN(created.getTime())) return false;
 
       const createdTime = created.getTime();
 
-      if (fechaDesde) {
-        const [y, m, d] = fechaDesde.split('-').map(Number);
+      if (appliedFechaDesde) {
+        const [y, m, d] = appliedFechaDesde.split('-').map(Number);
         const from = startOfDay(new Date(y, m - 1, d)).getTime();
         if (createdTime < from) return false;
       }
 
-      if (fechaHasta) {
-        const [y, m, d] = fechaHasta.split('-').map(Number);
+      if (appliedFechaHasta) {
+        const [y, m, d] = appliedFechaHasta.split('-').map(Number);
         const to = endOfDay(new Date(y, m - 1, d)).getTime();
         if (createdTime > to) return false;
       }
@@ -374,13 +382,15 @@ export function ComprobantesPage() {
 
   const ventaById = new Map(ventas.map(v => [v.id, v]));
 
-  const activeFiltersCount = [filterTipo, filterEstado, fechaDesde, fechaHasta].filter(Boolean).length;
+  const activeFiltersCount = [filterTipo, filterEstado, appliedFechaDesde, appliedFechaHasta].filter(Boolean).length;
 
   const limpiarFiltros = () => {
     setFilterTipo('');
     setFilterEstado('');
-    setFechaDesde('');
-    setFechaHasta('');
+    setFechaDesde(defaultFechaDesde);
+    setFechaHasta(defaultFechaHasta);
+    setAppliedFechaDesde(defaultFechaDesde);
+    setAppliedFechaHasta(defaultFechaHasta);
   };
 
   const ventasOptions = ventas
@@ -539,16 +549,16 @@ export function ComprobantesPage() {
                 <button onClick={() => setFilterEstado('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
               </span>
             )}
-            {fechaDesde && (
+            {appliedFechaDesde && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                Desde {fechaDesde}
-                <button onClick={() => setFechaDesde('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+                Desde {appliedFechaDesde}
+                <button onClick={() => { setFechaDesde(defaultFechaDesde); setAppliedFechaDesde(defaultFechaDesde); }} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
               </span>
             )}
-            {fechaHasta && (
+            {appliedFechaHasta && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                Hasta {fechaHasta}
-                <button onClick={() => setFechaHasta('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
+                Hasta {appliedFechaHasta}
+                <button onClick={() => { setFechaHasta(defaultFechaHasta); setAppliedFechaHasta(defaultFechaHasta); }} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
               </span>
             )}
             <button onClick={limpiarFiltros} className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors px-1">
@@ -652,7 +662,7 @@ export function ComprobantesPage() {
           <button onClick={limpiarFiltros} className="flex-1 h-9 rounded-xl border border-slate-600 text-xs font-semibold text-slate-400 hover:text-white hover:border-slate-500 transition-all">
             Limpiar todo
           </button>
-          <button onClick={() => setShowFilterDrawer(false)} className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all">
+          <button onClick={() => { setAppliedFechaDesde(fechaDesde); setAppliedFechaHasta(fechaHasta); setShowFilterDrawer(false); }} className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all">
             Ver {sortedComprobantes.length} resultado{sortedComprobantes.length !== 1 ? 's' : ''}
           </button>
         </div>

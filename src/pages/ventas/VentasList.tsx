@@ -111,7 +111,7 @@ export function VentasList() {
   const [estadoVentaFilter, setEstadoVentaFilter] = useState<EstadoVentaFilter>('TODOS');
 
   const defaultFechaDesde = (() => {
-    const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10);
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
   })();
   const defaultFechaHasta = new Date().toISOString().slice(0, 10);
   // draft: lo que el usuario está editando en el drawer (no dispara fetch)
@@ -222,7 +222,7 @@ export function VentasList() {
         hasViewPermission ? productoService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined) : Promise.resolve([] as ProductoDTO[]);
 
       const comprobantesPromise = facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[]);
-      const clientesPromise = clienteService.getAll().catch(() => [] as ClienteDTO[]);
+      const clientesPromise = clienteService.getActivos().catch(() => [] as ClienteDTO[]);
 
       const [ventasData, productosData, comprobantesData, clientesData] = await Promise.all([
         ventasPromise,
