@@ -392,7 +392,15 @@ export function POSPage() {
           (p.codigoBarras ?? '').toLowerCase().includes(lower) ||
           (p.componentes ?? '').toLowerCase().includes(lower)
         )
-        .slice(0, 8);
+        .sort((a, b) => {
+          // Prioridad: nombre empieza con el término → aparece primero
+          const aStarts = a.nombre.toLowerCase().startsWith(lower);
+          const bStarts = b.nombre.toLowerCase().startsWith(lower);
+          if (aStarts && !bStarts) return -1;
+          if (!aStarts && bStarts) return 1;
+          return a.nombre.localeCompare(b.nombre);
+        })
+        .slice(0, 20);
       setResultados(matches);
       setSelectedIndex(-1);
       setBuscando(false);
