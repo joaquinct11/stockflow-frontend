@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   Circle,
@@ -316,7 +316,6 @@ function StockModal({ onClose }: { onClose: () => void }) {
 export function OnboardingChecklist() {
   const { user } = useAuthStore();
   const navigate  = useNavigate();
-  const location  = useLocation();
 
   const dismissedKey   = `onboarding_dismissed_${user?.tenantId ?? 'default'}`;
   const welcomedKey    = `onboarding_welcomed_${user?.tenantId ?? 'default'}`;
@@ -331,15 +330,18 @@ export function OnboardingChecklist() {
   const [showCompletado, setShowCompletado] = useState(false);
   const [loading,        setLoading]        = useState(true);
   const prevCompletadoRef                   = useRef<boolean | null>(null);
+  const lastFetchRef                        = useRef<number>(0);
 
   const esAdmin = user?.rol === 'ADMIN';
 
   const fetchProgreso = () => {
+    lastFetchRef.current = Date.now();
     onboardingService.getProgreso().then(setProgreso).catch(() => {});
   };
 
   useEffect(() => {
     if (!esAdmin || dismissed) { setLoading(false); return; }
+    lastFetchRef.current = Date.now();
     onboardingService.getProgreso()
       .then((data) => {
         setProgreso(data);
@@ -356,14 +358,15 @@ export function OnboardingChecklist() {
 
   useEffect(() => {
     if (!esAdmin || dismissed) return;
-    fetchProgreso();
+    const handleFocus = () => {
+      // Solo refetch si pasaron más de 60s desde el último fetch
+      if (Date.now() - lastFetchRef.current > 60_000) {
+        fetchProgreso();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (!esAdmin || dismissed) return;
-    window.addEventListener('focus', fetchProgreso);
-    return () => window.removeEventListener('focus', fetchProgreso);
   }, [esAdmin, dismissed]);
 
   // Actualizar inmediatamente cuando cualquier módulo dispara el evento

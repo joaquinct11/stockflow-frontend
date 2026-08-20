@@ -34,6 +34,14 @@ export const ventaService = {
     return data;
   },
 
+  getByVendorAndPeriod: async (vendedorId: number, inicio: string, fin: string): Promise<VentaDTO[]> => {
+    const { data } = await axiosInstance.get<VentaDTO[]>(
+      API_ENDPOINTS.VENTAS.GET_BY_VENDOR(vendedorId),
+      { params: { inicio, fin } }
+    );
+    return data;
+  },
+
   /**
    * Obtener ventas por período
    */

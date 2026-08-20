@@ -205,34 +205,37 @@ export function Dashboard() {
       // ✅ Productos siempre (con stock por sucursal si es multi-local)
       const productosPromise = productoService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined);
 
-      // ✅ Movimientos: solo roles con acceso a inventario (VENDEDOR no tiene permiso)
+      // ✅ Rango del año en curso — suficiente para los filtros HOY/SEMANA/MES/ANUAL del dashboard
+      const now = new Date();
+      const yearStart = startOfYear(now);
+      const fmt = (d: Date) => d.toISOString().slice(0, 19); // formato LocalDateTime
+
+      // ✅ Movimientos: solo últimos 30 días (el dashboard solo muestra actividad reciente)
       let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
       if (rol === 'VENDEDOR') {
         movimientosPromise = Promise.resolve([]);
-      } else if (movimientoService.getAll) {
+      } else {
+        const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
         movimientosPromise = movimientoService
-          .getAll()
+          .getRecientes(30, sucId)
           .catch((err) => {
-            if (import.meta.env.DEV) { console.warn('⚠️ Error cargando movimientos:', err);}
+            if (import.meta.env.DEV) { console.warn('⚠️ Error cargando movimientos:', err); }
             return [];
           });
-      } else {
-        if (import.meta.env.DEV) { console.warn('⚠️ movimientoService.getAll no existe');}
-        movimientosPromise = Promise.resolve([]);
       }
 
-      // ✅ Ventas según rol
+      // ✅ Ventas según rol — siempre filtradas por año en curso para evitar timeouts
       let ventasPromise: Promise<VentaDTO[]>;
       if (rol === 'ADMIN') {
         setCanLoadVentas(true);
-        ventasPromise = ventaService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined);
+        ventasPromise = ventaService.getByPeriod(fmt(yearStart), fmt(now));
       } else if (rol === 'VENDEDOR') {
         if (!userId) {
           setCanLoadVentas(true);
           ventasPromise = Promise.resolve([]);
         } else {
           setCanLoadVentas(true);
-          ventasPromise = ventaService.getByVendor(userId);
+          ventasPromise = ventaService.getByVendorAndPeriod(userId, fmt(yearStart), fmt(now));
         }
       } else {
         setCanLoadVentas(false);
