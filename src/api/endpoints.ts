@@ -88,6 +88,8 @@ export const API_ENDPOINTS = {
     GET_KARDEX: (productoId: number) => `/movimientos-inventario/kardex/${productoId}`,
     LOTES: '/movimientos-inventario/lotes',
     LOTES_POR_PRODUCTO: (productoId: number) => `/movimientos-inventario/lotes/producto/${productoId}`,
+    LOTES_DISPONIBLES: (productoId: number, sucursalId?: number) =>
+      `/movimientos-inventario/lotes/disponibles?productoId=${productoId}${sucursalId ? `&sucursalId=${sucursalId}` : ''}`,
     CREATE: '/movimientos-inventario',
     UPDATE: (id: number) => `/movimientos-inventario/${id}`,
     DELETE: (id: number) => `/movimientos-inventario/${id}`,

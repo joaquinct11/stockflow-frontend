@@ -47,12 +47,17 @@ html { scroll-behavior: smooth; }
   .lp [data-r="bentobig"]   { grid-column: span 1 !important; }
   .lp [data-r="statsgrid"]  { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
   .lp [data-r="statitem"]   { border-right: none !important; }
-  .lp [data-r="navlogin"]   { display: none !important; }
+  .lp nav                   { gap: 6px !important; }
+  .lp [data-r="navlogin"]   { font-size: .8rem !important; padding: 7px 10px !important; }
+  .lp .lp-btn-primary       { padding: 9px 13px !important; font-size: .82rem !important; }
   .lp [data-r="sec"]        { padding-left: 18px !important; padding-right: 18px !important; }
   .lp [data-r="hero"]       { padding-left: 18px !important; padding-right: 18px !important; }
 }
 @media (min-width: 768px) { .lp [data-r="mobilebar"] { display: none !important; } }
 @media (max-width: 767px) { .lp [data-r="mobilebar"] { display: flex !important; } }
+@media (max-width: 400px) {
+  .lp [data-r="navlogin"] { padding: 6px 9px !important; font-size: .75rem !important; }
+}
 
 /* ── Nav links ──────────────────────────────────────────────────────────── */
 .lp .lp-navlink               { color: #9898b0; transition: color .2s; }
