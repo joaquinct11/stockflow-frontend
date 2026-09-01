@@ -13,6 +13,26 @@ export interface LoteVencimientoDTO {
   stockActual?: number;
   diasRestantes: number; // negativo = ya vencido
   registroSanitario?: string;
+  proveedorNombre?: string;
+  precioVenta?: number;
+}
+
+export interface LoteVentaDetalleDTO {
+  lote?: string;
+  proveedorNombre?: string;
+  cantidadDescontada: number;
+  precioVenta?: number;
+}
+
+export interface StockLoteDisponibleDTO {
+  id: number;
+  lote?: string;
+  fechaVencimiento: string; // yyyy-MM-dd
+  stockActual: number;
+  proveedorId?: number;
+  proveedorNombre?: string;
+  diasParaVencer: number;
+  precioVenta?: number;
 }
 
 export const movimientoService = {
@@ -135,5 +155,29 @@ export const movimientoService = {
       API_ENDPOINTS.MOVIMIENTOS.LOTES_POR_PRODUCTO(productoId)
     );
     return data;
+  },
+
+  /**
+   * Lotes disponibles (no vencidos, con stock) para seleccionar en el POS.
+   */
+  getLotesDisponibles: async (productoId: number, sucursalId?: number): Promise<StockLoteDisponibleDTO[]> => {
+    const { data } = await axiosInstance.get<StockLoteDisponibleDTO[]>(
+      API_ENDPOINTS.MOVIMIENTOS.LOTES_DISPONIBLES(productoId, sucursalId)
+    );
+    return data;
+  },
+
+  getLotesDeVenta: async (movimientoId: number): Promise<LoteVentaDetalleDTO[]> => {
+    const { data } = await axiosInstance.get<LoteVentaDetalleDTO[]>(
+      `${API_ENDPOINTS.MOVIMIENTOS.LIST}/${movimientoId}/lotes-venta`
+    );
+    return data;
+  },
+
+  actualizarProveedorLote: async (movimientoId: number, proveedorId: number | null, precioVenta?: number | null): Promise<void> => {
+    await axiosInstance.patch(
+      `${API_ENDPOINTS.MOVIMIENTOS.LIST}/lotes/${movimientoId}/proveedor`,
+      { proveedorId, precioVenta: precioVenta ?? null }
+    );
   },
 };
