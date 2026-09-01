@@ -26,10 +26,9 @@
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 940px) {
-  .fp [data-r="split"]      { grid-template-columns: minmax(0,1fr) !important; }
+  .fp[data-r="split"]       { grid-template-columns: minmax(0,1fr) !important; }
   .fp [data-r="brand"]      { display: none !important; }
   .fp [data-r="mobilelogo"] { display: flex !important; }
-  /* pane ocupa toda la pantalla → permitir scroll si el contenido no cabe */
   .fp [data-r="pane"]       { overflow-y: auto !important; }
 }
 @media (max-width: 520px) {

@@ -31,10 +31,9 @@
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 1000px) {
-  .rx [data-r="split"]      { grid-template-columns: minmax(0,1fr) !important; }
+  .rx[data-r="split"]       { grid-template-columns: minmax(0,1fr) !important; }
   .rx [data-r="brand"]      { display: none !important; }
   .rx [data-r="mobilelogo"] { display: flex !important; }
-  /* brand panel oculto → reducir padding horizontal del pane */
   .rx [data-r="pane"]       { padding-left: 28px !important; padding-right: 28px !important; }
 }
 @media (max-width: 640px) {
