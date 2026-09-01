@@ -77,6 +77,7 @@ export interface RegistrationRequestDTO {
   numeroDocumento?: string;
   numeroCelular?: string;
   rubro?: string;
+  rucEmpresa?: string;
 }
 
 // ========================================

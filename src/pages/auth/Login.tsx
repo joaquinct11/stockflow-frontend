@@ -2,11 +2,10 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
-import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
-
+import './login.css';
 
 export function Login() {
   const navigate = useNavigate();
@@ -14,11 +13,13 @@ export function Login() {
   const { setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState(false);
   const [formData, setFormData] = useState({ email: '', contraseña: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(false);
     try {
       const response = await authService.login(formData);
       try {
@@ -30,93 +31,149 @@ export function Login() {
       toast.success(`¡Bienvenido ${response.nombre}!`);
       const redirect = searchParams.get('redirect');
       navigate(redirect && redirect.startsWith('/') ? redirect : '/dashboard');
-    } catch (error: any) {
-      if (import.meta.env.DEV) console.error('❌ Error en login:', error);
-      toast.error(error.response?.data?.mensaje || 'Email o contraseña incorrectos');
+    } catch (err: any) {
+      if (import.meta.env.DEV) console.error('❌ Error en login:', err);
+      setError(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <AuthShell>
-      <div className="mx-auto w-full max-w-sm">
+    <div className="lx">
+      <div data-r="split" style={{height:'100vh',display:'grid',gridTemplateColumns:'1.05fr 1fr',background:'#08090d',overflow:'hidden'}}>
 
-        {/* Card */}
-        <div className="rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg shadow-slate-200/60 dark:shadow-black/50 overflow-hidden">
+        {/* ── Panel izquierdo — marca ──────────────────────────────── */}
+        <div data-r="brand" style={{position:'relative',overflow:'hidden',padding:'36px 56px',display:'flex',flexDirection:'column',background:'linear-gradient(160deg,#0b0d14,#08090d 55%)'}}>
+          <div style={{position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(108,99,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(108,99,255,.05) 1px,transparent 1px)',backgroundSize:'56px 56px',maskImage:'radial-gradient(90% 70% at 20% 10%,#000 20%,transparent 75%)',WebkitMaskImage:'radial-gradient(90% 70% at 20% 10%,#000 20%,transparent 75%)',pointerEvents:'none'}}></div>
+          <div style={{position:'absolute',top:-220,left:-140,width:760,height:620,background:'radial-gradient(50% 50% at 50% 50%,rgba(108,99,255,.3),transparent 70%)',filter:'blur(30px)',pointerEvents:'none'}}></div>
+          <div style={{position:'absolute',bottom:-260,right:-180,width:640,height:520,background:'radial-gradient(50% 50% at 50% 50%,rgba(0,212,170,.14),transparent 70%)',filter:'blur(30px)',pointerEvents:'none'}}></div>
 
-<div className="p-6 sm:p-8">
+          <Link to="/" style={{position:'relative',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
+            <img src="/fluxus.png" alt="Fluxus" style={{width:34,height:34,borderRadius:9,objectFit:'cover'}} />
+            <span style={{fontFamily:"'Space Mono',monospace",fontSize:'1.15rem',fontWeight:700,background:'linear-gradient(135deg,#8b85ff,#00d4aa)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>Fluxus</span>
+          </Link>
 
-            {/* Header */}
-            <div className="mb-6">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Bienvenido de nuevo</h1>
-              <p className="text-sm text-muted-foreground mt-1">Ingresa tus credenciales para continuar</p>
-
+          <div style={{position:'relative',marginTop:'auto',paddingTop:56}}>
+            <div style={{display:'inline-flex',alignItems:'center',gap:9,background:'rgba(108,99,255,.1)',border:'1px solid rgba(108,99,255,.3)',color:'#a79fff',padding:'.35rem .9rem',borderRadius:50,fontFamily:"'Space Mono',monospace",fontSize:'.7rem',letterSpacing:'.07em',textTransform:'uppercase',whiteSpace:'nowrap'}}>
+              <span className="lx-dot"></span>
+              Sistema operativo
             </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label htmlFor="email" className="text-sm font-medium">Correo electrónico</label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="tu@empresa.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                  className="h-11"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="password" className="text-sm font-medium">Contraseña</label>
-                  <Link
-                    to="/forgot-password"
-                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    ¿Olvidaste tu contraseña?
-                  </Link>
-                </div>
-                <PasswordInput
-                  id="password"
-                  value={formData.contraseña}
-                  show={showPassword}
-                  onToggle={() => setShowPassword((v) => !v)}
-                  onChange={(v) => setFormData({ ...formData, contraseña: v })}
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full h-11 font-semibold text-sm"
-                disabled={loading}
-              >
-                {loading ? <Spinner label="Ingresando..." /> : 'Iniciar sesión'}
-              </Button>
-            </form>
-
-            {/* Register CTA */}
-            <div className="mt-5 pt-5 border-t border-border/60 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">¿No tienes cuenta?</p>
-              <Link
-                to="/register"
-                className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
-              >
-                Regístrate gratis →
-              </Link>
+            <h2 style={{fontSize:'clamp(1.9rem,3.2vw,2.7rem)',fontWeight:800,lineHeight:1.08,letterSpacing:'-.03em',margin:'22px 0 0',maxWidth:460}}>Tu negocio ordenado, desde que abres la caja.</h2>
+            <p style={{fontSize:'1rem',lineHeight:1.65,color:'#9898b0',margin:'16px 0 0',maxWidth:420}}>Ventas, stock, compras y facturación electrónica en el mismo lugar. Todo lo que pasó hoy en tu local, a un clic.</p>
+            <div style={{display:'grid',gap:13,marginTop:32,maxWidth:420}}>
+              {['Comprobantes enviados a SUNAT con CDR guardado','Stock que se descuenta solo con cada venta','Cada usuario entra y ve solo lo que le toca'].map(t => (
+                <div key={t} style={{display:'flex',gap:12,fontSize:'.94rem',color:'#d5d6e2'}}><span style={{color:'#00d4aa',flexShrink:0}}>✓</span>{t}</div>
+              ))}
             </div>
+          </div>
 
+          <div style={{position:'relative',marginTop:'auto',paddingTop:48,display:'flex',flexWrap:'wrap',gap:'10px 24px',alignItems:'center'}}>
+            <span style={{fontFamily:"'Space Mono',monospace",fontSize:'.7rem',letterSpacing:'.06em',textTransform:'uppercase',color:'#7d7f96'}}>Conexión segura</span>
+            {['🔒 TLS 1.3','SUNAT integrado','Soporte en español'].map(t => (
+              <span key={t} style={{fontFamily:"'Space Mono',monospace",fontSize:'.7rem',color:'#8d90a6'}}>{t}</span>
+            ))}
           </div>
         </div>
 
-        {/* Footer */}
-        <p className="mt-6 text-center text-[11px] text-muted-foreground/40">
-          © 2026 Fluxus · Todos los derechos reservados
-        </p>
+        {/* ── Panel derecho — formulario ───────────────────────────── */}
+        <div data-r="pane" style={{display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',padding:'24px 40px',background:'#0a0b10',borderLeft:'1px solid rgba(255,255,255,.06)',overflowY:'auto'}}>
+          <div style={{width:'100%',maxWidth:404}}>
+
+            {/* Logo móvil */}
+            <div data-r="mobilelogo" style={{display:'none',alignItems:'center',gap:10,justifyContent:'center',marginBottom:28}}>
+              <img src="/fluxus.png" alt="Fluxus" style={{width:32,height:32,borderRadius:9,objectFit:'cover'}} />
+              <span style={{fontFamily:"'Space Mono',monospace",fontSize:'1.1rem',fontWeight:700,background:'linear-gradient(135deg,#8b85ff,#00d4aa)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>Fluxus</span>
+            </div>
+
+            {/* Card */}
+            <div data-r="formpad" style={{border:'1px solid rgba(255,255,255,.08)',borderRadius:20,background:'#0e0f15',padding:'28px 30px',boxShadow:'0 40px 90px -50px rgba(0,0,0,.9)'}}>
+              <h1 style={{fontSize:'1.65rem',fontWeight:800,letterSpacing:'-.025em',margin:0}}>Bienvenido de nuevo</h1>
+              <p style={{fontSize:'.94rem',color:'#7d7f96',lineHeight:1.6,margin:'8px 0 0'}}>Ingresa a tu cuenta para seguir operando.</p>
+
+              {error && (
+                <div className="lx-error">
+                  <span style={{color:'#ff8079',fontSize:'.95rem',lineHeight:1.4,flexShrink:0}}>!</span>
+                  <div style={{fontSize:'.88rem',color:'#ffb3ad',lineHeight:1.55}}>Email o contraseña incorrectos. Verifica tus datos e intenta de nuevo.</div>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} style={{display:'grid',gap:14,marginTop:20}}>
+                {/* Email */}
+                <div style={{display:'grid',gap:8}}>
+                  <label htmlFor="lx-email" style={{fontSize:'.85rem',fontWeight:600,color:'#c9cbd8'}}>Correo electrónico</label>
+                  <input
+                    id="lx-email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="tu@empresa.com"
+                    value={formData.email}
+                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                    required
+                    className="lx-input"
+                  />
+                </div>
+
+                {/* Contraseña */}
+                <div style={{display:'grid',gap:8}}>
+                  <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:12}}>
+                    <label htmlFor="lx-pass" style={{fontSize:'.85rem',fontWeight:600,color:'#c9cbd8'}}>Contraseña</label>
+                    <Link to="/forgot-password" className="lx-forgot">¿Olvidaste tu contraseña?</Link>
+                  </div>
+                  <div style={{position:'relative'}}>
+                    <input
+                      id="lx-pass"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="••••••••"
+                      value={formData.contraseña}
+                      onChange={e => setFormData({ ...formData, contraseña: e.target.value })}
+                      required
+                      className="lx-input lx-input-pass"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(v => !v)}
+                      aria-label="Mostrar u ocultar contraseña"
+                      className="lx-pass-toggle"
+                    >
+                      {showPassword
+                        ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.7 5.1A9.9 9.9 0 0 1 12 5c6.2 0 10 7 10 7a17.6 17.6 0 0 1-2.3 3.2"></path><path d="M6.6 6.7A17.2 17.2 0 0 0 2 12s3.8 7 10 7a9.7 9.7 0 0 0 4.2-.9"></path><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"></path><path d="m3 3 18 18"></path></svg>
+                        : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                      }
+                    </button>
+                  </div>
+                </div>
+
+                <button type="submit" disabled={loading} className="lx-submit">
+                  {loading
+                    ? <><span className="lx-spinner"></span>Ingresando...</>
+                    : 'Iniciar sesión'
+                  }
+                </button>
+              </form>
+
+              {/* Divider */}
+              <div style={{display:'flex',alignItems:'center',gap:14,margin:'18px 0 0'}}>
+                <span style={{flex:1,height:1,background:'rgba(255,255,255,.08)'}}></span>
+                <span style={{fontFamily:"'Outfit',sans-serif",fontSize:'.8rem',color:'#6a6c82'}}>o</span>
+                <span style={{flex:1,height:1,background:'rgba(255,255,255,.08)'}}></span>
+              </div>
+
+              <Link to="/register" className="lx-ghost" style={{marginTop:14}}>Crear cuenta — 14 días gratis</Link>
+
+              <p style={{fontSize:'.82rem',color:'#8d90a6',lineHeight:1.6,margin:'14px 0 0',textAlign:'center'}}>
+                Sin tarjeta y sin permanencia. ¿Necesitas ayuda?{' '}
+                <a href="https://wa.me/51994198710" target="_blank" rel="noopener noreferrer">Escríbenos por WhatsApp</a>.
+              </p>
+            </div>
+
+            <p style={{fontFamily:"'Space Mono',monospace",fontSize:'.68rem',color:'#6a6c82',textAlign:'center',margin:'16px 0 0'}}>© 2026 Fluxus · Todos los derechos reservados</p>
+          </div>
+        </div>
+
       </div>
-    </AuthShell>
+    </div>
   );
 }
 

@@ -1,0 +1,123 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+.rp *,
+.rp *::before,
+.rp *::after { box-sizing: border-box; }
+
+.rp {
+  background: #08090d;
+  color: #e8e8f0;
+  font-family: 'Outfit', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.rp a             { color: #8b85ff; text-decoration: none; }
+.rp a:hover       { color: #a79fff; }
+.rp input         { font-family: 'Outfit', sans-serif; }
+.rp input::placeholder { color: #4a4b60; }
+.rp input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #101118 inset;
+  -webkit-text-fill-color: #e8e8f0;
+}
+
+@keyframes rp-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@keyframes rp-spin   { to { transform: rotate(360deg); } }
+@keyframes rp-in     { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 940px) {
+  .rp [data-r="split"]      { grid-template-columns: minmax(0,1fr) !important; }
+  .rp [data-r="brand"]      { display: none !important; }
+  .rp [data-r="mobilelogo"] { display: flex !important; }
+}
+@media (max-width: 520px) {
+  .rp [data-r="formpad"] { padding: 28px 22px !important; }
+  .rp [data-r="pane"]    { padding: 28px 18px !important; }
+}
+
+/* ── Input ──────────────────────────────────────────────────────────────── */
+.rp .rp-input {
+  width: 100%;
+  height: 48px;
+  padding: 0 15px;
+  font-size: .95rem;
+  color: #e8e8f0;
+  background: #101118;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color .18s, box-shadow .18s;
+}
+.rp .rp-input:focus {
+  border-color: rgba(108,99,255,.7);
+  box-shadow: 0 0 0 4px rgba(108,99,255,.14);
+}
+.rp .rp-input-pass { padding-right: 50px; }
+
+/* ── Password toggle ─────────────────────────────────────────────────────── */
+.rp .rp-pass-toggle {
+  position: absolute;
+  top: 0; right: 0;
+  height: 48px; width: 46px;
+  display: grid; place-items: center;
+  background: transparent; border: 0;
+  color: #5a5a72; cursor: pointer;
+  transition: color .18s;
+}
+.rp .rp-pass-toggle:hover { color: #c9cbd8; }
+
+/* ── Submit button ──────────────────────────────────────────────────────── */
+.rp .rp-submit {
+  height: 50px; width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-family: 'Outfit', sans-serif; font-size: .98rem; font-weight: 600;
+  color: #fff; border: 0; border-radius: 12px;
+  background: linear-gradient(135deg,#6c63ff,#4a43cc);
+  box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 16px 36px -18px #6c63ff;
+  cursor: pointer; transition: filter .18s, transform .18s;
+}
+.rp .rp-submit:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+.rp .rp-submit:disabled { cursor: progress; filter: saturate(.7) brightness(.9); }
+
+/* ── Login button (success / invalid states) ────────────────────────────── */
+.rp .rp-login-btn {
+  display: flex; align-items: center; justify-content: center;
+  height: 48px; font-size: .95rem; font-weight: 600;
+  color: #fff; background: linear-gradient(135deg,#6c63ff,#4a43cc);
+  border-radius: 12px; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset;
+  transition: filter .18s; text-decoration: none;
+}
+.rp .rp-login-btn:hover { filter: brightness(1.08); color: #fff; }
+
+/* ── Ghost button ───────────────────────────────────────────────────────── */
+.rp .rp-ghost {
+  display: flex; align-items: center; justify-content: center;
+  height: 46px; width: 100%;
+  font-family: 'Outfit', sans-serif; font-size: .92rem; font-weight: 600;
+  color: #c9cbd8; background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.12); border-radius: 12px;
+  cursor: pointer; transition: background .18s; text-decoration: none;
+}
+.rp .rp-ghost:hover { background: rgba(255,255,255,.09); color: #c9cbd8; }
+
+/* ── Back link ───────────────────────────────────────────────────────────── */
+.rp .rp-back {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: .88rem; font-weight: 600; color: #8d90a6;
+  transition: color .18s; text-decoration: none;
+}
+.rp .rp-back:hover { color: #e8e8f0; }
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+.rp .rp-spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+  animation: rp-spin .7s linear infinite; flex-shrink: 0;
+}
+
+/* ── Pulse dot ──────────────────────────────────────────────────────────── */
+.rp .rp-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #a79fff; flex-shrink: 0;
+  animation: rp-pulse 2.2s ease-in-out infinite;
+}
