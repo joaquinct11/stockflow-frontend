@@ -26,17 +26,24 @@
 @keyframes rx-spin   { to { transform: rotate(360deg); } }
 @keyframes rx-in     { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
+/* ── Pane base (form panel) ──────────────────────────────────────────────── */
+.rx [data-r="pane"] { overflow-y: auto; }
+
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 1000px) {
   .rx [data-r="split"]      { grid-template-columns: minmax(0,1fr) !important; }
   .rx [data-r="brand"]      { display: none !important; }
   .rx [data-r="mobilelogo"] { display: flex !important; }
+  /* brand panel oculto → reducir padding horizontal del pane */
+  .rx [data-r="pane"]       { padding-left: 28px !important; padding-right: 28px !important; }
 }
-@media (max-width: 560px) {
-  .rx [data-r="formpad"] { padding: 26px 20px !important; }
-  .rx [data-r="pane"]    { padding: 28px 18px !important; }
-  .rx [data-r="duo"]     { grid-template-columns: minmax(0,1fr) !important; }
-  .rx [data-r="plans"]   { grid-template-columns: minmax(0,1fr) !important; }
+@media (max-width: 640px) {
+  .rx [data-r="duo"]   { grid-template-columns: minmax(0,1fr) !important; }
+  .rx [data-r="plans"] { grid-template-columns: minmax(0,1fr) !important; }
+}
+@media (max-width: 520px) {
+  .rx [data-r="formpad"] { padding: 24px 18px !important; }
+  .rx [data-r="pane"]    { padding: 24px 16px !important; }
 }
 
 /* ── Input ──────────────────────────────────────────────────────────────── */

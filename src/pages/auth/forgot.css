@@ -29,10 +29,14 @@
   .fp [data-r="split"]      { grid-template-columns: minmax(0,1fr) !important; }
   .fp [data-r="brand"]      { display: none !important; }
   .fp [data-r="mobilelogo"] { display: flex !important; }
+  /* pane ocupa toda la pantalla → permitir scroll si el contenido no cabe */
+  .fp [data-r="pane"]       { overflow-y: auto !important; }
 }
 @media (max-width: 520px) {
-  .fp [data-r="formpad"] { padding: 28px 22px !important; }
-  .fp [data-r="pane"]    { padding: 28px 18px !important; }
+  .fp [data-r="formpad"] { padding: 26px 20px !important; }
+  .fp [data-r="pane"]    { padding: 24px 16px !important; }
+  /* botón largo: reducir font para que no rompa línea */
+  .fp .fp-submit         { font-size: .88rem; }
 }
 
 /* ── Input ──────────────────────────────────────────────────────────────── */

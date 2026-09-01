@@ -215,7 +215,7 @@ export function Register() {
       </div>
 
       {/* ── Form panel ── */}
-      <div data-r="pane" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '48px 40px', background: '#0a0b10', borderLeft: '1px solid rgba(255,255,255,.06)' }}>
+      <div data-r="pane" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '40px', background: '#0a0b10', borderLeft: '1px solid rgba(255,255,255,.06)' }}>
         <div style={{ width: '100%', maxWidth: 460 }}>
 
           {/* Mobile logo */}

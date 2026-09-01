@@ -29,10 +29,11 @@
   .rp [data-r="split"]      { grid-template-columns: minmax(0,1fr) !important; }
   .rp [data-r="brand"]      { display: none !important; }
   .rp [data-r="mobilelogo"] { display: flex !important; }
+  .rp [data-r="pane"]       { overflow-y: auto !important; }
 }
 @media (max-width: 520px) {
-  .rp [data-r="formpad"] { padding: 28px 22px !important; }
-  .rp [data-r="pane"]    { padding: 28px 18px !important; }
+  .rp [data-r="formpad"] { padding: 26px 20px !important; }
+  .rp [data-r="pane"]    { padding: 24px 16px !important; }
 }
 
 /* ── Input ──────────────────────────────────────────────────────────────── */

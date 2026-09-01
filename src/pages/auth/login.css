@@ -30,10 +30,11 @@
   .lx [data-r="split"]      { grid-template-columns: minmax(0,1fr) !important; }
   .lx [data-r="brand"]      { display: none !important; }
   .lx [data-r="mobilelogo"] { display: flex !important; }
+  .lx [data-r="pane"]       { overflow-y: auto !important; }
 }
 @media (max-width: 520px) {
-  .lx [data-r="formpad"]    { padding: 28px 22px !important; }
-  .lx [data-r="pane"]       { padding: 28px 18px !important; }
+  .lx [data-r="formpad"]    { padding: 26px 20px !important; }
+  .lx [data-r="pane"]       { padding: 24px 16px !important; }
 }
 
 /* ── Input ──────────────────────────────────────────────────────────────── */
