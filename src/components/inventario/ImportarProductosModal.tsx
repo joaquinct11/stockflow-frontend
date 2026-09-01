@@ -25,6 +25,7 @@ interface ProductoImportRow {
   lote?: string;
   fechaVencimiento?: string;
   registroSanitario?: string;
+  proveedorNombre?: string;
   // Tienda (variantes)
   talla?: string;
   color?: string;
@@ -93,6 +94,8 @@ const COLUMN_MAP: Record<string, keyof ProductoImportRow> = {
   registro_sanitario: 'registroSanitario', registrosanitario: 'registroSanitario',
   rs: 'registroSanitario', reg_san: 'registroSanitario', regsanitario: 'registroSanitario',
   reg_sanitario: 'registroSanitario',
+  proveedor: 'proveedorNombre', proveedor_nombre: 'proveedorNombre', proveedornombre: 'proveedorNombre',
+  supplier: 'proveedorNombre', provider: 'proveedorNombre', laboratorio: 'proveedorNombre',
   // Tienda/variantes
   talla: 'talla', size: 'talla', talle: 'talla',
   color: 'color', colour: 'color',
@@ -103,7 +106,7 @@ const COLUMN_MAP: Record<string, keyof ProductoImportRow> = {
 
 const STRING_FIELDS: Array<keyof ProductoImportRow> = [
   'nombre', 'codigoBarras', 'categoria', 'unidadMedida',
-  'lote', 'registroSanitario', 'talla', 'color', 'skuVariante',
+  'lote', 'registroSanitario', 'proveedorNombre', 'talla', 'color', 'skuVariante',
 ];
 
 function stripAccents(s: string): string {
@@ -191,13 +194,13 @@ function descargarPlantilla(
     headers = [
       'nombre*', 'codigo_barras', 'categoria', 'precio_venta*', 'costo_unitario',
       'stock_actual', 'stock_minimo', 'stock_maximo', 'unidad_medida',
-      'lote', 'fecha_vencimiento', 'registro_sanitario',
+      'lote', 'fecha_vencimiento', 'registro_sanitario', 'proveedor',
     ];
     ejemplos = [
-      ['Ibuprofeno 400mg', 'COD-001', cat1, 8.00, 5.00, 100, 20, 500, um1, '', '', ''],
-      ['Panadol 500mg', 'COD-002', cat2, 5.50, 3.20, 25, 10, 200, um1, 'LOTE-A', '2026-01-31', 'RS-12345'],
-      ['Panadol 500mg', 'COD-002', cat2, 5.50, 3.20, 25, 10, 200, um1, 'LOTE-B', '2026-06-30', 'RS-12345'],
-      ['Vitamina C 1g', '', cat1, 12.00, 7.50, 60, 10, 300, um1, 'VIT-2025', '2025-12-31', ''],
+      ['Ibuprofeno 400mg', 'COD-001', cat1, 8.00, 5.00, 100, 20, 500, um1, '', '', '', ''],
+      ['Panadol 500mg', 'COD-002', cat2, 5.50, 3.20, 25, 10, 200, um1, 'LOTE-A', '2026-01-31', 'RS-12345', 'Lab. Genérico SAC'],
+      ['Panadol 500mg', 'COD-002', cat2, 5.50, 3.20, 25, 10, 200, um1, 'LOTE-B', '2026-06-30', 'RS-12345', 'Importaciones XYZ'],
+      ['Vitamina C 1g', '', cat1, 12.00, 7.50, 60, 10, 300, um1, 'VIT-2025', '2025-12-31', '', 'Lab. Genérico SAC'],
     ];
     sheetName = 'Productos';
   } else if (esTiendaRubro(rubro)) {
@@ -456,6 +459,7 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                   <div><span className="font-medium text-purple-600">lote</span> — Número de lote</div>
                   <div><span className="font-medium text-purple-600">fecha_vencimiento</span> — YYYY-MM-DD o DD/MM/YYYY</div>
                   <div><span className="font-medium text-purple-600">registro_sanitario</span> — RS del lote</div>
+                  <div><span className="font-medium text-purple-600">proveedor</span> — Nombre exacto del proveedor (opcional)</div>
                 </>}
                 {esTienda && <>
                   <div><span className="font-medium text-blue-600">talla</span> — Talla/tamaño (S, M, L, 30, 32…)</div>
@@ -576,6 +580,7 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                         {esFarmacia && <>
                           <th className="px-3 py-2 text-left font-medium text-purple-600">Lote</th>
                           <th className="px-3 py-2 text-left font-medium text-purple-600">Vencimiento</th>
+                          <th className="px-3 py-2 text-left font-medium text-purple-600">Proveedor</th>
                         </>}
                       </>}
                     </tr>
@@ -635,6 +640,9 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
                               </td>
                               <td className="px-3 py-2 text-purple-700 dark:text-purple-300 text-[11px]">
                                 {row.fechaVencimiento || '—'}
+                              </td>
+                              <td className="px-3 py-2 text-purple-700 dark:text-purple-300 text-[11px]">
+                                {row.proveedorNombre || '—'}
                               </td>
                             </>}
                           </>}

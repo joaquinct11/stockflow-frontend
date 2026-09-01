@@ -179,6 +179,7 @@ export interface DetalleVentaDTO {
   subtotal?: number;
   varianteId?: number;
   varianteDescripcion?: string;
+  stockLoteId?: number;
 }
 
 // ========================================

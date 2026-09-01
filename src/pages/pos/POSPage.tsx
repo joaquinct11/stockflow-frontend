@@ -23,7 +23,7 @@ import { refreshOnboarding } from '../../utils/onboardingEvents';
 import { productoVarianteService } from '../../services/productoVariante.service';
 import { axiosInstance } from '../../api/axios.config';
 import { movimientoService } from '../../services/movimiento.service';
-import type { LoteVencimientoDTO } from '../../services/movimiento.service';
+import type { LoteVencimientoDTO, StockLoteDisponibleDTO } from '../../services/movimiento.service';
 
 // ── Tipos locales ──────────────────────────────────────────────────────────────
 
@@ -33,10 +33,14 @@ interface CartItem {
   precioUnitario: number;
   varianteId?: number;
   varianteDescripcion?: string;
+  stockLoteId?: number;
+  stockLoteLabel?: string; // e.g. "Lote LOTE-A · Proveedor Lab. XYZ"
 }
 
-const cartItemKey = (item: { producto: ProductoDTO; varianteId?: number }) =>
-  item.varianteId ? `${item.producto.id}-v${item.varianteId}` : `${item.producto.id}`;
+const cartItemKey = (item: { producto: ProductoDTO; varianteId?: number; stockLoteId?: number }) =>
+  item.varianteId ? `${item.producto.id}-v${item.varianteId}` :
+  item.stockLoteId ? `${item.producto.id}-l${item.stockLoteId}` :
+  `${item.producto.id}`;
 
 type MetodoPago = 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN';
 type POSStep = 'venta' | 'cobro' | 'exito';
@@ -72,6 +76,7 @@ export function POSPage() {
 
   // ── Lotes por producto (solo farmacia) ───────────────────────────────────
   const [proximoVencimientoMap, setProximoVencimientoMap] = useState<Map<number, LoteVencimientoDTO>>(new Map());
+  const [loteCountMap, setLoteCountMap] = useState<Map<number, number>>(new Map());
 
   // ── Estado principal ──────────────────────────────────────────────────────
   const [step, setStep] = useState<POSStep>('venta');
@@ -93,6 +98,12 @@ export function POSPage() {
   const [variantesDisponibles, setVariantesDisponibles] = useState<ProductoVarianteDTO[]>([]);
   const [loadingVariantes, setLoadingVariantes] = useState(false);
   const [variantePrecioOverrides, setVariantePrecioOverrides] = useState<Record<number, string>>({});
+
+  // ── Selector de lotes (farmacia) ───────────────────────────────────────────
+  const [lotePickerOpen, setLotePickerOpen] = useState(false);
+  const [lotePickerProducto, setLotePickerProducto] = useState<ProductoDTO | null>(null);
+  const [lotesDisponibles, setLotesDisponibles] = useState<StockLoteDisponibleDTO[]>([]);
+  const [loadingLotes, setLoadingLotes] = useState(false);
 
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [mobileTab, setMobileTab] = useState<'productos' | 'carrito'>('productos');
@@ -206,6 +217,14 @@ export function POSPage() {
       });
 
       setProximoVencimientoMap(map);
+
+      // Contar lotes vigentes por producto
+      const countMap = new Map<number, number>();
+      porProducto.forEach((lotesProducto, productoId) => {
+        const vigentes = lotesProducto.filter(l => l.diasRestantes >= 0).length;
+        countMap.set(productoId, vigentes > 0 ? vigentes : lotesProducto.length);
+      });
+      setLoteCountMap(countMap);
     }).catch(() => {});
   }, [esFarmacia]);
 
@@ -533,6 +552,22 @@ export function POSPage() {
       finally { setLoadingVariantes(false); }
     }
 
+    // Para FARMACIA/BOTICA: mostrar picker de lotes si el producto tiene lotes registrados
+    if (esFarmacia && producto.stockVigente != null) {
+      try {
+        setLoadingLotes(true);
+        const lotes = await movimientoService.getLotesDisponibles(producto.id!, sucursalId);
+        if (lotes.length > 0) {
+          setLotePickerProducto(producto);
+          setLotesDisponibles(lotes);
+          setLotePickerOpen(true);
+          setLoadingLotes(false);
+          return;
+        }
+      } catch { /* sin lotes registrados, continúa flujo FEFO */ }
+      finally { setLoadingLotes(false); }
+    }
+
     if (getStockDisponible(producto) <= 0) {
       toast.error(`Sin stock disponible: ${producto.nombre}`);
       return;
@@ -546,16 +581,20 @@ export function POSPage() {
     varianteDescripcion?: string,
     switchToCart = false,
     precioOverride?: number,
+    stockLoteId?: number,
+    stockLoteLabel?: string,
   ) => {
     setCart(prev => {
-      const key = cartItemKey({ producto, varianteId });
+      const key = cartItemKey({ producto, varianteId, stockLoteId });
       const idx = prev.findIndex(i => cartItemKey(i) === key);
       if (idx >= 0) {
         const newCart = [...prev];
         const item = newCart[idx];
         const stockMax = varianteId
           ? (variantesDisponibles.find(v => v.id === varianteId)?.stockActual ?? getStockDisponible(producto))
-          : getStockDisponible(producto);
+          : stockLoteId
+            ? (lotesDisponibles.find(l => l.id === stockLoteId)?.stockActual ?? getStockDisponible(producto))
+            : getStockDisponible(producto);
         if (item.cantidad >= stockMax) {
           toast.error(`Stock máximo disponible: ${stockMax}`);
           return prev;
@@ -564,7 +603,7 @@ export function POSPage() {
         return newCart;
       }
       const precio = (precioOverride != null && precioOverride > 0) ? precioOverride : (producto.precioVenta ?? 0);
-      return [...prev, { producto, cantidad: 1, precioUnitario: precio, varianteId, varianteDescripcion }];
+      return [...prev, { producto, cantidad: 1, precioUnitario: precio, varianteId, varianteDescripcion, stockLoteId, stockLoteLabel }];
     });
     if (switchToCart) setMobileTab('carrito');
     refocus();
@@ -795,6 +834,7 @@ export function POSPage() {
         subtotal: item.cantidad * item.precioUnitario,
         varianteId: item.varianteId,
         varianteDescripcion: item.varianteDescripcion,
+        stockLoteId: item.stockLoteId,
       }));
 
       const venta = await ventaService.create({
@@ -821,14 +861,15 @@ export function POSPage() {
           precioUnitario: item.precioUnitario,
           varianteId: item.varianteId,
           varianteDescripcion: item.varianteDescripcion,
+          stockLoteId: item.stockLoteId,
         })),
       });
 
       // Actualizar stock local inmediatamente (sin recargar del servidor)
+      // Un producto puede estar varias veces en el carrito (distintos lotes) → sumar toda la cantidad vendida
       setTodosProductos(prev => prev.map(p => {
-        const item = cart.find(i => i.producto.id === p.id);
-        if (!item) return p;
-        const vendido = item.cantidad;
+        const vendido = cart.filter(i => i.producto.id === p.id).reduce((s, i) => s + i.cantidad, 0);
+        if (!vendido) return p;
         return {
           ...p,
           stockActual: Math.max(0, (p.stockActual ?? 0) - vendido),
@@ -1529,13 +1570,14 @@ export function POSPage() {
                             const vencido = lote && lote.diasRestantes < 0;
                             const proximo = lote && lote.diasRestantes >= 0 && lote.diasRestantes <= 30;
                             const colorFecha = vencido ? 'text-red-400' : proximo ? 'text-amber-400' : 'text-gray-500';
+                            const count = loteCountMap.get(p.id!);
                             return (
                               <>
-                                {lote?.lote && <span className="mr-2">Lote: {lote.lote}</span>}
                                 Stock: <span className={getStockDisponible(p) <= 0 ? 'text-red-400' : 'text-gray-400'}>{getStockDisponible(p)}</span>
+                                {count != null && count > 1 && <span className="ml-1 text-gray-600">({count} lotes)</span>}
                                 {lote && (
                                   <span className={`ml-2 ${colorFecha}`}>
-                                    · {vencido ? '⚠ Vencido' : `Vence ${lote.fechaVencimiento}`}
+                                    · {vencido ? '⚠ Vencido' : `Vence próximo: ${lote.fechaVencimiento}`}
                                   </span>
                                 )}
                               </>
@@ -1584,40 +1626,61 @@ export function POSPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                   {productosDisponibles.slice(0, 20).map(p => {
                     const hoy = new Date(); hoy.setHours(0,0,0,0);
-                    const limite90 = new Date(hoy); limite90.setDate(limite90.getDate() + 90);
-                    const fv = p.proximaFechaVencimiento ? new Date(p.proximaFechaVencimiento + 'T00:00:00') : null;
+                    // Para farmacia, usar datos del lote más próximo a vencer
+                    const loteFefo = esFarmacia ? proximoVencimientoMap.get(p.id!) : undefined;
+                    const fvStr = loteFefo?.fechaVencimiento ?? p.proximaFechaVencimiento;
+                    const fv = fvStr ? new Date(fvStr + 'T00:00:00') : null;
                     const diasRestantes = fv ? Math.ceil((fv.getTime() - hoy.getTime()) / 86400000) : null;
-                    const porVencer = fv && fv >= hoy && fv <= limite90;
-                    const critico   = diasRestantes !== null && diasRestantes <= 7;
+                    const vencido = diasRestantes !== null && diasRestantes < 0;
+                    const critico = !vencido && diasRestantes !== null && diasRestantes <= 7;
+                    const proximo30 = !vencido && diasRestantes !== null && diasRestantes <= 30;
+                    const porVencer = fv !== null && (vencido || critico || proximo30 || (diasRestantes !== null && diasRestantes <= 90));
+                    const count = loteCountMap.get(p.id!);
+                    const tieneMultiplesLotes = count != null && count > 1;
+                    // Precio: usa el del lote FEFO si tiene precio propio, si no el del producto
+                    const precioMostrar = loteFefo?.precioVenta ?? p.precioVenta ?? 0;
                     return (
                       <button key={p.id} onClick={() => agregarAlCarrito(p)}
                         className={`flex flex-col rounded-xl border text-left transition-all overflow-hidden group relative
-                          ${porVencer
+                          ${vencido
+                            ? 'bg-red-950/40 hover:bg-red-900/40 border-red-800/50 hover:border-red-600'
+                            : critico
+                            ? 'bg-red-950/30 hover:bg-red-900/30 border-red-800/40 hover:border-red-600'
+                            : proximo30
                             ? 'bg-amber-950/40 hover:bg-amber-900/40 border-amber-700/50 hover:border-amber-500'
                             : 'bg-gray-900 hover:bg-gray-800/90 border-gray-800 hover:border-primary/50 hover:shadow-md hover:shadow-primary/5'}`}
                       >
-                        {/* Badge vencimiento */}
-                        {porVencer && (
+                        {/* Badge días restantes */}
+                        {porVencer && diasRestantes !== null && (
                           <span className={`absolute top-1.5 right-1.5 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded-full
-                            ${critico ? 'bg-red-500 text-white' : 'bg-amber-500 text-black'}`}>
-                            {critico ? `¡${diasRestantes}d!` : `${diasRestantes}d`}
+                            ${vencido ? 'bg-red-600 text-white' : critico ? 'bg-red-500 text-white' : 'bg-amber-500 text-black'}`}>
+                            {vencido ? `Venc.` : `${diasRestantes}d`}
+                          </span>
+                        )}
+                        {/* Badge múltiples lotes */}
+                        {tieneMultiplesLotes && (
+                          <span className="absolute top-1.5 left-1.5 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-600 text-white">
+                            {count} lotes
                           </span>
                         )}
                         {/* Imagen */}
-                        <div className="w-full h-28 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center overflow-hidden group-hover:brightness-110 transition-all flex-shrink-0">
+                        <div className="w-full h-24 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center overflow-hidden group-hover:brightness-110 transition-all flex-shrink-0">
                           {p.imagenUrl
                             ? <img src={p.imagenUrl} alt={p.nombre} className="w-full h-full object-cover" onError={e => { const t = e.target as HTMLImageElement; t.style.display='none'; (t.nextElementSibling as HTMLElement|null)?.style && ((t.nextElementSibling as HTMLElement).style.display='flex'); }} />
                             : null}
                           <span className={`text-4xl font-bold text-gray-700 ${p.imagenUrl ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}>{p.nombre.charAt(0).toUpperCase()}</span>
                         </div>
                         {/* Info */}
-                        <div className="p-2.5">
-                          <p className="text-xs font-medium leading-snug line-clamp-2 mb-1">{p.nombre}</p>
-                          <p className="text-sm font-bold text-primary">{fmt(p.precioVenta ?? 0)}</p>
-                          <p className="text-[10px] text-gray-600 mt-0.5">Stock: {getStockDisponible(p)}</p>
-                          {porVencer && (
-                            <p className={`text-[9px] font-semibold mt-0.5 ${critico ? 'text-red-400' : 'text-amber-400'}`}>
-                              Vence {fv!.toLocaleDateString('es-PE', { day:'2-digit', month:'short' })}
+                        <div className="p-2.5 flex flex-col gap-0.5">
+                          <p className="text-xs font-medium leading-snug line-clamp-2">{p.nombre}</p>
+                          <p className="text-sm font-bold text-primary">{fmt(precioMostrar)}</p>
+                          <p className="text-[10px] text-gray-500">
+                            Stock: <span className={getStockDisponible(p) <= 0 ? 'text-red-400 font-semibold' : 'text-gray-400'}>{getStockDisponible(p)}</span>
+                            {tieneMultiplesLotes && <span className="text-gray-600 ml-1">· {count} lotes</span>}
+                          </p>
+                          {fv && (
+                            <p className={`text-[9px] font-semibold ${vencido ? 'text-red-400' : critico ? 'text-red-400' : proximo30 ? 'text-amber-400' : 'text-gray-600'}`}>
+                              {vencido ? '⚠ Vencido' : `Vence ${fv.toLocaleDateString('es-PE', { day:'2-digit', month:'short', year: diasRestantes! > 365 ? '2-digit' : undefined })}`}
                             </p>
                           )}
                         </div>
@@ -1672,6 +1735,7 @@ export function POSPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium leading-tight truncate">{item.producto.nombre}</p>
                       {item.varianteDescripcion && <p className="text-xs text-violet-400 leading-tight">{item.varianteDescripcion}</p>}
+                      {item.stockLoteLabel && <p className="text-[10px] text-purple-400 leading-tight truncate">{item.stockLoteLabel}</p>}
                       <div className="flex items-center gap-1 mt-0.5">
                         {esRopa && editandoPrecio?.key === cartItemKey(item) ? (
                           <input
@@ -1920,6 +1984,7 @@ export function POSPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium leading-tight truncate">{item.producto.nombre}</p>
                           {item.varianteDescripcion && <p className="text-xs text-violet-400 leading-tight">{item.varianteDescripcion}</p>}
+                          {item.stockLoteLabel && <p className="text-[10px] text-purple-400 leading-tight truncate">{item.stockLoteLabel}</p>}
                           <div className="flex items-center gap-1.5 mt-0.5">
                             {esRopa && editandoPrecio?.key === cartItemKey(item) ? (
                               <input
@@ -2246,6 +2311,76 @@ export function POSPage() {
           </div>
           <button onClick={() => setVariantePickerOpen(false)}
             className="w-full py-2.5 rounded-xl border border-gray-700 text-gray-500 hover:text-white hover:border-gray-500 text-sm transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* ── Selector de lotes (farmacia) ──────────────────────────────── */}
+    {lotePickerOpen && lotePickerProducto && (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+        onClick={() => setLotePickerOpen(false)}>
+        <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm p-5 flex flex-col gap-4"
+          onClick={e => e.stopPropagation()}>
+          <div>
+            <p className="text-xs text-purple-400 font-medium uppercase tracking-widest mb-1">Seleccionar lote</p>
+            <h3 className="font-bold text-base text-white">{lotePickerProducto.nombre}</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Elige el lote/proveedor a descontar del stock</p>
+          </div>
+          {loadingLotes ? (
+            <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-purple-400" /></div>
+          ) : (
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+              {lotesDisponibles.map(lote => {
+                const label = [
+                  lote.lote ? `Lote ${lote.lote}` : null,
+                  lote.proveedorNombre ? `· ${lote.proveedorNombre}` : null,
+                ].filter(Boolean).join(' ') || `Lote #${lote.id}`;
+                const proximo = lote.diasParaVencer <= 30;
+                const precio = lote.precioVenta ?? lotePickerProducto.precioVenta ?? 0;
+                return (
+                  <button key={lote.id}
+                    onClick={() => {
+                      agregarItemAlCarrito(
+                        lotePickerProducto, undefined, undefined, false,
+                        lote.precioVenta ?? undefined, lote.id, label
+                      );
+                      setLotePickerOpen(false);
+                    }}
+                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-gray-700 hover:border-purple-500/60 hover:bg-purple-900/10 text-left transition-colors group">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-white truncate">{label}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Vence: {lote.fechaVencimiento}
+                        {proximo && <span className="ml-1.5 text-yellow-400">⚠ Próximo</span>}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-bold text-primary">{fmt(precio)}</p>
+                      <span className="text-xs text-purple-300 bg-purple-900/30 border border-purple-700/40 px-2 py-0.5 rounded-lg">
+                        {lote.stockActual} uds
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button onClick={() => {
+            // Sin lote específico → FEFO automático
+            if (getStockDisponible(lotePickerProducto) <= 0) {
+              toast.error(`Sin stock disponible: ${lotePickerProducto.nombre}`);
+            } else {
+              agregarItemAlCarrito(lotePickerProducto);
+            }
+            setLotePickerOpen(false);
+          }}
+            className="w-full py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 text-sm transition-colors">
+            Agregar sin seleccionar lote (FEFO automático)
+          </button>
+          <button onClick={() => setLotePickerOpen(false)}
+            className="w-full py-2 rounded-xl text-gray-600 hover:text-gray-400 text-sm transition-colors">
             Cancelar
           </button>
         </div>

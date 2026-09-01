@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { movimientoService } from '../../services/movimiento.service';
 import { refreshOnboarding } from '../../utils/onboardingEvents';
-import type { LoteVencimientoDTO } from '../../services/movimiento.service';
+import type { LoteVencimientoDTO, LoteVentaDetalleDTO } from '../../services/movimiento.service';
 import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { proveedorService } from '../../services/proveedor.service';
@@ -39,6 +39,7 @@ import {
   FlaskConical,
   ArrowUpAZ,
   ArrowDownAZ,
+  Pencil,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -107,6 +108,19 @@ export function InventarioList() {
   const [ajusteLoteMovimientoId, setAjusteLoteMovimientoId] = useState<number | null>(null);
   const [lotesFiltro, setLotesFiltro] = useState<'todos' | 'vencidos' | 'proximos30' | 'proximos90'>('todos');
   const [lotesSearch, setLotesSearch] = useState('');
+  const [lotesPage, setLotesPage] = useState(1);
+  const LOTES_PER_PAGE = 10;
+
+  // Kardex expandible
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [lotesVentaCache, setLotesVentaCache] = useState<Map<number, LoteVentaDetalleDTO[]>>(new Map());
+  const [loadingLotesVenta, setLoadingLotesVenta] = useState<Set<number>>(new Set());
+
+  // Editar proveedor de lote
+  const [loteEditando, setLoteEditando] = useState<LoteVencimientoDTO | null>(null);
+  const [editProveedorId, setEditProveedorId] = useState<number | ''>('');
+  const [editPrecioVenta, setEditPrecioVenta] = useState<string>('');
+  const [savingLoteEdit, setSavingLoteEdit] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -271,6 +285,25 @@ export function InventarioList() {
     setKardexTipoFilter('TODOS');
     setKardexDesde('');
     setKardexHasta('');
+    setExpandedRows(new Set());
+    setLotesVentaCache(new Map());
+  };
+
+  const toggleKardexRow = async (movId: number) => {
+    const next = new Set(expandedRows);
+    if (next.has(movId)) { next.delete(movId); setExpandedRows(next); return; }
+    next.add(movId);
+    setExpandedRows(next);
+    if (!lotesVentaCache.has(movId)) {
+      setLoadingLotesVenta((prev) => new Set(prev).add(movId));
+      try {
+        const data = await movimientoService.getLotesDeVenta(movId);
+        setLotesVentaCache((prev) => new Map(prev).set(movId, data));
+      } catch { /* silencioso */ }
+      finally {
+        setLoadingLotesVenta((prev) => { const s = new Set(prev); s.delete(movId); return s; });
+      }
+    }
   };
 
   const kardexFiltrados = useMemo(() => {
@@ -741,7 +774,7 @@ export function InventarioList() {
                       <button
                         key={f.key}
                         type="button"
-                        onClick={() => setLotesFiltro(f.key)}
+                        onClick={() => { setLotesFiltro(f.key); setLotesPage(1); }}
                         className={[
                           'px-3 py-1 rounded-md text-xs font-medium border transition',
                           lotesFiltro === f.key
@@ -758,7 +791,7 @@ export function InventarioList() {
                     <Input
                       placeholder="Buscar producto o lote..."
                       value={lotesSearch}
-                      onChange={(e) => setLotesSearch(e.target.value)}
+                      onChange={(e) => { setLotesSearch(e.target.value); setLotesPage(1); }}
                       className="pl-8"
                     />
                   </div>
@@ -789,14 +822,16 @@ export function InventarioList() {
                             <TableHead>Lote</TableHead>
                             <TableHead>Fecha venc.</TableHead>
                             {esFarmacia && <TableHead>Reg. Sanitario</TableHead>}
+                            <TableHead>Proveedor</TableHead>
                             <TableHead className="text-center">Cant. recibida</TableHead>
                             <TableHead className="text-center">Stock actual</TableHead>
                             <TableHead className="text-center">Días restantes</TableHead>
                             <TableHead className="text-center">Estado</TableHead>
+                            <TableHead></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {lotesFiltrados.map((l) => {
+                          {lotesFiltrados.slice((lotesPage - 1) * LOTES_PER_PAGE, lotesPage * LOTES_PER_PAGE).map((l) => {
                             const dias = l.diasRestantes;
                             const vencido    = dias < 0;
                             const critico    = !vencido && dias <= 7;
@@ -844,6 +879,11 @@ export function InventarioList() {
                                     {l.registroSanitario || <span className="text-muted-foreground text-xs italic">—</span>}
                                   </TableCell>
                                 )}
+                                <TableCell className="text-sm">
+                                  {l.proveedorNombre
+                                    ? <span className="font-medium">{l.proveedorNombre}</span>
+                                    : <span className="text-muted-foreground text-xs italic">—</span>}
+                                </TableCell>
                                 <TableCell className="text-center text-sm font-semibold">
                                   {l.cantidad}
                                 </TableCell>
@@ -864,18 +904,126 @@ export function InventarioList() {
                                 <TableCell className="text-center">
                                   {estadoBadge}
                                 </TableCell>
+                                <TableCell className="text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setLoteEditando(l);
+                                      setEditProveedorId(
+                                        l.proveedorNombre
+                                          ? (proveedores.find(p => p.nombre === l.proveedorNombre)?.id ?? '')
+                                          : ''
+                                      );
+                                      setEditPrecioVenta(l.precioVenta != null ? String(l.precioVenta) : '');
+                                    }}
+                                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition"
+                                    title="Editar proveedor"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                </TableCell>
                               </TableRow>
                             );
                           })}
                         </TableBody>
                       </Table>
                     </div>
+                    {lotesFiltrados.length > LOTES_PER_PAGE && (
+                      <div className="flex items-center justify-between pt-2">
+                        <p className="text-xs text-muted-foreground">
+                          Página {lotesPage} de {Math.ceil(lotesFiltrados.length / LOTES_PER_PAGE)}
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={lotesPage === 1}
+                            onClick={() => setLotesPage((p) => p - 1)}
+                            className="px-3 py-1 text-xs rounded-md border border-input bg-background disabled:opacity-40 hover:bg-muted transition"
+                          >
+                            ← Anterior
+                          </button>
+                          <button
+                            type="button"
+                            disabled={lotesPage >= Math.ceil(lotesFiltrados.length / LOTES_PER_PAGE)}
+                            onClick={() => setLotesPage((p) => p + 1)}
+                            className="px-3 py-1 text-xs rounded-md border border-input bg-background disabled:opacity-40 hover:bg-muted transition"
+                          >
+                            Siguiente →
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </CardContent>
             </Card>
           )}
         </>
+      )}
+
+      {/* Modal editar proveedor de lote */}
+      {loteEditando && (
+        <Dialog
+          isOpen
+          onClose={() => setLoteEditando(null)}
+          title="Editar proveedor del lote"
+          description={`${loteEditando.productoNombre} · Lote: ${loteEditando.lote || 'Sin lote'}`}
+        >
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium block mb-1">Proveedor</label>
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editProveedorId}
+                onChange={(e) => setEditProveedorId(e.target.value ? Number(e.target.value) : '')}
+              >
+                <option value="">— Sin proveedor —</option>
+                {proveedores.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">Precio de venta (S/.)</label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={editPrecioVenta}
+                onChange={(e) => setEditPrecioVenta(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" type="button" onClick={() => setLoteEditando(null)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={savingLoteEdit}
+                onClick={async () => {
+                  setSavingLoteEdit(true);
+                  try {
+                    const pid = editProveedorId !== '' ? Number(editProveedorId) : null;
+                    const precio = editPrecioVenta !== '' ? Number(editPrecioVenta) : null;
+                    await movimientoService.actualizarProveedorLote(loteEditando.movimientoId, pid, precio);
+                    toast.success('Lote actualizado');
+                    setLoteEditando(null);
+                    // Refresca la lista de lotes
+                    const data = await movimientoService.getLotes();
+                    setLotes(data);
+                  } catch {
+                    toast.error('Error al actualizar el lote');
+                  } finally {
+                    setSavingLoteEdit(false);
+                  }
+                }}
+              >
+                {savingLoteEdit ? 'Guardando...' : 'Guardar'}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
       )}
 
       {/* Dialog para crear movimiento (corregido: Producto / Tipo / Cantidad+Referencia / Descripción) */}
@@ -1388,10 +1536,15 @@ export function InventarioList() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">{kardexFiltrados.length} de {kardexMovimientos.length} movimientos</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <FlaskConical className="h-3 w-3 inline" />
+              Las ventas muestran los lotes consumidos — haz clic en ▶ para expandir. Para stock por lote ve a la pestaña&nbsp;<strong>Lotes</strong>.
+            </p>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8"></TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Tipo Movimiento</TableHead>
                   <TableHead>Documento</TableHead>
@@ -1405,7 +1558,8 @@ export function InventarioList() {
               <TableBody>
                 {(() => {
                   let stockAcumulado = 0;
-                  return kardexFiltrados.map((m) => {
+                  const rows: React.ReactNode[] = [];
+                  kardexFiltrados.forEach((m) => {
                     const esEntrada = m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION';
                     const esSalida = m.tipo === 'SALIDA';
                     const esAjuste = m.tipo === 'AJUSTE';
@@ -1417,49 +1571,96 @@ export function InventarioList() {
                     const costoUnitario = m.costoUnitario ?? 0;
                     const costoTotal = costoUnitario > 0 ? costoUnitario * m.cantidad : undefined;
                     const prov = m.proveedorId ? proveedorById.get(m.proveedorId) : undefined;
-                    const documentoLabel = m.referencia
-                      ? `Ref: ${m.referencia}`
-                      : prov
-                        ? `Prov: ${prov.nombre}`
-                        : m.descripcion
-                          ? m.descripcion
-                          : '-';
+                    const isExpanded = expandedRows.has(m.id!);
+                    const isLoading = loadingLotesVenta.has(m.id!);
+                    const lotesVenta = lotesVentaCache.get(m.id!) ?? [];
 
-                    return (
-                      <TableRow key={m.id}>
+                    const documentoCell = esSalida && m.referencia?.startsWith('Venta #') ? (
+                      <span className="text-blue-600 dark:text-blue-400 font-medium text-sm">
+                        {m.referencia}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">
+                        {m.referencia ? `Ref: ${m.referencia}` : prov ? `Prov: ${prov.nombre}` : m.descripcion || '-'}
+                      </span>
+                    );
+
+                    rows.push(
+                      <TableRow key={m.id} className={esSalida ? 'cursor-pointer hover:bg-muted/40' : ''} onClick={esSalida ? () => toggleKardexRow(m.id!) : undefined}>
+                        <TableCell className="text-center pr-0">
+                          {esSalida && (
+                            <span className={`text-muted-foreground text-xs transition-transform inline-block ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                           {m.createdAt ? new Date(m.createdAt).toLocaleDateString('es-PE') : '-'}
                         </TableCell>
-
                         <TableCell>
                           <div className="flex items-center gap-2">
                             {getMovimientoIcon(m.tipo)}
                             {getMovimientoBadge(m.tipo)}
                           </div>
                         </TableCell>
-
-                        <TableCell
-                          className="text-muted-foreground text-sm max-w-[160px] truncate"
-                          title={documentoLabel}
-                        >
-                          {documentoLabel}
+                        <TableCell className="max-w-[160px] truncate" title={m.referencia ?? ''}>
+                          {documentoCell}
                         </TableCell>
-
                         <TableCell className="text-center font-semibold text-green-700">{esEntrada ? m.cantidad : '-'}</TableCell>
                         <TableCell className="text-center font-semibold text-red-700">{esSalida ? m.cantidad : '-'}</TableCell>
-
                         <TableCell className="text-center font-bold">{stockAcumulado}</TableCell>
-
                         <TableCell className="text-right text-muted-foreground text-sm">
                           {costoUnitario > 0 ? `S/.${costoUnitario.toFixed(2)}` : '-'}
                         </TableCell>
-
                         <TableCell className="text-right text-muted-foreground text-sm">
                           {costoTotal != null && costoTotal > 0 ? `S/.${costoTotal.toFixed(2)}` : '-'}
                         </TableCell>
                       </TableRow>
                     );
+
+                    if (esSalida && isExpanded) {
+                      if (isLoading) {
+                        rows.push(
+                          <TableRow key={`${m.id}-loading`} className="bg-blue-50/50 dark:bg-blue-950/20">
+                            <TableCell colSpan={9} className="text-xs text-muted-foreground py-2 pl-10">
+                              Cargando lotes...
+                            </TableCell>
+                          </TableRow>
+                        );
+                      } else if (lotesVenta.length === 0) {
+                        rows.push(
+                          <TableRow key={`${m.id}-empty`} className="bg-blue-50/50 dark:bg-blue-950/20">
+                            <TableCell colSpan={9} className="text-xs text-muted-foreground py-2 pl-10 italic">
+                              Sin detalle de lote disponible
+                            </TableCell>
+                          </TableRow>
+                        );
+                      } else {
+                        lotesVenta.forEach((lv, i) => {
+                          rows.push(
+                            <TableRow key={`${m.id}-lote-${i}`} className="bg-blue-50/50 dark:bg-blue-950/20">
+                              <TableCell></TableCell>
+                              <TableCell colSpan={2} className="py-2 pl-10">
+                                <span className="text-xs text-muted-foreground uppercase tracking-wide">Lote&nbsp;</span>
+                                <span className="text-xs font-semibold font-mono">{lv.lote || '—'}</span>
+                              </TableCell>
+                              <TableCell className="py-2">
+                                <span className="text-xs text-muted-foreground uppercase tracking-wide">Proveedor&nbsp;</span>
+                                <span className="text-xs font-medium">{lv.proveedorNombre || '—'}</span>
+                              </TableCell>
+                              <TableCell colSpan={2} className="text-center py-2">
+                                <span className="text-xs font-semibold text-red-600">−{lv.cantidadDescontada}</span>
+                              </TableCell>
+                              <TableCell className="py-2"></TableCell>
+                              <TableCell colSpan={2} className="text-right py-2">
+                                <span className="text-xs text-muted-foreground">Precio venta&nbsp;</span>
+                                <span className="text-xs font-semibold">{lv.precioVenta != null ? `S/.${lv.precioVenta.toFixed(2)}` : '—'}</span>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        });
+                      }
+                    }
                   });
+                  return rows;
                 })()}
               </TableBody>
             </Table>
