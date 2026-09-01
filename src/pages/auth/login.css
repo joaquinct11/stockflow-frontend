@@ -27,7 +27,7 @@
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 940px) {
-  .lx[data-r="split"]       { grid-template-columns: minmax(0,1fr) !important; }
+  .lx [data-r="split"]      { grid-template-columns: minmax(0,1fr) !important; }
   .lx [data-r="brand"]      { display: none !important; }
   .lx [data-r="mobilelogo"] { display: flex !important; }
   .lx [data-r="pane"]       { overflow-y: auto !important; }
