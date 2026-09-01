@@ -1,0 +1,139 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+.rx *,
+.rx *::before,
+.rx *::after { box-sizing: border-box; }
+
+.rx {
+  background: #08090d;
+  color: #e8e8f0;
+  font-family: 'Outfit', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.rx a             { color: #8b85ff; text-decoration: none; }
+.rx a:hover       { color: #a79fff; }
+.rx input,
+.rx select        { font-family: 'Outfit', sans-serif; }
+.rx input::placeholder { color: #4a4b60; }
+.rx input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #101118 inset;
+  -webkit-text-fill-color: #e8e8f0;
+}
+.rx select option { background: #101118; color: #e8e8f0; }
+
+@keyframes rx-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@keyframes rx-spin   { to { transform: rotate(360deg); } }
+@keyframes rx-in     { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ── Pane base (form panel) ──────────────────────────────────────────────── */
+.rx [data-r="pane"] { overflow-y: auto; }
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .rx[data-r="split"]       { grid-template-columns: minmax(0,1fr) !important; }
+  .rx [data-r="brand"]      { display: none !important; }
+  .rx [data-r="mobilelogo"] { display: flex !important; }
+  .rx [data-r="pane"]       { padding-left: 28px !important; padding-right: 28px !important; }
+}
+@media (max-width: 640px) {
+  .rx [data-r="duo"]   { grid-template-columns: minmax(0,1fr) !important; }
+  .rx [data-r="plans"] { grid-template-columns: minmax(0,1fr) !important; }
+}
+@media (max-width: 520px) {
+  .rx [data-r="formpad"] { padding: 24px 18px !important; }
+  .rx [data-r="pane"]    { padding: 24px 16px !important; }
+}
+
+/* ── Input ──────────────────────────────────────────────────────────────── */
+.rx .rx-input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  font-size: .93rem;
+  color: #e8e8f0;
+  background: #101118;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 11px;
+  outline: none;
+  transition: border-color .18s, box-shadow .18s;
+}
+.rx .rx-input:focus {
+  border-color: rgba(108,99,255,.7);
+  box-shadow: 0 0 0 4px rgba(108,99,255,.14);
+}
+.rx .rx-input-pass { padding-right: 50px; }
+
+/* ── Select ─────────────────────────────────────────────────────────────── */
+.rx .rx-select {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  font-size: .93rem;
+  color: #e8e8f0;
+  background: #101118;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 11px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .18s, box-shadow .18s;
+}
+.rx .rx-select:focus {
+  border-color: rgba(108,99,255,.7);
+  box-shadow: 0 0 0 4px rgba(108,99,255,.14);
+}
+
+/* ── Password toggle ─────────────────────────────────────────────────────── */
+.rx .rx-pass-toggle {
+  position: absolute;
+  top: 0; right: 0;
+  height: 46px;
+  width: 44px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  color: #5a5a72;
+  cursor: pointer;
+  transition: color .18s;
+}
+.rx .rx-pass-toggle:hover { color: #c9cbd8; }
+
+/* ── Back button ─────────────────────────────────────────────────────────── */
+.rx .rx-back-btn {
+  height: 50px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: .95rem;
+  font-weight: 600;
+  color: #c9cbd8;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background .18s;
+  white-space: nowrap;
+}
+.rx .rx-back-btn:hover { background: rgba(255,255,255,.09); }
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+.rx .rx-spinner {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  animation: rx-spin .7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Pulse dot ──────────────────────────────────────────────────────────── */
+.rx .rx-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #00d4aa;
+  flex-shrink: 0;
+  animation: rx-pulse 2.2s ease-in-out infinite;
+}
