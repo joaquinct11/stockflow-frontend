@@ -95,7 +95,10 @@ const COLOR_WARNING = '#f59e0b';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function toDateString(d: Date): string {
-  return d.toISOString().split('T')[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function daysAgo(n: number): string {
@@ -163,9 +166,10 @@ function formatPeriodoEje(periodo: string, agrupacion: AgrupacionTendencia): str
     const [y, m] = periodo.split('-');
     return `${MESES_CORTOS[parseInt(m, 10) - 1]} '${y.slice(2)}`;
   }
-  // SEMANA → "2026-W15" u otro formato → recortar
-  if (agrupacion === 'SEMANA') {
-    return periodo.replace(/^\d{4}-/, '');   // quita el año → "W15" o "04-06"
+  // SEMANA → backend devuelve "YYYY-MM-DD" (primer día de la semana)
+  if (agrupacion === 'SEMANA' && /^\d{4}-\d{2}-\d{2}$/.test(periodo)) {
+    const [, m, d] = periodo.split('-');
+    return `Sem. ${d} ${MESES_CORTOS[parseInt(m, 10) - 1]}`;
   }
   return periodo.length > 10 ? periodo.slice(5) : periodo;
 }
@@ -1656,6 +1660,9 @@ export function ReportesPage() {
         } : null,
         inventarioData,
         comprasData,
+        financieroData,
+        clientesData,
+        negocioConfig,
       );
       toast.success('Excel descargado');
     } catch { toast.error('Error al exportar Excel');
@@ -1681,6 +1688,9 @@ export function ReportesPage() {
         } : null,
         inventarioData,
         comprasData,
+        financieroData,
+        clientesData,
+        negocioConfig,
       );
       toast.success('PDF descargado');
     } catch { toast.error('Error al exportar PDF');
