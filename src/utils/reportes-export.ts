@@ -16,6 +16,8 @@ import type {
   InventarioSlowMoverDTO,
   InventarioCoberturaDTO,
   ComprasPorProveedorDTO,
+  FinancieroDTO,
+  ClienteReporteDTO,
   VentaDTO,
   OrdenCompraDTO,
   ProductoDTO,
@@ -129,12 +131,18 @@ export function exportarExcel(
   ventas: VentasExportData | null,
   inventario: InventarioExportData | null,
   compras: ComprasPorProveedorDTO[] | null,
+  financiero: FinancieroDTO | null = null,
+  clientes: ClienteReporteDTO[] | null = null,
+  negocio?: TenantConfigDTO | null,
 ): void {
   const wb = XLSX.utils.book_new();
 
   // ── Hoja 1: Resumen ──────────────────────────────────────────────────────
+  const nombreNegocio = negocio?.nombreNegocio ?? 'Reporte';
   const resumenRows: (string | number)[][] = [
-    [`Reporte de Resumen — ${labelRango(desde, hasta)}`],
+    [negocio?.nombreNegocio ? `${negocio.nombreNegocio} — Reporte de Gestión` : 'Reporte de Gestión'],
+    negocio?.ruc ? [`RUC: ${negocio.ruc}`] : [],
+    [`Período: ${labelRango(desde, hasta)}`],
     [],
     ['VENTAS DEL PERÍODO'],
     ['Métrica', 'Valor'],
@@ -281,6 +289,49 @@ export function exportarExcel(
     XLSX.utils.book_append_sheet(wb, ws, 'Bajo Stock');
   }
 
+  // ── Hoja 8: Financiero ───────────────────────────────────────────────────
+  if (financiero) {
+    const rows: (string | number)[][] = [
+      [`${nombreNegocio} — Estado de Resultados — ${labelRango(desde, hasta)}`],
+      [],
+      ['Concepto', 'Monto (S/)'],
+      ['Ingresos por ventas', financiero.ingresosVentas ?? 0],
+      ['Costo de ventas', financiero.costoVentas ?? 0],
+      ['Utilidad bruta', financiero.utilidadBruta ?? 0],
+      [`Margen bruto`, financiero.margenBruto != null ? `${Number(financiero.margenBruto).toFixed(1)}%` : '—'],
+      [],
+      ['GASTOS OPERATIVOS'],
+      ['Categoría', 'Monto (S/)'],
+      ...(financiero.gastosPorCategoria ?? []).map(g => [g.categoria, g.monto ?? 0]),
+      ['TOTAL gastos', financiero.gastosTotales ?? 0],
+      [],
+      ['Utilidad neta', financiero.utilidadNeta ?? 0],
+      ['Margen neto', financiero.margenNeto != null ? `${Number(financiero.margenNeto).toFixed(1)}%` : '—'],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Financiero');
+  }
+
+  // ── Hoja 9: Clientes ─────────────────────────────────────────────────────
+  if (clientes?.length) {
+    const rows: (string | number)[][] = [
+      [`${nombreNegocio} — Top Clientes — ${labelRango(desde, hasta)}`],
+      [],
+      ['Cliente', 'Nº Compras', 'Total comprado (S/)', 'Ticket promedio (S/)', 'Última compra'],
+      ...clientes.map(c => [
+        c.clienteNombre,
+        c.ventasCount ?? 0,
+        c.totalComprado ?? 0,
+        c.ticketPromedio ?? 0,
+        c.ultimaCompra ? c.ultimaCompra.slice(0, 10) : '—',
+      ]),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+  }
+
   const filename = `reporte_${desde}_${hasta}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
@@ -296,28 +347,15 @@ export function exportarPDF(
   ventas: VentasExportData | null,
   inventario: InventarioExportData | null,
   compras: ComprasPorProveedorDTO[] | null,
+  financiero: FinancieroDTO | null = null,
+  clientes: ClienteReporteDTO[] | null = null,
+  negocio?: TenantConfigDTO | null,
 ): void {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   let y = 15;
 
   // ── utilidades locales ────────────────────────────────────────────────────
-  const addTitle = (text: string) => {
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 30, 30);
-    doc.text(text, 14, y);
-    y += 6;
-  };
-
-  const addSubtitle = (text: string) => {
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 100, 100);
-    doc.text(text, 14, y);
-    y += 8;
-  };
-
   const addSectionTitle = (text: string) => {
     y += 4;
     doc.setFontSize(12);
@@ -342,16 +380,12 @@ export function exportarPDF(
     if (y > 270) { doc.addPage(); y = 15; }
   };
 
-  const divider = () => {
-    doc.setDrawColor(220, 220, 220);
-    doc.line(14, y, pageW - 14, y);
-    y += 5;
-  };
-
   // ── Encabezado ────────────────────────────────────────────────────────────
-  addTitle('Fluxus — Reporte de Gestión');
-  addSubtitle(`Período: ${labelRango(desde, hasta)}   ·   Generado: ${new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}`);
-  divider();
+  y = dibujarEncabezadoNegocio(
+    doc, negocio,
+    'Reporte de Gestión',
+    `Período: ${labelRango(desde, hasta)}  ·  Generado: ${new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}`,
+  );
 
   // ── KPIs de ventas ────────────────────────────────────────────────────────
   if (resumen?.ventas) {
@@ -478,14 +512,64 @@ export function exportarPDF(
     );
   }
 
+  // ── Financiero ────────────────────────────────────────────────────────────
+  if (financiero) {
+    addSectionTitle('Estado de resultados');
+    addTable(
+      [['Concepto', 'Monto']],
+      [
+        ['Ingresos por ventas', sol(financiero.ingresosVentas)],
+        ['Costo de ventas', sol(financiero.costoVentas)],
+        ['Utilidad bruta', sol(financiero.utilidadBruta)],
+        ['Margen bruto', pct(financiero.margenBruto)],
+      ],
+      { columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' } } }
+    );
+    if (financiero.gastosPorCategoria?.length) {
+      addSectionTitle('Gastos operativos');
+      addTable(
+        [['Categoría', 'Monto']],
+        [
+          ...financiero.gastosPorCategoria.map(g => [g.categoria, sol(g.monto)]),
+          ['TOTAL gastos', sol(financiero.gastosTotales)],
+        ],
+        { columnStyles: { 1: { halign: 'right' } } }
+      );
+    }
+    addTable(
+      [['Concepto', 'Monto']],
+      [
+        ['Utilidad neta', sol(financiero.utilidadNeta)],
+        ['Margen neto', pct(financiero.margenNeto)],
+      ],
+      { columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' } } }
+    );
+  }
+
+  // ── Top clientes ──────────────────────────────────────────────────────────
+  if (clientes?.length) {
+    addSectionTitle('Top clientes');
+    addTable(
+      [['Cliente', 'Compras', 'Total', 'Ticket prom.', 'Última compra']],
+      clientes.slice(0, 15).map(c => [
+        c.clienteNombre,
+        num(c.ventasCount),
+        sol(c.totalComprado),
+        sol(c.ticketPromedio),
+        c.ultimaCompra ? c.ultimaCompra.slice(0, 10) : '—',
+      ])
+    );
+  }
+
   // ── Pie de página en todas las páginas ───────────────────────────────────
+  const nombrePie = negocio?.nombreNegocio ?? 'Fluxus';
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(160, 160, 160);
     doc.text(
-      `Fluxus · Reporte ${labelRango(desde, hasta)} · Pág. ${i} de ${totalPages}`,
+      `${nombrePie} · Reporte ${labelRango(desde, hasta)} · Pág. ${i} de ${totalPages}`,
       pageW / 2, 290,
       { align: 'center' }
     );

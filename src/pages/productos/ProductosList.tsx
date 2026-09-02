@@ -28,6 +28,8 @@ import {
   Lock,
   Barcode,
   Tag,
+  FileDown,
+  ChevronDown,
   Scale,
   Boxes,
   Timer,
@@ -42,6 +44,7 @@ import {
   Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
@@ -68,6 +71,8 @@ export function ProductosList() {
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
   const [categorias, setCategorias] = useState<CategoriaDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
   const [loadingUnidades, setLoadingUnidades] = useState(false);
 
   // Mini-modal nueva unidad de medida
@@ -95,6 +100,17 @@ export function ProductosList() {
       window.history.replaceState({}, '');
     }
   }, []);
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportMenuOpen]);
 
   // Sugerencias de nombre duplicado
   const [nombreSugerencias, setNombreSugerencias] = useState<ProductoDTO[]>([]);
@@ -588,6 +604,39 @@ export function ProductosList() {
     return precio <= costo;
   }).length;
 
+  const handleExportarExcel = (filtro: 'todos' | 'sin-stock' | 'bajo-stock') => {
+    setExportMenuOpen(false);
+    let lista = productos.filter(p => p.activo !== false);
+    if (filtro === 'sin-stock') lista = lista.filter(p => (p.stockActual ?? 0) <= 0);
+    if (filtro === 'bajo-stock') lista = lista.filter(p => (p.stockActual ?? 0) > 0 && p.stockMinimo != null && (p.stockActual ?? 0) <= p.stockMinimo);
+
+    if (lista.length === 0) {
+      toast.error('No hay productos con ese criterio.');
+      return;
+    }
+
+    const filas = [
+      ['Nombre', 'Código barras', 'Categoría', 'Unidad', 'Stock actual', 'Stock mínimo', 'Precio venta', 'Costo unitario'],
+      ...lista.map(p => [
+        p.nombre,
+        p.codigoBarras ?? '',
+        p.categoriaNombre ?? '',
+        p.unidadMedidaNombre ?? '',
+        p.stockActual ?? 0,
+        p.stockMinimo ?? '',
+        p.precioVenta,
+        p.costoUnitario ?? '',
+      ]),
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(filas);
+    ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new();
+    const etiquetas: Record<string, string> = { todos: 'Todos', 'sin-stock': 'Sin stock', 'bajo-stock': 'Stock bajo' };
+    XLSX.utils.book_append_sheet(wb, ws, etiquetas[filtro]);
+    XLSX.writeFile(wb, `productos_${filtro}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -604,12 +653,52 @@ export function ProductosList() {
             {esServicios ? 'Gestiona tus servicios y planes' : 'Gestiona tu inventario de productos'}
           </p>
         </div>
-        {canCreate('PRODUCTOS') && (
-          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-            <Plus className="mr-2 h-4 w-4" />
-            {esServicios ? 'Nuevo Servicio' : 'Nuevo Producto'}
-          </Button>
-        )}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {!esServicios && (
+            <div className="relative" ref={exportMenuRef}>
+              <Button
+                onClick={() => setExportMenuOpen(v => !v)}
+                className="w-full sm:w-auto bg-white hover:bg-green-50 text-green-600 border border-green-600 dark:bg-transparent dark:hover:bg-green-950"
+              >
+                <FileDown className="mr-2 h-4 w-4" />
+                Exportar Excel
+                <ChevronDown className="ml-2 h-3 w-3 opacity-80" />
+              </Button>
+              {exportMenuOpen && (
+                <div className="absolute right-0 top-10 z-50 w-52 rounded-lg border border-border bg-white dark:bg-gray-900 shadow-lg py-1">
+                  <p className="px-3 py-1.5 text-xs text-muted-foreground font-medium uppercase tracking-wide">Seleccionar productos</p>
+                  <button
+                    onClick={() => handleExportarExcel('todos')}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted text-left"
+                  >
+                    <Package className="h-4 w-4 text-muted-foreground" />
+                    Todos los productos
+                  </button>
+                  <button
+                    onClick={() => handleExportarExcel('bajo-stock')}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted text-left"
+                  >
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Stock bajo
+                  </button>
+                  <button
+                    onClick={() => handleExportarExcel('sin-stock')}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted text-left"
+                  >
+                    <X className="h-4 w-4 text-red-500" />
+                    Sin stock
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {canCreate('PRODUCTOS') && (
+            <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+              <Plus className="mr-2 h-4 w-4" />
+              {esServicios ? 'Nuevo Servicio' : 'Nuevo Producto'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {!hasViewPermission ? (
