@@ -713,6 +713,7 @@ export interface InventarioABCDTO {
   nombre: string;
   clasificacion: 'A' | 'B' | 'C';
   ingresos: number;
+  porcentaje: number | null;
   porcentajeAcumulado: number | null;
 }
 
@@ -721,6 +722,7 @@ export interface InventarioSlowMoverDTO {
   productoId: number;
   nombre: string;
   stockActual: number;
+  costoUnitario: number | null;
   costoTotal: number | null;
   diasSinSalida: number;
 }
