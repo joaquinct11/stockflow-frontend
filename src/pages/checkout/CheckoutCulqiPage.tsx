@@ -7,57 +7,29 @@ import { Badge } from '../../components/ui/Badge';
 import { useAuthStore } from '../../store/authStore';
 import { culqiService, type CulqiConfigResponse } from '../../services/culqi.service';
 
-// ── Culqi Checkout Custom tipos ───────────────────────────────────────────────
-interface CulqiInstance {
-  open: () => void;
-  close: () => void;
-}
-
+// ── Culqi.js global types ──────────────────────────────────────────────────────
 declare global {
   interface Window {
-    // Nueva API: constructor
-    Culqi: new (config: {
-      settings: { title: string; currency: string; amount: number; description?: string };
-      client?: { email?: string };
-      options?: Record<string, unknown>;
-      appearance?: Record<string, unknown>;
-    }) => CulqiInstance;
-    // Token devuelto por Culqi al tokenizar la tarjeta
-    culqiConfig?: { token?: { id: string }; error?: unknown };
-    // Callback que Culqi invoca cuando el usuario completa o cierra
+    Culqi: {
+      publicKey: string;
+      token?: { id: string; [key: string]: unknown };
+      order?: { [key: string]: unknown };
+      settings: (opts: {
+        title: string;
+        currency: string;
+        description: string;
+        amount: number;
+        order?: string;
+      }) => void;
+      open: () => void;
+      close: () => void;
+    };
+    // Culqi.js invoca esta función cuando el usuario ingresa su tarjeta
     culqi: () => void;
   }
 }
 
-const CULQI_SCRIPT_URL = 'https://js.culqi.com/checkout-js';
-
-// Colores Fluxus — se pasan a Culqi para que el modal sea coherente con la app
-const CULQI_APPEARANCE = {
-  theme: 'default',
-  hiddenCulqiLogo: false,
-  menuType: 'sidebar',
-  buttonCardPayText: 'Pagar ahora',
-  defaultStyle: {
-    bannerColor: '#131720',
-    buttonBackground: '#3450EE',
-    menuColor: '#131720',
-    linksColor: '#3450EE',
-    buttonTextColor: '#ffffff',
-    priceColor: '#ffffff',
-  },
-  variables: {
-    fontFamily: 'Inter, system-ui, sans-serif',
-    borderRadius: '8px',
-    colorBackground: '#0f1117',
-    colorPrimary: '#3450EE',
-    colorPrimaryText: '#ffffff',
-    colorText: '#f1f5f9',
-    colorTextSecondary: '#94a3b8',
-    colorTextPlaceholder: '#64748b',
-    colorIconTab: '#94a3b8',
-    colorLogo: 'dark',
-  },
-};
+const CULQI_SCRIPT_URL = 'https://checkout.culqi.com/js/v4';
 
 export function CheckoutCulqiPage() {
   const navigate = useNavigate();
@@ -73,9 +45,8 @@ export function CheckoutCulqiPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const scriptLoaded   = useRef(false);
-  const culqiInstance  = useRef<CulqiInstance | null>(null);
-  const resolveToken   = useRef<((tokenId: string) => void) | null>(null);
+  const scriptLoaded = useRef(false);
+  const resolveToken = useRef<((tokenId: string) => void) | null>(null);
 
   // Leer planId y modo de query params
   const planParam        = searchParams.get('plan') ?? 'BASICO';
@@ -91,50 +62,47 @@ export function CheckoutCulqiPage() {
       .finally(() => setLoadingConfig(false));
   }, []);
 
-  // 2. Inyectar Culqi.js (una sola vez) ────────────────────────────────────────
+  // 2. Inyectar Culqi.js (una sola vez) y registrar window.culqi ─────────────
   useEffect(() => {
-    if (scriptLoaded.current) return;
+    if (scriptLoaded.current || !config) return;
     scriptLoaded.current = true;
 
-    // Callback global que Culqi invoca al tokenizar (éxito o error)
+    // Registrar callback ANTES de cargar el script
     window.culqi = () => {
-      const token = window.culqiConfig?.token;
+      const token = window.Culqi?.token;
       if (token?.id) {
-        resolveToken.current?.(token.id);
+        resolveToken.current?.(token.id as string);
         resolveToken.current = null;
-        culqiInstance.current?.close();
+        window.Culqi?.close();
       }
+      // Si no hay token, el usuario cerró el modal sin pagar — no hacemos nada
     };
 
     const script = document.createElement('script');
     script.src = CULQI_SCRIPT_URL;
     script.async = true;
     document.body.appendChild(script);
-  }, []);
+
+    return () => {
+      // No eliminamos el script al desmontar: Culqi necesita persistir entre renders
+    };
+  }, [config]);
 
   // 3. Lógica de pago ─────────────────────────────────────────────────────────
   const handlePagar = async () => {
     if (!config) return;
     setError(null);
 
-    // Crear instancia de Culqi con colores Fluxus
-    culqiInstance.current = new window.Culqi({
-      settings: {
-        title:       'Fluxus',
-        currency:    'PEN',
-        amount:      Math.round(config.precioMensual * 100),
-        description: config.nombrePlan,
-      },
-      client: { email: undefined },
-      options: {
-        lang:             'es',
-        modal:            true,
-        paymentMethods:   { tarjeta: true, yape: true },
-      },
-      appearance: CULQI_APPEARANCE,
+    // Configurar Culqi con la public key y datos del plan
+    window.Culqi.publicKey = config.publicKey;
+    window.Culqi.settings({
+      title: 'Fluxus',
+      currency: 'PEN',
+      description: config.nombrePlan,
+      amount: Math.round(config.precioMensual * 100),
     });
 
-    // Abrir el modal y esperar el token via Promise
+    // Abrir el modal de Culqi y esperar el token via Promise
     setModalOpen(true);
     let tokenId: string;
     try {
@@ -149,7 +117,7 @@ export function CheckoutCulqiPage() {
           resolve(id);
         };
 
-        culqiInstance.current!.open();
+        window.Culqi.open();
       });
     } catch {
       // El usuario cerró el modal o expiró el timeout
