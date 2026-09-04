@@ -256,7 +256,7 @@ export function DigemidOppfPage() {
       setEditandoCod(true);
       return;
     }
-    const ruc = negocioConfig?.rucEmpresa ?? negocioConfig?.ruc ?? '';
+    const ruc = negocioConfig?.ruc ?? '';
     if (!ruc) {
       toast.error('Configura el RUC del negocio en Configuración antes de exportar');
       return;
