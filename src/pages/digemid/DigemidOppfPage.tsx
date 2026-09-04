@@ -266,7 +266,7 @@ export function DigemidOppfPage() {
       setProductos((prev) =>
         prev.map((p) =>
           p.id === productoId
-            ? { ...p, codDigemid: '', nomDigemid: '', fraccion: 1, vinculado: false, registroSanitario: '' }
+            ? { ...p, codDigemid: '', nomDigemid: '', fraccion: 1, vinculado: false }
             : p
         )
       );
