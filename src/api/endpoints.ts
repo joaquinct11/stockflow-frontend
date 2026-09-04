@@ -237,7 +237,8 @@ export const API_ENDPOINTS = {
     PRODUCTOS: '/digemid/productos',
     VINCULAR: (id: number) => `/digemid/productos/${id}/vincular`,
     DESVINCULAR: (id: number) => `/digemid/productos/${id}/vincular`,
-    OPPF_EXPORTAR: (codEst: string) => `/digemid/oppf/exportar?codEstablecimiento=${encodeURIComponent(codEst)}`,
+    OPPF_EXPORTAR: (codEst: string, ruc: string, mes: string, ano: string, tipo: string) =>
+      `/digemid/oppf/exportar?codEstablecimiento=${encodeURIComponent(codEst)}&ruc=${encodeURIComponent(ruc)}&mes=${encodeURIComponent(mes)}&ano=${encodeURIComponent(ano)}&tipo=${encodeURIComponent(tipo)}`,
   },
 
   NOTIFICACIONES: {
