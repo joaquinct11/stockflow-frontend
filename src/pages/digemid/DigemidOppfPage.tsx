@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { cn } from '../../lib/utils';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 const COD_EST_KEY = 'digemid_cod_establecimiento';
 
@@ -179,6 +180,7 @@ export function DigemidOppfPage() {
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [modalProducto, setModalProducto] = useState<ProductoDigemidDTO | null>(null);
+  const { config: negocioConfig } = useTenantConfigStore();
   const [desvinculando, setDesvinculando] = useState<number | null>(null);
   const [exportando, setExportando] = useState(false);
   const [codEstablecimiento, setCodEstablecimiento] = useState(
@@ -254,19 +256,27 @@ export function DigemidOppfPage() {
       setEditandoCod(true);
       return;
     }
+    const ruc = negocioConfig?.ruc ?? '';
+    if (!ruc) {
+      toast.error('Configura el RUC del negocio en Configuración antes de exportar');
+      return;
+    }
     const vinculados = productos.filter((p) => p.vinculado);
     if (vinculados.length === 0) {
       toast.error('No hay productos vinculados a códigos DIGEMID');
       return;
     }
+    const hoy = new Date();
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+    const ano = String(hoy.getFullYear()).slice(-2);
     setExportando(true);
     try {
-      const blob = await digemidService.exportarOppf(codEstablecimiento);
+      const blob = await digemidService.exportarOppf(codEstablecimiento, ruc, mes, ano, 'CARGA ARCHIVO');
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       a.href = url;
-      a.download = `oppf_${codEstablecimiento}_${fecha}.zip`;
+      // El backend ya nombra el ZIP con el formato OPPF correcto
+      a.download = `${ruc}_${mes}_${ano}_CARGA ARCHIVO.zip`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success(`Archivo ZIP descargado con ${vinculados.length} producto(s)`);

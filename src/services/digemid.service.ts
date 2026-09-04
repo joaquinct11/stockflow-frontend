@@ -51,9 +51,15 @@ export const digemidService = {
     await axiosInstance.delete(API_ENDPOINTS.DIGEMID.DESVINCULAR(productoId));
   },
 
-  exportarOppf: async (codEstablecimiento: string): Promise<Blob> => {
+  exportarOppf: async (
+    codEstablecimiento: string,
+    ruc: string,
+    mes: string,
+    ano: string,
+    tipo: string = 'CARGA ARCHIVO'
+  ): Promise<Blob> => {
     const { data } = await axiosInstance.get<Blob>(
-      API_ENDPOINTS.DIGEMID.OPPF_EXPORTAR(codEstablecimiento),
+      API_ENDPOINTS.DIGEMID.OPPF_EXPORTAR(codEstablecimiento, ruc, mes, ano, tipo),
       { responseType: 'blob' }
     );
     return data;
