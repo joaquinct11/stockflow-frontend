@@ -142,6 +142,8 @@ export interface ProductoDTO {
   proximaFechaVencimiento?: string;
   /** PRODUCTO (default) = tiene stock físico. SERVICIO = sin stock, no genera movimiento. */
   tipo?: string;
+  /** Registro sanitario DIGEMID/DIRESA del producto. */
+  registroSanitario?: string;
   /** Stock vigente (no vencido). Solo presente si el producto tiene lotes con fechaVencimiento.
    *  El POS debe usar este valor cuando no es undefined, en lugar de stockActual. */
   stockVigente?: number;

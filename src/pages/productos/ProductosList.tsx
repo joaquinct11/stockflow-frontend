@@ -195,6 +195,7 @@ export function ProductosList() {
     unidadesPorCaja: undefined,
     talla: undefined,
     color: undefined,
+    registroSanitario: '',
   });
 
   useEffect(() => {
@@ -407,6 +408,7 @@ export function ProductosList() {
       unidadesPorCaja: producto.unidadesPorCaja,
       talla: producto.talla,
       color: producto.color,
+      registroSanitario: producto.registroSanitario ?? '',
     });
     setImgPreview(producto.imagenUrl ?? null);
     setEditingId(producto.id!);
@@ -442,6 +444,7 @@ export function ProductosList() {
       unidadesPorCaja: undefined,
       talla: undefined,
       color: undefined,
+      registroSanitario: '',
     });
     setEditingId(null);
     setIsDialogOpen(false);
@@ -1224,6 +1227,20 @@ export function ProductosList() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Registro Sanitario — solo farmacia/productos */}
+              {esFarmacia && !esServicios && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Registro Sanitario</label>
+                  <Input
+                    type="text"
+                    value={formData.registroSanitario ?? ''}
+                    onChange={(e) => setFormData(p => ({ ...p, registroSanitario: e.target.value }))}
+                    placeholder="Ej: E.F.A.12345 / RS-12345"
+                    className="h-10"
+                  />
                 </div>
               )}
 
