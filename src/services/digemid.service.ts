@@ -26,6 +26,9 @@ export interface ProductoDigemidDTO {
   nomDigemid: string;
   fraccion: number;
   vinculado: boolean;
+  unidadMedida: string;
+  precio1Oppf: number;
+  precio2Oppf: number;
 }
 
 export const digemidService = {

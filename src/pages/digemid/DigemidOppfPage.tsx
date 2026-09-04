@@ -16,18 +16,35 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(n);
 }
 
+const UNIDADES_BASICAS = new Set(['UNIDAD', 'TABLETA', 'TABLETAS', 'CÁPSULA', 'CAPSULA', 'CÁPSULAS', 'CAPSULAS',
+  'AMPOLLA', 'AMPOLLAS', 'VIAL', 'VIALES', 'COMPRIMIDO', 'COMPRIMIDOS']);
+
+function calcularPreciosOppfLocal(precioVenta: number, fraccion: number, unidadMedida: string) {
+  const esPorUnidad = UNIDADES_BASICAS.has((unidadMedida ?? '').trim().toUpperCase());
+  if (esPorUnidad) {
+    return { precio1: Math.round(precioVenta * fraccion * 100) / 100, precio2: precioVenta };
+  }
+  const p2 = Math.round((precioVenta / fraccion) * 100) / 100;
+  return { precio1: precioVenta, precio2: Math.max(0.01, p2) };
+}
+
 // ── Modal de búsqueda en catálogo DIGEMID ────────────────────────────────────
 
 interface BuscarModalProps {
   productoId: number;
   productoNombre: string;
+  precioVenta: number;
+  unidadMedida: string;
+  registroSanitario?: string;
+  resultadosIniciales?: CatalogoDigemidDTO[];
+  queryInicial?: string;
   onVincular: (codDigemid: string, item: CatalogoDigemidDTO) => void;
   onClose: () => void;
 }
 
-function BuscarModal({ productoId, productoNombre, onVincular, onClose }: BuscarModalProps) {
-  const [query, setQuery] = useState('');
-  const [resultados, setResultados] = useState<CatalogoDigemidDTO[]>([]);
+function BuscarModal({ productoId, productoNombre, precioVenta, unidadMedida, registroSanitario, resultadosIniciales, queryInicial, onVincular, onClose }: BuscarModalProps) {
+  const [query, setQuery] = useState(queryInicial ?? '');
+  const [resultados, setResultados] = useState<CatalogoDigemidDTO[]>(resultadosIniciales ?? []);
   const [buscando, setBuscando] = useState(false);
   const [vinculando, setVinculando] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,7 +95,14 @@ function BuscarModal({ productoId, productoNombre, onVincular, onClose }: Buscar
         <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
           <div>
             <h2 className="text-base font-semibold text-foreground">Buscar en catálogo DIGEMID</h2>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-sm">Producto: {productoNombre}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Producto: {productoNombre}
+              {' | '}
+              <span>Reg. Sanitario: </span>
+              <span className="font-mono font-medium text-amber-600 dark:text-amber-400">
+                {registroSanitario || '—'}
+              </span>
+            </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground">
             <X size={18} />
@@ -120,7 +144,10 @@ function BuscarModal({ productoId, productoNombre, onVincular, onClose }: Buscar
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {resultados.map((item) => (
+              {resultados.map((item) => {
+                const fraccion = item.fraccion && item.fraccion > 0 ? item.fraccion : 1;
+                const { precio1, precio2 } = calcularPreciosOppfLocal(precioVenta, fraccion, unidadMedida);
+                return (
                 <div key={item.codProd} className="px-4 py-3 hover:bg-muted/40 transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -146,6 +173,20 @@ function BuscarModal({ productoId, productoNombre, onVincular, onClose }: Buscar
                           </span>
                         )}
                       </div>
+                      {/* Preview de precios OPPF */}
+                      <div className="flex gap-3 mt-1.5">
+                        <span className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded border border-blue-500/20 font-mono">
+                          P1 Empaque: {formatPrice(precio1)}
+                        </span>
+                        <span className={cn(
+                          'text-xs px-2 py-0.5 rounded border font-mono',
+                          precio2 <= 0.01 && fraccion > 1
+                            ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                            : 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20'
+                        )}>
+                          P2 Unitario: {formatPrice(precio2)}
+                        </span>
+                      </div>
                     </div>
                     <Button
                       size="sm"
@@ -164,7 +205,8 @@ function BuscarModal({ productoId, productoNombre, onVincular, onClose }: Buscar
                     </Button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -189,6 +231,9 @@ export function DigemidOppfPage() {
   const [editandoCod, setEditandoCod] = useState(false);
   const [codInput, setCodInput] = useState(codEstablecimiento);
   const [filtroVinculado, setFiltroVinculado] = useState<'todos' | 'vinculados' | 'sinvincular'>('todos');
+  const [pagina, setPagina] = useState(1);
+  const PAGE_SIZE = 20;
+  const [autoVinculando, setAutoVinculando] = useState<number | null>(null);
 
   const cargarProductos = useCallback(async () => {
     setCargando(true);
@@ -235,18 +280,21 @@ export function DigemidOppfPage() {
 
   const handleVincularExitoso = (productoId: number, codDigemid: string, item: CatalogoDigemidDTO) => {
     setProductos((prev) =>
-      prev.map((p) =>
-        p.id === productoId
-          ? {
-              ...p,
-              codDigemid,
-              nomDigemid: item.nomProd,
-              fraccion: item.fraccion ?? 1,
-              registroSanitario: item.numRegSan ?? '',
-              vinculado: true,
-            }
-          : p
-      )
+      prev.map((p) => {
+        if (p.id !== productoId) return p;
+        const fraccion = item.fraccion ?? 1;
+        const { precio1, precio2 } = calcularPreciosOppfLocal(p.precioVenta, fraccion, p.unidadMedida);
+        return {
+          ...p,
+          codDigemid,
+          nomDigemid: item.nomProd,
+          fraccion,
+          registroSanitario: item.numRegSan ?? p.registroSanitario,
+          vinculado: true,
+          precio1Oppf: precio1,
+          precio2Oppf: precio2,
+        };
+      })
     );
   };
 
@@ -279,7 +327,7 @@ export function DigemidOppfPage() {
       a.download = `${ruc}_${mes}_${ano}_CARGA ARCHIVO.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(`Archivo ZIP descargado con ${vinculados.length} producto(s)`);
+      toast.success(`Archivo ZIP descargado con ${totalParaExportar} producto(s)`);
     } catch {
       toast.error('Error al generar el archivo ZIP');
     } finally {
@@ -302,7 +350,37 @@ export function DigemidOppfPage() {
     return matchBusqueda && matchFiltro;
   });
 
+  const totalPaginas = Math.max(1, Math.ceil(productosFiltrados.length / PAGE_SIZE));
+  const productosPagina = productosFiltrados.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE);
+
   const totalVinculados = productos.filter((p) => p.vinculado).length;
+  const totalParaExportar = productos.filter((p) => p.vinculado && p.stockActual > 0).length;
+
+  const handleVincularClick = async (p: ProductoDigemidDTO) => {
+    if (!p.registroSanitario) {
+      setModalProducto(p);
+      return;
+    }
+    setAutoVinculando(p.id);
+    try {
+      const resultados = await digemidService.buscarCatalogo(p.registroSanitario);
+      if (resultados.length === 1) {
+        // Único resultado → vincular automáticamente
+        const item = resultados[0];
+        await digemidService.vincular(p.id, item.codProd);
+        handleVincularExitoso(p.id, item.codProd, item);
+        toast.success(`Vinculado automáticamente: ${item.nomProd}`);
+      } else {
+        // Varios o ninguno → abrir modal con resultados pre-cargados
+        setModalProducto({ ...p, _resultadosIniciales: resultados, _queryInicial: p.registroSanitario } as any);
+      }
+    } catch {
+      toast.error('Error al buscar en catálogo DIGEMID');
+      setModalProducto(p);
+    } finally {
+      setAutoVinculando(null);
+    }
+  };
   const totalSinVincular = productos.filter((p) => !p.vinculado).length;
 
   return (
@@ -379,7 +457,7 @@ export function DigemidOppfPage() {
             {/* Botón exportar */}
             <Button
               onClick={handleExportar}
-              disabled={exportando || totalVinculados === 0}
+              disabled={exportando || totalParaExportar === 0}
               className="flex-shrink-0 gap-2"
             >
               {exportando ? (
@@ -396,6 +474,16 @@ export function DigemidOppfPage() {
               Debes vincular al menos un producto a un código DIGEMID antes de exportar.
             </p>
           )}
+          {totalVinculados > 0 && totalParaExportar === 0 && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-3 bg-amber-500/10 rounded-lg px-3 py-2 border border-amber-500/20">
+              Tienes {totalVinculados} producto(s) vinculado(s) pero todos tienen stock 0. Ingresa stock antes de exportar.
+            </p>
+          )}
+          {totalVinculados > 0 && totalParaExportar > 0 && totalVinculados !== totalParaExportar && (
+            <p className="text-xs text-muted-foreground mt-3 bg-muted/50 rounded-lg px-3 py-2 border border-border">
+              Se exportarán <span className="font-semibold text-foreground">{totalParaExportar}</span> de {totalVinculados} productos vinculados (los demás tienen stock 0).
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -410,7 +498,7 @@ export function DigemidOppfPage() {
               {(['todos', 'vinculados', 'sinvincular'] as const).map((f) => (
                 <button
                   key={f}
-                  onClick={() => setFiltroVinculado(f)}
+                  onClick={() => { setFiltroVinculado(f); setPagina(1); }}
                   className={cn(
                     'px-3 py-1 rounded-full text-xs font-medium transition-colors',
                     filtroVinculado === f
@@ -429,7 +517,7 @@ export function DigemidOppfPage() {
               <input
                 type="text"
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
+                onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
                 placeholder="Buscar producto..."
                 className="pl-8 pr-3 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 w-48"
               />
@@ -449,85 +537,150 @@ export function DigemidOppfPage() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="table-fixed w-full">
+                <colgroup>
+                  <col style={{width:'18%'}} />
+                  <col style={{width:'8%'}} />
+                  <col style={{width:'6%'}} />
+                  <col style={{width:'9%'}} />
+                  <col style={{width:'17%'}} />
+                  <col style={{width:'9%'}} />
+                  <col style={{width:'9%'}} />
+                  <col style={{width:'13%'}} />
+                  <col style={{width:'11%'}} />
+                </colgroup>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Producto</TableHead>
-                    <TableHead className="text-right">Precio Venta</TableHead>
+                    <TableHead className="text-right">Precio</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
-                    <TableHead>Reg. Sanitario</TableHead>
-                    <TableHead>Código DIGEMID</TableHead>
+                    <TableHead>Cód. DIGEMID</TableHead>
                     <TableHead>Nombre DIGEMID</TableHead>
+                    <TableHead className="text-right text-blue-600 dark:text-blue-400">P1 Empaque</TableHead>
+                    <TableHead className="text-right text-blue-600 dark:text-blue-400">P2 Unitario</TableHead>
                     <TableHead className="text-center">Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {productosFiltrados.map((p) => (
+                  {productosPagina.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="font-medium max-w-[180px] truncate" title={p.nombre}>
-                        {p.nombre}
+                      {/* Producto */}
+                      <TableCell>
+                        <span className="block text-sm font-medium leading-snug">{p.nombre}</span>
+                        <div className="flex flex-wrap gap-x-2 mt-0.5">
+                          {p.unidadMedida && (
+                            <span className="text-xs text-muted-foreground">({p.unidadMedida})</span>
+                          )}
+                          {p.registroSanitario && (
+                            <span className="text-xs font-mono text-muted-foreground/70">{p.registroSanitario}</span>
+                          )}
+                        </div>
                       </TableCell>
+
+                      {/* Precio */}
                       <TableCell className="text-right font-mono text-sm">
                         {formatPrice(p.precioVenta)}
                       </TableCell>
-                      <TableCell className="text-right text-sm">{p.stockActual}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {p.registroSanitario || <span className="text-muted-foreground/50">—</span>}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {p.codDigemid || <span className="text-muted-foreground/50">—</span>}
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[200px] truncate" title={p.nomDigemid}>
-                        {p.nomDigemid || <span className="text-muted-foreground/50">—</span>}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className={cn(
-                          'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
-                          p.vinculado
-                            ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
-                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                        )}>
-                          {p.vinculado ? (
-                            <><Link2 size={10} /> Vinculado</>
-                          ) : (
-                            <><Link2Off size={10} /> Sin vincular</>
-                          )}
+
+                      {/* Stock */}
+                      <TableCell className="text-right">
+                        <span className={cn('text-sm font-medium', p.stockActual === 0 ? 'text-rose-500' : 'text-foreground')}>
+                          {p.stockActual}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {p.vinculado ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDesvincular(p.id)}
-                              disabled={desvinculando === p.id}
-                              className="text-xs h-7 px-2 text-rose-600 border-rose-300 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-700 dark:hover:bg-rose-900/20"
-                            >
-                              {desvinculando === p.id ? (
-                                <LoadingSpinner />
-                              ) : (
-                                <><Link2Off size={12} className="mr-1" />Desvincular</>
-                              )}
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setModalProducto(p)}
-                              className="text-xs h-7 px-2"
-                            >
-                              <Link2 size={12} className="mr-1" />
-                              Vincular
-                            </Button>
+
+                      {/* Cód. DIGEMID */}
+                      <TableCell className="font-mono text-xs text-foreground/80">
+                        {p.vinculado ? p.codDigemid : <span className="text-muted-foreground/40">—</span>}
+                      </TableCell>
+
+                      {/* Nombre DIGEMID */}
+                      <TableCell className="text-xs text-muted-foreground">
+                        {p.vinculado
+                          ? <span className="line-clamp-2 leading-snug">{p.nomDigemid}</span>
+                          : <span className="text-muted-foreground/40">—</span>}
+                      </TableCell>
+
+                      {/* P1 Empaque */}
+                      <TableCell className="text-right font-mono text-xs">
+                        {p.vinculado && p.stockActual > 0
+                          ? <span className="text-blue-600 dark:text-blue-400">{formatPrice(p.precio1Oppf)}</span>
+                          : <span className="text-muted-foreground/40">—</span>}
+                      </TableCell>
+
+                      {/* P2 Unitario */}
+                      <TableCell className="text-right font-mono text-xs">
+                        {p.vinculado && p.stockActual > 0 ? (
+                          <span className={p.precio2Oppf <= 0.01 ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'}>
+                            {formatPrice(p.precio2Oppf)}
+                          </span>
+                        ) : <span className="text-muted-foreground/40">—</span>}
+                      </TableCell>
+
+                      {/* Estado */}
+                      <TableCell className="text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={cn(
+                            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
+                            p.vinculado
+                              ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
+                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                          )}>
+                            {p.vinculado ? <><Link2 size={10} />Vinculado</> : <><Link2Off size={10} />Sin vincular</>}
+                          </span>
+                          {p.vinculado && p.stockActual === 0 && (
+                            <span className="text-xs text-muted-foreground/60 italic">no se exportará</span>
                           )}
                         </div>
+                      </TableCell>
+
+                      {/* Acciones */}
+                      <TableCell className="text-right">
+                        {p.vinculado ? (
+                          <Button size="sm" variant="outline" onClick={() => handleDesvincular(p.id)} disabled={desvinculando === p.id}
+                            className="text-xs h-7 px-2 text-rose-600 border-rose-300 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-700 dark:hover:bg-rose-900/20">
+                            {desvinculando === p.id ? <LoadingSpinner /> : <><Link2Off size={12} className="mr-1" />Desvincular</>}
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => handleVincularClick(p)} disabled={autoVinculando === p.id}
+                            className="text-xs h-7 px-2">
+                            {autoVinculando === p.id ? <LoadingSpinner /> : <><Link2 size={12} className="mr-1" />Vincular</>}
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          {!cargando && productosFiltrados.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border text-sm text-muted-foreground">
+              <span>
+                {(pagina - 1) * PAGE_SIZE + 1}–{Math.min(pagina * PAGE_SIZE, productosFiltrados.length)} de {productosFiltrados.length} productos
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs"
+                  disabled={pagina === 1}
+                  onClick={() => setPagina((p) => p - 1)}
+                >
+                  ← Anterior
+                </Button>
+                <span className="px-2 font-medium text-foreground">{pagina} / {totalPaginas}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs"
+                  disabled={pagina === totalPaginas}
+                  onClick={() => setPagina((p) => p + 1)}
+                >
+                  Siguiente →
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
@@ -538,6 +691,11 @@ export function DigemidOppfPage() {
         <BuscarModal
           productoId={modalProducto.id}
           productoNombre={modalProducto.nombre}
+          precioVenta={modalProducto.precioVenta}
+          unidadMedida={modalProducto.unidadMedida}
+          registroSanitario={modalProducto.registroSanitario || undefined}
+          resultadosIniciales={(modalProducto as any)._resultadosIniciales}
+          queryInicial={(modalProducto as any)._queryInicial}
           onVincular={(codDigemid, item) => handleVincularExitoso(modalProducto.id, codDigemid, item)}
           onClose={() => setModalProducto(null)}
         />
