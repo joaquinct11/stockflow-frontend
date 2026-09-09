@@ -237,8 +237,10 @@ export const API_ENDPOINTS = {
     PRODUCTOS: '/digemid/productos',
     VINCULAR: (id: number) => `/digemid/productos/${id}/vincular`,
     DESVINCULAR: (id: number) => `/digemid/productos/${id}/vincular`,
+    VINCULAR_TODOS: '/digemid/productos/vincular-todos',
     OPPF_EXPORTAR: (codEst: string, ruc: string, mes: string, ano: string, tipo: string) =>
       `/digemid/oppf/exportar?codEstablecimiento=${encodeURIComponent(codEst)}&ruc=${encodeURIComponent(ruc)}&mes=${encodeURIComponent(mes)}&ano=${encodeURIComponent(ano)}&tipo=${encodeURIComponent(tipo)}`,
+    OPPF_HISTORIAL: '/digemid/oppf/historial',
   },
 
   NOTIFICACIONES: {
@@ -274,6 +276,8 @@ export const API_ENDPOINTS = {
     INVENTARIO_COBERTURA: (desde: string, hasta: string, limit = 20) =>
       `/reportes/inventario/cobertura?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
     INVENTARIO_VENCIMIENTOS: '/reportes/inventario/vencimientos',
+    INVENTARIO_MERMAS: (desde: string, hasta: string) =>
+      `/reportes/inventario/mermas?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
 
     // Compras
     COMPRAS_POR_PROVEEDOR: (desde: string, hasta: string, limit = 20) =>

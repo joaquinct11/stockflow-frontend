@@ -865,6 +865,19 @@ export interface VencimientosRiesgoDTO {
   lotesUrgentes: LoteRiesgoDetalleDTO[];
 }
 
+// ── Mermas ────────────────────────────────────────────────────────────────────
+export interface MermaReporteDTO {
+  id: number;
+  productoId: number;
+  productoNombre: string;
+  cantidad: number;
+  lote: string | null;
+  motivo: string;
+  observaciones: string | null;
+  referencia: string | null;
+  fecha: string; // ISO datetime
+}
+
 // ── Top clientes ──────────────────────────────────────────────────────────────
 export interface ClienteReporteDTO {
   clienteId: number;
