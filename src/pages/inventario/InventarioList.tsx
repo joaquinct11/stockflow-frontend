@@ -122,6 +122,13 @@ export function InventarioList() {
   const [editPrecioVenta, setEditPrecioVenta] = useState<string>('');
   const [savingLoteEdit, setSavingLoteEdit] = useState(false);
 
+  // Baja de lote vencido (merma)
+  const [loteMerma, setLoteMerma] = useState<LoteVencimientoDTO | null>(null);
+  const [mermaCantidad, setMermaCantidad] = useState<string>('');
+  const [mermaMotivo, setMermaMotivo] = useState<string>('VENCIMIENTO');
+  const [mermaObservaciones, setMermaObservaciones] = useState<string>('');
+  const [savingMerma, setSavingMerma] = useState(false);
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -905,22 +912,39 @@ export function InventarioList() {
                                   {estadoBadge}
                                 </TableCell>
                                 <TableCell className="text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setLoteEditando(l);
-                                      setEditProveedorId(
-                                        l.proveedorNombre
-                                          ? (proveedores.find(p => p.nombre === l.proveedorNombre)?.id ?? '')
-                                          : ''
-                                      );
-                                      setEditPrecioVenta(l.precioVenta != null ? String(l.precioVenta) : '');
-                                    }}
-                                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition"
-                                    title="Editar proveedor"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLoteEditando(l);
+                                        setEditProveedorId(
+                                          l.proveedorNombre
+                                            ? (proveedores.find(p => p.nombre === l.proveedorNombre)?.id ?? '')
+                                            : ''
+                                        );
+                                        setEditPrecioVenta(l.precioVenta != null ? String(l.precioVenta) : '');
+                                      }}
+                                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition"
+                                      title="Editar proveedor"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                    {vencido && (l.stockActual ?? 0) > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setLoteMerma(l);
+                                          setMermaCantidad(String(l.stockActual ?? 1));
+                                          setMermaMotivo('VENCIMIENTO');
+                                          setMermaObservaciones('');
+                                        }}
+                                        className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition"
+                                        title="Dar de baja lote vencido"
+                                      >
+                                        <AlertTriangle className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
                                 </TableCell>
                               </TableRow>
                             );
@@ -1020,6 +1044,90 @@ export function InventarioList() {
                 }}
               >
                 {savingLoteEdit ? 'Guardando...' : 'Guardar'}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Modal: dar de baja lote vencido */}
+      {loteMerma && (
+        <Dialog
+          isOpen
+          onClose={() => setLoteMerma(null)}
+          title="Dar de baja lote vencido"
+          description={`${loteMerma.productoNombre} · Lote: ${loteMerma.lote || 'Sin lote'} · Vencido el ${new Date(loteMerma.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+        >
+          <div className="space-y-4 pt-2">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-xs text-red-600 dark:text-red-400">
+              Esta acción registra una merma y reduce el stock del producto. No se puede deshacer.
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">Cantidad a dar de baja</label>
+              <Input
+                type="number"
+                min="1"
+                max={loteMerma.stockActual ?? 1}
+                value={mermaCantidad}
+                onChange={(e) => setMermaCantidad(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Stock disponible en este lote: {loteMerma.stockActual}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">Motivo</label>
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={mermaMotivo}
+                onChange={(e) => setMermaMotivo(e.target.value)}
+              >
+                <option value="VENCIMIENTO">Vencimiento</option>
+                <option value="DANO">Daño o deterioro</option>
+                <option value="ROBO">Robo / Pérdida</option>
+                <option value="ERROR">Error de ingreso</option>
+                <option value="OTRO">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">Observaciones (opcional)</label>
+              <Input
+                type="text"
+                placeholder="Descripción adicional..."
+                value={mermaObservaciones}
+                onChange={(e) => setMermaObservaciones(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" type="button" onClick={() => setLoteMerma(null)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={savingMerma || !mermaCantidad || Number(mermaCantidad) <= 0}
+                onClick={async () => {
+                  const cant = Number(mermaCantidad);
+                  if (!cant || cant <= 0) { toast.error('Ingresa una cantidad válida'); return; }
+                  if (cant > (loteMerma.stockActual ?? 0)) { toast.error('Cantidad mayor al stock del lote'); return; }
+                  setSavingMerma(true);
+                  try {
+                    await movimientoService.darDeBajaLote({
+                      movimientoOrigenId: loteMerma.movimientoId,
+                      cantidad: cant,
+                      motivo: mermaMotivo,
+                      observaciones: mermaObservaciones || undefined,
+                    });
+                    toast.success('Baja registrada correctamente');
+                    setLoteMerma(null);
+                    const data = await movimientoService.getLotes();
+                    setLotes(data);
+                  } catch {
+                    toast.error('Error al registrar la baja');
+                  } finally {
+                    setSavingMerma(false);
+                  }
+                }}
+              >
+                {savingMerma ? 'Registrando...' : 'Confirmar baja'}
               </Button>
             </div>
           </div>

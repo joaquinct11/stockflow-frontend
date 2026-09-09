@@ -392,10 +392,10 @@ export function Register() {
                       <option value="FARMACIA">Farmacia</option>
                       <option value="MINIMARKET">Minimarket</option>
                       <option value="FERRETERIA">Ferretería</option>
-                      <option value="RESTAURANTE">Restaurante</option>
+                      {/* <option value="RESTAURANTE">Restaurante</option> */}
                       <option value="TIENDA_ROPA">Tienda de Ropa</option>
                       <option value="TIENDA">Tienda / Bodega</option>
-                      <option value="EMPRESA_SERVICIOS">Empresa de Servicios / Dealer</option>
+                      {/* <option value="EMPRESA_SERVICIOS">Empresa de Servicios / Dealer</option> */}
                       <option value="OTRO">Otro</option>
                     </select>
                     <span style={{ fontSize: '.78rem', color: '#7d7f96' }}>{RUBRO_HINTS[rubro] ?? RUBRO_HINTS.OTRO}</span>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Search, Link2, Link2Off, FileArchive, X } from 'lucide-react';
+import { Search, Link2, Link2Off, FileArchive, X, History, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { digemidService, type ProductoDigemidDTO, type CatalogoDigemidDTO } from '../../services/digemid.service';
+import { digemidService, type ProductoDigemidDTO, type CatalogoDigemidDTO, type OppfExportacionDTO } from '../../services/digemid.service';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
@@ -234,6 +234,15 @@ export function DigemidOppfPage() {
   const [pagina, setPagina] = useState(1);
   const PAGE_SIZE = 20;
   const [autoVinculando, setAutoVinculando] = useState<number | null>(null);
+  const [historial, setHistorial] = useState<OppfExportacionDTO[]>([]);
+  const [historialCargando, setHistorialCargando] = useState(false);
+  const [mostrarPrevia, setMostrarPrevia] = useState(false);
+  const [vinculandoTodos, setVinculandoTodos] = useState(false);
+  const [resultadoVincularTodos, setResultadoVincularTodos] = useState<{
+    totalProcesados: number;
+    vinculados: { productoId: number; nombre: string; codDigemid: string; nomDigemid: string; registroSanitario: string }[];
+    noVinculados: { productoId: number; nombre: string; registroSanitario?: string; motivo: string }[];
+  } | null>(null);
 
   const cargarProductos = useCallback(async () => {
     setCargando(true);
@@ -247,9 +256,22 @@ export function DigemidOppfPage() {
     }
   }, []);
 
+  const cargarHistorial = useCallback(async () => {
+    setHistorialCargando(true);
+    try {
+      const data = await digemidService.getHistorialOppf();
+      setHistorial(data);
+    } catch {
+      // historial no crítico
+    } finally {
+      setHistorialCargando(false);
+    }
+  }, []);
+
   useEffect(() => {
     cargarProductos();
-  }, [cargarProductos]);
+    cargarHistorial();
+  }, [cargarProductos, cargarHistorial]);
 
   const guardarCodEst = () => {
     const val = codInput.trim();
@@ -328,6 +350,7 @@ export function DigemidOppfPage() {
       a.click();
       URL.revokeObjectURL(url);
       toast.success(`Archivo ZIP descargado con ${totalParaExportar} producto(s)`);
+      cargarHistorial();
     } catch {
       toast.error('Error al generar el archivo ZIP');
     } finally {
@@ -382,6 +405,24 @@ export function DigemidOppfPage() {
     }
   };
   const totalSinVincular = productos.filter((p) => !p.vinculado).length;
+
+  const handleVincularTodos = async () => {
+    setVinculandoTodos(true);
+    try {
+      const resultado = await digemidService.vincularTodos();
+      setResultadoVincularTodos(resultado);
+      if (resultado.vinculados.length > 0) {
+        await cargarProductos();
+        toast.success(`${resultado.vinculados.length} producto(s) vinculados automáticamente`);
+      } else {
+        toast('No se pudo vincular ningún producto automáticamente', { icon: 'ℹ️' });
+      }
+    } catch {
+      toast.error('Error al vincular productos');
+    } finally {
+      setVinculandoTodos(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -454,19 +495,44 @@ export function DigemidOppfPage() {
               </div>
             </div>
 
-            {/* Botón exportar */}
-            <Button
-              onClick={handleExportar}
-              disabled={exportando || totalParaExportar === 0}
-              className="flex-shrink-0 gap-2"
-            >
-              {exportando ? (
-                <LoadingSpinner />
-              ) : (
-                <FileArchive size={16} />
-              )}
-              Descargar ZIP para OPPF
-            </Button>
+            {/* Botón vincular todos */}
+            {totalSinVincular > 0 && (
+              <Button
+                variant="outline"
+                onClick={handleVincularTodos}
+                disabled={vinculandoTodos}
+                className="gap-2 border-amber-400 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"
+              >
+                {vinculandoTodos ? <LoadingSpinner /> : <Link2 size={16} />}
+                Vincular todos ({totalSinVincular})
+              </Button>
+            )}
+
+            {/* Botón vista previa + exportar */}
+            <div className="flex gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!codEstablecimiento) { toast.error('Ingresa el código de establecimiento'); setEditandoCod(true); return; }
+                  if (!(negocioConfig?.ruc)) { toast.error('Configura el RUC en Configuración'); return; }
+                  if (totalParaExportar === 0) { toast.error('No hay productos vinculados con stock para exportar'); return; }
+                  setMostrarPrevia(true);
+                }}
+                disabled={totalParaExportar === 0}
+                className="gap-2"
+              >
+                <Eye size={16} />
+                Vista previa
+              </Button>
+              <Button
+                onClick={handleExportar}
+                disabled={exportando || totalParaExportar === 0}
+                className="gap-2"
+              >
+                {exportando ? <LoadingSpinner /> : <FileArchive size={16} />}
+                Descargar ZIP
+              </Button>
+            </div>
           </div>
 
           {totalVinculados === 0 && (
@@ -686,6 +752,171 @@ export function DigemidOppfPage() {
         </CardContent>
       </Card>
 
+      {/* Historial de exportaciones */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <History size={16} />
+            Historial de exportaciones OPPF
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {historialCargando ? (
+            <div className="flex items-center justify-center py-8"><LoadingSpinner /></div>
+          ) : historial.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-8">
+              Aún no hay exportaciones registradas. El historial aparecerá aquí después de tu primera descarga.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="table-fixed w-full">
+                <colgroup>
+                  <col style={{width:'20%'}} />
+                  <col style={{width:'12%'}} />
+                  <col style={{width:'12%'}} />
+                  <col style={{width:'10%'}} />
+                  <col style={{width:'10%'}} />
+                  <col style={{width:'10%'}} />
+                  <col style={{width:'26%'}} />
+                </colgroup>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>RUC</TableHead>
+                    <TableHead>Cód. Est.</TableHead>
+                    <TableHead className="text-center">Mes</TableHead>
+                    <TableHead className="text-center">Año</TableHead>
+                    <TableHead className="text-center">Productos</TableHead>
+                    <TableHead>Archivo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historial.map((h) => {
+                    const fecha = new Date(h.fechaExportacion);
+                    const fechaStr = fecha.toLocaleDateString('es-PE', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+                    return (
+                      <TableRow key={h.id}>
+                        <TableCell className="text-xs text-muted-foreground">{fechaStr}</TableCell>
+                        <TableCell className="font-mono text-xs">{h.ruc}</TableCell>
+                        <TableCell className="font-mono text-xs">{h.codEstablecimiento}</TableCell>
+                        <TableCell className="text-center text-sm">{h.mes}</TableCell>
+                        <TableCell className="text-center text-sm">{h.ano}</TableCell>
+                        <TableCell className="text-center">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">{h.totalProductos}</span>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground truncate" title={h.nombreArchivo}>{h.nombreArchivo}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal: vista previa del ZIP */}
+      {mostrarPrevia && (() => {
+        const productosAExportar = productos.filter((p) => p.vinculado && p.stockActual > 0);
+        const ruc = negocioConfig?.ruc ?? '';
+        const hoy = new Date();
+        const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+        const ano = String(hoy.getFullYear()).slice(-2);
+        const nombreZip = `${ruc}_${mes}_${ano}_CARGA ARCHIVO.zip`;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-background border border-border rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                    <Eye size={16} className="text-primary" />
+                    Vista previa — archivo OPPF
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">{nombreZip}</p>
+                </div>
+                <button onClick={() => setMostrarPrevia(false)} className="p-1.5 rounded-lg hover:bg-muted transition">
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Info rápida */}
+              <div className="px-5 py-3 bg-primary/5 border-b border-border flex gap-6 text-sm">
+                <div><span className="text-muted-foreground">RUC:</span> <span className="font-mono font-medium">{ruc}</span></div>
+                <div><span className="text-muted-foreground">Cód. Est.:</span> <span className="font-mono font-medium">{codEstablecimiento}</span></div>
+                <div><span className="text-muted-foreground">Período:</span> <span className="font-medium">{mes}/{ano}</span></div>
+                <div><span className="text-muted-foreground">Productos:</span> <span className="font-semibold text-primary">{productosAExportar.length}</span></div>
+              </div>
+
+              {/* Tabla */}
+              <div className="overflow-y-auto flex-1 px-5 py-3">
+                <p className="text-xs text-muted-foreground mb-2">
+                  El archivo CSV dentro del ZIP contendrá estas {productosAExportar.length} filas:
+                </p>
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">#</th>
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Producto</th>
+                        <th className="text-left px-3 py-2 font-mono font-semibold text-muted-foreground">CodProd</th>
+                        <th className="text-right px-3 py-2 font-semibold text-blue-600 dark:text-blue-400">P1 Empaque</th>
+                        <th className="text-right px-3 py-2 font-semibold text-blue-600 dark:text-blue-400">P2 Unitario</th>
+                        <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Stock</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productosAExportar.map((p, i) => (
+                        <tr key={p.id} className={i % 2 === 0 ? '' : 'bg-muted/20'}>
+                          <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
+                          <td className="px-3 py-1.5">
+                            <span className="font-medium text-foreground">{p.nombre}</span>
+                            {p.unidadMedida && <span className="text-muted-foreground ml-1">({p.unidadMedida})</span>}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono text-foreground/80">{p.codDigemid}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-blue-600 dark:text-blue-400">
+                            {formatPrice(p.precio1Oppf)}
+                          </td>
+                          <td className={cn(
+                            'px-3 py-1.5 text-right font-mono',
+                            p.precio2Oppf <= 0.01 ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'
+                          )}>
+                            {formatPrice(p.precio2Oppf)}
+                            {p.precio2Oppf <= 0.01 && <span className="ml-1 text-amber-500" title="Precio mínimo OPPF">⚠</span>}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-foreground/70">{p.stockActual}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between px-5 py-4 border-t border-border bg-muted/30">
+                <p className="text-xs text-muted-foreground">
+                  El archivo se llamará <span className="font-mono">{nombreZip}</span>
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setMostrarPrevia(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-2"
+                    disabled={exportando}
+                    onClick={() => { setMostrarPrevia(false); handleExportar(); }}
+                  >
+                    {exportando ? <LoadingSpinner /> : <FileArchive size={14} />}
+                    Confirmar y descargar ZIP
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Modal de búsqueda */}
       {modalProducto && (
         <BuscarModal
@@ -699,6 +930,95 @@ export function DigemidOppfPage() {
           onVincular={(codDigemid, item) => handleVincularExitoso(modalProducto.id, codDigemid, item)}
           onClose={() => setModalProducto(null)}
         />
+      )}
+
+      {/* Modal resultado "Vincular todos" */}
+      {resultadoVincularTodos && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-background rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b">
+              <h2 className="text-lg font-bold">Resultado — Vincular todos</h2>
+              <button onClick={() => setResultadoVincularTodos(null)} className="rounded-lg p-1.5 hover:bg-muted transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-5 space-y-5">
+              {/* Resumen */}
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="rounded-lg border p-3">
+                  <p className="text-2xl font-bold">{resultadoVincularTodos.totalProcesados}</p>
+                  <p className="text-xs text-muted-foreground">Procesados</p>
+                </div>
+                <div className="rounded-lg border border-green-200 dark:border-green-800 p-3">
+                  <p className="text-2xl font-bold text-green-600">{resultadoVincularTodos.vinculados.length}</p>
+                  <p className="text-xs text-muted-foreground">Vinculados</p>
+                </div>
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 p-3">
+                  <p className="text-2xl font-bold text-amber-600">{resultadoVincularTodos.noVinculados.length}</p>
+                  <p className="text-xs text-muted-foreground">Sin vincular</p>
+                </div>
+              </div>
+
+              {/* Vinculados */}
+              {resultadoVincularTodos.vinculados.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-green-600 mb-2 flex items-center gap-1.5">
+                    <Link2 size={14} /> Vinculados exitosamente
+                  </h3>
+                  <div className="rounded-lg border divide-y max-h-48 overflow-y-auto">
+                    {resultadoVincularTodos.vinculados.map((v) => (
+                      <div key={v.productoId} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                        <span className="font-medium truncate">{v.nombre}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{v.codDigemid}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No vinculados */}
+              {resultadoVincularTodos.noVinculados.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-1.5">
+                    <Link2Off size={14} /> Requieren vinculación manual
+                  </h3>
+                  <div className="rounded-lg border divide-y max-h-48 overflow-y-auto">
+                    {resultadoVincularTodos.noVinculados.map((nv) => (
+                      <div key={nv.productoId} className="px-3 py-2 text-sm flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{nv.nombre}</p>
+                          {nv.registroSanitario && (
+                            <p className="text-xs text-muted-foreground">{nv.registroSanitario}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-full">
+                            {nv.motivo}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setResultadoVincularTodos(null);
+                              const prod = productos.find((p) => p.id === nv.productoId);
+                              if (prod) setModalProducto(prod);
+                            }}
+                            className="text-xs text-primary underline hover:no-underline"
+                          >
+                            Vincular
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t flex justify-end">
+              <Button onClick={() => setResultadoVincularTodos(null)}>Cerrar</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

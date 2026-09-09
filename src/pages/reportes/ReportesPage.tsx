@@ -55,6 +55,7 @@ import type {
   FinancieroDTO,
   VencimientosRiesgoDTO,
   ClienteReporteDTO,
+  MermaReporteDTO,
 } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -798,6 +799,7 @@ interface InventarioData {
   slowMovers: InventarioSlowMoverDTO[];
   cobertura: InventarioCoberturaDTO[];
   vencimientos: VencimientosRiesgoDTO | null;
+  mermas: MermaReporteDTO[];
 }
 
 function abcVariant(c: string): 'success' | 'warning' | 'destructive' | 'default' {
@@ -820,8 +822,8 @@ function coberturaTextColor(dias: number | null | undefined): string {
   return 'text-green-600';
 }
 
-function InventarioTab({ loading, error, data, onRetry, esServicios = false }: {
-  loading: boolean; error: string | null; data: InventarioData | null; onRetry: () => void; esServicios?: boolean;
+function InventarioTab({ loading, error, data, onRetry, esServicios = false, mermasLoading = false }: {
+  loading: boolean; error: string | null; data: InventarioData | null; onRetry: () => void; esServicios?: boolean; mermasLoading?: boolean;
 }) {
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
@@ -845,6 +847,25 @@ function InventarioTab({ loading, error, data, onRetry, esServicios = false }: {
 
   return (
     <div className="space-y-6">
+
+      {/* ── KPIs de inventario del período ── */}
+      {!esServicios && data.mermas.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <StatCard
+            icon={<AlertTriangle className="h-5 w-5" />}
+            title="Mermas en el período"
+            value={String(data.mermas.reduce((s, m) => s + m.cantidad, 0))}
+            colorClass="text-red-600"
+            description={`${data.mermas.length} baja(s) de lote registrada(s)`}
+          />
+          <StatCard
+            icon={<Package className="h-5 w-5" />}
+            title="Productos con merma"
+            value={String(new Set(data.mermas.map((m) => m.productoId)).size)}
+            description="productos afectados"
+          />
+        </div>
+      )}
 
       {/* ── Capital en riesgo de vencimiento — oculto para dealer ── */}
       {!esServicios && venc && (venc.lotesVencidos > 0 || venc.lotesRiesgo7d > 0 || venc.lotesRiesgo30d > 0 || venc.lotesRiesgo90d > 0) && (
@@ -1063,6 +1084,81 @@ function InventarioTab({ loading, error, data, onRetry, esServicios = false }: {
           )}
         </CardContent>
       </Card>
+
+      {/* Mermas del período */}
+      {!esServicios && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              Bajas de lotes vencidos (Mermas)
+            </CardTitle>
+            <CardDescription>
+              Lotes dados de baja en el período · {data.mermas.length} registro(s)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {mermasLoading ? (
+              <div className="flex justify-center py-6"><LoadingSpinner /></div>
+            ) : data.mermas.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Sin mermas en el período seleccionado.</p>
+            ) : (
+              <>
+                {/* KPIs rápidos */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                  <div className="rounded-lg border p-3 text-center space-y-1">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Total unidades</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {data.mermas.reduce((s, m) => s + m.cantidad, 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center space-y-1">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Productos afectados</p>
+                    <p className="text-2xl font-bold">
+                      {new Set(data.mermas.map((m) => m.productoId)).size}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center space-y-1 col-span-2 sm:col-span-1">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Registros</p>
+                    <p className="text-2xl font-bold">{data.mermas.length}</p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>Lote</TableHead>
+                        <TableHead className="text-center">Cant.</TableHead>
+                        <TableHead>Motivo</TableHead>
+                        <TableHead>Observaciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.mermas.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {new Date(m.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </TableCell>
+                          <TableCell className="font-medium">{m.productoNombre}</TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{m.lote ?? '—'}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="destructive">{m.cantidad}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">{m.motivo}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{m.observaciones ?? '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1520,6 +1616,7 @@ export function ReportesPage() {
   const [inventarioLoading, setInventarioLoading] = useState(false);
   const [inventarioError, setInventarioError] = useState<string | null>(null);
   const [inventarioData, setInventarioData] = useState<InventarioData | null>(null);
+  const [mermasLoading, setMermasLoading] = useState(false);
 
   const [comprasLoading, setComprasLoading] = useState(false);
   const [comprasError, setComprasError] = useState<string | null>(null);
@@ -1561,16 +1658,17 @@ export function ReportesPage() {
   };
 
   const fetchInventario = async () => {
-    try { setInventarioLoading(true); setInventarioError(null);
-      const [abc, slowMovers, cobertura, vencimientos] = await Promise.all([
+    try { setInventarioLoading(true); setMermasLoading(true); setInventarioError(null);
+      const [abc, slowMovers, cobertura, vencimientos, mermas] = await Promise.all([
         reportesService.getInventarioABC(desde, hasta, 50, sucursalId),
         reportesService.getInventarioSlowMovers(30),
         reportesService.getInventarioCobertura(desde, hasta, 20, sucursalId),
         reportesService.getVencimientosRiesgo().catch(() => null),
+        reportesService.getMermas(desde, hasta).catch(() => []),
       ]);
-      setInventarioData({ abc, slowMovers, cobertura, vencimientos });
+      setInventarioData({ abc, slowMovers, cobertura, vencimientos, mermas });
     } catch { setInventarioError('Error al cargar datos de inventario.'); toast.error('Error al cargar datos de inventario.');
-    } finally { setInventarioLoading(false); }
+    } finally { setInventarioLoading(false); setMermasLoading(false); }
   };
 
   const fetchCompras = async () => {
@@ -1827,7 +1925,7 @@ export function ReportesPage() {
           />
         )}
         {activeTab === 'inventario' && (
-          <InventarioTab loading={inventarioLoading} error={inventarioError} data={inventarioData} onRetry={fetchInventario} esServicios={esServicios} />
+          <InventarioTab loading={inventarioLoading} error={inventarioError} data={inventarioData} onRetry={fetchInventario} esServicios={esServicios} mermasLoading={mermasLoading} />
         )}
         {activeTab === 'compras' && (
           <ComprasTab loading={comprasLoading} error={comprasError} data={comprasData} onRetry={fetchCompras} />
