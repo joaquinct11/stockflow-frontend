@@ -54,6 +54,15 @@ export const digemidService = {
     await axiosInstance.delete(API_ENDPOINTS.DIGEMID.DESVINCULAR(productoId));
   },
 
+  vincularTodos: async (): Promise<{
+    totalProcesados: number;
+    vinculados: { productoId: number; nombre: string; codDigemid: string; nomDigemid: string; registroSanitario: string }[];
+    noVinculados: { productoId: number; nombre: string; registroSanitario?: string; motivo: string }[];
+  }> => {
+    const { data } = await axiosInstance.post(API_ENDPOINTS.DIGEMID.VINCULAR_TODOS);
+    return data;
+  },
+
   exportarOppf: async (
     codEstablecimiento: string,
     ruc: string,
@@ -67,4 +76,21 @@ export const digemidService = {
     );
     return data;
   },
+
+  getHistorialOppf: async (): Promise<OppfExportacionDTO[]> => {
+    const { data } = await axiosInstance.get<OppfExportacionDTO[]>(API_ENDPOINTS.DIGEMID.OPPF_HISTORIAL);
+    return data;
+  },
 };
+
+export interface OppfExportacionDTO {
+  id: number;
+  ruc: string;
+  codEstablecimiento: string;
+  mes: string;
+  ano: string;
+  tipo: string;
+  totalProductos: number;
+  nombreArchivo: string;
+  fechaExportacion: string;
+}

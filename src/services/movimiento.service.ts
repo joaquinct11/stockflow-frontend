@@ -180,4 +180,17 @@ export const movimientoService = {
       { proveedorId, precioVenta: precioVenta ?? null }
     );
   },
+
+  darDeBajaLote: async (payload: {
+    movimientoOrigenId: number;
+    cantidad: number;
+    motivo: string;
+    observaciones?: string;
+  }): Promise<{ mensaje: string; movimientoId: number; nuevoStockProducto: number; nuevoStockLote: number }> => {
+    const { data } = await axiosInstance.post(
+      `${API_ENDPOINTS.MOVIMIENTOS.LIST}/merma`,
+      payload
+    );
+    return data;
+  },
 };

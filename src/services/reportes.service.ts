@@ -14,6 +14,7 @@ import type {
   FinancieroDTO,
   VencimientosRiesgoDTO,
   ClienteReporteDTO,
+  MermaReporteDTO,
 } from '../types';
 
 export type AgrupacionTendencia = 'DIA' | 'SEMANA' | 'MES';
@@ -169,6 +170,15 @@ export const reportesService = {
       API_ENDPOINTS.REPORTES.INVENTARIO_VENCIMIENTOS
     );
     return data;
+  },
+
+  // ── Mermas ────────────────────────────────────────────────────────────────
+
+  getMermas: async (desde: string, hasta: string): Promise<MermaReporteDTO[]> => {
+    const { data } = await axiosInstance.get<MermaReporteDTO[]>(
+      API_ENDPOINTS.REPORTES.INVENTARIO_MERMAS(desde, hasta)
+    );
+    return data ?? [];
   },
 
   // ── Top clientes ──────────────────────────────────────────────────────────
