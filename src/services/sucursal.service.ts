@@ -8,6 +8,7 @@ export interface SucursalDTO {
   email?: string;
   esPrincipal?: boolean;
   activo?: boolean;
+  bloqueadaPorPlan?: boolean;
   tenantId?: string;
   createdAt?: string;
 }
@@ -35,5 +36,10 @@ export const sucursalService = {
 
   desactivar: async (id: number): Promise<void> => {
     await axiosInstance.delete(`/sucursales/${id}`);
+  },
+
+  listarConBloqueadas: async (): Promise<SucursalDTO[]> => {
+    const { data } = await axiosInstance.get<SucursalDTO[]>('/sucursales/con-bloqueadas');
+    return data;
   },
 };

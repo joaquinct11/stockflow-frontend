@@ -63,4 +63,12 @@ export const culqiService = {
     );
     return data;
   },
+
+  downgradeBasico: async (tokenId: string): Promise<CulqiSuscribirResponse> => {
+    const { data } = await axiosInstance.post<CulqiSuscribirResponse>(
+      API_ENDPOINTS.CULQI.DOWNGRADE_BASICO,
+      { tokenId },
+    );
+    return data;
+  },
 };
