@@ -49,9 +49,10 @@ export function CheckoutCulqiPage() {
   const resolveToken = useRef<((tokenId: string) => void) | null>(null);
 
   // Leer planId y modo de query params
-  const planParam        = searchParams.get('plan') ?? 'BASICO';
-  const isUpgrade        = searchParams.get('mode') === 'upgrade';
-  const isCambiarTarjeta = searchParams.get('mode') === 'cambiar-tarjeta';
+  const planParam          = searchParams.get('plan') ?? 'BASICO';
+  const isUpgrade          = searchParams.get('mode') === 'upgrade';
+  const isCambiarTarjeta   = searchParams.get('mode') === 'cambiar-tarjeta';
+  const isDowngradeBasico  = searchParams.get('mode') === 'downgrade-basico';
 
   // 1. Cargar configuración del backend ─────────────────────────────────────
   useEffect(() => {
@@ -131,6 +132,9 @@ export function CheckoutCulqiPage() {
     try {
       if (isCambiarTarjeta) {
         await culqiService.cambiarTarjeta(tokenId);
+      } else if (isDowngradeBasico) {
+        const response = await culqiService.downgradeBasico(tokenId);
+        setSuscripcionEstado(response.estado as 'ACTIVA' | 'CANCELADA' | 'TRIAL' | 'EXPIRADA' | 'SIN_SUSCRIPCION');
       } else {
         const response = isUpgrade
           ? await culqiService.upgradePro(tokenId)
@@ -187,13 +191,15 @@ export function CheckoutCulqiPage() {
               </div>
             </div>
             <CardTitle className="text-xl">
-              {isCambiarTarjeta ? '¡Tarjeta actualizada!' : isUpgrade ? '¡Upgrade a Pro exitoso!' : '¡Suscripción activada!'}
+              {isCambiarTarjeta ? '¡Tarjeta actualizada!' : isUpgrade ? '¡Upgrade a Pro exitoso!' : isDowngradeBasico ? '¡Plan cambiado a Básico!' : '¡Suscripción activada!'}
             </CardTitle>
             <CardDescription>
               {isCambiarTarjeta
                 ? 'Tu nueva tarjeta quedó registrada. Los próximos cobros se realizarán con ella.'
                 : isUpgrade
                 ? 'Tu plan Pro está activo. Ya puedes gestionar hasta 5 sucursales desde el menú lateral.'
+                : isDowngradeBasico
+                ? 'Tu plan Básico está activo. Las sucursales adicionales quedaron bloqueadas y podrás recuperarlas volviendo a Pro.'
                 : `Tu plan ${config.nombrePlan} está activo. Ahora tienes acceso completo a Fluxus.`}
             </CardDescription>
           </CardHeader>
@@ -204,8 +210,8 @@ export function CheckoutCulqiPage() {
                 <strong>S/ {Number(config.precioMensual).toFixed(2)}</strong>.
               </div>
             )}
-            <Button className="w-full" onClick={() => navigate(isCambiarTarjeta ? '/dashboard/suscripciones' : isUpgrade ? '/dashboard/sucursales' : '/dashboard', { replace: true })}>
-              {isCambiarTarjeta ? 'Volver a mi suscripción' : isUpgrade ? 'Ir a Sucursales' : 'Ir al dashboard'}
+            <Button className="w-full" onClick={() => navigate(isCambiarTarjeta ? '/dashboard/suscripciones' : isUpgrade ? '/dashboard/sucursales' : '/dashboard/suscripciones', { replace: true })}>
+              {isCambiarTarjeta ? 'Volver a mi suscripción' : isUpgrade ? 'Ir a Sucursales' : 'Volver a mi suscripción'}
             </Button>
           </CardContent>
         </Card>
@@ -220,11 +226,13 @@ export function CheckoutCulqiPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5 text-primary" />
-            {isCambiarTarjeta ? 'Cambiar método de pago' : 'Activar suscripción'}
+            {isCambiarTarjeta ? 'Cambiar método de pago' : isDowngradeBasico ? 'Cambiar a Plan Básico' : 'Activar suscripción'}
           </CardTitle>
           <CardDescription>
             {isCambiarTarjeta
               ? 'Ingresa tu nueva tarjeta. No se cancelará tu suscripción actual.'
+              : isDowngradeBasico
+              ? 'Se cobrará S/ 89.00 de inmediato y tu plan cambiará a Básico.'
               : 'Paga de forma segura con tarjeta o Yape. Sin redirecciones externas.'}
           </CardDescription>
         </CardHeader>
@@ -293,7 +301,9 @@ export function CheckoutCulqiPage() {
               ) : (
                 <>
                   <Lock className="mr-2 h-4 w-4" />
-                  Pagar S/ {Number(config.precioMensual).toFixed(2)}/mes de forma segura
+                  {isDowngradeBasico
+                    ? 'Cambiar a Básico — S/ 89.00 ahora'
+                    : `Pagar S/ ${Number(config.precioMensual).toFixed(2)}/mes de forma segura`}
                 </>
               )}
             </Button>

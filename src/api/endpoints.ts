@@ -228,8 +228,9 @@ export const API_ENDPOINTS = {
     CONFIG:          '/culqi/config',
     SUSCRIBIR:       '/culqi/suscribir',
     UPGRADE_PRO:     '/culqi/upgrade-pro',
-    CAMBIAR_TARJETA: '/culqi/cambiar-tarjeta',
-    CREAR_PLAN:      '/culqi/admin/crear-plan',
+    CAMBIAR_TARJETA:   '/culqi/cambiar-tarjeta',
+    DOWNGRADE_BASICO:  '/culqi/downgrade-basico',
+    CREAR_PLAN:        '/culqi/admin/crear-plan',
   },
 
   DIGEMID: {
