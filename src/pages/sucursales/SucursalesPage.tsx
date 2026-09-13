@@ -9,7 +9,7 @@ import { Input } from '../../components/ui/Input';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   Building2, Plus, Edit, Trash2, MapPin, Phone, Mail,
-  Star, CheckCircle, XCircle, Store,
+  Star, CheckCircle, XCircle, Store, Lock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -35,9 +35,9 @@ export function SucursalesPage() {
   const cargar = async () => {
     setLoading(true);
     try {
-      const data = await sucursalService.listar();
+      const data = await sucursalService.listarConBloqueadas();
       setSucursalesLocal(data);
-      setSucursales(data); // sincronizar con el store global
+      setSucursales(data.filter((s) => s.activo)); // el store global solo necesita las activas
     } catch {
       toast.error('Error al cargar sucursales');
     } finally {
@@ -101,6 +101,7 @@ export function SucursalesPage() {
   // ── Stats ────────────────────────────────────────────────────────────────────
 
   const activas    = sucursales.filter((s) => s.activo).length;
+  const bloqueadas = sucursales.filter((s) => s.bloqueadaPorPlan).length;
   const principal  = sucursales.find((s) => s.esPrincipal);
   const restantes  = MAX_SUCURSALES - activas;
 
@@ -131,6 +132,21 @@ export function SucursalesPage() {
           Nueva sucursal
         </Button>
       </div>
+
+      {/* Banner sucursales bloqueadas */}
+      {bloqueadas > 0 && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 flex items-start gap-3">
+          <Lock size={16} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div className="text-sm">
+            <span className="font-semibold text-amber-800 dark:text-amber-200">
+              {bloqueadas} sucursal{bloqueadas !== 1 ? 'es' : ''} bloqueada{bloqueadas !== 1 ? 's' : ''}
+            </span>
+            <span className="text-amber-700 dark:text-amber-300">
+              {' '}por tu plan actual. Sus datos están intactos. Vuelve al Plan Pro para reactivarlas.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -184,29 +200,40 @@ export function SucursalesPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {sucursales.map((s) => (
-            <Card key={s.id} className={`border shadow-sm transition-all ${s.esPrincipal ? 'border-primary/30 bg-primary/5' : ''}`}>
+          {sucursales.map((s) => {
+            const esBloqueada = s.bloqueadaPorPlan === true;
+            return (
+            <Card key={s.id} className={`border shadow-sm transition-all ${esBloqueada ? 'border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/10 opacity-70' : s.esPrincipal ? 'border-primary/30 bg-primary/5' : ''}`}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${s.esPrincipal ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                      <Building2 size={15} />
+                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${esBloqueada ? 'bg-amber-100 dark:bg-amber-900/30' : s.esPrincipal ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                      {esBloqueada ? <Lock size={15} className="text-amber-600 dark:text-amber-400" /> : <Building2 size={15} />}
                     </div>
                     <div className="min-w-0">
                       <CardTitle className="text-sm font-semibold truncate">{s.nombre}</CardTitle>
-                      {s.esPrincipal && (
+                      {esBloqueada ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">Bloqueada · Plan Básico</span>
+                      ) : s.esPrincipal ? (
                         <span className="text-[10px] font-bold uppercase tracking-wide text-primary">Principal</span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    {s.activo
+                    {esBloqueada
+                      ? <Lock size={14} className="text-amber-500" aria-label="Bloqueada" />
+                      : s.activo
                       ? <CheckCircle size={14} className="text-emerald-500" aria-label="Activa" />
                       : <XCircle size={14} className="text-muted-foreground" aria-label="Inactiva" />}
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-0 pb-3 space-y-1.5">
+                {esBloqueada && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 rounded px-2 py-1">
+                    Esta sucursal está bloqueada por tu plan actual. Vuelve a Plan Pro para reactivarla.
+                  </p>
+                )}
                 {s.direccion && (
                   <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <MapPin size={11} className="shrink-0" /> {s.direccion}
@@ -224,6 +251,7 @@ export function SucursalesPage() {
                 )}
 
                 {/* Acciones */}
+                {!esBloqueada && (
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" size="sm" className="flex-1 text-xs h-7" onClick={() => abrirEditar(s)}>
                     <Edit size={12} /> Editar
@@ -240,9 +268,11 @@ export function SucursalesPage() {
                     </Button>
                   )}
                 </div>
+                )}
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 

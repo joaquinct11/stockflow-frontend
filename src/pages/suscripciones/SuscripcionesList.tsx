@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   Building2,
   Zap,
+  ArrowDownCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -104,6 +105,7 @@ export function SuscripcionesList() {
   });
 
   const [upgradeWarningOpen, setUpgradeWarningOpen] = useState(false);
+  const [downgradeWarningOpen, setDowngradeWarningOpen] = useState(false);
 
   useEffect(() => {
     fetchSuscripcion();
@@ -190,8 +192,11 @@ export function SuscripcionesList() {
   const esCancelacionPendiente  = suscripcion.estado === 'CANCELACION_PENDIENTE';
   const esCancelableOReactivable = ['CANCELADA', 'SUSPENDIDA'].includes(suscripcion.estado ?? '')
     || esPendiente;
+  const esSuspendida            = suscripcion.estado === 'SUSPENDIDA';
   const esPro                   = suscripcion.planId?.toUpperCase() === 'PRO';
   const puedeUpgrade            = !esPro && (esActiva || esTrial);
+  // Downgrade disponible para cualquier estado PRO excepto cancelada/cancelación_pendiente
+  const puedeDowngrade          = esPro && !['CANCELADA', 'CANCELACION_PENDIENTE'].includes(suscripcion.estado ?? '');
 
   // Fecha de corte formateada para CANCELACION_PENDIENTE
   const currentPeriodEndRaw = (suscripcion as any).currentPeriodEnd as string | undefined;
@@ -365,6 +370,42 @@ export function SuscripcionesList() {
             </div>
           )}
 
+          {/* ── Banner downgrade a Básico ── */}
+          {puedeDowngrade && canToggleState('SUSCRIPCIONES') && (
+            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex items-start gap-3 flex-1">
+                  <ArrowDownCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-sm text-amber-900 dark:text-amber-100">
+                      {esSuspendida
+                        ? 'Cambia a Plan Básico para reactivar tu cuenta'
+                        : esPendiente
+                        ? 'Prefiere el Plan Básico en lugar del Pro'
+                        : '¿Quieres reducir tu plan?'}
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                      {esSuspendida
+                        ? 'Tu cuenta está suspendida por pago fallido. Puedes cambiar ahora al Plan Básico (S/ 89/mes) y recuperar el acceso de inmediato.'
+                        : esPendiente
+                        ? 'Actívate directamente en Plan Básico (S/ 89/mes) si no necesitas múltiples sucursales.'
+                        : 'Puedes volver al Plan Básico (S/ 89/mes). Las sucursales adicionales quedarán bloqueadas — no se eliminan y podrás recuperarlas si vuelves a Pro.'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 shrink-0"
+                  onClick={() => setDowngradeWarningOpen(true)}
+                >
+                  <ArrowDownCircle className="mr-2 h-4 w-4" />
+                  Cambiar a Básico
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* ── Acciones ── */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             {(esCancelableOReactivable || esCancelacionPendiente) && canToggleState('SUSCRIPCIONES') && (
@@ -449,6 +490,59 @@ export function SuscripcionesList() {
             >
               <Zap className="mr-2 h-4 w-4" />
               Continuar al checkout
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Modal advertencia downgrade a Básico */}
+      <Dialog
+        isOpen={downgradeWarningOpen}
+        onClose={() => setDowngradeWarningOpen(false)}
+        title="Cambiar a Plan Básico"
+        size="sm"
+      >
+        <div className="space-y-4 py-1">
+          <div className="flex items-start gap-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">¿Estás seguro?</p>
+              <p className="text-sm text-amber-700 dark:text-amber-300 leading-relaxed">
+                Al cambiar al Plan Básico se realizará un <strong>cobro inmediato de S/ 89.00</strong>.
+                Las sucursales adicionales quedarán <strong>bloqueadas temporalmente</strong> — sus datos se conservan
+                y puedes recuperarlas volviendo al Plan Pro en cualquier momento.
+              </p>
+            </div>
+          </div>
+
+          <ul className="space-y-1.5 text-sm text-muted-foreground pl-1">
+            <li className="flex items-center gap-2">✅ La sucursal principal permanece activa</li>
+            <li className="flex items-center gap-2">🔒 Sucursales adicionales: bloqueadas (datos intactos)</li>
+            <li className="flex items-center gap-2">💳 Cobro inmediato: S/ 89.00</li>
+            <li className="flex items-center gap-2">📦 Límite: 1 sucursal, 5 usuarios, 2 000 productos</li>
+          </ul>
+
+          <p className="text-xs text-muted-foreground border-t pt-3">
+            Cuando vuelvas a Plan Pro, tus sucursales bloqueadas se reactivarán automáticamente con todos sus datos.
+          </p>
+
+          <div className="flex gap-3 pt-1">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setDowngradeWarningOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => {
+                setDowngradeWarningOpen(false);
+                navigate('/checkout/culqi?plan=BASICO&mode=downgrade-basico');
+              }}
+            >
+              <ArrowDownCircle className="mr-2 h-4 w-4" />
+              Continuar al pago
             </Button>
           </div>
         </div>
