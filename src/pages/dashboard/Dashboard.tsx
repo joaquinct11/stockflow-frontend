@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { productoService } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
 import { movimientoService } from '../../services/movimiento.service';
+import { dashboardService, type ActividadRecienteDTO } from '../../services/dashboard.service';
 import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, DollarSign, Clock, RefreshCw, Calendar, CreditCard, TrendingDown, TrendingUp, Zap, ClipboardList, BarChart2, Wallet, FileText, Award, Users, ArrowRightLeft, PlusSquare } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, Clock, RefreshCw, Calendar, CreditCard, Zap, ClipboardList, BarChart2, Wallet, FileText, Award, Users, ArrowRightLeft, PlusSquare } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { gastoService } from '../../services/gasto.service';
 import { comisionService } from '../../services/comision.service';
-import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../store/authStore';
@@ -94,6 +93,31 @@ interface ProductoConVencimiento {
   lote?: string;
 }
 
+function tipoActividadStyle(tipo: string) {
+  switch (tipo) {
+    case 'VENTA':       return { bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-700 dark:text-green-400', letter: 'V' };
+    case 'COMPROBANTE': return { bg: 'bg-blue-100 dark:bg-blue-900/40',   text: 'text-blue-700 dark:text-blue-400',   letter: 'F' };
+    case 'ENTRADA':     return { bg: 'bg-sky-100 dark:bg-sky-900/40',     text: 'text-sky-700 dark:text-sky-400',     letter: 'E' };
+    case 'AJUSTE':      return { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-400', letter: 'A' };
+    case 'MERMA':       return { bg: 'bg-red-100 dark:bg-red-900/40',     text: 'text-red-700 dark:text-red-400',     letter: 'M' };
+    case 'ORDEN_COMPRA':return { bg: 'bg-violet-100 dark:bg-violet-900/40',text: 'text-violet-700 dark:text-violet-400',letter: 'O'};
+    default:            return { bg: 'bg-muted',                          text: 'text-muted-foreground',              letter: '?' };
+  }
+}
+
+function formatRelativo(fecha: Date): string {
+  const diff = Date.now() - fecha.getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1)  return 'hace un momento';
+  if (min < 60) return `hace ${min} min`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `hace ${hrs} h`;
+  const dias = Math.floor(hrs / 24);
+  if (dias === 1) return 'ayer';
+  if (dias < 7)  return `hace ${dias} días`;
+  return fecha.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+}
+
 export function Dashboard() {
   const { user, suscripcionEstado } = useAuthStore();
   const { userId } = useCurrentUser();
@@ -113,8 +137,9 @@ export function Dashboard() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('MES');
   const isInitialLoad = useRef(true);
   const [totalComisionesMes, setTotalComisionesMes] = useState<number>(0);
-
   const [totalGastosPeriodo, setTotalGastosPeriodo] = useState<number>(0);
+  const [actividad, setActividad] = useState<ActividadRecienteDTO[]>([]);
+  const [actividadLoading, setActividadLoading] = useState(false);
 
   // Estado de suscripción
   const [suscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
@@ -144,15 +169,8 @@ export function Dashboard() {
 
   const suscripcionActiva = estadoSuscripcion === 'ACTIVA' || estadoSuscripcion === 'TRIAL' || estadoSuscripcion === 'CANCELACION_PENDIENTE' || estadoSuscripcion === '' || !estadoSuscripcion;
   const mostrarBloqueo = rol === 'ADMIN' && !suscripcionActiva && !!estadoSuscripcion;
-  const esTrial                = estadoSuscripcion === 'TRIAL';
   const esCancelacionPendiente = estadoSuscripcion === 'CANCELACION_PENDIENTE';
 
-  // Calcular días restantes de trial (solo cuando sigue en TRIAL activo)
-  const diasTrialRestantes = (() => {
-    if (!esTrial || !trialEndDate) return null;
-    const diff = Math.ceil((new Date(trialEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return Math.max(0, diff);
-  })();
 
   // Fecha de corte para cancelación pendiente
   const currentPeriodEndRaw = (suscripcion as any)?.currentPeriodEnd as string | undefined;
@@ -201,6 +219,17 @@ export function Dashboard() {
       .then((t) => setTotalGastosPeriodo(Number(t)))
       .catch(() => setTotalGastosPeriodo(0));
   }, [timeFilter, rol, sucursalActual?.id]);
+
+  // Actividad reciente — carga lazy después del render principal (no bloquea KPIs)
+  useEffect(() => {
+    if (!sucursalLoaded) return;
+    setActividadLoading(true);
+    const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+    dashboardService.getActividadReciente(15, sucId)
+      .then(setActividad)
+      .catch(() => setActividad([]))
+      .finally(() => setActividadLoading(false));
+  }, [sucursalLoaded, sucursalActual?.id]);
 
   // Comisiones del mes — solo para dealer
   useEffect(() => {
@@ -413,12 +442,6 @@ export function Dashboard() {
     };
   }, [productos, ventas, filteredVentas, movimientos, esServicios]);
 
-  const gridColsClass =
-    rol === 'GESTOR_INVENTARIO'
-      ? 'lg:grid-cols-2'
-      : rol === 'ADMIN'
-        ? 'lg:grid-cols-3'
-        : 'lg:grid-cols-4';
 
   if (loading) return <LoadingSpinner />;
 
@@ -530,32 +553,6 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Banner de período de prueba */}
-      {rol === 'ADMIN' && esTrial && (
-        <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <Calendar className="mt-0.5 h-5 w-5 shrink-0" />
-              <div>
-                <p className="font-semibold">
-                  {diasTrialRestantes === 0
-                    ? 'Tu período de prueba vence hoy'
-                    : `Período de prueba — ${diasTrialRestantes} día${diasTrialRestantes === 1 ? '' : 's'} restante${diasTrialRestantes === 1 ? '' : 's'}`}
-                </p>
-                <p className="text-sm">
-                  Estás usando el plan <strong>{planParaReintentar}</strong>. Al vencer, deberás activar tu suscripción para continuar.
-                </p>
-              </div>
-            </div>
-            {puedeReintentar && (
-              <Button size="sm" className="shrink-0" onClick={handleReintentar}>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Activar suscripción
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Banner OSE / facturación */}
       {oseConfigured === false && <OseBanner />}
@@ -569,7 +566,9 @@ export function Dashboard() {
               return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
             })()}, {user?.nombre?.split(' ')[0] ?? 'bienvenido'} 👋
           </p>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {timeFilter === 'HOY' ? 'Resumen de hoy' : timeFilter === 'SEMANA' ? 'Resumen de la semana' : timeFilter === 'MES' ? 'Resumen del mes' : 'Resumen del año'}
+          </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
@@ -849,281 +848,322 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className={`grid gap-4 grid-cols-2 ${gridColsClass} animate-fade-in-up-delay-1`}>
+      {/* Stats Grid — 4 KPI cards */}
+      <div className="grid gap-[14px] grid-cols-2 lg:grid-cols-4 animate-fade-in-up-delay-1">
 
         {esServicios ? (
           /* ── Cards para dealer ── */
           <>
-            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Unidades Vendidas</p>
-                <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                  <Package className="text-blue-600 dark:text-blue-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-3xl font-bold tracking-tight">{stats.unidadesVendidas}</div>
-                <p className="text-xs text-muted-foreground mt-1">+{stats.unidadesHoy} hoy</p>
-              </CardContent>
-            </Card>
+            <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">Unidades Vendidas</span>
+              </div>
+              <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{stats.unidadesVendidas}</div>
+              <p className="text-[.78rem] text-muted-foreground mt-3">+{stats.unidadesHoy} hoy</p>
+            </div>
 
-            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-              <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comisiones del Mes</p>
-                <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                  <Award className="text-amber-600 dark:text-amber-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-3xl font-bold tracking-tight">S/.{totalComisionesMes.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground mt-1">Recibido de operadoras</p>
-              </CardContent>
-            </Card>
+            <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">Comisiones del Mes</span>
+              </div>
+              <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">S/ {totalComisionesMes.toFixed(2)}</div>
+              <p className="text-[.78rem] text-muted-foreground mt-3">Recibido de operadoras</p>
+            </div>
           </>
         ) : (
-          /* ── Cards para inventario ── */
+          /* ── 4 KPI cards para inventario ── */
           <>
-            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Productos</p>
-                <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                  <Package className="text-blue-600 dark:text-blue-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-3xl font-bold tracking-tight">{stats.totalProductos}</div>
-                <p className="text-xs text-muted-foreground mt-1">En inventario activo</p>
-              </CardContent>
-            </Card>
+            {/* Card 1: Ingresos */}
+            <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">
+                  {timeFilter === 'HOY' ? 'Ingresos hoy' : timeFilter === 'SEMANA' ? 'Ingresos semana' : timeFilter === 'MES' ? 'Ingresos mes' : 'Ingresos año'}
+                </span>
+                {showVentasCards && stats.ingresoFiltrado > 0 && (
+                  <span className="inline-flex items-center gap-[3px] text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                    ↑ activo
+                  </span>
+                )}
+              </div>
+              <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">
+                {showVentasCards ? `S/ ${stats.ingresoFiltrado.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+              </div>
+              {/* mini sparkline */}
+              <div className="flex items-end gap-[3px] h-[30px] mt-3">
+                <span className="flex-1 rounded-sm bg-primary" style={{ height: '38%', opacity: 0.22 }} />
+                <span className="flex-1 rounded-sm bg-primary" style={{ height: '52%', opacity: 0.28 }} />
+                <span className="flex-1 rounded-sm bg-primary" style={{ height: '44%', opacity: 0.28 }} />
+                <span className="flex-1 rounded-sm bg-primary" style={{ height: '70%', opacity: 0.4 }} />
+                <span className="flex-1 rounded-sm bg-primary" style={{ height: '58%', opacity: 0.4 }} />
+                <span className="flex-1 rounded-sm bg-primary" style={{ height: '82%', opacity: 0.62 }} />
+                <span className="flex-1 rounded-sm bg-primary" style={{ height: '100%' }} />
+              </div>
+            </div>
 
-            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-              <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bajo Stock</p>
-                <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="text-red-600 dark:text-red-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className={`text-3xl font-bold tracking-tight ${stats.bajoStockCount > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
-                  {stats.bajoStockCount}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stats.bajoStockCount === 0 ? 'Sin alertas 🎉' : 'Requieren reabastecimiento'}
-                </p>
-              </CardContent>
-            </Card>
-          </>
-        )}
+            {/* Card 2: Ventas */}
+            <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">
+                  {rol === 'VENDEDOR' ? 'Tus ventas' : timeFilter === 'HOY' ? 'Ventas hoy' : timeFilter === 'SEMANA' ? 'Ventas semana' : timeFilter === 'MES' ? 'Ventas mes' : 'Ventas año'}
+                </span>
+                {stats.ventasHoy > 0 && (
+                  <span className="inline-flex items-center gap-[3px] text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                    ↑ {stats.ventasHoy} hoy
+                  </span>
+                )}
+              </div>
+              <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">
+                {showVentasCards ? stats.totalVentasFiltradas : '—'}
+              </div>
+              <p className="text-[.78rem] text-muted-foreground mt-3 leading-relaxed">
+                Ticket promedio{' '}
+                <strong className="text-foreground/80 font-semibold">
+                  S/ {stats.totalVentasFiltradas > 0 ? (stats.ingresoFiltrado / stats.totalVentasFiltradas).toFixed(2) : '0.00'}
+                </strong>
+              </p>
+            </div>
 
-        {/* Ventas e Ingresos SOLO para ADMIN/VENDEDOR */}
-        {showVentasCards && (
-          <>
-            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {rol === 'VENDEDOR' ? 'Tus Ventas' : 'Ventas'}
-                  </p>
-                </div>
-                <div className="h-9 w-9 rounded-xl bg-violet-500/10 flex items-center justify-center flex-shrink-0">
-                  <ShoppingCart className="text-violet-600 dark:text-violet-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-3xl font-bold tracking-tight">{stats.totalVentasFiltradas}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  +{stats.ventasHoy} hoy
-                </p>
-              </CardContent>
-            </Card>
+            {/* Card 3: Bajo stock */}
+            <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">Bajo stock</span>
+                {stats.bajoStockCount > 0 ? (
+                  <span className="inline-flex items-center text-[.72rem] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                    Requiere acción
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                    Todo en orden
+                  </span>
+                )}
+              </div>
+              <div className={`text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums ${stats.bajoStockCount > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                {stats.bajoStockCount}
+              </div>
+              <p className="text-[.78rem] text-muted-foreground mt-3 leading-relaxed">
+                {stats.bajoStockCount === 0
+                  ? 'Sin alertas de stock'
+                  : `${stats.bajoStockItems.filter(p => p.stockActual === 0).length} sin stock · ${stats.bajoStockItems.filter(p => p.stockActual > 0).length} por debajo del mínimo`}
+              </p>
+            </div>
 
-            <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {rol === 'VENDEDOR' ? 'Tus Ingresos' : 'Ingresos'}
-                  </p>
+            {/* Card 4: Utilidad / Productos */}
+            {rol === 'ADMIN' ? (
+              (() => {
+                const utilidad = stats.ingresoFiltrado - totalGastosPeriodo;
+                const positiva = utilidad >= 0;
+                return (
+                  <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[.78rem] font-semibold text-muted-foreground">Utilidad neta</span>
+                      <span className={`inline-flex items-center gap-[3px] text-[.72rem] font-bold rounded-full px-[7px] py-[2px] flex-shrink-0 ${positiva ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30'}`}>
+                        {positiva ? '↑' : '↓'} {positiva ? 'positiva' : 'negativa'}
+                      </span>
+                    </div>
+                    <div className={`text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums ${positiva ? '' : 'text-red-600 dark:text-red-400'}`}>
+                      S/ {utilidad.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <p className="text-[.78rem] text-muted-foreground mt-3 leading-relaxed">
+                      Gastos <strong className="text-foreground/80 font-semibold">S/ {totalGastosPeriodo.toFixed(2)}</strong>
+                    </p>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[.78rem] font-semibold text-muted-foreground">Productos</span>
                 </div>
-                <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                  <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-3xl font-bold tracking-tight">S/.{stats.ingresoFiltrado.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {timeFilter === 'HOY'
-                    ? 'Ingresos de hoy'
-                    : timeFilter === 'SEMANA'
-                      ? 'Esta semana'
-                      : timeFilter === 'MES'
-                        ? 'Este mes'
-                        : 'Este año'}
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Gastos y Utilidad Neta — solo ADMIN */}
-            {(rol === 'ADMIN') && (
-              <>
-                <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-                  <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent pointer-events-none" />
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Gastos</p>
-                    </div>
-                    <div className="h-9 w-9 rounded-xl bg-rose-500/10 flex items-center justify-center flex-shrink-0">
-                      <TrendingDown className="text-rose-600 dark:text-rose-400" size={18} />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="text-3xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
-                      S/.{totalGastosPeriodo.toFixed(2)}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">Egresos del período</p>
-                  </CardContent>
-                </Card>
-
-                <Card className="relative overflow-hidden border-0 shadow-sm bg-card">
-                  <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-transparent pointer-events-none" />
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Utilidad Neta</p>
-                    </div>
-                    <div className="h-9 w-9 rounded-xl bg-teal-500/10 flex items-center justify-center flex-shrink-0">
-                      <TrendingUp className="text-teal-600 dark:text-teal-400" size={18} />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    {(() => {
-                      const utilidad = stats.ingresoFiltrado - totalGastosPeriodo;
-                      const positiva = utilidad >= 0;
-                      return (
-                        <>
-                          <div className={`text-3xl font-bold tracking-tight ${positiva ? 'text-teal-600 dark:text-teal-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                            S/.{utilidad.toFixed(2)}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {positiva ? 'Ingresos − Gastos' : 'Pérdida neta del período'}
-                          </p>
-                        </>
-                      );
-                    })()}
-                  </CardContent>
-                </Card>
-              </>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{stats.totalProductos}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">En inventario activo</p>
+              </div>
             )}
           </>
         )}
       </div>
 
-      {/* Low Stock Alert — físicos para dealer, todos los demás para inventario */}
-      {stats.bajoStockItems.length > 0 && (
-        <Card className="border-0 shadow-sm animate-fade-in-up-delay-2">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-              </div>
-              <div>
-                <CardTitle className="text-base">Productos con Bajo Stock</CardTitle>
-                <CardDescription className="text-xs">Requieren reabastecimiento urgente</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="divide-y divide-border/60">
-              {stats.bajoStockItems.map((producto) => (
-                <div key={producto.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{producto.nombre}</p>
-                    <p className="text-xs text-muted-foreground">{producto.codigoBarras}</p>
-                  </div>
-                  <div className="flex items-center gap-3 ml-3 flex-shrink-0">
-                    <div className="text-right">
-                      <p className="text-sm font-semibold">{producto.stockActual} uds</p>
-                      <p className="text-xs text-muted-foreground">mín. {producto.stockMinimo}</p>
-                    </div>
-                    <Badge variant="destructive" className="text-xs">Bajo</Badge>
-                  </div>
+      {/* Sección inferior — bajo stock · por vencer · actividad (2 columnas mockup) */}
+      {!esServicios && (stats.bajoStockItems.length > 0 || stats.productosProximosAVencer.length > 0 || rol === 'ADMIN') && (
+        <div className="grid gap-[14px] grid-cols-1 lg:grid-cols-[1.25fr_1fr] items-start animate-fade-in-up-delay-2">
+
+          {/* Columna izquierda: Necesitan reposición */}
+          {stats.bajoStockItems.length > 0 ? (
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between gap-3 px-[18px] py-[15px] border-b border-border/60">
+                <div className="flex items-center gap-[9px]">
+                  <span className="w-[7px] h-[7px] rounded-full bg-red-500 dark:bg-red-400 flex-shrink-0" />
+                  <span className="text-[.92rem] font-[650]">Necesitan reposición</span>
+                  <span className="text-[.7rem] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-full px-2 py-[2px]">
+                    {stats.bajoStockCount}
+                  </span>
                 </div>
-              ))}
+                <button
+                  onClick={() => navigate('/dashboard/productos?filtro=bajo-stock')}
+                  className="text-[.8rem] font-semibold text-primary hover:underline"
+                >
+                  Ver todos
+                </button>
+              </div>
+              <div className="overflow-y-auto overflow-x-hidden max-h-[330px]" style={{ overscrollBehavior: 'contain' }}>
+                {stats.bajoStockItems.map((producto) => (
+                  <div key={producto.id} className="flex items-center gap-[14px] px-[18px] py-[13px] border-b border-border/50 last:border-b-0">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[.875rem] font-semibold truncate">{producto.nombre}</p>
+                      <p className="font-mono text-[.72rem] text-muted-foreground mt-[3px]">{producto.codigoBarras}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`text-[.875rem] font-bold tabular-nums ${producto.stockActual === 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                        {producto.stockActual} und
+                      </p>
+                      <p className="text-[.72rem] text-muted-foreground mt-[3px]">mín. {producto.stockMinimo}</p>
+                    </div>
+                    <button
+                      onClick={() => navigate('/dashboard/compras/ordenes')}
+                      className="flex-shrink-0 text-[.78rem] font-semibold text-primary border border-primary/30 bg-primary/8 hover:bg-primary/15 rounded-lg px-[11px] py-[6px] transition-colors"
+                    >
+                      Pedir
+                    </button>
+                  </div>
+                ))}
+                <div className="h-px" />
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          ) : (
+            /* placeholder vacío para mantener el grid cuando solo hay por vencer / actividad */
+            <div />
+          )}
+
+          {/* Columna derecha: Por vencer + Actividad reciente apiladas */}
+          <div className="flex flex-col gap-[14px]">
+
+            {/* Por vencer */}
+            {stats.productosProximosAVencer.length > 0 && (
+              <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between gap-3 px-[18px] py-[15px] border-b border-border/60">
+                  <div className="flex items-center gap-[9px]">
+                    <span className="w-[7px] h-[7px] rounded-full bg-amber-500 dark:bg-amber-400 flex-shrink-0" />
+                    <span className="text-[.92rem] font-[650]">Por vencer</span>
+                    <span className="text-[.7rem] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded-full px-2 py-[2px]">
+                      {stats.productosProximosAVencer.length}
+                    </span>
+                  </div>
+                  <span className="text-[.75rem] text-muted-foreground">próximos 90 días</span>
+                </div>
+                <div className="overflow-y-auto overflow-x-hidden max-h-[180px]" style={{ overscrollBehavior: 'contain' }}>
+                  {stats.productosProximosAVencer.map((producto) => {
+                    const fechaParts = producto.fechaVencimiento.split('T')[0].split('-');
+                    const fv = new Date(parseInt(fechaParts[0]), parseInt(fechaParts[1]) - 1, parseInt(fechaParts[2]));
+                    const diasRestantes = Math.ceil((fv.getTime() - new Date(new Date().toLocaleDateString('en-US')).getTime()) / (1000 * 60 * 60 * 24));
+                    const badgeClass = diasRestantes <= 30
+                      ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30'
+                      : diasRestantes <= 60
+                        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30'
+                        : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30';
+                    return (
+                      <div key={`${producto.id}-${producto.fechaVencimiento}`} className="flex items-center gap-3 px-[18px] py-[12px] border-b border-border/50 last:border-b-0">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[.86rem] font-semibold truncate">{producto.nombre}</p>
+                          <p className="font-mono text-[.71rem] text-muted-foreground mt-[3px]">
+                            {producto.lote ? `Lote ${producto.lote} · ` : ''}{producto.stockActual} und
+                          </p>
+                        </div>
+                        <span className={`flex-shrink-0 text-[.74rem] font-bold rounded-[7px] px-2 py-1 ${badgeClass}`}>
+                          {diasRestantes} días
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div className="h-px" />
+                </div>
+              </div>
+            )}
+
+            {/* Actividad reciente (ADMIN) */}
+            {rol === 'ADMIN' && (
+              <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between gap-3 px-[18px] py-[15px] border-b border-border/60">
+                  <span className="text-[.92rem] font-[650]">Actividad reciente</span>
+                </div>
+                <div className="overflow-y-auto overflow-x-hidden max-h-[300px] px-[18px] pb-[14px]" style={{ overscrollBehavior: 'contain' }}>
+                  {actividadLoading ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                      <RefreshCw size={13} className="mr-2 animate-spin" />
+                      Cargando...
+                    </div>
+                  ) : actividad.length === 0 ? (
+                    <p className="text-[.845rem] text-muted-foreground text-center py-6">Sin actividad reciente</p>
+                  ) : (
+                    actividad.map((item, i) => {
+                      const { bg, text, letter } = tipoActividadStyle(item.tipo);
+                      const fecha = new Date(item.fechaHora);
+                      return (
+                        <div key={i} className={`flex gap-3 py-[10px] ${i > 0 ? 'border-t border-border/50' : ''}`}>
+                          <span className={`w-[28px] h-[28px] flex-shrink-0 rounded-lg flex items-center justify-center text-[.68rem] font-bold ${bg} ${text}`}>
+                            {letter}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[.845rem] leading-[1.45]">
+                              {item.descripcion}
+                              {item.detalle && (
+                                <span className="text-muted-foreground"> · {item.detalle}</span>
+                              )}
+                            </p>
+                            <p className="font-mono text-[.71rem] text-muted-foreground mt-[3px]">
+                              {formatRelativo(fecha)}{item.usuarioNombre ? ` · ${item.usuarioNombre}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
       )}
 
-      {/* Productos próximos a vencer — oculto para dealer */}
-      {!esServicios && stats.productosProximosAVencer.length > 0 && (
-        <Card className="border-0 shadow-sm animate-fade-in-up-delay-3">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+      {/* Actividad reciente standalone — cuando no hay bajo stock ni vencimientos */}
+      {rol === 'ADMIN' && esServicios && (
+        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden animate-fade-in-up-delay-2">
+          <div className="flex items-center justify-between gap-3 px-[18px] py-[15px] border-b border-border/60">
+            <span className="text-[.92rem] font-[650]">Actividad reciente</span>
+          </div>
+          <div className="overflow-y-auto overflow-x-hidden max-h-[300px] px-[18px] pb-[14px]" style={{ overscrollBehavior: 'contain' }}>
+            {actividadLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                <RefreshCw size={13} className="mr-2 animate-spin" />
+                Cargando...
               </div>
-              <div>
-                <CardTitle className="text-base">Próximos a Vencer</CardTitle>
-                <CardDescription className="text-xs">
-                  {stats.productosProximosAVencer.length} producto(s) vencen en los próximos 90 días
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="divide-y divide-border/60">
-              {stats.productosProximosAVencer.map((producto) => {
-                const fechaParts = producto.fechaVencimiento.split('T')[0].split('-');
-                const fv = new Date(
-                  parseInt(fechaParts[0]),
-                  parseInt(fechaParts[1]) - 1,
-                  parseInt(fechaParts[2])
-                );
-
-                const diasRestantes = Math.ceil(
-                  (fv.getTime() - new Date(new Date().toLocaleDateString('en-US')).getTime()) /
-                    (1000 * 60 * 60 * 24)
-                );
-
-                const urgencia =
-                  diasRestantes <= 7 ? 'destructive' : diasRestantes <= 15 ? 'warning' : 'secondary';
-
+            ) : actividad.length === 0 ? (
+              <p className="text-[.845rem] text-muted-foreground text-center py-6">Sin actividad reciente</p>
+            ) : (
+              actividad.map((item, i) => {
+                const { bg, text, letter } = tipoActividadStyle(item.tipo);
+                const fecha = new Date(item.fechaHora);
                 return (
-                  <div
-                    key={`${producto.id}-${producto.fechaVencimiento}`}
-                    className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{producto.nombre}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {producto.codigoBarras}
-                        {producto.lote ? ` · Lote: ${producto.lote}` : ''}
+                  <div key={i} className={`flex gap-3 py-[10px] ${i > 0 ? 'border-t border-border/50' : ''}`}>
+                    <span className={`w-[28px] h-[28px] flex-shrink-0 rounded-lg flex items-center justify-center text-[.68rem] font-bold ${bg} ${text}`}>
+                      {letter}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[.845rem] leading-[1.45]">
+                        {item.descripcion}
+                        {item.detalle && (
+                          <span className="text-muted-foreground"> · {item.detalle}</span>
+                        )}
                       </p>
-                    </div>
-                    <div className="flex items-center gap-3 ml-3 flex-shrink-0">
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{fv.toLocaleDateString('es-PE')}</p>
-                        <p className="text-xs text-muted-foreground">{diasRestantes} días</p>
-                      </div>
-                      <Badge variant={urgencia as any} className="text-xs">
-                        {diasRestantes <= 7
-                          ? 'Urgente'
-                          : diasRestantes <= 15
-                            ? 'Pronto'
-                            : 'Próximo'}
-                      </Badge>
+                      <p className="font-mono text-[.71rem] text-muted-foreground mt-[3px]">
+                        {formatRelativo(fecha)}{item.usuarioNombre ? ` · ${item.usuarioNombre}` : ''}
+                      </p>
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+              })
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
