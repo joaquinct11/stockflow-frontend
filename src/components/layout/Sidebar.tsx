@@ -60,12 +60,6 @@ type GroupItem = {
 
 type MenuEntry = LeafItem | GroupItem;
 
-const ROL_BADGE: Record<string, string> = {
-  ADMIN:             'bg-rose-500/20 text-rose-300 border border-rose-500/30',
-  VENDEDOR:          'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
-  GESTOR_INVENTARIO: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
-};
-
 const ROL_LABEL: Record<string, string> = {
   ADMIN:             'Admin',
   VENDEDOR:          'Vendedor',
@@ -82,7 +76,7 @@ function getInitials(nombre?: string) {
 
 export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: SidebarProps) {
   const location = useLocation();
-  const { user } = useAuthStore();
+  const { user, suscripcionEstado } = useAuthStore();
   const { canAccess, isAdmin, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
   const { sucursales } = useSucursalStore();
@@ -92,6 +86,20 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const esBoticaFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
   const esPro        = isPro || sucursales.length > 0;
 
+  // Trial info para la barra del sidebar
+  const trialEndDate = (user?.suscripcion?.trialEndDate) as string | undefined;
+  const esTrial = suscripcionEstado === 'TRIAL';
+  const diasTrialRestantes = (() => {
+    if (!esTrial || !trialEndDate) return null;
+    const diff = Math.ceil((new Date(trialEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, diff);
+  })();
+  const trialProgressPct = (() => {
+    if (!esTrial || diasTrialRestantes === null) return 57;
+    const total = 14;
+    return Math.round(((total - diasTrialRestantes) / total) * 100);
+  })();
+
   const isPathActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
     if (href === '/pos') return location.pathname === '/pos';
@@ -99,14 +107,12 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
       const [hrefPath, hrefQuery] = href.split('?');
       return location.pathname.startsWith(hrefPath) && location.search.includes(hrefQuery);
     }
-    // For /dashboard/productos without query param, don't activate when a tipo param is present
     if (href === '/dashboard/productos' && location.search.includes('tipo=')) return false;
     return location.pathname.startsWith(href);
   };
 
   const menu: MenuEntry[] = useMemo(
     () => [
-      // ── Dashboard ────────────────────────────────────────────────
       {
         type: 'item',
         title: 'Dashboard',
@@ -114,8 +120,6 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         icon: LayoutDashboard,
         show: true,
       },
-
-      // ── Ventas / Servicios ───────────────────────────────────────
       {
         type: 'group',
         key: 'ventas',
@@ -123,40 +127,13 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         icon: ShoppingCart,
         show: canAccess('VENTAS') || canAccess('FACTURACION') || canAccess('POS') || isAdmin,
         items: [
-          {
-            title: 'Punto de Venta',
-            href: '/pos',
-            icon: ScanLine,
-            show: canAccess('POS'),
-          },
-          {
-            title: 'Cuadre de Caja',
-            href: '/dashboard/caja',
-            icon: Wallet,
-            show: canAccess('POS'),
-          },
-          {
-            title: esServicios ? 'Servicios prestados' : 'Historial de Ventas',
-            href: '/dashboard/ventas',
-            icon: ShoppingCart,
-            show: canAccess('VENTAS'),
-          },
-          {
-            title: 'Facturación',
-            href: '/dashboard/facturacion',
-            icon: FileText,
-            show: canAccess('FACTURACION'),
-          },
-          {
-            title: 'Notas de Crédito',
-            href: '/dashboard/notas-credito',
-            icon: Receipt,
-            show: !esServicios && (isAdmin || puede('VER_NOTAS_CREDITO')),
-          },
+          { title: 'Punto de Venta',   href: '/pos',                        icon: ScanLine,      show: canAccess('POS') },
+          { title: 'Cuadre de Caja',   href: '/dashboard/caja',             icon: Wallet,        show: canAccess('POS') },
+          { title: esServicios ? 'Servicios prestados' : 'Historial de Ventas', href: '/dashboard/ventas', icon: ShoppingCart, show: canAccess('VENTAS') },
+          { title: 'Facturación',      href: '/dashboard/facturacion',      icon: FileText,      show: canAccess('FACTURACION') },
+          { title: 'Notas de Crédito', href: '/dashboard/notas-credito',    icon: Receipt,       show: !esServicios && (isAdmin || puede('VER_NOTAS_CREDITO')) },
         ],
       },
-
-      // ── Gastos / Egresos ─────────────────────────────────────────
       {
         type: 'group',
         key: 'gastos',
@@ -164,28 +141,11 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         icon: TrendingDown,
         show: canAccess('GASTOS') || (!esRopa && !esServicios && (canAccess('COMPRAS') || canAccess('RECEPCIONES'))),
         items: [
-          {
-            title: 'Gastos y Egresos',
-            href: '/dashboard/gastos',
-            icon: TrendingDown,
-            show: canAccess('GASTOS'),
-          },
-          {
-            title: 'Órdenes de Compra',
-            href: '/dashboard/compras/ordenes',
-            icon: ClipboardList,
-            show: !esRopa && !esServicios && canAccess('COMPRAS'),
-          },
-          {
-            title: 'Recepciones',
-            href: '/dashboard/recepciones',
-            icon: Inbox,
-            show: !esRopa && !esServicios && canAccess('RECEPCIONES'),
-          },
+          { title: 'Gastos y Egresos',   href: '/dashboard/gastos',           icon: TrendingDown, show: canAccess('GASTOS') },
+          { title: 'Órdenes de Compra',  href: '/dashboard/compras/ordenes',  icon: ClipboardList,show: !esRopa && !esServicios && canAccess('COMPRAS') },
+          { title: 'Recepciones',        href: '/dashboard/recepciones',       icon: Inbox,        show: !esRopa && !esServicios && canAccess('RECEPCIONES') },
         ],
       },
-
-      // ── Contactos ────────────────────────────────────────────────
       {
         type: 'group',
         key: 'contactos',
@@ -193,22 +153,10 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         icon: UserCheck,
         show: canAccess('CLIENTES') || canAccess('PROVEEDORES'),
         items: [
-          {
-            title: 'Clientes',
-            href: '/dashboard/clientes',
-            icon: UserCheck,
-            show: canAccess('CLIENTES'),
-          },
-          {
-            title: 'Proveedores',
-            href: '/dashboard/proveedores',
-            icon: Building2,
-            show: canAccess('PROVEEDORES'),
-          },
+          { title: 'Clientes',    href: '/dashboard/clientes',    icon: UserCheck,  show: canAccess('CLIENTES') },
+          { title: 'Proveedores', href: '/dashboard/proveedores', icon: Building2,  show: canAccess('PROVEEDORES') },
         ],
       },
-
-      // ── Comisiones (solo EMPRESA_SERVICIOS) ──────────────────────
       {
         type: 'item',
         title: 'Comisiones',
@@ -216,8 +164,6 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         icon: BarChart3,
         show: esServicios && (isAdmin || puede('VER_COMISIONES')),
       },
-
-      // ── Inventario ────────────────────────────────────────────────
       {
         type: 'group',
         key: 'inventario',
@@ -225,28 +171,11 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         icon: PackageOpen,
         show: canAccess('PRODUCTOS') || canAccess('INVENTARIO'),
         items: [
-          {
-            title: esServicios ? 'Catálogo de Servicios' : 'Productos',
-            href: esServicios ? '/dashboard/productos?tipo=SERVICIO' : '/dashboard/productos',
-            icon: Package,
-            show: canAccess('PRODUCTOS'),
-          },
-          {
-            title: 'Productos Físicos',
-            href: '/dashboard/productos?tipo=PRODUCTO',
-            icon: Boxes,
-            show: esServicios && canAccess('PRODUCTOS'),
-          },
-          {
-            title: 'Movimientos',
-            href: '/dashboard/inventario',
-            icon: PackageOpen,
-            show: canAccess('INVENTARIO'),
-          },
+          { title: esServicios ? 'Catálogo de Servicios' : 'Productos', href: esServicios ? '/dashboard/productos?tipo=SERVICIO' : '/dashboard/productos', icon: Package, show: canAccess('PRODUCTOS') },
+          { title: 'Productos Físicos', href: '/dashboard/productos?tipo=PRODUCTO', icon: Boxes, show: esServicios && canAccess('PRODUCTOS') },
+          { title: 'Movimientos',       href: '/dashboard/inventario',              icon: PackageOpen, show: canAccess('INVENTARIO') },
         ],
       },
-
-      // ── Usuarios ─────────────────────────────────────────────────
       {
         type: 'group',
         key: 'usuarios',
@@ -254,95 +183,35 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         icon: Users,
         show: canAccess('USUARIOS') || isAdmin,
         items: [
-          {
-            title: 'Usuarios',
-            href: '/dashboard/usuarios',
-            icon: Users,
-            show: canAccess('USUARIOS'),
-          },
-          {
-            title: 'Gestión de permisos',
-            href: '/dashboard/admin/permisos',
-            icon: ShieldCheck,
-            show: isAdmin,
-          },
+          { title: 'Usuarios',           href: '/dashboard/usuarios',        icon: Users,      show: canAccess('USUARIOS') },
+          { title: 'Gestión de permisos',href: '/dashboard/admin/permisos',  icon: ShieldCheck,show: isAdmin },
         ],
       },
-
-      // ── DIGEMID / OPPF (solo BOTICA/FARMACIA) ────────────────────
-      {
-        type: 'item',
-        title: 'DIGEMID / OPPF',
-        href: '/dashboard/digemid',
-        icon: FlaskConical,
-        show: esBoticaFarmacia && isAdmin,
-      },
-
-      // ── Certificados (solo BOTICA/FARMACIA, oculto para servicios) ─
-      {
-        type: 'item',
-        title: 'Certificados',
-        href: '/dashboard/certificados',
-        icon: Award,
-        show: !esServicios && canAccess('CERTIFICADOS'),
-      },
-
-      // ── Sucursales (solo ADMIN plan PRO) ─────────────────────────
-      {
-        type: 'item',
-        title: 'Sucursales',
-        href: '/dashboard/sucursales',
-        icon: Building2,
-        show: isAdmin && esPro,
-      },
-
-      // ── Resto ────────────────────────────────────────────────────
-      {
-        type: 'item',
-        title: 'Suscripciones',
-        href: '/dashboard/suscripciones',
-        icon: CreditCard,
-        show: canAccess('SUSCRIPCIONES'),
-      },
-      {
-        type: 'item',
-        title: 'Reportes',
-        href: '/dashboard/reportes',
-        icon: BarChart3,
-        show: canAccess('REPORTES'),
-      },
-      {
-        type: 'item',
-        title: 'Configuración',
-        href: '/dashboard/configuracion',
-        icon: Settings,
-        show: true,
-      },
+      { type: 'item', title: 'DIGEMID / OPPF',  href: '/dashboard/digemid',        icon: FlaskConical, show: esBoticaFarmacia && isAdmin },
+      { type: 'item', title: 'Certificados',     href: '/dashboard/certificados',   icon: Award,        show: !esServicios && canAccess('CERTIFICADOS') },
+      { type: 'item', title: 'Sucursales',       href: '/dashboard/sucursales',     icon: Building2,    show: isAdmin && esPro },
+      { type: 'item', title: 'Suscripciones',    href: '/dashboard/suscripciones',  icon: CreditCard,   show: canAccess('SUSCRIPCIONES') },
+      { type: 'item', title: 'Reportes',         href: '/dashboard/reportes',       icon: BarChart3,    show: canAccess('REPORTES') },
+      { type: 'item', title: 'Configuración',    href: '/dashboard/configuracion',  icon: Settings,     show: true },
     ],
     [canAccess, isAdmin, puede, user?.rol, esPro, esServicios, esBoticaFarmacia]
   );
 
   const defaultExpanded = useMemo(() => {
     const ventasOpen =
-      isPathActive('/dashboard/ventas') ||
-      isPathActive('/dashboard/facturacion') ||
-      isPathActive('/dashboard/notas-credito') ||
-      isPathActive('/dashboard/caja') ||
+      isPathActive('/dashboard/ventas') || isPathActive('/dashboard/facturacion') ||
+      isPathActive('/dashboard/notas-credito') || isPathActive('/dashboard/caja') ||
       location.pathname === '/pos';
     const gastosOpen =
-      isPathActive('/dashboard/gastos') ||
-      isPathActive('/dashboard/compras') ||
+      isPathActive('/dashboard/gastos') || isPathActive('/dashboard/compras') ||
       isPathActive('/dashboard/recepciones');
     const contactosOpen =
-      isPathActive('/dashboard/clientes') ||
-      isPathActive('/dashboard/proveedores');
+      isPathActive('/dashboard/clientes') || isPathActive('/dashboard/proveedores');
     const inventarioOpen =
       location.pathname.startsWith('/dashboard/productos') ||
-      isPathActive('/dashboard/inventario') ||
-      isPathActive('/dashboard/kardex');
+      isPathActive('/dashboard/inventario') || isPathActive('/dashboard/kardex');
     const usuariosOpen =
-      isPathActive('/dashboard/usuarios') ||
-      isPathActive('/dashboard/admin');
+      isPathActive('/dashboard/usuarios') || isPathActive('/dashboard/admin');
     return { ventas: ventasOpen, gastos: gastosOpen, contactos: contactosOpen, inventario: inventarioOpen, usuarios: usuariosOpen };
   }, [location.pathname, location.search]);
 
@@ -359,15 +228,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const toggleGroup = (key: GroupItem['key']) => {
     setOpenGroups((prev) => {
       const isCurrentlyOpen = prev[key];
-      // Cierra todos y abre solo el clickeado (accordion)
-      return {
-        ventas:     false,
-        gastos:     false,
-        contactos:  false,
-        inventario: false,
-        usuarios:   false,
-        [key]: !isCurrentlyOpen,
-      };
+      return { ventas: false, gastos: false, contactos: false, inventario: false, usuarios: false, [key]: !isCurrentlyOpen };
     });
   };
 
@@ -375,10 +236,18 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
     <>
       {/* Overlay flyout colapsado */}
       {collapsed && collapsedPopover && (
-        <div
-          className="fixed inset-0 z-[65]"
-          onClick={() => setCollapsedPopover(null)}
-        />
+        <div className="fixed inset-0 z-[65]" onClick={() => setCollapsedPopover(null)} />
+      )}
+
+      {/* Botón expandir — tab flotante en el borde derecho del sidebar contraído */}
+      {collapsed && (
+        <button
+          onClick={() => onCollapsedChange(false)}
+          aria-label="Expandir sidebar"
+          className="fixed top-1/2 -translate-y-1/2 left-[68px] z-[21] hidden lg:flex items-center justify-center w-5 h-8 bg-card border border-border border-l-0 rounded-r-md shadow-sm text-muted-foreground hover:text-primary hover:bg-accent transition-all"
+        >
+          <ChevronRight size={13} />
+        </button>
       )}
 
       {/* Overlay móvil */}
@@ -393,77 +262,76 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
       <aside
         className={cn(
           'fixed left-0 top-0 z-50 h-screen flex flex-col',
-          'bg-[#0f1117] border-r border-white/[0.06]',
+          'bg-card border-r border-border',
           'transition-all duration-300 ease-in-out',
           'lg:translate-x-0',
-          collapsed ? 'lg:w-16' : 'lg:w-64',
+          collapsed ? 'lg:w-[68px]' : 'lg:w-64',
           isOpen ? 'translate-x-0' : '-translate-x-full',
           !isOpen && 'max-lg:pointer-events-none',
           'w-64 lg:z-20'
         )}
       >
-        {/* ── Logo ──────────────────────────────────────────────── */}
+        {/* ── Logo header ─────────────────────────────────────────── */}
         <div className={cn(
-          'flex h-16 items-center border-b border-white/[0.06] flex-shrink-0',
-          collapsed ? 'justify-center px-3' : 'justify-between px-4'
+          'flex h-16 items-center border-b border-border/60 flex-shrink-0 relative',
+          collapsed ? 'justify-center px-3' : 'gap-[10px] px-[18px]'
         )}>
           {!collapsed && (
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-                <img src="/fluxus.png" alt="Fluxus" className="h-5 w-5" />
+            <>
+              <img src="/fluxus.png" alt="Fluxus" className="w-[30px] h-[30px] rounded-lg object-cover flex-shrink-0" />
+              <div className="min-w-0 leading-[1.2]">
+                <div className="text-base font-bold tracking-tight">Fluxus</div>
+                <div className="text-[10px] text-muted-foreground tracking-wide">Mini ERP · Perú</div>
               </div>
-              <div>
-                <span className="text-white font-bold text-base tracking-tight">Fluxus</span>
-                <p className="text-slate-300/70/60 text-[10px] leading-tight tracking-wide">Mini ERP · Perú</p>
-              </div>
-            </div>
+            </>
           )}
 
           {collapsed && (
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-              <img src="/fluxus.png" alt="Fluxus" className="h-5 w-5" />
-            </div>
+            <button
+              onClick={() => onCollapsedChange(false)}
+              title="Expandir sidebar"
+              className="hidden lg:block rounded-lg hover:ring-2 hover:ring-primary/40 transition-all"
+              aria-label="Expandir sidebar"
+            >
+              <img src="/fluxus.png" alt="Fluxus" className="w-[30px] h-[30px] rounded-lg object-cover" />
+            </button>
+          )}
+          {collapsed && (
+            <img src="/fluxus.png" alt="Fluxus" className="w-[30px] h-[30px] rounded-lg object-cover lg:hidden" />
           )}
 
+          {/* Botón cerrar móvil */}
           <button
             onClick={onClose}
-            className="rounded-md p-1.5 text-slate-300/70 hover:text-white hover:bg-white/10 lg:hidden"
+            className="ml-auto rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent lg:hidden"
           >
-            <X size={18} />
+            <X size={17} />
           </button>
 
-          <button
-            onClick={() => onCollapsedChange(!collapsed)}
-            className={cn(
-              'hidden lg:flex items-center justify-center transition-colors',
-              'text-slate-400 hover:text-white',
-              collapsed
-                ? 'absolute -right-5 top-1/2 -translate-y-1/2 h-10 w-5 bg-[#0f1117] border border-white/[0.12] shadow-lg rounded-r-lg rounded-l-none hover:bg-white/10'
-                : 'rounded-md p-1.5 hover:bg-white/10'
-            )}
-            aria-label={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-          >
-            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          </button>
+          {/* Botón collapse desktop — solo visible cuando expandido */}
+          {!collapsed && (
+            <button
+              onClick={() => onCollapsedChange(true)}
+              className="hidden lg:grid place-items-center ml-auto w-[26px] h-[26px] rounded-[7px] transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
+              aria-label="Colapsar sidebar"
+            >
+              <ChevronLeft size={15} />
+            </button>
+          )}
         </div>
 
         {/* ── Badge de Rol ──────────────────────────────────────── */}
         {!collapsed && user && (
-          <div className="px-4 py-2.5 border-b border-white/[0.06] flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold text-slate-400/60 uppercase tracking-wider">Rol</span>
-              <span className={cn(
-                'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide',
-                ROL_BADGE[user.rol] ?? 'bg-slate-700 text-slate-300'
-              )}>
-                {ROL_LABEL[user.rol] ?? user.rol}
-              </span>
-            </div>
+          <div className="flex items-center justify-between gap-2 px-[18px] py-[10px] border-b border-border/60 flex-shrink-0">
+            <span className="font-mono text-[.62rem] font-semibold tracking-[.1em] uppercase text-muted-foreground">Rol</span>
+            <span className="text-[.66rem] font-bold tracking-[.05em] uppercase text-destructive bg-destructive/10 rounded-full px-[9px] py-[2px]">
+              {ROL_LABEL[user.rol] ?? user.rol}
+            </span>
           </div>
         )}
 
         {/* ── Navegación ────────────────────────────────────────── */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto py-3 px-[10px] flex flex-col gap-0.5">
           {menu
             .filter((entry) => entry.show)
             .map((entry) => {
@@ -478,15 +346,16 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                     onClick={onClose}
                     title={collapsed ? entry.title : undefined}
                     className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                      collapsed && 'justify-center px-2',
+                      'relative flex items-center gap-[11px] rounded-[9px] px-[10px] py-2 text-[.865rem] font-medium transition-all',
+                      collapsed && 'justify-center px-0 w-full',
                       active
-                        ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-md shadow-primary/30'
-                        : 'text-slate-300/70 hover:text-white hover:bg-white/10'
+                        ? 'bg-primary/10 text-primary font-semibold'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                     )}
+                    style={active ? { boxShadow: 'inset 3px 0 0 hsl(var(--primary))' } : undefined}
                   >
-                    <Icon size={18} className="flex-shrink-0" />
-                    {!collapsed && <span>{entry.title}</span>}
+                    <Icon size={17} className="flex-shrink-0" />
+                    {!collapsed && <span className="flex-1 min-w-0">{entry.title}</span>}
                   </Link>
                 );
               }
@@ -500,7 +369,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
               const expanded = !!openGroups[entry.key];
 
               return (
-                <div key={entry.key} className="space-y-0.5">
+                <div key={entry.key} className="flex flex-col gap-0.5">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -514,22 +383,23 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                       }
                     }}
                     className={cn(
-                      'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                      collapsed && 'justify-center px-2',
+                      'w-full flex items-center gap-[11px] rounded-[9px] px-[10px] py-2 text-[.865rem] font-medium transition-all',
+                      collapsed && 'justify-center px-0',
                       groupActive || (collapsed && collapsedPopover?.key === entry.key)
-                        ? 'bg-primary/15 text-primary'
-                        : 'text-slate-300/70 hover:text-white hover:bg-white/10'
+                        ? 'bg-primary/10 text-primary font-semibold'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                     )}
+                    style={groupActive ? { boxShadow: 'inset 3px 0 0 hsl(var(--primary))' } : undefined}
                     title={collapsed ? entry.title : undefined}
                     aria-expanded={collapsed ? undefined : expanded}
                   >
-                    <GroupIcon size={18} className="flex-shrink-0" />
+                    <GroupIcon size={17} className="flex-shrink-0" />
                     {!collapsed && (
                       <>
                         <span className="flex-1 text-left">{entry.title}</span>
                         <ChevronDown
                           size={14}
-                          className={cn('transition-transform duration-200', expanded ? 'rotate-180' : 'rotate-0')}
+                          className={cn('transition-transform duration-200 flex-shrink-0', expanded ? 'rotate-180' : 'rotate-0')}
                         />
                       </>
                     )}
@@ -537,7 +407,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
 
                   {/* Subitems */}
                   {!collapsed && expanded && (
-                    <div className="ml-3 pl-3 border-l border-white/[0.08]/60 space-y-0.5">
+                    <div className="ml-3 pl-[11px] border-l border-border flex flex-col gap-0.5">
                       {visibleChildren.map((it) => {
                         const Icon = it.icon;
                         const active = isPathActive(it.href);
@@ -547,14 +417,14 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                             to={it.href}
                             onClick={onClose}
                             className={cn(
-                              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
+                              'flex items-center gap-[10px] rounded-lg px-[10px] py-[7px] text-[.83rem] transition-all',
                               active
-                                ? 'text-white bg-white/10 font-semibold'
-                                : 'text-slate-400/60 hover:text-white hover:bg-white/10'
+                                ? 'text-foreground bg-accent font-semibold'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-accent font-medium'
                             )}
                           >
                             <Icon size={16} className="flex-shrink-0" />
-                            <span>{it.title}</span>
+                            <span className="flex-1 min-w-0">{it.title}</span>
                           </Link>
                         );
                       })}
@@ -565,27 +435,62 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             })}
         </nav>
 
-        {/* ── User Info ─────────────────────────────────────────── */}
-        {user && (
-          <div className={cn(
-            'border-t border-white/[0.06] p-3 flex-shrink-0',
-            collapsed ? 'flex justify-center' : 'flex items-center gap-3'
-          )}>
-            {/* Avatar con iniciales */}
-            <div className="h-8 w-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-bold text-primary">{getInitials(user.nombre)}</span>
-            </div>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{user.nombre}</p>
-                <p className="text-xs text-slate-400/60 truncate">{user.email}</p>
+        {/* ── Trial / Suscripción ───────────────────────────────── */}
+        {!collapsed && user && (
+          <div className="border-t border-border/60 flex-shrink-0">
+            {esTrial && (
+              <div className="p-3">
+                <div className="border border-border rounded-xl p-3 bg-muted/30">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[.77rem] font-semibold text-muted-foreground">Prueba gratuita</span>
+                    <span className="font-mono text-[.72rem] font-semibold text-primary">
+                      {diasTrialRestantes !== null ? `${diasTrialRestantes} días` : '—'}
+                    </span>
+                  </div>
+                  <div className="h-[5px] rounded-full bg-border mt-[9px] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${trialProgressPct}%` }}
+                    />
+                  </div>
+                  <Link
+                    to="/dashboard/suscripciones"
+                    onClick={onClose}
+                    className="block text-center mt-[10px] text-[.78rem] font-semibold text-white bg-primary rounded-lg py-[7px] hover:brightness-110 transition-all"
+                  >
+                    Activar suscripción
+                  </Link>
+                </div>
               </div>
             )}
+
+            {/* ── User row ────────────────────────────────────────── */}
+            <div className={cn(
+              'flex items-center gap-[10px] px-[14px] py-[11px]',
+              esTrial ? 'border-t border-border/60' : ''
+            )}>
+              <span className="w-8 h-8 flex-shrink-0 rounded-full bg-primary/10 border border-primary/30 text-primary text-[.72rem] font-bold grid place-items-center">
+                {getInitials(user.nombre)}
+              </span>
+              <div className="min-w-0 flex-1 leading-[1.3]">
+                <div className="text-[.82rem] font-semibold truncate">{user.nombre}</div>
+                <div className="text-[.71rem] text-muted-foreground truncate">{user.email}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* User row colapsado */}
+        {collapsed && user && (
+          <div className="flex justify-center py-3 flex-shrink-0">
+            <span className="w-8 h-8 flex-shrink-0 rounded-full bg-primary/10 border border-primary/30 text-primary text-[.72rem] font-bold grid place-items-center">
+              {getInitials(user.nombre)}
+            </span>
           </div>
         )}
       </aside>
 
-      {/* Flyout de grupos — fuera del aside para escapar su transform/stacking context */}
+      {/* Flyout de grupos — fuera del aside para escapar su stacking context */}
       {collapsed && collapsedPopover && (() => {
         const entry = menu
           .filter((e) => e.show)
@@ -594,10 +499,10 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         const children = entry.items.filter((it) => it.show);
         return (
           <div
-            className="fixed left-16 z-[70] min-w-[200px] bg-[#0f1117] border border-white/[0.1] rounded-lg shadow-2xl py-1.5 overflow-hidden"
+            className="fixed left-[68px] z-[70] min-w-[200px] bg-card border border-border rounded-xl shadow-xl py-1.5 overflow-hidden"
             style={{ top: collapsedPopover.top }}
           >
-            <div className="px-3 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 border-b border-white/[0.06]">
+            <div className="px-3 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border">
               {entry.title}
             </div>
             {children.map((it) => {
@@ -611,8 +516,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                   className={cn(
                     'flex items-center gap-2.5 px-3 py-2 text-sm transition-all',
                     active
-                      ? 'text-white bg-white/10 font-semibold'
-                      : 'text-slate-300/70 hover:text-white hover:bg-white/10'
+                      ? 'text-foreground bg-accent font-semibold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   )}
                 >
                   <Icon size={15} className="flex-shrink-0" />
