@@ -253,6 +253,11 @@ export const API_ENDPOINTS = {
     ELIMINAR_LEIDAS: '/notificaciones/leidas',
   },
 
+  DASHBOARD: {
+    ACTIVIDAD_RECIENTE: (limit = 15, sucursalId?: number) =>
+      `/dashboard/actividad-reciente?limit=${limit}${sucursalId ? `&sucursalId=${sucursalId}` : ''}`,
+  },
+
   REPORTES: {
     RESUMEN: (desde: string, hasta: string) =>
       `/reportes/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,

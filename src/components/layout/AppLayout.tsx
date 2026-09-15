@@ -54,7 +54,7 @@ export function AppLayout() {
 
       {/* El margen cambia según si el sidebar está colapsado o no */}
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${
-        sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+        sidebarCollapsed ? 'lg:ml-[68px]' : 'lg:ml-64'
       }`}>
         <Header onMenuClick={() => setSidebarOpen(true)} />
 

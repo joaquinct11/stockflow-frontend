@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Calendar, CreditCard, Info } from 'lucide-react';
+import { AlertCircle, CreditCard, Info } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -31,36 +31,9 @@ export function SubscripcionGuard({ children }: SubscripcionGuardProps) {
     trialVencidoClientSide ||
     (estadoRaw === 'PENDIENTE' && !preapprovalId && !!trialEndDate && new Date(trialEndDate) < new Date());
 
-  // Trial activo — acceso completo + banner informativo pequeño
+  // Trial activo — acceso completo, el sidebar ya muestra la barra de progreso
   if (estado === 'TRIAL') {
-    const diasRestantes = (() => {
-      if (!trialEndDate) return null;
-      const diff = Math.ceil((new Date(trialEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-      return Math.max(0, diff);
-    })();
-
-    return (
-      <div className="space-y-4">
-        <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 shrink-0" />
-              <p className="text-sm">
-                <span className="font-semibold">Período de prueba</span>
-                {diasRestantes !== null && ` — ${diasRestantes} día${diasRestantes === 1 ? '' : 's'} restante${diasRestantes === 1 ? '' : 's'}`}
-              </p>
-            </div>
-            {puedeReintentar && (
-              <Button size="sm" variant="outline" className="shrink-0 text-blue-800 border-blue-400 hover:bg-blue-100" onClick={() => navigate(`/checkout/culqi?plan=${planId}`)}>
-                <CreditCard className="mr-1 h-3 w-3" />
-                Activar ahora
-              </Button>
-            )}
-          </div>
-        </div>
-        {children}
-      </div>
-    );
+    return <>{children}</>;
   }
 
   // Cancelación pendiente — acceso completo hasta currentPeriodEnd, banner informativo
