@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  ScanLine, X, Plus, Minus, Trash2, ShoppingCart,
+  X, Plus, Minus, Trash2, ShoppingCart,
   Banknote, CreditCard, Smartphone, CheckCircle2,
   ArrowLeft, Loader2, Wallet, Lock, Tag, User, UserPlus,
   Camera, CameraOff, Printer, Download, Edit2, ChevronDown,
@@ -456,7 +456,6 @@ export function POSPage() {
     setCart(prev => prev.map(item => cartItemKey(item) === key ? { ...item, cantidad: item.cantidad + delta } : item).filter(item => item.cantidad > 0));
   };
 
-  const quitarItem = (key: string) => { setCart(prev => prev.filter(i => cartItemKey(i) !== key)); refocus(); };
 
   const limpiarCarrito = () => { setCart([]); setQuery(''); setResultados([]); refocus(); };
 
@@ -1293,8 +1292,6 @@ export function POSPage() {
                       const fv = fvStr ? new Date(fvStr + 'T00:00:00') : null;
                       const diasRestantes = fv ? Math.ceil((fv.getTime() - hoy.getTime()) / 86400000) : null;
                       const vencido = diasRestantes !== null && diasRestantes < 0;
-                      const critico = !vencido && diasRestantes !== null && diasRestantes <= 7;
-                      const proximo = !vencido && diasRestantes !== null && diasRestantes <= 30;
                       const tieneAviso = diasRestantes !== null && diasRestantes <= 90;
                       const count = loteCountMap.get(p.id!);
                       const stock = getStockDisponible(p);
