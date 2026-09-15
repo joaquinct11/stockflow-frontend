@@ -174,10 +174,16 @@ export const movimientoService = {
     return data;
   },
 
-  actualizarProveedorLote: async (movimientoId: number, proveedorId: number | null, precioVenta?: number | null): Promise<void> => {
+  actualizarProveedorLote: async (
+    movimientoId: number,
+    proveedorId: number | null,
+    precioVenta?: number | null,
+    lote?: string | null,
+    fechaVencimiento?: string | null,
+  ): Promise<void> => {
     await axiosInstance.patch(
       `${API_ENDPOINTS.MOVIMIENTOS.LIST}/lotes/${movimientoId}/proveedor`,
-      { proveedorId, precioVenta: precioVenta ?? null }
+      { proveedorId, precioVenta: precioVenta ?? null, lote: lote ?? null, fechaVencimiento: fechaVencimiento ?? null }
     );
   },
 

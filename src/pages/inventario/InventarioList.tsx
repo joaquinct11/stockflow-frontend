@@ -116,10 +116,12 @@ export function InventarioList() {
   const [lotesVentaCache, setLotesVentaCache] = useState<Map<number, LoteVentaDetalleDTO[]>>(new Map());
   const [loadingLotesVenta, setLoadingLotesVenta] = useState<Set<number>>(new Set());
 
-  // Editar proveedor de lote
+  // Editar datos del lote
   const [loteEditando, setLoteEditando] = useState<LoteVencimientoDTO | null>(null);
   const [editProveedorId, setEditProveedorId] = useState<number | ''>('');
   const [editPrecioVenta, setEditPrecioVenta] = useState<string>('');
+  const [editLoteNumero, setEditLoteNumero] = useState<string>('');
+  const [editFechaVencimiento, setEditFechaVencimiento] = useState<string>('');
   const [savingLoteEdit, setSavingLoteEdit] = useState(false);
 
   // Baja de lote vencido (merma)
@@ -923,9 +925,13 @@ export function InventarioList() {
                                             : ''
                                         );
                                         setEditPrecioVenta(l.precioVenta != null ? String(l.precioVenta) : '');
+                                        setEditLoteNumero(l.lote ?? '');
+                                        setEditFechaVencimiento(
+                                          l.fechaVencimiento ? String(l.fechaVencimiento) : ''
+                                        );
                                       }}
                                       className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition"
-                                      title="Editar proveedor"
+                                      title="Editar datos del lote"
                                     >
                                       <Pencil className="h-3.5 w-3.5" />
                                     </button>
@@ -985,15 +991,32 @@ export function InventarioList() {
         </>
       )}
 
-      {/* Modal editar proveedor de lote */}
+      {/* Modal editar datos del lote */}
       {loteEditando && (
         <Dialog
           isOpen
           onClose={() => setLoteEditando(null)}
-          title="Editar proveedor del lote"
-          description={`${loteEditando.productoNombre} · Lote: ${loteEditando.lote || 'Sin lote'}`}
+          title="Editar datos del lote"
+          description={loteEditando.productoNombre}
         >
           <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium block mb-1">Número de lote</label>
+              <Input
+                type="text"
+                placeholder="Ej. LOT-2026-001"
+                value={editLoteNumero}
+                onChange={(e) => setEditLoteNumero(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">Fecha de vencimiento</label>
+              <Input
+                type="date"
+                value={editFechaVencimiento}
+                onChange={(e) => setEditFechaVencimiento(e.target.value)}
+              />
+            </div>
             <div>
               <label className="text-sm font-medium block mb-1">Proveedor</label>
               <select
@@ -1030,10 +1053,11 @@ export function InventarioList() {
                   try {
                     const pid = editProveedorId !== '' ? Number(editProveedorId) : null;
                     const precio = editPrecioVenta !== '' ? Number(editPrecioVenta) : null;
-                    await movimientoService.actualizarProveedorLote(loteEditando.movimientoId, pid, precio);
+                    const loteNum = editLoteNumero.trim() || null;
+                    const fechaVenc = editFechaVencimiento || null;
+                    await movimientoService.actualizarProveedorLote(loteEditando.movimientoId, pid, precio, loteNum, fechaVenc);
                     toast.success('Lote actualizado');
                     setLoteEditando(null);
-                    // Refresca la lista de lotes
                     const data = await movimientoService.getLotes();
                     setLotes(data);
                   } catch {
