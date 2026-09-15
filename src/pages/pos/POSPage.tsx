@@ -456,6 +456,8 @@ export function POSPage() {
     setCart(prev => prev.map(item => cartItemKey(item) === key ? { ...item, cantidad: item.cantidad + delta } : item).filter(item => item.cantidad > 0));
   };
 
+  const quitarItem = (key: string) => { setCart(prev => prev.filter(i => cartItemKey(i) !== key)); refocus(); };
+
 
   const limpiarCarrito = () => { setCart([]); setQuery(''); setResultados([]); refocus(); };
 
@@ -759,20 +761,26 @@ export function POSPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <div className="flex items-center gap-0.5 bg-muted/60 rounded-[9px] p-0.5">
-                      <button onClick={() => cambiarCantidad(cartItemKey(item), -1)}
-                        className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card rounded-[7px] transition-colors cursor-pointer border-0 bg-transparent">
-                        <Minus size={13} />
-                      </button>
-                      <span className="w-6 text-center text-[.85rem] font-bold font-mono">{item.cantidad}</span>
-                      <button onClick={() => cambiarCantidad(cartItemKey(item), 1)}
-                        disabled={item.cantidad >= getStockDisponible(item.producto)}
-                        className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card rounded-[7px] transition-colors disabled:opacity-30 cursor-pointer border-0 bg-transparent">
-                        <Plus size={13} />
-                      </button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <div className="flex flex-col items-end gap-1.5">
+                      <div className="flex items-center gap-0.5 bg-muted/60 rounded-[9px] p-0.5">
+                        <button onClick={() => cambiarCantidad(cartItemKey(item), -1)}
+                          className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card rounded-[7px] transition-colors cursor-pointer border-0 bg-transparent">
+                          <Minus size={13} />
+                        </button>
+                        <span className="w-6 text-center text-[.85rem] font-bold font-mono">{item.cantidad}</span>
+                        <button onClick={() => cambiarCantidad(cartItemKey(item), 1)}
+                          disabled={item.cantidad >= getStockDisponible(item.producto)}
+                          className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card rounded-[7px] transition-colors disabled:opacity-30 cursor-pointer border-0 bg-transparent">
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                      <span className="text-[.9rem] font-bold font-mono">{fmt(item.cantidad * item.precioUnitario)}</span>
                     </div>
-                    <span className="text-[.9rem] font-bold font-mono">{fmt(item.cantidad * item.precioUnitario)}</span>
+                    <button onClick={() => quitarItem(cartItemKey(item))}
+                      className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-[7px] transition-colors cursor-pointer border-0 bg-transparent flex-shrink-0 self-center">
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
               ))
