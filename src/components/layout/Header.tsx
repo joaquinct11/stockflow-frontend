@@ -14,7 +14,7 @@ interface HeaderProps {
 }
 
 const ROL_LABEL: Record<string, string> = {
-  ADMIN:             'Administrador',
+  ADMIN:             'Admin',
   VENDEDOR:          'Vendedor',
   GESTOR_INVENTARIO: 'Almacén',
 };
@@ -378,7 +378,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="relative" ref={sucursalRef}>
             <button
               onClick={() => setIsSucursalOpen(!isSucursalOpen)}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors text-primary"
+              className="flex items-center gap-1.5 rounded-[9px] px-2.5 h-9 text-sm font-semibold border border-border bg-transparent hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
               title="Cambiar sucursal"
             >
               <Building2 size={14} className="shrink-0" />
@@ -438,21 +438,21 @@ export function Header({ onMenuClick }: HeaderProps) {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted transition-colors"
           >
+            {/* Avatar con iniciales */}
+            <div className="h-[30px] w-[30px] rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+              <span className="text-[0.74rem] font-bold text-primary">{getInitials(user?.nombre)}</span>
+            </div>
+
             {/* Nombre + Rol — desktop */}
-            <div className="text-right hidden md:block">
-              <p className="text-sm font-semibold leading-tight">{user?.nombre || 'Usuario'}</p>
-              <p className="text-[10px] text-muted-foreground uppercase font-medium tracking-wide">
+            <div className="text-left hidden md:block">
+              <p className="text-[0.81rem] font-semibold leading-[1.25] text-foreground">{user?.nombre || 'Usuario'}</p>
+              <p className="text-[0.7rem] text-muted-foreground">
                 {ROL_LABEL[user?.rol ?? ''] ?? user?.rol ?? 'Admin'}
               </p>
             </div>
 
-            {/* Avatar con iniciales */}
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0 shadow-sm">
-              <span className="text-xs font-bold text-white">{getInitials(user?.nombre)}</span>
-            </div>
-
             <ChevronDown
-              size={14}
+              size={13}
               className={`text-muted-foreground transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`}
             />
           </button>

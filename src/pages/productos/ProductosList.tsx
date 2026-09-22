@@ -6,6 +6,7 @@ import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { categoriaService } from '../../services/categoria.service';
 import { movimientoService } from '../../services/movimiento.service';
 import { productoVarianteService } from '../../services/productoVariante.service';
+import { productoPresentacionService } from '../../services/productoPresentacion.service';
 import type { ProductoDTO, UnidadMedidaDTO, CategoriaDTO, ProductoVarianteDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -31,7 +32,6 @@ import {
   FileDown,
   ChevronDown,
   Scale,
-  Boxes,
   Timer,
   X,
   Loader2,
@@ -178,6 +178,16 @@ export function ProductosList() {
   const updateVarianteBorrador = (idx: number, field: string, value: string | number) =>
     setVariantesBorrador(p => p.map((v, i) => i === idx ? { ...v, [field]: value } : v));
 
+  // Presentaciones adicionales (multi-unidad, solo farmacia)
+  interface PresentacionBorrador { id?: number; unidadMedidaId: number; precioVenta: number; factor: number; esPrincipal: boolean; }
+  const [presentacionesBorrador, setPresentacionesBorrador] = useState<PresentacionBorrador[]>([]);
+  const addPresentacionBorrador = () =>
+    setPresentacionesBorrador(p => [...p, { unidadMedidaId: unidadesMedida[0]?.id ?? 0, precioVenta: 0, factor: 1, esPrincipal: false }]);
+  const removePresentacionBorrador = (idx: number) =>
+    setPresentacionesBorrador(p => p.filter((_, i) => i !== idx));
+  const updatePresentacionBorrador = (idx: number, field: string, value: string | number | boolean) =>
+    setPresentacionesBorrador(p => p.map((v, i) => i === idx ? { ...v, [field]: value } : v));
+
   const [formData, setFormData] = useState<ProductoDTO>({
     nombre: '',
     codigoBarras: '',
@@ -297,6 +307,19 @@ export function ProductosList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validar presentaciones: detectar configuración invertida (factor > stock disponible)
+    if (esFarmacia && presentacionesBorrador.length > 0) {
+      const stockBase = formData.stockActual ?? 0;
+      const invertidas = presentacionesBorrador.filter(p =>
+        stockBase > 0 && p.factor > 1 && Math.floor(stockBase / p.factor) === 0
+      );
+      if (invertidas.length > 0) {
+        const nombres = invertidas.map(p => unidadesMedida.find(u => u.id === p.unidadMedidaId)?.nombre ?? 'desconocida').join(', ');
+        toast.error(`Presentación(es) con configuración incorrecta: ${nombres}. El stock quedaría en 0. Revisa que la unidad base del producto sea la más pequeña.`);
+        return;
+      }
+    }
+
     if (import.meta.env.DEV) { console.log('🖼️ imagenUrl al guardar:', formData.imagenUrl ? `SÍ (${formData.imagenUrl.length} chars)` : 'NO / undefined'); }
 
     try {
@@ -312,6 +335,15 @@ export function ProductosList() {
           ));
         }
 
+        // Guardar presentaciones farmacia en EDIT
+        if (esFarmacia && presentacionesBorrador.length > 0) {
+          await Promise.all(presentacionesBorrador.map(p =>
+            p.id
+              ? productoPresentacionService.actualizar(p.id, { ...p, productoId: editingId })
+              : productoPresentacionService.crear(editingId, { ...p, productoId: editingId })
+          ));
+        }
+
         toast.success('Producto actualizado');
       } else {
         const nuevoProducto = await productoService.create(formData, sucursalId);
@@ -320,6 +352,13 @@ export function ProductosList() {
         if (esRopa && variantesBorrador.length > 0 && nuevoProducto.id) {
           await Promise.all(variantesBorrador.map(v =>
             productoVarianteService.create({ ...v, productoId: nuevoProducto.id!, activo: true })
+          ));
+        }
+
+        // Guardar presentaciones farmacia en CREATE
+        if (esFarmacia && presentacionesBorrador.length > 0 && nuevoProducto.id) {
+          await Promise.all(presentacionesBorrador.map(p =>
+            productoPresentacionService.crear(nuevoProducto.id!, { ...p, productoId: nuevoProducto.id! })
           ));
         }
 
@@ -423,6 +462,19 @@ export function ProductosList() {
       setVariantesBorrador([]);
     }
 
+    // Cargar presentaciones existentes como borrador (solo farmacia)
+    if (esFarmacia && producto.id) {
+      try {
+        const presentaciones = await productoPresentacionService.listar(producto.id);
+        setPresentacionesBorrador(presentaciones.map(p => ({
+          id: p.id, unidadMedidaId: p.unidadMedidaId, precioVenta: Number(p.precioVenta),
+          factor: p.factor ?? 1, esPrincipal: p.esPrincipal ?? false,
+        })));
+      } catch { setPresentacionesBorrador([]); }
+    } else {
+      setPresentacionesBorrador([]);
+    }
+
     setIsDialogOpen(true);
   };
 
@@ -452,6 +504,7 @@ export function ProductosList() {
     setNombreSugerencias([]);
     setMostrarSugerencias(false);
     setVariantesBorrador([]);
+    setPresentacionesBorrador([]);
     if (imgInputRef.current) imgInputRef.current.value = '';
   };
 
@@ -1174,56 +1227,41 @@ export function ProductosList() {
                 </div>
               </div>
 
-              {/* Unidad + Unidades por caja (farmacia) */}
+              {/* Unidad de medida */}
               {!esServicios && (
-                <div className={`grid gap-3 ${esFarmacia ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Unidad de medida <span className="text-red-500">*</span></label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Scale className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <select value={formData.unidadMedidaId || ''}
-                          onChange={(e) => setFormData({ ...formData, unidadMedidaId: Number(e.target.value) })}
-                          className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          required disabled={loadingUnidades}>
-                          <option value="" disabled>{loadingUnidades ? 'Cargando...' : 'Seleccione unidad'}</option>
-                          {unidadesMedida.map((u) => <option key={u.id} value={u.id}>{u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}</option>)}
-                        </select>
-                      </div>
-                      <button type="button" onClick={() => setNuevaUnidadOpen(true)} title="Nueva unidad"
-                        className="h-10 w-10 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors flex-shrink-0">
-                        <Plus size={15} />
-                      </button>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Unidad de medida <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Scale className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <select value={formData.unidadMedidaId || ''}
+                        onChange={(e) => setFormData({ ...formData, unidadMedidaId: Number(e.target.value) })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        required disabled={loadingUnidades}>
+                        <option value="" disabled>{loadingUnidades ? 'Cargando...' : 'Seleccione unidad'}</option>
+                        {unidadesMedida.map((u) => <option key={u.id} value={u.id}>{u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}</option>)}
+                      </select>
                     </div>
-                    {nuevaUnidadOpen && (
-                      <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-primary">Nueva unidad de medida</p>
-                          <button type="button" onClick={() => { setNuevaUnidadOpen(false); setNuevaUnidadNombre(''); }} className="text-muted-foreground hover:text-foreground"><X size={14} /></button>
-                        </div>
-                        <div className="flex gap-2">
-                          <input type="text" autoFocus value={nuevaUnidadNombre} onChange={e => setNuevaUnidadNombre(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCrearUnidad())}
-                            placeholder="Ej: Caja, Docena, Litro..."
-                            className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-                          <button type="button" onClick={handleCrearUnidad} disabled={!nuevaUnidadNombre.trim() || savingUnidad}
-                            className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors flex items-center gap-1">
-                            {savingUnidad ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Crear
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    <button type="button" onClick={() => setNuevaUnidadOpen(true)} title="Nueva unidad"
+                      className="h-10 w-10 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors flex-shrink-0">
+                      <Plus size={15} />
+                    </button>
                   </div>
-                  {esFarmacia && (
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Unidades por caja</label>
-                      <div className="relative">
-                        <Boxes className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input type="number" min="1"
-                          value={formData.unidadesPorCaja === undefined || formData.unidadesPorCaja === 0 ? '' : formData.unidadesPorCaja}
-                          onChange={(e) => setFormData(p => ({ ...p, unidadesPorCaja: e.target.value ? parseInt(e.target.value) : undefined }))}
-                          placeholder="Ej: 100 tabletas/caja"
-                          className="pl-10 h-10" />
+                  {nuevaUnidadOpen && (
+                    <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-primary">Nueva unidad de medida</p>
+                        <button type="button" onClick={() => { setNuevaUnidadOpen(false); setNuevaUnidadNombre(''); }} className="text-muted-foreground hover:text-foreground"><X size={14} /></button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input type="text" autoFocus value={nuevaUnidadNombre} onChange={e => setNuevaUnidadNombre(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCrearUnidad())}
+                          placeholder="Ej: Caja, Docena, Litro..."
+                          className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                        <button type="button" onClick={handleCrearUnidad} disabled={!nuevaUnidadNombre.trim() || savingUnidad}
+                          className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors flex items-center gap-1">
+                          {savingUnidad ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Crear
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1333,6 +1371,101 @@ export function ProductosList() {
                   />
                   <p className="text-xs text-muted-foreground">Permite encontrar este producto al buscar por ingrediente en el POS.</p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Sección: Presentaciones adicionales — solo farmacia ── */}
+          {esFarmacia && !esServicios && (
+            <div className="rounded-xl border border-blue-200 dark:border-blue-800 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20">
+                <div className="flex items-center gap-2">
+                  <Layers size={14} className="text-blue-600 dark:text-blue-400" />
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Presentaciones adicionales</p>
+                  {presentacionesBorrador.length > 0 && (
+                    <span className="text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                      {presentacionesBorrador.length}
+                    </span>
+                  )}
+                </div>
+                <button type="button" onClick={addPresentacionBorrador}
+                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 transition-colors">
+                  <Plus size={12} /> Agregar
+                </button>
+              </div>
+              <div className="p-4">
+                {/* Nota explicativa siempre visible */}
+                <div className="mb-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2.5 text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                  <p className="font-semibold">¿Cómo funciona?</p>
+                  <p>La <strong>unidad de medida del producto</strong> debe ser la <strong>más pequeña</strong> que vendes (ej: Tableta, Unidad, Ampolla). Luego agrega las presentaciones mayores.</p>
+                  <p className="text-blue-600 dark:text-blue-400">Ejemplo correcto: base=<strong>Tableta</strong> → agregar Blíster (factor=10) y Caja (factor=100).</p>
+                  <p className="text-amber-700 dark:text-amber-400 font-medium">⚠ Si tu producto tiene base=Caja y quieres vender por Tableta, primero cambia la unidad base y el stock antes de agregar presentaciones.</p>
+                </div>
+
+                {presentacionesBorrador.length === 0 ? (
+                  <div className="text-center py-4 text-xs text-muted-foreground border border-dashed border-blue-300 dark:border-blue-700 rounded-lg">
+                    <p className="font-medium mb-1">Sin presentaciones adicionales</p>
+                    <p>Agrega presentaciones si el producto se vende en más de una unidad (CAJA, BLÍSTER, TABLETA…)</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-[1.5fr_1fr_0.8fr_28px] gap-2 px-1 mb-1">
+                      {['Unidad', 'Precio', 'Factor', ''].map(h => (
+                        <span key={h} className="text-xs font-medium text-muted-foreground">{h}</span>
+                      ))}
+                    </div>
+                    {presentacionesBorrador.map((p, idx) => {
+                      const stockBase = formData.stockActual ?? 0;
+                      const stockEnPresentacion = p.factor > 0 ? Math.floor(stockBase / p.factor) : 0;
+                      const configInvertida = stockBase > 0 && p.factor > 1 && stockEnPresentacion === 0;
+                      const precioMayorQueBase = p.precioVenta > 0 && formData.precioVenta && p.precioVenta < Number(formData.precioVenta);
+                      const advertencia = configInvertida || precioMayorQueBase;
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <div className="grid grid-cols-[1.5fr_1fr_0.8fr_28px] gap-2 items-center">
+                            <select value={p.unidadMedidaId}
+                              onChange={e => updatePresentacionBorrador(idx, 'unidadMedidaId', parseInt(e.target.value))}
+                              className={`rounded-md border bg-background px-2 py-1.5 text-sm h-9 ${advertencia ? 'border-amber-400' : 'border-input'}`}>
+                              {unidadesMedida.map(u => <option key={u.id} value={u.id}>{u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}</option>)}
+                            </select>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-2 text-xs text-muted-foreground">S/</span>
+                              <Input type="number" step="0.01" min="0.01"
+                                value={p.precioVenta === 0 ? '' : p.precioVenta}
+                                onChange={e => updatePresentacionBorrador(idx, 'precioVenta', parseFloat(e.target.value || '0'))}
+                                placeholder="0.00" className={`pl-7 h-9 text-sm ${advertencia ? 'border-amber-400' : ''}`} />
+                            </div>
+                            <Input type="number" min="1"
+                              value={p.factor}
+                              onChange={e => updatePresentacionBorrador(idx, 'factor', parseInt(e.target.value || '1'))}
+                              title="Cuántas unidades base equivale esta presentación"
+                              className={`h-9 text-sm ${advertencia ? 'border-amber-400' : ''}`} />
+                            <button type="button" onClick={() => removePresentacionBorrador(idx)}
+                              className="text-muted-foreground hover:text-destructive transition-colors p-1">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          {advertencia && (
+                            <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+                              {configInvertida
+                                ? <>⚠ Con factor={p.factor} y stock={stockBase}, esta presentación tendría <strong>0 unidades disponibles</strong> en el POS. La unidad base del producto ({unidadesMedida.find(u => u.id === formData.unidadMedidaId)?.nombre ?? '?'}) parece ser mayor que esta presentación. Verifica que la unidad base sea la más pequeña.</>
+                                : <>⚠ Esta presentación tiene precio menor que la unidad base. Las presentaciones aquí deben ser <strong>mayores</strong> (más caras) que la unidad base.</>
+                              }
+                            </div>
+                          )}
+                          {!advertencia && p.factor > 1 && stockBase > 0 && (
+                            <p className="text-xs text-muted-foreground pl-1">
+                              Stock disponible en esta presentación: <strong>{stockEnPresentacion}</strong> {unidadesMedida.find(u => u.id === p.unidadMedidaId)?.nombre ?? ''}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <p className="text-xs text-muted-foreground pt-1">
+                      <strong>Factor:</strong> cuántas unidades base contiene esta presentación. Ej: base=Tableta → BLÍSTER factor=10, CAJA factor=100.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
