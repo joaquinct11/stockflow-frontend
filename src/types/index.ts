@@ -182,6 +182,27 @@ export interface DetalleVentaDTO {
   varianteId?: number;
   varianteDescripcion?: string;
   stockLoteId?: number;
+  /** ID de la presentación elegida en el POS (null = unidad principal). */
+  presentacionId?: number;
+  /** Multiplicador de unidades base. Ej: CAJA=20 → descuenta 20 tabletas. Default 1. */
+  factor?: number;
+}
+
+// ========================================
+// PRODUCTO PRESENTACIONES (multi-unidad farmacia)
+// ========================================
+
+export interface ProductoPresentacionDTO {
+  id?: number;
+  productoId: number;
+  unidadMedidaId: number;
+  unidadMedidaNombre?: string;
+  unidadMedidaAbreviatura?: string;
+  precioVenta: number;
+  /** Cuántas unidades base = 1 de esta presentación. Ej: CAJA=20, BLISTER=10, TABLETA=1 */
+  factor: number;
+  esPrincipal?: boolean;
+  tenantId?: string;
 }
 
 // ========================================
