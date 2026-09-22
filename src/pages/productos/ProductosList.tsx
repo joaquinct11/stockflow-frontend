@@ -7,7 +7,7 @@ import { categoriaService } from '../../services/categoria.service';
 import { movimientoService } from '../../services/movimiento.service';
 import { productoVarianteService } from '../../services/productoVariante.service';
 import { productoPresentacionService } from '../../services/productoPresentacion.service';
-import type { ProductoDTO, UnidadMedidaDTO, CategoriaDTO, ProductoVarianteDTO, ProductoPresentacionDTO } from '../../types';
+import type { ProductoDTO, UnidadMedidaDTO, CategoriaDTO, ProductoVarianteDTO } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';

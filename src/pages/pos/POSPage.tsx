@@ -105,7 +105,7 @@ export function POSPage() {
   const [presentacionPickerOpen, setPresentacionPickerOpen] = useState(false);
   const [presentacionPickerProducto, setPresentacionPickerProducto] = useState<ProductoDTO | null>(null);
   const [presentacionesDisponibles, setPresentacionesDisponibles] = useState<ProductoPresentacionDTO[]>([]);
-  const [loadingPresentaciones, setLoadingPresentaciones] = useState(false);
+  const [, setLoadingPresentaciones] = useState(false);
 
   // ── Selector de lotes (farmacia) ───────────────────────────────────────────
   const [lotePickerOpen, setLotePickerOpen] = useState(false);
