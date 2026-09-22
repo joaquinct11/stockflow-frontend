@@ -17,10 +17,11 @@ import type { ClienteDTO } from '../../services/cliente.service';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useSucursalStore } from '../../store/sucursalStore';
-import type { ProductoDTO, DetalleVentaDTO, CajaDTO, ValidarNotaCreditoResponseDTO, VentaDTO, ProductoVarianteDTO } from '../../types';
+import type { ProductoDTO, DetalleVentaDTO, CajaDTO, ValidarNotaCreditoResponseDTO, VentaDTO, ProductoVarianteDTO, ProductoPresentacionDTO } from '../../types';
 import { printVentaTicket } from '../../utils/printTicket';
 import { refreshOnboarding } from '../../utils/onboardingEvents';
 import { productoVarianteService } from '../../services/productoVariante.service';
+import { productoPresentacionService } from '../../services/productoPresentacion.service';
 import { axiosInstance } from '../../api/axios.config';
 import { movimientoService } from '../../services/movimiento.service';
 import type { LoteVencimientoDTO, StockLoteDisponibleDTO } from '../../services/movimiento.service';
@@ -35,6 +36,9 @@ interface CartItem {
   varianteDescripcion?: string;
   stockLoteId?: number;
   stockLoteLabel?: string;
+  presentacionId?: number;
+  /** Cuántas unidades base descuenta del stock. 1 = unidad principal. */
+  factor?: number;
 }
 
 const cartItemKey = (item: { producto: ProductoDTO; varianteId?: number; stockLoteId?: number }) =>
@@ -97,11 +101,19 @@ export function POSPage() {
   const [loadingVariantes, setLoadingVariantes] = useState(false);
   const [variantePrecioOverrides, setVariantePrecioOverrides] = useState<Record<number, string>>({});
 
+  // ── Selector de presentaciones (farmacia multi-unidad) ───────────────────
+  const [presentacionPickerOpen, setPresentacionPickerOpen] = useState(false);
+  const [presentacionPickerProducto, setPresentacionPickerProducto] = useState<ProductoDTO | null>(null);
+  const [presentacionesDisponibles, setPresentacionesDisponibles] = useState<ProductoPresentacionDTO[]>([]);
+  const [loadingPresentaciones, setLoadingPresentaciones] = useState(false);
+
   // ── Selector de lotes (farmacia) ───────────────────────────────────────────
   const [lotePickerOpen, setLotePickerOpen] = useState(false);
   const [lotePickerProducto, setLotePickerProducto] = useState<ProductoDTO | null>(null);
   const [lotesDisponibles, setLotesDisponibles] = useState<StockLoteDisponibleDTO[]>([]);
   const [loadingLotes, setLoadingLotes] = useState(false);
+  // Presentación seleccionada pendiente de asignar lote
+  const [pendingPresentacion, setPendingPresentacion] = useState<{ id?: number; factor: number; precio: number; label: string } | null>(null);
 
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
@@ -399,6 +411,21 @@ export function POSPage() {
   useEffect(() => () => stopCamera(), [stopCamera]);
 
   // ── Carrito ───────────────────────────────────────────────────────────────
+  const abrirLotePickerParaProducto = async (producto: ProductoDTO) => {
+    if (producto.stockVigente == null) return;
+    try {
+      setLoadingLotes(true);
+      const lotes = await movimientoService.getLotesDisponibles(producto.id!, sucursalId);
+      if (lotes.length > 0) {
+        setLotePickerProducto(producto); setLotesDisponibles(lotes); setLotePickerOpen(true); return;
+      }
+    } catch { /* sin lotes */ } finally { setLoadingLotes(false); }
+    if (getStockDisponible(producto) <= 0) { toast.error(`Sin stock disponible: ${producto.nombre}`); return; }
+    const pending = pendingPresentacion;
+    setPendingPresentacion(null);
+    agregarItemAlCarrito(producto, undefined, pending?.label, true, pending?.precio ?? producto.precioVenta, undefined, undefined, pending?.id, pending?.factor ?? 1);
+  };
+
   const agregarAlCarrito = async (producto: ProductoDTO, switchToCart = false) => {
     if (esRopa) {
       try {
@@ -413,14 +440,22 @@ export function POSPage() {
         }
       } catch { /* sin variantes */ } finally { setLoadingVariantes(false); }
     }
-    if (esFarmacia && producto.stockVigente != null) {
+    if (esFarmacia) {
       try {
-        setLoadingLotes(true);
-        const lotes = await movimientoService.getLotesDisponibles(producto.id!, sucursalId);
-        if (lotes.length > 0) {
-          setLotePickerProducto(producto); setLotesDisponibles(lotes); setLotePickerOpen(true); setLoadingLotes(false); return;
+        setLoadingPresentaciones(true);
+        const presentaciones = await productoPresentacionService.listar(producto.id!);
+        if (presentaciones.length > 0) {
+          setPresentacionPickerProducto(producto);
+          setPresentacionesDisponibles(presentaciones);
+          setPresentacionPickerOpen(true);
+          setLoadingPresentaciones(false);
+          return;
         }
-      } catch { /* sin lotes */ } finally { setLoadingLotes(false); }
+      } catch { /* sin presentaciones */ } finally { setLoadingPresentaciones(false); }
+    }
+    if (esFarmacia && producto.stockVigente != null) {
+      await abrirLotePickerParaProducto(producto);
+      return;
     }
     if (getStockDisponible(producto) <= 0) { toast.error(`Sin stock disponible: ${producto.nombre}`); return; }
     agregarItemAlCarrito(producto, undefined, undefined, switchToCart);
@@ -429,6 +464,7 @@ export function POSPage() {
   const agregarItemAlCarrito = (
     producto: ProductoDTO, varianteId?: number, varianteDescripcion?: string,
     switchToCart = false, precioOverride?: number, stockLoteId?: number, stockLoteLabel?: string,
+    presentacionId?: number, factor?: number,
   ) => {
     setCart(prev => {
       const key = cartItemKey({ producto, varianteId, stockLoteId });
@@ -436,17 +472,18 @@ export function POSPage() {
       if (idx >= 0) {
         const newCart = [...prev];
         const item = newCart[idx];
+        const itemFactor = item.factor ?? 1;
         const stockMax = varianteId
           ? (variantesDisponibles.find(v => v.id === varianteId)?.stockActual ?? getStockDisponible(producto))
           : stockLoteId
             ? (lotesDisponibles.find(l => l.id === stockLoteId)?.stockActual ?? getStockDisponible(producto))
-            : getStockDisponible(producto);
+            : Math.floor(getStockDisponible(producto) / itemFactor);
         if (item.cantidad >= stockMax) { toast.error(`Stock máximo disponible: ${stockMax}`); return prev; }
         newCart[idx] = { ...item, cantidad: item.cantidad + 1 };
         return newCart;
       }
       const precio = (precioOverride != null && precioOverride > 0) ? precioOverride : (producto.precioVenta ?? 0);
-      return [...prev, { producto, cantidad: 1, precioUnitario: precio, varianteId, varianteDescripcion, stockLoteId, stockLoteLabel }];
+      return [...prev, { producto, cantidad: 1, precioUnitario: precio, varianteId, varianteDescripcion, stockLoteId, stockLoteLabel, presentacionId, factor: factor ?? 1 }];
     });
     if (switchToCart) setMobileCartOpen(true);
     refocus();
@@ -589,6 +626,7 @@ export function POSPage() {
         productoId: item.producto.id!, cantidad: item.cantidad, precioUnitario: item.precioUnitario,
         subtotal: item.cantidad * item.precioUnitario, varianteId: item.varianteId,
         varianteDescripcion: item.varianteDescripcion, stockLoteId: item.stockLoteId,
+        presentacionId: item.presentacionId, factor: item.factor ?? 1,
       }));
       const venta = await ventaService.create({
         vendedorId: user!.usuarioId, total: subtotalCarrito, metodoPago, estado: 'COMPLETADA',
@@ -598,7 +636,9 @@ export function POSPage() {
       setUltimaVentaId(venta.id ?? null); refreshOnboarding();
       setUltimaVenta({ ...venta, vendedorNombre: user?.nombre ?? undefined, detalles: cart.map(item => ({ productoId: item.producto.id!, productoNombre: item.producto.nombre, cantidad: item.cantidad, precioUnitario: item.precioUnitario, varianteId: item.varianteId, varianteDescripcion: item.varianteDescripcion, stockLoteId: item.stockLoteId })) });
       setTodosProductos(prev => prev.map(p => {
-        const vendido = cart.filter(i => i.producto.id === p.id).reduce((s, i) => s + i.cantidad, 0);
+        // Descontar en unidades base (cantidad × factor de presentación)
+        const vendido = cart.filter(i => i.producto.id === p.id)
+          .reduce((s, i) => s + i.cantidad * (i.factor ?? 1), 0);
         if (!vendido) return p;
         return { ...p, stockActual: Math.max(0, (p.stockActual ?? 0) - vendido), stockVigente: p.stockVigente != null ? Math.max(0, p.stockVigente - vendido) : undefined };
       }));
@@ -770,7 +810,7 @@ export function POSPage() {
                         </button>
                         <span className="w-6 text-center text-[.85rem] font-bold font-mono">{item.cantidad}</span>
                         <button onClick={() => cambiarCantidad(cartItemKey(item), 1)}
-                          disabled={item.cantidad >= getStockDisponible(item.producto)}
+                          disabled={item.cantidad >= Math.floor(getStockDisponible(item.producto) / (item.factor ?? 1))}
                           className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card rounded-[7px] transition-colors disabled:opacity-30 cursor-pointer border-0 bg-transparent">
                           <Plus size={13} />
                         </button>
@@ -1559,6 +1599,70 @@ export function POSPage() {
         </div>
       )}
 
+      {/* ── Selector de presentaciones (farmacia multi-unidad) ─────────── */}
+      {presentacionPickerOpen && presentacionPickerProducto && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setPresentacionPickerOpen(false)}>
+          <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-primary font-semibold uppercase tracking-widest mb-1">Seleccionar presentación</p>
+                <h3 className="font-bold text-base leading-snug">{presentacionPickerProducto.nombre}</h3>
+              </div>
+              <button onClick={() => setPresentacionPickerOpen(false)} className="text-muted-foreground hover:text-foreground p-1"><X size={18} /></button>
+            </div>
+            <div className="space-y-2">
+              {/* Unidad principal del producto */}
+              <button
+                onClick={async () => {
+                  const stockDisp = getStockDisponible(presentacionPickerProducto);
+                  if (stockDisp <= 0) { toast.error('Sin stock disponible'); return; }
+                  const label = presentacionPickerProducto.unidadMedidaNombre || 'Unidad';
+                  setPresentacionPickerOpen(false);
+                  setPendingPresentacion({ id: undefined, factor: 1, precio: Number(presentacionPickerProducto.precioVenta), label });
+                  await abrirLotePickerParaProducto(presentacionPickerProducto);
+                }}
+                className="w-full flex items-center justify-between rounded-xl border border-border bg-muted/30 hover:bg-muted px-4 py-3 text-left transition-colors">
+                <div>
+                  <p className="font-semibold text-sm">{presentacionPickerProducto.unidadMedidaNombre || 'Unidad principal'}</p>
+                  <p className="text-xs text-muted-foreground">Unidad base · stock: {getStockDisponible(presentacionPickerProducto)}</p>
+                </div>
+                <p className="font-bold text-sm text-primary">S/ {Number(presentacionPickerProducto.precioVenta).toFixed(2)}</p>
+              </button>
+              {/* Presentaciones adicionales */}
+              {presentacionesDisponibles.map(pres => {
+                const factor = pres.factor ?? 1;
+                const stockDisp = Math.floor(getStockDisponible(presentacionPickerProducto) / factor);
+                return (
+                  <button key={pres.id}
+                    disabled={stockDisp <= 0}
+                    onClick={async () => {
+                      if (stockDisp <= 0) { toast.error('Sin stock disponible'); return; }
+                      const label = pres.unidadMedidaNombre || pres.unidadMedidaAbreviatura || 'Presentación';
+                      setPresentacionPickerOpen(false);
+                      setPendingPresentacion({ id: pres.id, factor, precio: Number(pres.precioVenta), label });
+                      await abrirLotePickerParaProducto(presentacionPickerProducto);
+                    }}
+                    className="w-full flex items-center justify-between rounded-xl border border-border bg-muted/30 hover:bg-muted px-4 py-3 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    <div>
+                      <p className="font-semibold text-sm">{pres.unidadMedidaNombre || pres.unidadMedidaAbreviatura}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {factor > 1 ? `× ${factor} uds base · ` : ''}stock: {stockDisp}
+                      </p>
+                    </div>
+                    <p className="font-bold text-sm text-primary">S/ {Number(pres.precioVenta).toFixed(2)}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={() => setPresentacionPickerOpen(false)}
+              className="w-full py-2.5 rounded-xl border border-border text-muted-foreground hover:text-foreground text-sm transition-colors cursor-pointer bg-transparent">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Selector de lotes (farmacia) ──────────────────────────────── */}
       {lotePickerOpen && lotePickerProducto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
@@ -1579,7 +1683,13 @@ export function POSPage() {
                   const precio = lote.precioVenta ?? lotePickerProducto.precioVenta ?? 0;
                   return (
                     <button key={lote.id}
-                      onClick={() => { agregarItemAlCarrito(lotePickerProducto, undefined, undefined, false, lote.precioVenta ?? undefined, lote.id, label); setLotePickerOpen(false); }}
+                      onClick={() => {
+                        const pp = pendingPresentacion;
+                        setPendingPresentacion(null);
+                        agregarItemAlCarrito(lotePickerProducto, undefined, pp?.label, false,
+                          pp?.precio ?? lote.precioVenta ?? undefined, lote.id, label, pp?.id, pp?.factor ?? 1);
+                        setLotePickerOpen(false);
+                      }}
                       className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors cursor-pointer bg-transparent">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate">{label}</p>
@@ -1597,11 +1707,17 @@ export function POSPage() {
                 })}
               </div>
             )}
-            <button onClick={() => { if (getStockDisponible(lotePickerProducto) <= 0) toast.error(`Sin stock disponible: ${lotePickerProducto.nombre}`); else agregarItemAlCarrito(lotePickerProducto); setLotePickerOpen(false); }}
+            <button onClick={() => {
+              if (getStockDisponible(lotePickerProducto) <= 0) { toast.error(`Sin stock disponible: ${lotePickerProducto.nombre}`); return; }
+              const pp = pendingPresentacion;
+              setPendingPresentacion(null);
+              agregarItemAlCarrito(lotePickerProducto, undefined, pp?.label, false, pp?.precio ?? undefined, undefined, undefined, pp?.id, pp?.factor ?? 1);
+              setLotePickerOpen(false);
+            }}
               className="w-full py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground text-sm transition-colors cursor-pointer bg-transparent">
               Agregar sin seleccionar lote (FEFO automático)
             </button>
-            <button onClick={() => setLotePickerOpen(false)}
+            <button onClick={() => { setPendingPresentacion(null); setLotePickerOpen(false); }}
               className="w-full py-2 rounded-xl text-muted-foreground hover:text-foreground text-sm transition-colors cursor-pointer bg-transparent border-0">
               Cancelar
             </button>

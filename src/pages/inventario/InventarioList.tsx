@@ -7,7 +7,8 @@ import { productoService } from '../../services/producto.service';
 import { unidadMedidaService } from '../../services/unidadMedida.service';
 import { proveedorService } from '../../services/proveedor.service';
 import { productoVarianteService } from '../../services/productoVariante.service';
-import type { MovimientoInventarioDTO, ProductoDTO, ProductoVarianteDTO, ProveedorDTO, UnidadMedidaDTO } from '../../types';
+import { productoPresentacionService } from '../../services/productoPresentacion.service';
+import type { MovimientoInventarioDTO, ProductoDTO, ProductoVarianteDTO, ProductoPresentacionDTO, ProveedorDTO, UnidadMedidaDTO } from '../../types';
 import { useSucursalStore } from '../../store/sucursalStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -136,6 +137,8 @@ export function InventarioList() {
   const itemsPerPage = 10;
 
   const [tipoAjuste, setTipoAjuste] = useState<'STOCK' | 'PRECIO' | 'AMBOS'>('STOCK');
+  const [presentacionesProducto, setPresentacionesProducto] = useState<ProductoPresentacionDTO[]>([]);
+  const [preciosPresent, setPreciosPresent] = useState<Record<number, string>>({});
 
   const [formData, setFormData] = useState<MovimientoInventarioDTO>({
     productoId: 0,
@@ -392,6 +395,21 @@ export function InventarioList() {
 
     try {
       await movimientoService.create(payload);
+
+      // Si es ajuste de precio y hay presentaciones con nuevo precio, actualizarlas también
+      if ((tipoAjuste === 'PRECIO' || tipoAjuste === 'AMBOS') && presentacionesProducto.length > 0) {
+        const updates = presentacionesProducto
+          .filter(p => p.id && preciosPresent[p.id] && parseFloat(preciosPresent[p.id]) > 0)
+          .map(p => productoPresentacionService.actualizar(p.id!, {
+            productoId: p.productoId,
+            unidadMedidaId: p.unidadMedidaId,
+            precioVenta: parseFloat(preciosPresent[p.id!]),
+            factor: p.factor,
+            esPrincipal: p.esPrincipal,
+          }));
+        if (updates.length > 0) await Promise.all(updates);
+      }
+
       toast.success(`Movimiento de ${formData.tipo} registrado`);
       refreshOnboarding();
       resetForm();
@@ -422,6 +440,8 @@ export function InventarioList() {
     setSelectedProducto(null);
     setSelectedProveedorMov(null);
     setVariantesProducto([]);
+    setPresentacionesProducto([]);
+    setPreciosPresent({});
     setSelectedVarianteId(null);
     setLotesDelProducto([]);
     setAjusteLoteMovimientoId(null);
@@ -1252,6 +1272,15 @@ export function InventarioList() {
                           } catch { /* sin variantes */ }
                           finally { setLoadingVariantes(false); }
                         }
+                        // Cargar presentaciones para ajuste de precio (farmacia)
+                        if (esFarmacia) {
+                          productoPresentacionService.listar(producto.id!).then(pres => {
+                            setPresentacionesProducto(pres);
+                            const init: Record<number, string> = {};
+                            pres.forEach(p => { if (p.id) init[p.id] = String(p.precioVenta ?? ''); });
+                            setPreciosPresent(init);
+                          }).catch(() => setPresentacionesProducto([]));
+                        }
                         // Si es farmacia y el producto tiene lotes, cargarlos para el selector de ajuste
                         if (esFarmacia && producto.stockVigente != null) {
                           setLoadingLotesProducto(true);
@@ -1546,7 +1575,12 @@ export function InventarioList() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Nuevo precio de venta</label>
+                        <label className="text-sm font-medium">
+                          Nuevo precio de venta
+                          {presentacionesProducto.length > 0 && (
+                            <span className="ml-1 text-xs text-muted-foreground font-normal">(unidad base)</span>
+                          )}
+                        </label>
                         <Input type="number" min="0" step="0.01"
                           value={formData.precioVenta ?? ''}
                           onChange={(e) => setFormData(prev => ({ ...prev, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined }))}
@@ -1554,6 +1588,28 @@ export function InventarioList() {
                         />
                       </div>
                     </div>
+                    {/* Precios por presentación adicional */}
+                    {presentacionesProducto.length > 0 && (
+                      <div className="space-y-2 pt-1 border-t border-border">
+                        <p className="text-xs text-muted-foreground font-medium">Precio por presentación adicional</p>
+                        {presentacionesProducto.map(pres => (
+                          <div key={pres.id} className="flex items-center gap-3">
+                            <span className="text-sm flex-1 text-muted-foreground">
+                              {pres.unidadMedidaNombre || pres.unidadMedidaAbreviatura}
+                              <span className="ml-1 text-xs">(×{pres.factor})</span>
+                            </span>
+                            <div className="relative w-36">
+                              <span className="absolute left-2.5 top-2 text-xs text-muted-foreground">S/</span>
+                              <Input type="number" min="0" step="0.01"
+                                value={preciosPresent[pres.id!] ?? ''}
+                                onChange={e => setPreciosPresent(prev => ({ ...prev, [pres.id!]: e.target.value }))}
+                                placeholder="0.00" className="pl-7 h-9 text-sm"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="grid grid-cols-1 gap-3">
