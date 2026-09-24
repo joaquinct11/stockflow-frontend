@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ventaService } from '../../services/venta.service';
 import { productoService } from '../../services/producto.service';
@@ -13,26 +14,19 @@ import type {
   EmitirComprobanteForm,
   ComprobanteDTO,
 } from '../../types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { Dialog } from '../../components/ui/Dialog';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { Pagination } from '../../components/ui/Pagination';
 import {
   Trash2,
   ShoppingCart,
   Search,
-  DollarSign,
   Eye,
   User,
   Calendar,
   FileText,
-  TrendingUp,
-  Hash,
   X,
   FileSpreadsheet,
   FileDown,
@@ -42,6 +36,7 @@ import {
   Printer,
   Plus,
   Zap,
+  ChevronDown,
 } from 'lucide-react';
 import { printVentaTicket } from '../../utils/printTicket';
 import toast from 'react-hot-toast';
@@ -137,6 +132,11 @@ export function VentasList() {
     confirmText: '',
     action: null as (() => Promise<void>) | null,
   });
+
+  // ── Modal dedicado de anulación ──────────────────────────────────────────
+  const [anularVenta, setAnularVenta] = useState<VentaDTO | null>(null);
+  const [anularMotivo, setAnularMotivo] = useState('');
+  const [anularSubmitting, setAnularSubmitting] = useState(false);
 
   const emptyForm = (): EmitirComprobanteForm => ({
     ventaId: 0,
@@ -400,24 +400,25 @@ export function VentasList() {
   };
 
   const handleAnular = (venta: VentaDTO) => {
-    setConfirmDialog({
-      isOpen: true,
-      type: 'danger',
-      title: 'Anular Venta',
-      description: `¿Seguro que deseas anular la Venta #${venta.id}? El registro se conserva pero quedará marcado como ANULADA.`,
-      confirmText: 'Sí, anular',
-      action: async () => {
-        try {
-          await ventaService.anular(venta.id!);
-          toast.success(`Venta #${venta.id} anulada`);
-          await fetchData();
-          setConfirmDialog({ ...confirmDialog, isOpen: false });
-        } catch (err: unknown) {
-          const e = err as { response?: { data?: { mensaje?: string } } };
-          toast.error(e?.response?.data?.mensaje || 'Error al anular la venta');
-        }
-      },
-    });
+    setAnularMotivo('');
+    setAnularVenta(venta);
+  };
+
+  const handleConfirmarAnular = async () => {
+    if (!anularVenta) return;
+    try {
+      setAnularSubmitting(true);
+      await ventaService.anular(anularVenta.id!);
+      toast.success(`Venta #${anularVenta.id} anulada`);
+      setAnularVenta(null);
+      setAnularMotivo('');
+      await fetchData();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { mensaje?: string } } };
+      toast.error(e?.response?.data?.mensaje || 'Error al anular la venta');
+    } finally {
+      setAnularSubmitting(false);
+    }
   };
 
   // Mapa clienteId → ClienteDTO para lookup rápido — debe ir ANTES de filteredVentas
@@ -475,62 +476,11 @@ export function VentasList() {
   const endIndex = startIndex + itemsPerPage;
   const currentVentas = filteredVentas.slice(startIndex, endIndex);
 
-  // ✅ Cards solicitados
-  const totalVentas = ventas.length;
-
   // Solo ventas activas (excluye ANULADAS) para el resumen financiero
   const ventasActivas = filteredVentas.filter(v => v.estado !== 'ANULADA');
   const ingresosFiltrads = ventasActivas.reduce((s, v) => s + v.total, 0);
-  const ticketPromedio = ventasActivas.length > 0 ? ingresosFiltrads / ventasActivas.length : 0;
 
-  const hoy = new Date();
-  const ventasHoy = ventas.filter((v) => {
-    if (!v.createdAt) return false;
-    const d = new Date(v.createdAt);
-    if (Number.isNaN(d.getTime())) return false;
-    return d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate();
-  });
-  const totalVentasHoy = ventasHoy.length;
 
-  // ✅ FIX: Map tipado explícito + lectura con variable tipada (evita "never")
-  const productoById = useMemo<Map<number, ProductoDTO>>(() => {
-    const m = new Map<number, ProductoDTO>();
-    for (const p of productos) {
-      if (p.id != null) m.set(Number(p.id), p);
-    }
-    return m;
-  }, [productos]);
-
-  const topProducto = useMemo<{
-      productoId: number;
-      nombre: string;
-      cantidad: number;
-    } | null>(() => {
-      const counts = new Map<number, { productoId: number; nombre: string; cantidad: number }>();
-
-      for (const v of ventas) {
-        for (const d of v.detalles ?? []) {
-          const id = Number(d.productoId);
-          if (!id) continue;
-
-          const prod: ProductoDTO | undefined = productoById.get(id);
-
-          const nombre = d.productoNombre || prod?.nombre || `Producto #${id}`;
-
-          const prev = counts.get(id);
-          if (prev) prev.cantidad += d.cantidad ?? 0;
-          else counts.set(id, { productoId: id, nombre, cantidad: d.cantidad ?? 0 });
-        }
-      }
-
-      let best: { productoId: number; nombre: string; cantidad: number } | null = null;
-
-      counts.forEach((v) => {
-        if (!best || v.cantidad > best.cantidad) best = v;
-      });
-
-      return best;
-  }, [ventas, productoById]);
 
   const etiquetaFiltro =
     fechaDesde && fechaHasta ? `${fechaDesde} al ${fechaHasta}` :
@@ -538,19 +488,14 @@ export function VentasList() {
     fechaHasta ? `Hasta ${fechaHasta}` : 'Todas las fechas';
 
   const [exporting, setExporting] = useState(false);
-  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
-
-  // Cuenta de filtros activos (excluye search — ese va en barra principal)
-  const activeFiltersCount = [
-    metodoPagoFilter !== 'TODOS',
-    estadoVentaFilter !== 'TODOS',
-    !!fechaDesde,
-    !!fechaHasta,
-  ].filter(Boolean).length;
+  const [panelFiltrosOpen, setPanelFiltrosOpen] = useState(false);
+  const [rangoOpen, setRangoOpen] = useState(false);
+  const [datePreset, setDatePreset] = useState<'hoy'|'ayer'|'7d'|'mes'|'custom'>('mes');
 
   const limpiarFiltros = () => {
     setMetodoPagoFilter('TODOS');
     setEstadoVentaFilter('TODOS');
+    setDatePreset('mes');
     setFechaDesde(defaultFechaDesde);
     setFechaHasta(defaultFechaHasta);
     setAppliedFechaDesde(defaultFechaDesde);
@@ -571,6 +516,35 @@ export function VentasList() {
     finally { setExporting(false); }
   };
 
+  const completadasFiltradas = filteredVentas.filter(v => v.estado === 'COMPLETADA');
+  const incidenciasFiltradas = filteredVentas.filter(v => v.estado !== 'COMPLETADA');
+  const ticketPromedioCompletadas = completadasFiltradas.length > 0
+    ? completadasFiltradas.reduce((s, v) => s + v.total, 0) / completadasFiltradas.length : 0;
+
+  const aplicarPreset = (preset: 'hoy'|'ayer'|'7d'|'mes') => {
+    const h = new Date();
+    const fmtD = (d: Date) => d.toISOString().slice(0, 10);
+    let desde: string, hasta = fmtD(h);
+    if (preset === 'hoy') { desde = fmtD(h); }
+    else if (preset === 'ayer') { const a = new Date(h); a.setDate(a.getDate()-1); desde = hasta = fmtD(a); }
+    else if (preset === '7d') { const a = new Date(h); a.setDate(a.getDate()-6); desde = fmtD(a); }
+    else { desde = fmtD(new Date(h.getFullYear(), h.getMonth(), 1)); }
+    setFechaDesde(desde); setFechaHasta(hasta);
+    setAppliedFechaDesde(desde); setAppliedFechaHasta(hasta);
+    setDatePreset(preset); setRangoOpen(false); setCurrentPage(1);
+  };
+
+  const rangoLabel = (() => {
+    if (datePreset === 'hoy') return 'Hoy';
+    if (datePreset === 'ayer') return 'Ayer';
+    if (datePreset === '7d') return 'Últimos 7 días';
+    const fmtL = (s: string) => new Date(s+'T00:00:00').toLocaleDateString('es-PE', {day:'2-digit', month:'short'});
+    const d1 = appliedFechaDesde ? fmtL(appliedFechaDesde) : '';
+    const d2 = appliedFechaHasta ? fmtL(appliedFechaHasta) : '';
+    if (!d1 && !d2) return 'Este mes';
+    return d1 === d2 ? d1 : `${d1} → ${d2}`;
+  })();
+
   if (loading) return <LoadingSpinner />;
 
   if (!canViewAll('VENTAS') && !canViewOwn('VENTAS') && !canCreate('VENTAS')) {
@@ -583,746 +557,592 @@ export function VentasList() {
     );
   }
 
+  // Variables para el drawer de detalle
+  const drawerSubtotal = selectedVenta ? selectedVenta.detalles.reduce((acc, d) => acc + d.cantidad * d.precioUnitario, 0) : 0;
+  const drawerDescuentoNc = selectedVenta?.descuentoNotaCredito ?? 0;
+  const drawerTotal = Math.max(0, drawerSubtotal - drawerDescuentoNc);
+  const drawerIgv = drawerTotal * IGV_RATE / (1 + IGV_RATE);
+  const drawerBase = drawerTotal / (1 + IGV_RATE);
+  const drawerCliente = selectedVenta?.clienteId ? clienteById.get(selectedVenta.clienteId) : null;
+  const drawerYaFacturada = selectedVenta ? comprobantes.some(c => c.ventaId === selectedVenta.id && c.estado === 'EMITIDO') : false;
+  const drawerEstadoCls: Record<string, string> = {
+    COMPLETADA: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20',
+    ANULADA: 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20',
+    DEVUELTA: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20',
+    DEVUELTA_PARCIAL: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20',
+  };
+  const drawerEstadoLabels: Record<string, string> = { COMPLETADA: 'Completada', ANULADA: 'Anulada', DEVUELTA: 'Devuelta', DEVUELTA_PARCIAL: 'Dev. parcial' };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {esServicios ? 'Servicios Prestados' : 'Ventas'}
+          <h1 className="text-[1.6rem] font-bold tracking-tight leading-none">
+            {esServicios ? 'Servicios Prestados' : 'Historial de Ventas'}
           </h1>
-          <p className="text-muted-foreground">
-            {esServicios ? 'Registro de servicios facturados' : 'Gestiona las ventas y transacciones'}
+          <p className="text-sm text-muted-foreground mt-1.5">
+            {filteredVentas.length} de {ventas.length} ventas · {rangoLabel}
+            {sucursalActual?.nombre ? ` · ${sucursalActual.nombre}` : ''}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          {esServicios && canCreate('VENTAS') && (
-            <Button onClick={async () => {
-              const caja = await cajaService.getActiva(isMultiLocal && sucursalActual ? sucursalActual.id : undefined).catch(() => null);
-              if (!caja) {
-                toast.error(
-                  (t) => (
-                    <span>
-                      Sin caja abierta.{' '}
-                      <button
-                        className="underline font-semibold"
-                        onClick={() => { toast.dismiss(t.id); navigate('/dashboard/caja'); }}
-                      >
-                        Abrir caja
-                      </button>
-                    </span>
-                  ),
-                  { duration: 5000 }
-                );
-                return;
-              }
-              setCajaActivaServicio(caja);
-              setRegistrarOpen(true);
-            }} className="flex-1 sm:flex-none">
-              <Plus className="mr-2 h-4 w-4" />
-              Registrar Servicio
-            </Button>
-          )}
+        <div className="flex flex-wrap gap-2">
           {(canViewAll('VENTAS') || canViewOwn('VENTAS')) && filteredVentas.length > 0 && (
             <>
-              <Button variant="outline" size="sm" onClick={handleExportExcel} className="flex-1 sm:flex-none">
-                <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" />
+              <button type="button" onClick={handleExportExcel}
+                className="flex items-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-emerald-500 hover:text-emerald-600 transition-colors">
+                <FileSpreadsheet size={15} />
                 Excel
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={exporting} className="flex-1 sm:flex-none">
-                <FileDown className="mr-2 h-4 w-4 text-red-500" />
+              </button>
+              <button type="button" onClick={handleExportPDF} disabled={exporting}
+                className="flex items-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-red-500 hover:text-red-600 transition-colors disabled:opacity-50">
+                <FileDown size={15} />
                 {exporting ? 'Exportando...' : 'PDF'}
-              </Button>
+              </button>
             </>
           )}
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Ventas</p>
-            <div className="h-9 w-9 rounded-xl bg-violet-500/10 flex items-center justify-center flex-shrink-0">
-              <ShoppingCart className="text-violet-600 dark:text-violet-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tight">{totalVentas}</div>
-            <p className="text-xs text-muted-foreground mt-1">Transacciones registradas</p>
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ventas de hoy</p>
-            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-              <Calendar className="text-blue-600 dark:text-blue-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tight">{totalVentasHoy}</div>
-            <p className="text-xs text-muted-foreground mt-1">Transacciones del día</p>
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Producto más vendido</p>
-            <div className="h-9 w-9 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
-              <TrendingUp className="text-orange-600 dark:text-orange-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {topProducto ? (
-              <>
-                <div className="text-xl font-bold tracking-tight leading-tight">{topProducto.nombre}</div>
-                <p className="text-xs text-muted-foreground mt-1">{topProducto.cantidad} unidad(es)</p>
-              </>
-            ) : (
-              <>
-                <div className="text-3xl font-bold tracking-tight text-muted-foreground">—</div>
-                <p className="text-xs text-muted-foreground mt-1">Sin datos aún</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ingresos del Período</p>
-            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-              <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tight">S/.{ingresosFiltrads.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Ticket prom. S/.{ticketPromedio.toFixed(2)}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Barra de búsqueda + botón filtros */}
-      <div className="flex gap-2 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Buscar por ID, vendedor, cliente, método..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 h-10 pr-9"
-          />
-          {searchTerm && (
-            <button
-              type="button"
-              onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="h-4 w-4" />
+          {esServicios && canCreate('VENTAS') && (
+            <button type="button" onClick={async () => {
+              const caja = await cajaService.getActiva(isMultiLocal && sucursalActual ? sucursalActual.id : undefined).catch(() => null);
+              if (!caja) {
+                toast.error((t) => (
+                  <span>Sin caja abierta.{' '}
+                    <button className="underline font-semibold" onClick={() => { toast.dismiss(t.id); navigate('/dashboard/caja'); }}>Abrir caja</button>
+                  </span>
+                ), { duration: 5000 });
+                return;
+              }
+              setCajaActivaServicio(caja); setRegistrarOpen(true);
+            }} className="flex items-center gap-2 h-[38px] px-[16px] text-[.855rem] font-[650] text-white bg-primary border-0 rounded-[10px] cursor-pointer hover:brightness-105 transition-all shadow-[0_6px_16px_-8px_hsl(var(--primary)/0.6)]">
+              <Plus size={15} />
+              Registrar servicio
             </button>
           )}
         </div>
-
-        {/* Botón Filtros */}
-        <button
-          type="button"
-          onClick={() => setShowFilterDrawer(true)}
-          className="relative flex items-center gap-2 h-10 px-4 rounded-lg border border-input bg-background hover:bg-muted transition-colors text-sm font-medium shrink-0"
-        >
-          <SlidersHorizontal className="h-4 w-4" />
-          <span className="hidden sm:inline">Filtros</span>
-          {activeFiltersCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
-              {activeFiltersCount}
-            </span>
-          )}
-        </button>
       </div>
 
-      {/* Chips de filtros activos */}
-      {activeFiltersCount > 0 && (
-        <div className="flex flex-wrap gap-2 items-center -mt-2">
-          {metodoPagoFilter !== 'TODOS' && (
-            <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1 font-medium">
-              Pago: {metodoPagoFilter === 'YAPE_PLIN' ? 'Yape/Plin' : metodoPagoFilter.charAt(0) + metodoPagoFilter.slice(1).toLowerCase()}
-              <button type="button" onClick={() => setMetodoPagoFilter('TODOS')} className="hover:text-primary/70"><X className="h-3 w-3" /></button>
-            </span>
-          )}
-          {estadoVentaFilter !== 'TODOS' && (
-            <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1 font-medium">
-              Estado: {estadoVentaFilter === 'DEVUELTA_PARCIAL' ? 'Dev. parcial' : estadoVentaFilter.charAt(0) + estadoVentaFilter.slice(1).toLowerCase()}
-              <button type="button" onClick={() => setEstadoVentaFilter('TODOS')} className="hover:text-primary/70"><X className="h-3 w-3" /></button>
-            </span>
-          )}
-          {fechaDesde && (
-            <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1 font-medium">
-              Desde: {fechaDesde}
-              <button type="button" onClick={() => setFechaDesde('')} className="hover:text-primary/70"><X className="h-3 w-3" /></button>
-            </span>
-          )}
-          {fechaHasta && (
-            <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1 font-medium">
-              Hasta: {fechaHasta}
-              <button type="button" onClick={() => setFechaHasta('')} className="hover:text-primary/70"><X className="h-3 w-3" /></button>
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={limpiarFiltros}
-            className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
-          >
-            Limpiar todo
-          </button>
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
+          <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Ingresos</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">S/ {ingresosFiltrads.toFixed(2)}</p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">Solo ventas no anuladas</p>
         </div>
-      )}
+        <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
+          <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Ventas</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">{filteredVentas.length}</p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">{ventasActivas.length} válidas en el periodo</p>
+        </div>
+        <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
+          <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Ticket promedio</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">S/ {ticketPromedioCompletadas.toFixed(2)}</p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">Por venta completada</p>
+        </div>
+        <div className={`p-[16px_18px] rounded-[14px] shadow-sm border ${incidenciasFiltradas.length > 0 ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-700/40' : 'bg-card border-border'}`}>
+          <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Anuladas y devueltas</p>
+          <p className={`text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums ${incidenciasFiltradas.length > 0 ? 'text-amber-700 dark:text-amber-400' : ''}`}>{incidenciasFiltradas.length}</p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">{incidenciasFiltradas.length === 0 ? 'Ninguna en el periodo' : 'Revisa antes de cerrar el mes'}</p>
+        </div>
+      </div>
 
-      {/* ── Filter Drawer ─────────────────────────────────────────────────── */}
-      {/* Backdrop — cubre desde inset-0; header (z-45) y sidebar (z-40) quedan encima */}
-      <div
-        className={`fixed inset-0 bg-black/50 z-[35] transition-opacity duration-300 ${showFilterDrawer ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => setShowFilterDrawer(false)}
-      />
-      {/* Panel — arranca en top-16 (bajo el header), oscuro, bordes redondeados a la izq */}
-      <div
-        className={`fixed right-0 top-16 w-80 z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out rounded-l-2xl overflow-hidden
-          bg-slate-900 border-l border-t border-b border-slate-700/50
-          ${showFilterDrawer ? 'translate-x-0' : 'translate-x-full'}`}
-        style={{ height: 'calc(100vh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }}
-      >
-        {/* Drawer header */}
-        <div className="flex items-center justify-between px-5 py-4 shrink-0 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700/50">
-          <div className="flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-lg bg-blue-500/20 flex items-center justify-center">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-blue-400" />
-            </div>
-            <h2 className="font-semibold text-sm text-white">Filtros</h2>
-            {activeFiltersCount > 0 && (
-              <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
-                {activeFiltersCount}
-              </span>
+      {/* Main card */}
+      <div className="bg-card border border-border rounded-[14px] shadow-sm">
+
+        {/* Filter bar */}
+        <div className="grid gap-2.5 p-[14px_18px] border-b border-border/60" style={{gridTemplateColumns: 'minmax(0,1fr) auto auto'}}>
+          {/* Search */}
+          <div className="relative min-w-0">
+            <Search className="absolute left-[13px] top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" size={16} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Buscar por ID, vendedor, cliente, método…"
+              className="w-full h-10 pl-[38px] pr-3 text-[.875rem] text-foreground bg-muted border border-transparent rounded-[10px] outline-none focus:bg-card focus:border-primary focus:ring-[3px] focus:ring-primary/15 transition-all"
+            />
+          </div>
+
+          {/* Date range */}
+          <div className="relative min-w-0">
+            <button
+              type="button"
+              onClick={() => setRangoOpen(o => !o)}
+              className={`flex items-center justify-center gap-2 h-10 px-[13px] font-mono text-[.8rem] rounded-[10px] cursor-pointer whitespace-nowrap transition-all ${
+                rangoOpen || datePreset !== 'mes'
+                  ? 'text-primary bg-primary/10 border border-primary/30'
+                  : 'text-muted-foreground bg-muted border border-transparent hover:bg-muted/80'
+              }`}
+            >
+              <Calendar size={15} className="flex-shrink-0" />
+              {rangoLabel}
+              <ChevronDown size={14} className={`flex-shrink-0 opacity-70 transition-transform ${rangoOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {rangoOpen && (
+              <>
+                <div className="fixed inset-0 z-[55]" onClick={() => setRangoOpen(false)} />
+                <div className="absolute top-[calc(100%+6px)] right-0 z-[60] w-[280px] max-w-[calc(100vw-40px)] bg-card border border-border rounded-[14px] shadow-[0_22px_50px_-22px_rgba(0,0,0,.45)] p-2">
+                  {([
+                    { key: 'hoy' as const, label: 'Hoy' },
+                    { key: 'ayer' as const, label: 'Ayer' },
+                    { key: '7d' as const, label: 'Últimos 7 días' },
+                    { key: 'mes' as const, label: 'Este mes' },
+                  ]).map(p => (
+                    <button key={p.key} type="button" onClick={() => aplicarPreset(p.key)}
+                      className={`w-full flex items-center h-9 px-[10px] text-[.845rem] border-0 rounded-lg cursor-pointer transition-all text-left ${
+                        datePreset === p.key ? 'font-[650] text-primary bg-primary/10' : 'font-medium text-foreground bg-transparent hover:bg-muted'
+                      }`}>
+                      {p.label}
+                    </button>
+                  ))}
+                  <div className="h-px bg-border/60 my-2 mx-1" />
+                  <div className="p-[4px_6px_6px]">
+                    <p className="font-mono text-[.66rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-2">Personalizado</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="grid gap-1 text-[.74rem] text-muted-foreground">
+                        Desde
+                        <input type="date" value={fechaDesde} onChange={e => { setFechaDesde(e.target.value); setDatePreset('custom'); }}
+                          className="w-full h-9 px-2 text-[.8rem] text-foreground bg-muted border border-border rounded-lg outline-none focus:border-primary" />
+                      </label>
+                      <label className="grid gap-1 text-[.74rem] text-muted-foreground">
+                        Hasta
+                        <input type="date" value={fechaHasta} onChange={e => { setFechaHasta(e.target.value); setDatePreset('custom'); }}
+                          className="w-full h-9 px-2 text-[.8rem] text-foreground bg-muted border border-border rounded-lg outline-none focus:border-primary" />
+                      </label>
+                    </div>
+                    {datePreset === 'custom' && (
+                      <button type="button" onClick={() => { setAppliedFechaDesde(fechaDesde); setAppliedFechaHasta(fechaHasta); setRangoOpen(false); setCurrentPage(1); }}
+                        className="w-full mt-2 h-8 text-[.8rem] font-semibold text-white bg-primary rounded-lg border-0 cursor-pointer hover:brightness-105">
+                        Aplicar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
           </div>
+
+          {/* Filtros button */}
           <button
             type="button"
-            onClick={() => setShowFilterDrawer(false)}
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+            onClick={() => setPanelFiltrosOpen(o => !o)}
+            className={`flex items-center gap-2 h-10 px-[14px] text-[.855rem] font-semibold rounded-[10px] cursor-pointer whitespace-nowrap transition-all ${
+              panelFiltrosOpen || (metodoPagoFilter !== 'TODOS' || estadoVentaFilter !== 'TODOS')
+                ? 'text-primary bg-primary/10 border border-primary/30'
+                : 'text-muted-foreground bg-card border border-border hover:bg-muted'
+            }`}
           >
-            <X className="h-3.5 w-3.5" />
+            <SlidersHorizontal size={15} className="flex-shrink-0" />
+            Filtros
+            {(metodoPagoFilter !== 'TODOS' || estadoVentaFilter !== 'TODOS') && (
+              <span className="min-w-[18px] h-[18px] px-[5px] grid place-items-center rounded-full text-[.68rem] font-bold text-white bg-primary">
+                {[metodoPagoFilter !== 'TODOS', estadoVentaFilter !== 'TODOS'].filter(Boolean).length}
+              </span>
+            )}
           </button>
         </div>
 
-        {/* Drawer content */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+        {/* Filter panel */}
+        {panelFiltrosOpen && (
+          <div className="grid grid-cols-2 gap-[18px] p-[16px_18px] border-b border-border/60 bg-muted/30">
+            <div>
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-[9px]">Método de pago</p>
+              <div className="flex flex-wrap gap-[7px]">
+                {([
+                  { key: 'TODOS' as MetodoPagoFilter, label: 'Todos' },
+                  { key: 'EFECTIVO' as MetodoPagoFilter, label: 'Efectivo' },
+                  { key: 'TARJETA' as MetodoPagoFilter, label: 'Tarjeta' },
+                  { key: 'YAPE_PLIN' as MetodoPagoFilter, label: 'Yape/Plin' },
+                ]).map(m => (
+                  <button key={m.key} type="button" onClick={() => { setMetodoPagoFilter(m.key); setCurrentPage(1); }}
+                    className={`h-8 px-[13px] text-[.81rem] font-semibold rounded-[9px] cursor-pointer whitespace-nowrap transition-all border ${
+                      metodoPagoFilter === m.key
+                        ? 'text-white bg-primary border-primary'
+                        : 'text-muted-foreground bg-card border-border hover:border-primary/40'
+                    }`}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-[9px]">Estado de la venta</p>
+              <div className="flex flex-wrap gap-[7px]">
+                {([
+                  { key: 'TODOS' as EstadoVentaFilter, label: 'Todos' },
+                  { key: 'COMPLETADA' as EstadoVentaFilter, label: 'Completada' },
+                  { key: 'ANULADA' as EstadoVentaFilter, label: 'Anulada' },
+                  { key: 'DEVUELTA' as EstadoVentaFilter, label: 'Devuelta' },
+                  { key: 'DEVUELTA_PARCIAL' as EstadoVentaFilter, label: 'Dev. parcial' },
+                ]).map(e => (
+                  <button key={e.key} type="button" onClick={() => { setEstadoVentaFilter(e.key); setCurrentPage(1); }}
+                    className={`h-8 px-[13px] text-[.81rem] font-semibold rounded-[9px] cursor-pointer whitespace-nowrap transition-all border ${
+                      estadoVentaFilter === e.key
+                        ? 'text-white bg-primary border-primary'
+                        : 'text-muted-foreground bg-card border-border hover:border-primary/40'
+                    }`}>
+                    {e.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
-          {/* Rango de fechas */}
-          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 flex items-center gap-2">
-              <Calendar className="h-3.5 w-3.5 text-blue-400" /> Rango de fechas
+        {/* Active filter chips */}
+        {(metodoPagoFilter !== 'TODOS' || estadoVentaFilter !== 'TODOS' || searchTerm) && (
+          <div className="flex flex-wrap items-center gap-2 px-[18px] py-3 border-b border-border/60">
+            <span className="text-[.79rem] text-muted-foreground">Filtros activos:</span>
+            {metodoPagoFilter !== 'TODOS' && (
+              <button type="button" onClick={() => setMetodoPagoFilter('TODOS')}
+                className="flex items-center gap-[7px] h-7 px-[10px] text-[.78rem] font-semibold text-primary bg-primary/10 border border-primary/30 rounded-full cursor-pointer hover:brightness-95">
+                Pago: {metodoPagoFilter === 'YAPE_PLIN' ? 'Yape/Plin' : metodoPagoFilter.charAt(0) + metodoPagoFilter.slice(1).toLowerCase()}
+                <X size={12} className="flex-shrink-0" />
+              </button>
+            )}
+            {estadoVentaFilter !== 'TODOS' && (
+              <button type="button" onClick={() => setEstadoVentaFilter('TODOS')}
+                className="flex items-center gap-[7px] h-7 px-[10px] text-[.78rem] font-semibold text-primary bg-primary/10 border border-primary/30 rounded-full cursor-pointer hover:brightness-95">
+                Estado: {estadoVentaFilter === 'DEVUELTA_PARCIAL' ? 'Dev. parcial' : estadoVentaFilter.charAt(0) + estadoVentaFilter.slice(1).toLowerCase()}
+                <X size={12} className="flex-shrink-0" />
+              </button>
+            )}
+            {searchTerm && (
+              <button type="button" onClick={() => setSearchTerm('')}
+                className="flex items-center gap-[7px] h-7 px-[10px] text-[.78rem] font-semibold text-primary bg-primary/10 border border-primary/30 rounded-full cursor-pointer hover:brightness-95">
+                "{searchTerm}"
+                <X size={12} className="flex-shrink-0" />
+              </button>
+            )}
+            <button type="button" onClick={limpiarFiltros}
+              className="h-7 px-[10px] text-[.78rem] font-semibold text-muted-foreground bg-transparent border-0 rounded-full cursor-pointer hover:text-destructive transition-colors">
+              Limpiar todo
+            </button>
+          </div>
+        )}
+
+        {/* Table / empty */}
+        {filteredVentas.length === 0 ? (
+          <div className="py-14 px-6 text-center">
+            <div className="w-[52px] h-[52px] mx-auto grid place-items-center rounded-[14px] bg-muted text-muted-foreground mb-[14px]">
+              <ShoppingCart size={24} />
+            </div>
+            <p className="text-base font-[650]">Ninguna venta coincide con estos filtros</p>
+            <p className="text-[.865rem] text-muted-foreground leading-[1.55] mt-[7px] mx-auto max-w-[380px]">
+              Prueba con otro rango de fechas, otro método de pago, o quita los filtros para ver todo el periodo.
             </p>
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <label className="text-[11px] text-slate-500 font-medium">Desde</label>
-                <input
-                  type="date"
-                  value={fechaDesde}
-                  onChange={(e) => setFechaDesde(e.target.value)}
-                  className="w-full h-9 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm px-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] text-slate-500 font-medium">Hasta</label>
-                <input
-                  type="date"
-                  value={fechaHasta}
-                  onChange={(e) => setFechaHasta(e.target.value)}
-                  className="w-full h-9 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm px-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                />
-              </div>
-              {(fechaDesde || fechaHasta) && (
-                <button
-                  type="button"
-                  onClick={() => { setFechaDesde(''); setFechaHasta(''); }}
-                  className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
-                >
-                  <X className="h-3 w-3" /> Limpiar fechas
-                </button>
-              )}
-            </div>
+            <button type="button" onClick={limpiarFiltros}
+              className="h-[38px] mt-4 px-4 text-[.855rem] font-semibold text-primary bg-primary/10 border border-primary/30 rounded-[10px] cursor-pointer hover:brightness-97">
+              Quitar filtros
+            </button>
           </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto" style={{scrollbarWidth:'thin'}}>
+              <table className="w-full border-collapse text-[.84rem]" style={{minWidth:'1060px'}}>
+                <thead>
+                  <tr className="bg-muted/50">
+                    <th className="text-left py-[10px] px-[18px] text-[.72rem] font-[650] tracking-[.04em] uppercase text-muted-foreground whitespace-nowrap">Venta</th>
+                    <th className="text-left py-[10px] px-[14px] text-[.72rem] font-[650] tracking-[.04em] uppercase text-muted-foreground whitespace-nowrap">Cliente</th>
+                    <th className="text-left py-[10px] px-[14px] text-[.72rem] font-[650] tracking-[.04em] uppercase text-muted-foreground whitespace-nowrap">Vendedor</th>
+                    <th className="text-left py-[10px] px-[14px] text-[.72rem] font-[650] tracking-[.04em] uppercase text-muted-foreground whitespace-nowrap">Pago</th>
+                    <th className="text-left py-[10px] px-[14px] text-[.72rem] font-[650] tracking-[.04em] uppercase text-muted-foreground whitespace-nowrap">Comprobante</th>
+                    <th className="text-left py-[10px] px-[14px] text-[.72rem] font-[650] tracking-[.04em] uppercase text-muted-foreground whitespace-nowrap">Estado</th>
+                    <th className="text-right py-[10px] px-[14px] text-[.72rem] font-[650] tracking-[.04em] uppercase text-muted-foreground whitespace-nowrap">Total</th>
+                    <th className="text-right py-[10px] px-[18px] text-[.72rem] font-[650] tracking-[.04em] uppercase text-muted-foreground whitespace-nowrap">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentVentas.map((venta) => {
+                    const cliente = venta.clienteId ? clienteById.get(venta.clienteId) : null;
+                    const comp = comprobantes.find(c => c.ventaId === venta.id);
+                    const anulada = venta.estado === 'ANULADA';
+                    const iniciales = (venta.vendedorNombre ?? '').split(' ').map((p: string) => p[0]).join('').slice(0, 2).toUpperCase() || '?';
 
-          {/* Método de pago */}
-          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Método de pago</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  { key: 'TODOS',     label: 'Todos' },
-                  { key: 'EFECTIVO',  label: 'Efectivo' },
-                  { key: 'TARJETA',   label: 'Tarjeta' },
-                  { key: 'YAPE_PLIN', label: 'Yape/Plin' },
-                ] as Array<{ key: MetodoPagoFilter; label: string }>
-              ).map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setMetodoPagoFilter(t.key)}
-                  className={`rounded-lg border py-2 text-xs font-semibold transition-all text-center ${
-                    metodoPagoFilter === t.key
-                      ? 'border-blue-500 bg-blue-500/20 text-blue-300 shadow-sm shadow-blue-500/10'
-                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-slate-200'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
+                    const pagoCls: Record<string, string> = {
+                      EFECTIVO: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20',
+                      TARJETA: 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20',
+                      YAPE_PLIN: 'text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20',
+                    };
+                    const pagoLabels: Record<string, string> = { EFECTIVO: 'Efectivo', TARJETA: 'Tarjeta', YAPE_PLIN: 'Yape/Plin' };
+                    const estadoCls: Record<string, string> = {
+                      COMPLETADA: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20',
+                      ANULADA: 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20',
+                      DEVUELTA: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20',
+                      DEVUELTA_PARCIAL: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20',
+                    };
+                    const estadoLabels: Record<string, string> = { COMPLETADA: 'Completada', ANULADA: 'Anulada', DEVUELTA: 'Devuelta', DEVUELTA_PARCIAL: 'Dev. parcial' };
+                    const sunatCls = comp?.sunatEstado === 'ACEPTADO' ? 'text-emerald-600 dark:text-emerald-400' : comp?.sunatEstado === 'RECHAZADO' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400';
 
-          {/* Estado */}
-          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Estado</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  { key: 'TODOS',            label: 'Todos' },
-                  { key: 'COMPLETADA',       label: 'Completada' },
-                  { key: 'DEVUELTA_PARCIAL', label: 'Dev. parcial' },
-                  { key: 'DEVUELTA',         label: 'Devuelta' },
-                  { key: 'ANULADA',          label: 'Anulada' },
-                ] as Array<{ key: EstadoVentaFilter; label: string }>
-              ).map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setEstadoVentaFilter(t.key)}
-                  className={`rounded-lg border py-2 text-xs font-semibold transition-all text-center ${
-                    estadoVentaFilter === t.key
-                      ? 'border-blue-500 bg-blue-500/20 text-blue-300 shadow-sm shadow-blue-500/10'
-                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-slate-200'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Drawer footer */}
-        <div className="px-4 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex gap-2">
-          <button
-            type="button"
-            onClick={limpiarFiltros}
-            className="flex-1 h-9 rounded-xl border border-slate-600 text-xs font-semibold text-slate-400 hover:text-white hover:border-slate-400 transition-all"
-          >
-            Limpiar todo
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAppliedFechaDesde(fechaDesde);
-              setAppliedFechaHasta(fechaHasta);
-              setShowFilterDrawer(false);
-            }}
-            className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-lg shadow-blue-500/20"
-          >
-            Ver {filteredVentas.length} resultado{filteredVentas.length !== 1 ? 's' : ''}
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader>
-          <CardTitle>Lista de Ventas</CardTitle>
-          <CardDescription>{filteredVentas.length} venta(s) — {etiquetaFiltro}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!canViewAll('VENTAS') && !canViewOwn('VENTAS') ? (
-            <EmptyState title="Sin permisos" description="No tienes permisos para ver ventas" />
-          ) : filteredVentas.length === 0 ? (
-            <EmptyState icon={ShoppingCart} title="Todavía no hay ventas" description="Cuando registres tu primera venta desde el POS aparecerá aquí con todos sus detalles." />
-          ) : (
-            <>
-              <div className="overflow-x-auto rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead>ID</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Método de Pago</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Comprobante</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {currentVentas.map((venta) => (
-                      <TableRow key={venta.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Hash className="h-3 w-3" />
-                            <span className="font-semibold text-foreground">{venta.id}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            {venta.createdAt ? new Date(venta.createdAt).toLocaleDateString('es-PE') : '-'}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {venta.createdAt
-                              ? new Date(venta.createdAt).toLocaleTimeString('es-PE', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })
-                              : ''}
-                          </div>
-                        </TableCell>
-                        <TableCell>
+                    return (
+                      <tr key={venta.id} onClick={() => handleViewDetail(venta)}
+                        className={`border-t border-border/60 cursor-pointer hover:bg-muted/50 transition-colors ${anulada ? 'opacity-60' : ''}`}>
+                        {/* Venta */}
+                        <td className="py-3 px-[18px] whitespace-nowrap">
+                          <p className="font-mono text-[.85rem] font-semibold">#{venta.id}</p>
+                          <p className="text-[.74rem] text-muted-foreground mt-0.5">
+                            {venta.createdAt ? new Date(venta.createdAt).toLocaleDateString('es-PE', {day:'2-digit', month:'short'}) : '-'}
+                            {' · '}
+                            {venta.createdAt ? new Date(venta.createdAt).toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}) : ''}
+                          </p>
+                        </td>
+                        {/* Cliente */}
+                        <td className="py-3 px-[14px] max-w-[190px]">
+                          <p className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{cliente?.nombre ?? 'Público general'}</p>
+                          {cliente?.numeroDocumento && (
+                            <p className="font-mono text-[.73rem] text-muted-foreground mt-0.5">{cliente.tipoDocumento} {cliente.numeroDocumento}</p>
+                          )}
+                        </td>
+                        {/* Vendedor */}
+                        <td className="py-3 px-[14px] whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <p className="font-medium text-sm">{venta.vendedorNombre || 'Sin nombre'}</p>
+                            <span className="w-[26px] h-[26px] flex-shrink-0 rounded-full grid place-items-center text-[.66rem] font-bold bg-muted text-muted-foreground">
+                              {iniciales}
+                            </span>
+                            <span className="text-sm text-muted-foreground">{venta.vendedorNombre ?? '—'}</span>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {venta.clienteId && clienteById.get(venta.clienteId) ? (
+                        </td>
+                        {/* Pago */}
+                        <td className="py-3 px-[14px] whitespace-nowrap">
+                          <span className={`inline-flex items-center text-[.75rem] font-[650] px-[9px] py-[3px] rounded-full ${pagoCls[venta.metodoPago] ?? 'text-muted-foreground bg-muted'}`}>
+                            {pagoLabels[venta.metodoPago] ?? venta.metodoPago}
+                          </span>
+                        </td>
+                        {/* Comprobante */}
+                        <td className="py-3 px-[14px] whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                          {comp ? (
                             <div>
-                              <p className="text-sm font-medium">{clienteById.get(venta.clienteId)!.nombre}</p>
-                              {clienteById.get(venta.clienteId)!.numeroDocumento && (
-                                <p className="text-xs text-muted-foreground">
-                                  {clienteById.get(venta.clienteId)!.tipoDocumento} {clienteById.get(venta.clienteId)!.numeroDocumento}
-                                </p>
-                              )}
+                              <p className="font-mono text-[.8rem] font-semibold">{comp.numero ?? '—'}</p>
+                              {comp.sunatEstado && <p className={`text-[.72rem] font-semibold mt-0.5 ${sunatCls}`}>{comp.sunatEstado.charAt(0) + comp.sunatEstado.slice(1).toLowerCase()} SUNAT</p>}
                             </div>
+                          ) : canEmitirComprobante && !anulada ? (
+                            <button type="button" onClick={() => handleOpenEmitirComprobante(venta)}
+                              className="flex items-center gap-[6px] h-7 px-[10px] text-[.77rem] font-semibold text-primary bg-transparent border border-dashed border-primary/40 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors">
+                              <Plus size={12} />
+                              Emitir
+                            </button>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{venta.metodoPago}</Badge>
-                        </TableCell>
-                        <TableCell className="font-semibold">S/.{venta.total.toFixed(2)}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              venta.estado === 'COMPLETADA'
-                                ? 'success'
-                                : venta.estado === 'DEVUELTA_PARCIAL'
-                                  ? 'warning'
-                                  : venta.estado === 'DEVUELTA'
-                                    ? 'secondary'
-                                    : venta.estado === 'PENDIENTE'
-                                      ? 'warning'
-                                      : 'destructive'
-                            }
-                          >
-                            {venta.estado}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {(() => {
-                            const comp = comprobantes.find(c => c.ventaId === venta.id);
-                            if (!comp) return <span className="text-xs text-muted-foreground">—</span>;
-                            return (
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-xs font-mono font-medium">{comp.numero ?? '—'}</span>
-                                {comp.sunatEstado ? (
-                                  <Badge
-                                    variant={comp.sunatEstado === 'ACEPTADO' ? 'success' : comp.sunatEstado === 'RECHAZADO' ? 'destructive' : 'warning'}
-                                    className="text-[10px] px-1.5 w-fit"
-                                    title={comp.sunatMensaje ?? undefined}
-                                  >
-                                    {comp.sunatEstado}
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="secondary" className="text-[10px] px-1.5 w-fit opacity-60">
-                                    Sin enviar
-                                  </Badge>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewDetail(venta)}
-                              title="Ver detalle"
-                            >
-                              <Eye className="h-4 w-4 text-blue-600" />
-                            </Button>
+                        </td>
+                        {/* Estado */}
+                        <td className="py-3 px-[14px] whitespace-nowrap">
+                          <span className={`inline-flex items-center text-[.75rem] font-[650] px-[9px] py-[3px] rounded-full ${estadoCls[venta.estado] ?? 'text-muted-foreground bg-muted'}`}>
+                            {estadoLabels[venta.estado] ?? venta.estado}
+                          </span>
+                        </td>
+                        {/* Total */}
+                        <td className="py-3 px-[14px] text-right whitespace-nowrap font-bold font-mono tabular-nums">
+                          S/ {venta.total.toFixed(2)}
+                        </td>
+                        {/* Acciones */}
+                        <td className="py-3 px-[18px] text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                          <div className="inline-flex gap-[3px]">
+                            <button type="button" onClick={() => handleViewDetail(venta)} title="Ver detalle"
+                              className="w-[30px] h-[30px] grid place-items-center text-muted-foreground bg-transparent border-0 rounded-lg cursor-pointer hover:bg-primary/10 hover:text-primary transition-colors">
+                              <Eye size={15} />
+                            </button>
                             {venta.estado !== 'ANULADA' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Imprimir ticket"
-                                onClick={() => {
-                                  const cl = venta.clienteId ? clienteById.get(venta.clienteId) : null;
-                                  setTicketVenta(venta);
-                                  setTicketDni(cl?.numeroDocumento ?? '');
-                                  setTicketNombre(cl?.nombre ?? '');
-                                }}
-                              >
-                                <Printer className="h-4 w-4 text-violet-600" />
-                              </Button>
+                              <button type="button" title="Imprimir ticket" onClick={() => {
+                                const cl = venta.clienteId ? clienteById.get(venta.clienteId) : null;
+                                setTicketVenta(venta); setTicketDni(cl?.numeroDocumento ?? ''); setTicketNombre(cl?.nombre ?? '');
+                              }} className="w-[30px] h-[30px] grid place-items-center text-muted-foreground bg-transparent border-0 rounded-lg cursor-pointer hover:bg-muted hover:text-foreground transition-colors">
+                                <Printer size={15} />
+                              </button>
                             )}
                             {(venta.estado === 'COMPLETADA' || venta.estado === 'DEVUELTA_PARCIAL') && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setDevolucionVenta(venta);
-                                  setShowDevolucion(true);
-                                }}
-                                title="Registrar devolución"
-                              >
-                                <RotateCcw className="h-4 w-4 text-amber-600" />
-                              </Button>
+                              <button type="button" title="Registrar devolución" onClick={() => { setDevolucionVenta(venta); setShowDevolucion(true); }}
+                                className="w-[30px] h-[30px] grid place-items-center text-muted-foreground bg-transparent border-0 rounded-lg cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-700 dark:hover:text-amber-400 transition-colors">
+                                <RotateCcw size={15} />
+                              </button>
                             )}
-                            {(puede('ANULAR_VENTA') || canDelete('VENTAS')) && venta.estado !== 'ANULADA' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleAnular(venta)}
-                                title="Anular venta"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                            {(puede('ANULAR_VENTA') || canDelete('VENTAS')) && !anulada && (
+                              <button type="button" title="Anular venta" onClick={() => handleAnular(venta)}
+                                className="w-[30px] h-[30px] grid place-items-center text-muted-foreground bg-transparent border-0 rounded-lg cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors">
+                                <Trash2 size={15} />
+                              </button>
                             )}
-                            {venta.estado === 'ANULADA' && canCreate('VENTAS') && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => navigate('/pos', { state: { cargarVenta: venta } })}
-                                title="Rehacer en POS"
-                              >
-                                <RefreshCw className="h-4 w-4 text-emerald-600" />
-                              </Button>
+                            {anulada && canCreate('VENTAS') && (
+                              <button type="button" title="Rehacer en POS" onClick={() => navigate('/pos', { state: { cargarVenta: venta } })}
+                                className="w-[30px] h-[30px] grid place-items-center text-muted-foreground bg-transparent border-0 rounded-lg cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+                                <RefreshCw size={15} />
+                              </button>
                             )}
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={filteredVentas.length}
-                itemsPerPage={itemsPerPage}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Dialog - Detalle de Venta */}
-      <Dialog
-        isOpen={isDetailDialogOpen}
-        onClose={closeDetailDialog}
-        title="Detalle de Venta"
-        description={selectedVenta ? `Venta #${selectedVenta.id} - ${selectedVenta.estado}` : ''}
-        size="lg"
-      >
-        {selectedVenta &&
-          (() => {
-            const subtotalVenta = selectedVenta.detalles.reduce((acc, d) => acc + d.cantidad * d.precioUnitario, 0);
-            const descuentoNc = selectedVenta.descuentoNotaCredito ?? 0;
-            const totalConDescuento = Math.max(0, subtotalVenta - descuentoNc);
-            const igvVenta = totalConDescuento * IGV_RATE / (1 + IGV_RATE);
-            const baseImponible = totalConDescuento / (1 + IGV_RATE);
-            const totalCalculado = totalConDescuento;
-
-            return (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-1 p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground font-medium">Método de Pago</p>
-                    <p className="font-semibold text-sm">{selectedVenta.metodoPago}</p>
-                  </div>
-
-                  <div className="space-y-1 p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground font-medium">Estado</p>
-                    <Badge
-                      variant={
-                        selectedVenta.estado === 'COMPLETADA'
-                          ? 'success'
-                          : selectedVenta.estado === 'DEVUELTA_PARCIAL'
-                            ? 'warning'
-                            : selectedVenta.estado === 'DEVUELTA'
-                              ? 'secondary'
-                              : selectedVenta.estado === 'PENDIENTE'
-                                ? 'warning'
-                                : 'destructive'
-                      }
-                      className="w-fit"
-                    >
-                      {selectedVenta.estado}
-                    </Badge>
-                  </div>
-
-                  <div className="space-y-1 p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground font-medium">Vendedor</p>
-                    <p className="font-semibold text-sm">{selectedVenta.vendedorNombre || 'Sin nombre'}</p>
-                  </div>
-                </div>
-
-                {/* Cliente asociado */}
-                {(() => {
-                  const cliente = selectedVenta.clienteId ? clienteById.get(selectedVenta.clienteId) : null;
+            {/* Pagination */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-3 border-t border-border/60">
+              <span className="text-[.8rem] text-muted-foreground">
+                Mostrando {startIndex + 1}–{Math.min(startIndex + itemsPerPage, filteredVentas.length)} de {filteredVentas.length}
+              </span>
+              <div className="flex items-center gap-[5px]">
+                <button type="button" onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={currentPage === 1}
+                  className="min-w-8 h-8 px-[10px] text-[.81rem] font-semibold text-muted-foreground bg-card border border-border rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition-colors">
+                  Anterior
+                </button>
+                {Array.from({length: Math.min(totalPages, 7)}, (_, i) => {
+                  const page = totalPages <= 7 ? i + 1
+                    : currentPage <= 4 ? i + 1
+                    : currentPage >= totalPages - 3 ? totalPages - 6 + i
+                    : currentPage - 3 + i;
                   return (
-                    <div className={`flex items-center gap-3 p-3 rounded-lg border ${cliente ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' : 'bg-muted border-border'}`}>
-                      <User className={`h-4 w-4 flex-shrink-0 ${cliente ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`} />
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium">Cliente</p>
-                        {cliente ? (
-                          <>
-                            <p className="font-semibold text-sm">{cliente.nombre}</p>
-                            {cliente.numeroDocumento && (
-                              <p className="text-xs text-muted-foreground">{cliente.tipoDocumento} {cliente.numeroDocumento}</p>
-                            )}
-                          </>
-                        ) : (
-                          <p className="font-semibold text-sm text-muted-foreground">Consumidor final</p>
-                        )}
-                      </div>
-                    </div>
+                    <button key={page} type="button" onClick={() => setCurrentPage(page)}
+                      className={`min-w-8 h-8 px-[10px] text-[.81rem] font-semibold rounded-lg cursor-pointer transition-colors ${
+                        page === currentPage ? 'text-white bg-primary border border-primary' : 'text-muted-foreground bg-card border border-border hover:bg-muted'
+                      }`}>
+                      {page}
+                    </button>
                   );
-                })()}
-
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted">
-                        <TableHead>Producto</TableHead>
-                        <TableHead className="text-center">Cantidad</TableHead>
-                        <TableHead className="text-right">Precio Unit.</TableHead>
-                        <TableHead className="text-right">Subtotal</TableHead>
-                      </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                      {selectedVenta.detalles.map((detalle, index) => {
-                        const productoInfo = productos.find((p) => p.id === detalle.productoId);
-                        const subtotalLinea = detalle.cantidad * detalle.precioUnitario;
-
-                        return (
-                          <TableRow key={index}>
-                            <TableCell className="font-medium">
-                              <div>{detalle.productoNombre || productoInfo?.nombre || `Producto #${detalle.productoId}`}</div>
-                              {detalle.varianteDescripcion && (
-                                <div className="text-xs text-muted-foreground font-normal">{detalle.varianteDescripcion}</div>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-center">{detalle.cantidad}</TableCell>
-                            <TableCell className="text-right">S/.{detalle.precioUnitario.toFixed(2)}</TableCell>
-                            <TableCell className="text-right font-semibold text-primary">
-                              S/.{subtotalLinea.toFixed(2)}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="bg-primary/10 border border-primary rounded-lg p-4 space-y-3">
-                  {descuentoNc > 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground font-medium">Subtotal productos:</span>
-                      <span className="font-semibold">S/.{subtotalVenta.toFixed(2)}</span>
-                    </div>
-                  )}
-
-                  {descuentoNc > 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
-                        🎟 Descuento Nota de Crédito
-                        {selectedVenta.notaCreditoId && (
-                          <span className="font-mono text-xs text-muted-foreground ml-1">
-                            #{selectedVenta.notaCreditoId}
-                          </span>
-                        )}
-                      </span>
-                      <span className="font-semibold text-green-600 dark:text-green-400">
-                        - S/.{descuentoNc.toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground font-medium">Base imponible:</span>
-                    <span className="font-semibold">S/.{baseImponible.toFixed(2)}</span>
-                  </div>
-
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground font-medium">IGV (18%) incl.:</span>
-                    <span className="font-semibold">S/.{igvVenta.toFixed(2)}</span>
-                  </div>
-
-                  <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
-                    <span className="text-lg font-semibold">Total:</span>
-                    <span className="text-2xl font-bold text-primary">S/.{totalCalculado.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (() => {
-                  const yaFacturada = comprobantes.some(
-                    (c) => c.ventaId === selectedVenta.id && c.estado === 'EMITIDO'
-                  );
-                  return yaFacturada ? (
-                    <div className="w-full flex items-center justify-center gap-2 rounded-md border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800 px-4 py-2 text-sm text-green-700 dark:text-green-300 font-medium">
-                      <FileText size={16} />
-                      Comprobante ya emitido
-                    </div>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      className="w-full flex items-center gap-2"
-                      onClick={() => handleOpenEmitirComprobante(selectedVenta)}
-                    >
-                      <FileText size={16} />
-                      Emitir Comprobante
-                    </Button>
-                  );
-                })()}
-
-                {selectedVenta.estado !== 'ANULADA' && (
-                  <Button
-                    variant="outline"
-                    className="w-full flex items-center gap-2"
-                    onClick={() => {
-                      closeDetailDialog();
-                      const cl = selectedVenta.clienteId ? clienteById.get(selectedVenta.clienteId) : null;
-                      setTicketVenta(selectedVenta);
-                      setTicketDni(cl?.numeroDocumento ?? '');
-                      setTicketNombre(cl?.nombre ?? '');
-                    }}
-                  >
-                    <Printer size={16} />
-                    Imprimir ticket
-                  </Button>
-                )}
-
-                <Button onClick={closeDetailDialog} className="w-full">
-                  Cerrar
-                </Button>
+                })}
+                <button type="button" onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} disabled={currentPage === totalPages || totalPages === 0}
+                  className="min-w-8 h-8 px-[10px] text-[.81rem] font-semibold text-muted-foreground bg-card border border-border rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition-colors">
+                  Siguiente
+                </button>
               </div>
-            );
-          })()}
-      </Dialog>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Detail slide-in drawer — portal para salir del overflow:hidden del layout */}
+      {isDetailDialogOpen && selectedVenta && createPortal(
+        <div className="fixed inset-0 z-[200] flex justify-end" style={{background:'rgba(9,11,16,.5)', backdropFilter:'blur(3px)'}} onClick={closeDetailDialog}>
+          <style>{`@keyframes slideFromRight { from { transform:translateX(28px); opacity:0; } to { transform:none; opacity:1; } }`}</style>
+          <aside className="w-full max-w-[520px] h-full flex flex-col bg-card border-l border-border shadow-[_-20px_0_60px_-30px_rgba(0,0,0,.6)]"
+            style={{animation: 'slideFromRight .24s cubic-bezier(.4,0,.2,1)'}}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 p-[20px_22px] border-b border-border/60 flex-shrink-0">
+              <div>
+                <div className="flex items-center gap-[9px] flex-wrap">
+                  <h2 className="text-[1.15rem] font-bold tracking-tight">Venta #{selectedVenta.id}</h2>
+                  <span className={`inline-flex items-center text-[.75rem] font-[650] px-[9px] py-[3px] rounded-full ${drawerEstadoCls[selectedVenta.estado] ?? 'text-muted-foreground bg-muted'}`}>
+                    {drawerEstadoLabels[selectedVenta.estado] ?? selectedVenta.estado}
+                  </span>
+                </div>
+                <p className="font-mono text-[.78rem] text-muted-foreground mt-[6px]">
+                  {selectedVenta.createdAt ? new Date(selectedVenta.createdAt).toLocaleDateString('es-PE', {day:'2-digit', month:'short', year:'numeric'}) : '—'}
+                  {' · '}
+                  {selectedVenta.createdAt ? new Date(selectedVenta.createdAt).toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}) : ''}
+                  {selectedVenta.vendedorNombre ? ` · ${selectedVenta.vendedorNombre}` : ''}
+                </p>
+              </div>
+              <button type="button" onClick={closeDetailDialog}
+                className="w-[30px] h-[30px] flex-shrink-0 grid place-items-center text-muted-foreground bg-transparent border-0 rounded-lg cursor-pointer hover:bg-muted hover:text-foreground transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-[20px_22px] space-y-5">
+              {/* Cliente + Pago */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-[13px_14px] rounded-xl bg-muted">
+                  <p className="text-[.74rem] text-muted-foreground">Cliente</p>
+                  <p className="text-[.9rem] font-[650] mt-1 break-words">{drawerCliente?.nombre ?? 'Público general'}</p>
+                  {drawerCliente?.numeroDocumento && <p className="font-mono text-[.76rem] text-muted-foreground mt-0.5">{drawerCliente.tipoDocumento} {drawerCliente.numeroDocumento}</p>}
+                </div>
+                <div className="p-[13px_14px] rounded-xl bg-muted">
+                  <p className="text-[.74rem] text-muted-foreground">Método de pago</p>
+                  <p className="text-[.9rem] font-[650] mt-1">{{EFECTIVO:'Efectivo', TARJETA:'Tarjeta', YAPE_PLIN:'Yape / Plin'}[selectedVenta.metodoPago as string] ?? selectedVenta.metodoPago}</p>
+                  <p className="font-mono text-[.76rem] text-muted-foreground mt-0.5">{comprobantes.find(c => c.ventaId === selectedVenta.id)?.numero ?? 'Sin comprobante'}</p>
+                </div>
+              </div>
+
+              {/* Productos */}
+              <div>
+                <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-[10px]">Productos</p>
+                <div className="border border-border rounded-xl overflow-hidden">
+                  {selectedVenta.detalles.map((d, i) => (
+                    <div key={i} className={`flex items-start gap-[14px] p-[12px_14px] ${i > 0 ? 'border-t border-border/60' : ''}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[.865rem] font-semibold leading-snug">{d.productoNombre ?? `Producto #${d.productoId}`}</p>
+                        {d.varianteDescripcion && <p className="font-mono text-[.74rem] text-muted-foreground mt-0.5">{d.varianteDescripcion}</p>}
+                        <p className="font-mono text-[.74rem] text-muted-foreground mt-0.5">x{d.cantidad} · S/ {d.precioUnitario.toFixed(2)}</p>
+                      </div>
+                      <p className="flex-shrink-0 text-right font-mono text-[.86rem] font-semibold tabular-nums">S/ {(d.cantidad * d.precioUnitario).toFixed(2)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Totales */}
+              <div className="grid gap-2 p-[15px_16px] rounded-xl bg-muted border border-border text-[.87rem]">
+                {drawerDescuentoNc > 0 && (
+                  <>
+                    <div className="flex justify-between gap-3 text-muted-foreground">
+                      <span>Subtotal:</span>
+                      <span className="tabular-nums">S/ {drawerSubtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between gap-3 text-emerald-600 dark:text-emerald-400">
+                      <span>Descuento NC{selectedVenta.notaCreditoId ? ` #${selectedVenta.notaCreditoId}` : ''}:</span>
+                      <span className="tabular-nums">- S/ {drawerDescuentoNc.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between gap-3 text-muted-foreground">
+                  <span>Base imponible</span>
+                  <span className="tabular-nums">S/ {drawerBase.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-muted-foreground">
+                  <span>IGV (18%)</span>
+                  <span className="tabular-nums">S/ {drawerIgv.toFixed(2)}</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-3 pt-[9px] border-t border-border">
+                  <span className="font-[650]">Total</span>
+                  <span className="text-[1.32rem] font-bold tracking-tight tabular-nums">S/ {drawerTotal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {selectedVenta.estado !== 'COMPLETADA' && (
+                <div className={`p-[13px_15px] rounded-xl text-[.84rem] leading-[1.55] ${
+                  selectedVenta.estado === 'ANULADA' ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/10' : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10'
+                }`}>
+                  {selectedVenta.estado === 'ANULADA' ? 'Venta anulada. El stock ya regresó al inventario.'
+                    : selectedVenta.estado === 'DEVUELTA' ? 'Devolución total registrada.'
+                    : 'Devolución parcial: un producto regresó al inventario y el total se ajustó.'}
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div className="flex flex-wrap gap-[9px] p-[16px_22px] border-t border-border/60 flex-shrink-0">
+              {canEmitirComprobante && selectedVenta.estado === 'COMPLETADA' && (
+                drawerYaFacturada ? (
+                  <div className="flex-1 min-w-[150px] h-11 flex items-center justify-center gap-2 rounded-[11px] border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-sm text-emerald-700 dark:text-emerald-400 font-medium">
+                    <FileText size={15} />
+                    Comprobante ya emitido
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => { closeDetailDialog(); handleOpenEmitirComprobante(selectedVenta); }}
+                    className="flex-1 min-w-[150px] h-11 flex items-center justify-center gap-2 font-[650] text-[.9rem] text-white bg-primary border-0 rounded-[11px] cursor-pointer hover:brightness-105 transition-all shadow-[0_8px_20px_-10px_hsl(var(--primary)/0.6)]">
+                    <FileText size={15} />
+                    Emitir comprobante
+                  </button>
+                )
+              )}
+              {selectedVenta.estado !== 'ANULADA' && (
+                <button type="button" onClick={() => {
+                  closeDetailDialog();
+                  const cl = selectedVenta.clienteId ? clienteById.get(selectedVenta.clienteId) : null;
+                  setTicketVenta(selectedVenta); setTicketDni(cl?.numeroDocumento ?? ''); setTicketNombre(cl?.nombre ?? '');
+                }} className="flex-1 min-w-[150px] h-11 flex items-center justify-center gap-2 font-semibold text-[.9rem] text-muted-foreground bg-card border border-border rounded-[11px] cursor-pointer hover:border-primary hover:text-primary transition-colors">
+                  <Printer size={15} />
+                  Imprimir ticket
+                </button>
+              )}
+            </div>
+          </aside>
+        </div>,
+        document.body
+      )}
 
       {/* Devolucion Modal */}
       {showDevolucion && devolucionVenta && (
@@ -1336,56 +1156,244 @@ export function VentasList() {
         />
       )}
 
-      {/* Dialog — Ticket de venta */}
-      <Dialog
-        isOpen={!!ticketVenta}
-        onClose={() => setTicketVenta(null)}
-        title="Imprimir ticket"
-        description={ticketVenta ? `Venta #${ticketVenta.id} · S/.${ticketVenta.total.toFixed(2)}` : ''}
-        size="sm"
-      >
-        {ticketVenta && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Agrega los datos del cliente al ticket (opcional).</p>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-muted-foreground">DNI (opcional)</label>
-                <Input
-                  placeholder="12345678"
-                  maxLength={8}
-                  value={ticketDni}
-                  onChange={e => setTicketDni(e.target.value.replace(/\D/g, ''))}
-                />
+      {/* Modal — Ticket de venta */}
+      {!!ticketVenta && createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-5"
+          style={{ background: 'rgba(9,11,16,.55)', backdropFilter: 'blur(3px)' }}
+          onClick={() => setTicketVenta(null)}
+        >
+          <style>{`@keyframes tkModalIn{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}`}</style>
+          <div
+            className="w-full max-w-[700px] flex flex-col bg-background border border-border rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,.55)] overflow-hidden"
+            style={{ animation: 'tkModalIn .2s ease', maxHeight: 'calc(100vh - 40px)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start gap-3 px-[22px] pt-5 pb-4 border-b border-border/50 flex-shrink-0">
+              <span className="w-[38px] h-[38px] flex-shrink-0 grid place-items-center rounded-[11px] bg-primary/10 text-primary">
+                <Printer size={18} />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-[1.08rem] font-bold tracking-[-0.02em]">Imprimir ticket</h2>
+                <div className="font-mono text-[.76rem] text-muted-foreground mt-1">
+                  Venta #{ticketVenta.id} · S/.{ticketVenta.total.toFixed(2)}
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-muted-foreground">Nombre (opcional)</label>
-                <Input
-                  placeholder="Juan Pérez"
-                  value={ticketNombre}
-                  onChange={e => setTicketNombre(e.target.value)}
-                />
+              <button type="button" onClick={() => setTicketVenta(null)} className="w-[30px] h-[30px] flex-shrink-0 ml-auto grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-[22px] py-[18px]">
+              <div className="grid gap-[22px]" style={{ gridTemplateColumns: 'minmax(0,1fr) 240px', alignItems: 'start' }}>
+                {/* Form */}
+                <div className="space-y-[14px]">
+                  <p className="text-[.86rem] text-muted-foreground leading-relaxed">
+                    Los datos del cliente son opcionales. Si los dejas vacíos, el ticket sale como Público general.
+                  </p>
+                  <div>
+                    <label className="block text-[.8rem] font-semibold text-muted-foreground mb-1.5">DNI / RUC</label>
+                    <Input
+                      placeholder="Opcional"
+                      maxLength={11}
+                      value={ticketDni}
+                      onChange={e => setTicketDni(e.target.value.replace(/\D/g, ''))}
+                      className="font-mono tracking-wide"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[.8rem] font-semibold text-muted-foreground mb-1.5">Nombre</label>
+                    <Input
+                      placeholder="Opcional"
+                      value={ticketNombre}
+                      onChange={e => setTicketNombre(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Preview 80mm */}
+                <div className="p-4 rounded-[14px] bg-muted">
+                  <div className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-[10px] text-center">
+                    Vista previa · 80 mm
+                  </div>
+                  <div className="bg-white text-[#1a1d24] font-mono text-[.66rem] leading-[1.55] px-3 py-[14px] rounded-sm shadow-[0_10px_24px_-14px_rgba(0,0,0,.4)]">
+                    <div className="text-center text-[.8rem] font-bold">{negocioConfig?.nombreNegocio || 'BOTICA'}</div>
+                    <div className="text-center text-[#5b6170]">{negocioConfig?.direccion || ''}</div>
+                    <div className="border-t border-dashed border-[#b9bec8] my-2" />
+                    <div className="flex justify-between gap-2"><span>TICKET DE VENTA</span><span>#{ticketVenta.id}</span></div>
+                    <div className="text-[#5b6170]">{new Date(ticketVenta.createdAt || '').toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })}</div>
+                    <div className="mt-1 break-words">Cliente: {ticketNombre.trim() || 'Público general'}</div>
+                    {ticketDni && <div>Doc: {ticketDni}</div>}
+                    <div className="border-t border-dashed border-[#b9bec8] my-2" />
+                    {ticketVenta.detalles.map((d, i) => (
+                      <div key={i} className="mb-1">
+                        <div className="break-words">{d.productoNombre || `Prod. #${d.productoId}`}</div>
+                        <div className="flex justify-between gap-2 text-[#5b6170]">
+                          <span>{d.cantidad} x S/.{d.precioUnitario.toFixed(2)}</span>
+                          <span className="text-[#1a1d24]">S/.{(d.cantidad * d.precioUnitario).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="border-t border-dashed border-[#b9bec8] my-2" />
+                    <div className="flex justify-between font-bold text-[.78rem]">
+                      <span>TOTAL</span><span>S/.{ticketVenta.total.toFixed(2)}</span>
+                    </div>
+                    <div className="border-t border-dashed border-[#b9bec8] my-2" />
+                    <div className="text-center text-[#5b6170]">Gracias por su compra</div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="flex gap-2 pt-2 border-t">
-              <Button variant="outline" className="flex-1" onClick={() => setTicketVenta(null)}>
+
+            {/* Footer */}
+            <div className="flex gap-[9px] px-[22px] py-[14px] border-t border-border/50 flex-shrink-0">
+              <button type="button" onClick={() => setTicketVenta(null)}
+                className="flex-none min-w-[110px] h-11 px-[18px] text-[.9rem] font-semibold text-muted-foreground bg-background border border-border rounded-[11px] hover:bg-muted transition-colors">
                 Cancelar
-              </Button>
-              <Button
-                className="flex-1 gap-2"
+              </button>
+              <button type="button"
+                className="flex-1 h-11 flex items-center justify-center gap-2 text-[.9rem] font-semibold text-white bg-primary border-0 rounded-[11px] shadow-[0_8px_20px_-10px_hsl(var(--primary)/0.5)] hover:brightness-105 transition-all"
                 onClick={() => {
                   printVentaTicket(ticketVenta, negocioConfig, ticketDni.trim() || undefined, ticketNombre.trim() || undefined);
                   setTicketVenta(null);
-                }}
-              >
-                <Printer size={15} />
+                  toast.success(`Ticket enviado a la impresora · Venta #${ticketVenta.id}`);
+                }}>
+                <Printer size={16} />
                 Imprimir
-              </Button>
+              </button>
             </div>
           </div>
-        )}
-      </Dialog>
+        </div>,
+        document.body
+      )}
 
-      {/* Confirm Dialog */}
+      {/* Modal — Anular venta */}
+      {!!anularVenta && createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-5"
+          style={{ background: 'rgba(9,11,16,.55)', backdropFilter: 'blur(3px)' }}
+          onClick={() => { if (!anularSubmitting) setAnularVenta(null); }}
+        >
+          <style>{`@keyframes anModalIn{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}`}</style>
+          <div
+            className="w-full max-w-[470px] flex flex-col bg-background border border-border rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,.55)] overflow-hidden"
+            style={{ animation: 'anModalIn .2s ease', maxHeight: 'calc(100vh - 40px)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start gap-3 px-[22px] pt-5 pb-4 border-b border-border/50 flex-shrink-0">
+              <span className="w-[38px] h-[38px] flex-shrink-0 grid place-items-center rounded-[11px] bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-[1.08rem] font-bold tracking-[-0.02em]">Anular venta</h2>
+                <div className="font-mono text-[.76rem] text-muted-foreground mt-1">
+                  Venta #{anularVenta.id} · S/.{anularVenta.total.toFixed(2)}
+                </div>
+              </div>
+              <button type="button" onClick={() => setAnularVenta(null)} disabled={anularSubmitting}
+                className="w-[30px] h-[30px] flex-shrink-0 ml-auto grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-40">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-[22px] py-[18px] space-y-4">
+              {/* Resumen */}
+              <div className="grid gap-2 px-[15px] py-[13px] rounded-xl bg-muted text-[.84rem]">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Cliente</span>
+                  <span className="font-semibold text-right">
+                    {anularVenta.clienteId ? clienteById.get(anularVenta.clienteId)?.nombre : 'Público general'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Fecha</span>
+                  <span className="font-mono text-[.8rem]">
+                    {anularVenta.createdAt
+                      ? new Date(anularVenta.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Comprobante</span>
+                  <span className="font-mono text-[.8rem]">
+                    {(() => {
+                      const comp = comprobantes.find(c => c.ventaId === anularVenta.id && c.estado === 'EMITIDO');
+                      return comp ? `${comp.tipo === 'FACTURA' ? 'F001' : 'B001'}-${String(comp.id).padStart(6, '0')}` : 'Sin comprobante';
+                    })()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Aviso si tiene comprobante SUNAT */}
+              {(() => {
+                const comp = comprobantes.find(c => c.ventaId === anularVenta.id && c.estado === 'EMITIDO');
+                if (!comp) return null;
+                return (
+                  <div className="px-[15px] py-[13px] rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
+                    <p className="text-[.83rem] leading-relaxed text-amber-800 dark:text-amber-300">
+                      Esta venta tiene un comprobante emitido. Anular no revierte el comprobante; para eso corresponde una nota de crédito.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAnularVenta(null);
+                        setDevolucionVenta(anularVenta);
+                        setShowDevolucion(true);
+                      }}
+                      className="flex items-center gap-1.5 h-[30px] mt-[9px] px-[11px] text-[.79rem] font-semibold text-amber-700 dark:text-amber-400 bg-background border border-amber-200 dark:border-amber-700 rounded-lg hover:brightness-95 transition-all"
+                    >
+                      <RotateCcw size={13} />
+                      Registrar devolución en su lugar
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Motivo */}
+              <div>
+                <label className="block text-[.8rem] font-semibold text-muted-foreground mb-1.5">
+                  Motivo de la anulación <span className="text-destructive">*</span>
+                </label>
+                <textarea
+                  value={anularMotivo}
+                  onChange={e => setAnularMotivo(e.target.value)}
+                  rows={3}
+                  placeholder="Ej. venta registrada por error, cobro duplicado…"
+                  className="w-full px-[13px] py-[11px] text-[.875rem] leading-relaxed text-foreground bg-background border border-border rounded-[10px] outline-none focus:ring-1 focus:ring-ring resize-none"
+                />
+              </div>
+              <p className="text-[.78rem] text-muted-foreground leading-relaxed">
+                La venta se conserva marcada como ANULADA, sale de los ingresos y su stock regresa al inventario.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-[9px] px-[22px] py-[14px] border-t border-border/50 flex-shrink-0">
+              <button type="button" onClick={() => setAnularVenta(null)} disabled={anularSubmitting}
+                className="flex-none min-w-[110px] h-11 px-[18px] text-[.9rem] font-semibold text-muted-foreground bg-background border border-border rounded-[11px] hover:bg-muted transition-colors disabled:opacity-40">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={anularMotivo.trim().length < 4 || anularSubmitting}
+                onClick={handleConfirmarAnular}
+                className="flex-1 h-11 flex items-center justify-center gap-2 text-[.9rem] font-semibold text-white bg-red-600 border-0 rounded-[11px] shadow-[0_8px_20px_-10px_rgba(214,59,59,.5)] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:brightness-105 transition-all"
+              >
+                {anularSubmitting
+                  ? <><svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Anulando…</>
+                  : 'Anular venta'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Confirm Dialog (para otras acciones) */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}
@@ -1398,171 +1406,218 @@ export function VentasList() {
         onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
       />
 
-      {/* Dialog - Emitir Comprobante desde Venta */}
-      <Dialog
-        isOpen={isEmitirComprobanteOpen}
-        onClose={() => { setIsEmitirComprobanteOpen(false); setEmitirClienteEncontrado(null); }}
-        title="Emitir Comprobante"
-        description={emitirForm.ventaId ? `Para Venta #${emitirForm.ventaId}` : ''}
-        size="md"
-        noBackdrop={isDetailDialogOpen}
-      >
-        <form onSubmit={handleEmitirComprobante} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">
-              Tipo de Comprobante <span className="text-destructive">*</span>
-            </label>
-            <div className="flex gap-3">
-              {(['BOLETA', 'FACTURA'] as const).map((tipo) => (
-                <label
-                  key={tipo}
-                  className={`flex-1 flex items-center justify-center gap-2 rounded-md border-2 px-4 py-3 cursor-pointer transition-colors ${
-                    emitirForm.tipo === tipo
-                      ? 'border-primary bg-primary/10 font-semibold'
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    className="sr-only"
-                    checked={emitirForm.tipo === tipo}
-                    onChange={() => {
-                      setEmitirClienteEncontrado(null);
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        tipo,
-                        receptor:
-                          tipo === 'BOLETA'
-                            ? { tipoDocumento: 'DNI' as const, numeroDocumento: '', razonSocial: '', direccion: '' }
-                            : { tipoDocumento: 'RUC' as const, numeroDocumento: '', razonSocial: '', direccion: '' },
-                      }));
-                    }}
-                  />
-                  {tipo}
-                  <span className="text-xs text-muted-foreground font-normal">
-                    {tipo === 'BOLETA' ? 'con DNI opcional' : 'requiere RUC'}
+      {/* Modal — Emitir Comprobante */}
+      {isEmitirComprobanteOpen && createPortal(
+        (() => {
+          const esFac = emitirForm.tipo === 'FACTURA';
+          const docLen = esFac ? 11 : 8;
+          const doc = emitirForm.receptor?.numeroDocumento ?? '';
+          const razonSocial = emitirForm.receptor?.razonSocial ?? '';
+          const direccion = emitirForm.receptor?.direccion ?? '';
+          const emitirVenta = ventas.find(v => v.id === emitirForm.ventaId);
+          const totalVenta = emitirVenta?.total ?? 0;
+          const base = totalVenta / (1 + IGV_RATE);
+          const igv = totalVenta - base;
+          const canSubmit = esFac
+            ? (doc.length === docLen && razonSocial.trim().length > 0 && direccion.trim().length > 0)
+            : true;
+
+          return (
+            <div
+              className="fixed inset-0 z-[200] flex items-center justify-center p-5"
+              style={{ background: 'rgba(9,11,16,.55)', backdropFilter: 'blur(3px)' }}
+              onClick={() => { setIsEmitirComprobanteOpen(false); setEmitirClienteEncontrado(null); }}
+            >
+              <style>{`@keyframes emModalIn{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}`}</style>
+              <div
+                className="w-full max-w-[540px] flex flex-col bg-background border border-border rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,.55)] overflow-hidden"
+                style={{ animation: 'emModalIn .2s ease', maxHeight: 'calc(100vh - 40px)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-start gap-3 px-[22px] pt-5 pb-4 border-b border-border/50 flex-shrink-0">
+                  <span className="w-[38px] h-[38px] flex-shrink-0 grid place-items-center rounded-[11px] bg-primary/10 text-primary">
+                    <FileText size={18} />
                   </span>
-                </label>
-              ))}
-            </div>
-          </div>
+                  <div className="min-w-0">
+                    <h2 className="text-[1.08rem] font-bold tracking-[-0.02em]">Emitir comprobante</h2>
+                    <div className="font-mono text-[.76rem] text-muted-foreground mt-1">
+                      Venta #{emitirForm.ventaId} · S/.{totalVenta.toFixed(2)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setIsEmitirComprobanteOpen(false); setEmitirClienteEncontrado(null); }}
+                    className="w-[30px] h-[30px] flex-shrink-0 ml-auto grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
 
-          <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
-            <p className="text-sm font-medium">
-              Datos del receptor {emitirForm.tipo === 'FACTURA' && <span className="text-destructive">*</span>}
-            </p>
-            {/* Badge cliente encontrado */}
-            {emitirClienteEncontrado && (
-              <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md px-3 py-1.5">
-                <User size={12} />
-                <span>Cliente encontrado: <strong>{emitirClienteEncontrado.nombre}</strong></span>
+                {/* Scrollbox */}
+                <div className="flex-1 min-h-0 overflow-y-auto px-[22px] py-[18px] space-y-5">
+                  {/* Tipo */}
+                  <div>
+                    <div className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-[9px]">
+                      Tipo de comprobante
+                    </div>
+                    <div className="grid grid-cols-2 gap-[10px]">
+                      {([
+                        { key: 'BOLETA' as const, label: 'Boleta', desc: 'Consumidor final · DNI opcional', serie: 'B001' },
+                        { key: 'FACTURA' as const, label: 'Factura', desc: 'Empresas · RUC obligatorio', serie: 'F001' },
+                      ]).map(op => {
+                        const on = emitirForm.tipo === op.key;
+                        return (
+                          <button
+                            key={op.key}
+                            type="button"
+                            onClick={() => {
+                              setEmitirClienteEncontrado(null);
+                              setEmitirForm(prev => ({
+                                ...prev,
+                                tipo: op.key,
+                                receptor: op.key === 'BOLETA'
+                                  ? { tipoDocumento: 'DNI' as const, numeroDocumento: '', razonSocial: '', direccion: '' }
+                                  : { tipoDocumento: 'RUC' as const, numeroDocumento: '', razonSocial: '', direccion: '' },
+                              }));
+                            }}
+                            className={`flex items-center gap-[11px] px-[14px] py-[13px] rounded-xl text-left transition-all border-[1.5px] ${
+                              on ? 'bg-primary/5 border-primary' : 'bg-background border-border hover:border-primary/40'
+                            }`}
+                          >
+                            <span className={`w-4 h-4 flex-shrink-0 rounded-full box-border ${
+                              on ? 'border-[5px] border-primary bg-background' : 'border-[1.5px] border-border bg-background'
+                            }`} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[.92rem] font-[650] text-foreground">{op.label}</span>
+                              <span className="block text-[.75rem] text-muted-foreground mt-0.5">{op.desc}</span>
+                            </span>
+                            <span className="font-mono text-[.72rem] font-semibold text-muted-foreground">{op.serie}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Campos */}
+                  <div className="space-y-[14px]">
+                    {/* Documento */}
+                    <div>
+                      <label className="block text-[.8rem] font-semibold text-muted-foreground mb-1.5">
+                        {esFac ? 'RUC *' : 'DNI (opcional)'}
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={docLen}
+                          placeholder={esFac ? '11 dígitos' : '8 dígitos'}
+                          value={doc}
+                          onChange={e => {
+                            setEmitirClienteEncontrado(null);
+                            setEmitirForm(prev => ({
+                              ...prev,
+                              receptor: {
+                                ...prev.receptor,
+                                tipoDocumento: esFac ? 'RUC' as const : 'DNI' as const,
+                                numeroDocumento: e.target.value.replace(/\D/g, '').slice(0, docLen),
+                                razonSocial: '',
+                                direccion: '',
+                              },
+                            }));
+                          }}
+                          className="flex-1 min-w-0 h-[42px] px-[13px] font-mono tracking-[.04em] text-[.875rem] text-foreground bg-background border border-border rounded-[10px] outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <button
+                          type="button"
+                          disabled={doc.length < docLen || emitirBuscando}
+                          className={`flex-shrink-0 flex items-center gap-[7px] h-[42px] px-[14px] text-[.82rem] font-[650] rounded-[10px] whitespace-nowrap transition-all border ${
+                            doc.length >= docLen && !emitirBuscando
+                              ? 'text-primary bg-primary/10 border-primary/30 cursor-pointer hover:brightness-95'
+                              : 'text-muted-foreground bg-muted border-transparent cursor-not-allowed'
+                          }`}
+                        >
+                          <Search size={14} className="flex-shrink-0" />
+                          {emitirBuscando ? 'Buscando…' : esFac ? 'SUNAT' : 'RENIEC'}
+                        </button>
+                      </div>
+                      {emitirClienteEncontrado && (
+                        <div className="flex items-center gap-2 mt-1.5 text-[.76rem] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <User size={12} />
+                          Cliente encontrado: {emitirClienteEncontrado.nombre}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Nombre / Razón social */}
+                    <div>
+                      <label className="block text-[.8rem] font-semibold text-muted-foreground mb-1.5">
+                        {esFac ? 'Razón social *' : 'Nombre (opcional)'}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={esFac ? 'Se completa al buscar el RUC' : 'Nombre del cliente'}
+                        value={razonSocial}
+                        onChange={e => setEmitirForm(prev => ({ ...prev, receptor: { ...prev.receptor, razonSocial: e.target.value } }))}
+                        className="w-full h-[42px] px-[13px] text-[.875rem] text-foreground bg-background border border-border rounded-[10px] outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </div>
+
+                    {/* Dirección */}
+                    <div>
+                      <label className="block text-[.8rem] font-semibold text-muted-foreground mb-1.5">
+                        {esFac ? 'Dirección fiscal *' : 'Dirección (opcional)'}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Av., calle, distrito"
+                        value={direccion}
+                        onChange={e => setEmitirForm(prev => ({ ...prev, receptor: { ...prev.receptor, direccion: e.target.value } }))}
+                        className="w-full h-[42px] px-[13px] text-[.875rem] text-foreground bg-background border border-border rounded-[10px] outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Resumen totales */}
+                  <div className="grid grid-cols-3 gap-px bg-border border border-border rounded-xl overflow-hidden">
+                    {[
+                      { label: 'Base imponible', value: `S/.${base.toFixed(2)}` },
+                      { label: 'IGV 18%', value: `S/.${igv.toFixed(2)}` },
+                      { label: 'Total', value: `S/.${totalVenta.toFixed(2)}` },
+                    ].map(item => (
+                      <div key={item.label} className="px-[13px] py-[11px] bg-muted">
+                        <div className="text-[.72rem] text-muted-foreground">{item.label}</div>
+                        <div className="text-[.9rem] font-[650] mt-0.5 tabular-nums">{item.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex gap-[9px] px-[22px] py-[14px] border-t border-border/50 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => { setIsEmitirComprobanteOpen(false); setEmitirClienteEncontrado(null); }}
+                    className="flex-none min-w-[110px] h-11 px-[18px] text-[.9rem] font-semibold text-muted-foreground bg-background border border-border rounded-[11px] hover:bg-muted transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSubmit || emitirSubmitting}
+                    onClick={() => handleEmitirComprobante({ preventDefault: () => {} } as React.FormEvent<HTMLFormElement>)}
+                    className="flex-1 h-11 flex items-center justify-center gap-2 text-[.9rem] font-semibold text-white bg-primary border-0 rounded-[11px] shadow-[0_8px_20px_-10px_hsl(var(--primary)/0.5)] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:brightness-105 transition-all"
+                  >
+                    <FileText size={16} />
+                    {emitirSubmitting ? 'Emitiendo…' : esFac ? 'Emitir factura' : 'Emitir boleta'}
+                  </button>
+                </div>
               </div>
-            )}
-
-            {emitirForm.tipo === 'FACTURA' ? (
-              <>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground font-medium">
-                    RUC <span className="text-destructive">*</span>
-                  </label>
-                  <div className="relative">
-                    <Input
-                      placeholder="20xxxxxxxxx (11 dígitos)"
-                      maxLength={11}
-                      value={emitirForm.receptor?.numeroDocumento ?? ''}
-                      onChange={(e) => {
-                        setEmitirClienteEncontrado(null);
-                        setEmitirForm((prev) => ({
-                          ...prev,
-                          receptor: { ...prev.receptor, tipoDocumento: 'RUC' as const, numeroDocumento: e.target.value, razonSocial: '', direccion: '' },
-                        }));
-                      }}
-                      required
-                    />
-                    {emitirBuscando && (
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground animate-pulse">buscando...</span>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground font-medium">
-                    Razón Social <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    placeholder="Nombre de la empresa"
-                    value={emitirForm.receptor?.razonSocial ?? ''}
-                    onChange={(e) =>
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        receptor: { ...prev.receptor, razonSocial: e.target.value },
-                      }))
-                    }
-                    required
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground font-medium">DNI (opcional)</label>
-                  <div className="relative">
-                    <Input
-                      placeholder="DNI del cliente"
-                      maxLength={8}
-                      value={emitirForm.receptor?.numeroDocumento ?? ''}
-                      onChange={(e) => {
-                        setEmitirClienteEncontrado(null);
-                        setEmitirForm((prev) => ({
-                          ...prev,
-                          receptor: { ...prev.receptor, tipoDocumento: 'DNI' as const, numeroDocumento: e.target.value, razonSocial: '', direccion: '' },
-                        }));
-                      }}
-                    />
-                    {emitirBuscando && (
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground animate-pulse">buscando...</span>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground font-medium">Nombre (opcional)</label>
-                  <Input
-                    placeholder="Nombre del cliente"
-                    value={emitirForm.receptor?.razonSocial ?? ''}
-                    onChange={(e) =>
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        receptor: { ...prev.receptor, razonSocial: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-              </>
-            )}
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">Dirección (opcional)</label>
-              <Input
-                placeholder="Dirección del receptor"
-                value={emitirForm.receptor?.direccion ?? ''}
-                onChange={(e) =>
-                  setEmitirForm((prev) => ({
-                    ...prev,
-                    receptor: { ...prev.receptor, direccion: e.target.value },
-                  }))
-                }
-              />
             </div>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-2 border-t">
-            <Button type="button" variant="outline" onClick={() => setIsEmitirComprobanteOpen(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={emitirSubmitting}>
-              {emitirSubmitting ? 'Emitiendo...' : 'Emitir Comprobante'}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
+          );
+        })(),
+        document.body
+      )}
 
       {/* Dialog: Registrar Servicio (solo EMPRESA_SERVICIOS) */}
       <Dialog

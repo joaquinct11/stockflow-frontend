@@ -40,11 +40,13 @@ function amountToWords(amount: number): string {
 // ── Estilos base ──────────────────────────────────────────────────────────────
 const BASE_STYLES = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: 80mm auto; margin: 4mm 3mm; }
+  @page { size: 80mm auto; margin: 2mm; }
+  html { display: flex; justify-content: center; }
   body {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 11px;
-    width: 74mm;
+    width: 76mm;
+    max-width: 76mm;
     color: #000;
     line-height: 1.5;
     margin: 0 auto;
@@ -72,7 +74,7 @@ const BASE_STYLES = `
 `;
 
 function openTicket(html: string) {
-  const win = window.open('', '_blank', 'width=290,height=700,scrollbars=yes');
+  const win = window.open('', '_blank', 'width=320,height=700,scrollbars=yes');
   if (!win) { toast.error('Permite ventanas emergentes para imprimir el ticket'); return; }
   win.document.open();
   win.document.write(html);
