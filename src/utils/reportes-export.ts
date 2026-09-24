@@ -21,6 +21,7 @@ import type {
   VentaDTO,
   OrdenCompraDTO,
   ProductoDTO,
+  ComprobanteDTO,
 } from '../types';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -855,4 +856,78 @@ export function exportarStockPDF(
   }
 
   doc.save(`stock_actual_${new Date().toISOString().split('T')[0]}.pdf`);
+}
+
+// ── Comprobantes ──────────────────────────────────────────────────────────────
+
+export function exportarComprobantesExcel(comprobantes: ComprobanteDTO[], etiqueta: string): void {
+  const filas = comprobantes.map(c => ({
+    'Número': c.numero ?? `#${c.id}`,
+    'Tipo': c.tipo,
+    'Fecha': c.createdAt ? new Date(c.createdAt).toLocaleDateString('es-PE') : '',
+    'Hora': c.createdAt ? new Date(c.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '',
+    'Receptor': c.receptorNombre ?? c.receptor?.razonSocial ?? '',
+    'Doc. Receptor': c.receptorDocNumero ?? c.receptor?.numeroDocumento ?? '',
+    'Venta ID': c.ventaId,
+    'Estado': c.estado,
+    'Estado SUNAT': c.sunatEstado ?? '',
+    'Total': c.total ?? 0,
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(filas);
+  ws['!cols'] = [
+    { wch: 18 }, { wch: 9 }, { wch: 12 }, { wch: 8 },
+    { wch: 28 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 10 },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Comprobantes');
+  XLSX.writeFile(wb, `comprobantes_${etiqueta}_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+export function exportarComprobantesPDF(
+  comprobantes: ComprobanteDTO[],
+  etiqueta: string,
+  negocio?: TenantConfigDTO,
+): void {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  let startY = 14;
+
+  if (negocio) {
+    startY = dibujarEncabezadoNegocio(doc, negocio, 'Comprobantes', etiqueta);
+  } else {
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Comprobantes', 14, startY);
+    startY += 8;
+  }
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Período: ${etiqueta}  ·  Total registros: ${comprobantes.length}`, 14, startY);
+  startY += 6;
+
+  const filas = comprobantes.map(c => [
+    c.numero ?? `#${c.id}`,
+    c.tipo,
+    c.createdAt ? new Date(c.createdAt).toLocaleDateString('es-PE') : '',
+    c.receptorNombre ?? c.receptor?.razonSocial ?? '',
+    c.receptorDocNumero ?? c.receptor?.numeroDocumento ?? '',
+    String(c.ventaId),
+    c.estado,
+    c.sunatEstado ?? '',
+    sol(c.total ?? 0),
+  ]);
+
+  autoTable(doc, {
+    startY,
+    head: [['Número', 'Tipo', 'Fecha', 'Receptor', 'Documento', 'Venta', 'Estado', 'SUNAT', 'Total']],
+    body: filas,
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: { 8: { halign: 'right', fontStyle: 'bold' } },
+  });
+
+  doc.save(`comprobantes_${etiqueta}_${new Date().toISOString().split('T')[0]}.pdf`);
 }
