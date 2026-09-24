@@ -39,6 +39,33 @@
 
     /* Esquinas más redondeadas — más moderno */
     --radius: 0.625rem;
+
+    /* ── Fluxus design tokens ──────────────────────────────────── */
+    --bg:            #f8f9fc;
+    --surface:       #ffffff;
+    --surface-2:     #f1f3f8;
+    --surface-3:     #e8ebf2;
+    --line:          #dde1eb;
+    --line-soft:     #eef0f6;
+    --text:          #0d1117;
+    --text-2:        #4b5263;
+    --text-3:        #8b93a4;
+    --primary-soft:  #eef0fd;
+    --primary-line:  #c5cafc;
+    --ok:            #0f9d6e;
+    --ok-soft:       #e5f6f0;
+    --warn:          #b7791f;
+    --warn-soft:     #fef3c7;
+    --warn-line:     #f59e0b;
+    --bad:           #d63b3b;
+    --bad-soft:      #fde8e8;
+    --info:          #2563eb;
+    --info-soft:     #dbeafe;
+    --violet:        #7c3aed;
+    --violet-soft:   #ede9fe;
+    --shadow:        0 1px 4px 0 rgba(9,11,16,.07),0 4px 16px 0 rgba(9,11,16,.05);
+    --sidebar:       #ffffff;
+    --sidebar-line:  #e8ebf2;
   }
 
   .dark {
@@ -69,6 +96,33 @@
     --border: 217 33% 15%;
     --input: 217 33% 15%;
     --ring: 231 85% 65%;
+
+    /* ── Fluxus design tokens ──────────────────────────────────── */
+    --bg:            #090b10;
+    --surface:       #0e1117;
+    --surface-2:     #161b25;
+    --surface-3:     #1d2535;
+    --line:          #232c3d;
+    --line-soft:     #1a2030;
+    --text:          #e8ecf4;
+    --text-2:        #8b93a4;
+    --text-3:        #5a6173;
+    --primary-soft:  #1a1e3d;
+    --primary-line:  #2d3580;
+    --ok:            #0f9d6e;
+    --ok-soft:       #0d2d22;
+    --warn:          #d4a054;
+    --warn-soft:     #2d1f08;
+    --warn-line:     #92620a;
+    --bad:           #e85555;
+    --bad-soft:      #2a0f0f;
+    --info:          #5b9cf6;
+    --info-soft:     #0f1f40;
+    --violet:        #a67cfc;
+    --violet-soft:   #1e1040;
+    --shadow:        0 1px 4px 0 rgba(0,0,0,.3),0 4px 16px 0 rgba(0,0,0,.25);
+    --sidebar:       #0e1117;
+    --sidebar-line:  #1d2535;
   }
 }
 
@@ -90,23 +144,24 @@
 
   /* Scrollbar elegante */
   ::-webkit-scrollbar {
-    width: 7px;
-    height: 7px;
+    width: 5px;
+    height: 5px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-muted rounded-full;
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-primary/40 rounded-full;
+    background-color: hsl(var(--muted-foreground) / 0.25);
+    border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-primary/70;
+    background-color: hsl(var(--muted-foreground) / 0.45);
   }
 
   /* Firefox */
   * {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--primary) / 0.4) hsl(var(--muted));
+    scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
   }
 
   /* Ocultar scrollbar pero mantener funcionalidad */

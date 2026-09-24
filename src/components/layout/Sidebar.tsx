@@ -262,7 +262,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
       <aside
         className={cn(
           'fixed left-0 top-0 z-50 h-screen flex flex-col',
-          'bg-card border-r border-border',
+          'bg-sidebar border-r border-sidebar-line',
           'transition-all duration-300 ease-in-out',
           'lg:translate-x-0',
           collapsed ? 'lg:w-[68px]' : 'lg:w-64',
@@ -273,7 +273,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
       >
         {/* ── Logo header ─────────────────────────────────────────── */}
         <div className={cn(
-          'flex h-16 items-center border-b border-border/60 flex-shrink-0 relative',
+          'flex h-16 items-center border-b border-sidebar-line flex-shrink-0 relative',
           collapsed ? 'justify-center px-3' : 'gap-[10px] px-[18px]'
         )}>
           {!collapsed && (
@@ -322,7 +322,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
 
         {/* ── Badge de Rol ──────────────────────────────────────── */}
         {!collapsed && user && (
-          <div className="flex items-center justify-between gap-2 px-[18px] py-[10px] border-b border-border/60 flex-shrink-0">
+          <div className="flex items-center justify-between gap-2 px-[18px] py-[10px] border-b border-sidebar-line flex-shrink-0">
             <span className="font-mono text-[.62rem] font-semibold tracking-[.1em] uppercase text-muted-foreground">Rol</span>
             <span className="text-[.66rem] font-bold tracking-[.05em] uppercase text-destructive bg-destructive/10 rounded-full px-[9px] py-[2px]">
               {ROL_LABEL[user.rol] ?? user.rol}
@@ -350,7 +350,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                       collapsed && 'justify-center px-0 w-full',
                       active
                         ? 'bg-primary/10 text-primary font-semibold'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                        : 'text-ink-2 hover:text-ink hover:bg-surface-2'
                     )}
                     style={active ? { boxShadow: 'inset 3px 0 0 hsl(var(--primary))' } : undefined}
                   >
@@ -387,7 +387,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                       collapsed && 'justify-center px-0',
                       groupActive || (collapsed && collapsedPopover?.key === entry.key)
                         ? 'bg-primary/10 text-primary font-semibold'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                        : 'text-ink-2 hover:text-ink hover:bg-surface-2'
                     )}
                     style={groupActive ? { boxShadow: 'inset 3px 0 0 hsl(var(--primary))' } : undefined}
                     title={collapsed ? entry.title : undefined}
@@ -407,7 +407,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
 
                   {/* Subitems */}
                   {!collapsed && expanded && (
-                    <div className="ml-3 pl-[11px] border-l border-border flex flex-col gap-0.5">
+                    <div className="ml-3 pl-[11px] border-l border-sidebar-line flex flex-col gap-0.5">
                       {visibleChildren.map((it) => {
                         const Icon = it.icon;
                         const active = isPathActive(it.href);
@@ -419,8 +419,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                             className={cn(
                               'flex items-center gap-[10px] rounded-lg px-[10px] py-[7px] text-[.83rem] transition-all',
                               active
-                                ? 'text-foreground bg-accent font-semibold'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-accent font-medium'
+                                ? 'text-primary bg-primary/10 font-semibold'
+                                : 'text-ink-2 hover:text-ink hover:bg-surface-2 font-medium'
                             )}
                           >
                             <Icon size={16} className="flex-shrink-0" />
@@ -437,7 +437,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
 
         {/* ── Trial / Suscripción ───────────────────────────────── */}
         {!collapsed && user && (
-          <div className="border-t border-border/60 flex-shrink-0">
+          <div className="border-t border-sidebar-line flex-shrink-0">
             {esTrial && (
               <div className="p-3">
                 <div className="border border-border rounded-xl p-3 bg-muted/30">
@@ -467,7 +467,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
             {/* ── User row ────────────────────────────────────────── */}
             <div className={cn(
               'flex items-center gap-[10px] px-[14px] py-[11px]',
-              esTrial ? 'border-t border-border/60' : ''
+              esTrial ? 'border-t border-sidebar-line' : ''
             )}>
               <span className="w-8 h-8 flex-shrink-0 rounded-full bg-primary/10 border border-primary/30 text-primary text-[.72rem] font-bold grid place-items-center">
                 {getInitials(user.nombre)}
@@ -499,10 +499,10 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         const children = entry.items.filter((it) => it.show);
         return (
           <div
-            className="fixed left-[68px] z-[70] min-w-[200px] bg-card border border-border rounded-xl shadow-xl py-1.5 overflow-hidden"
+            className="fixed left-[68px] z-[70] min-w-[200px] bg-sidebar border border-sidebar-line rounded-xl shadow-card py-1.5 overflow-hidden"
             style={{ top: collapsedPopover.top }}
           >
-            <div className="px-3 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border">
+            <div className="px-3 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-widest text-ink-3 border-b border-sidebar-line">
               {entry.title}
             </div>
             {children.map((it) => {
@@ -516,8 +516,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
                   className={cn(
                     'flex items-center gap-2.5 px-3 py-2 text-sm transition-all',
                     active
-                      ? 'text-foreground bg-accent font-semibold'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      ? 'text-primary bg-primary/10 font-semibold'
+                      : 'text-ink-2 hover:text-ink hover:bg-surface-2'
                   )}
                 >
                   <Icon size={15} className="flex-shrink-0" />

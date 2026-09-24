@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
@@ -35,8 +36,8 @@ export function Dialog({ isOpen, onClose, title, description, children, size = '
     full: 'max-w-7xl',
   };
 
-  return (
-    <div className="fixed inset-0 z-50">
+  return createPortal(
+    <div className="fixed inset-0 z-[200]">
       {/* Backdrop */}
       {!noBackdrop && (
         <div
@@ -46,14 +47,14 @@ export function Dialog({ isOpen, onClose, title, description, children, size = '
       )}
 
       {/* Contenedor centrado */}
-      <div className="fixed inset-0 top-16 flex items-center justify-center p-4 pointer-events-none">
+      <div className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">
         {/* Modal */}
         <div
           className={[
             'pointer-events-auto relative bg-background rounded-2xl shadow-2xl shadow-black/20 w-full',
             'ring-1 ring-border/50',
             sizeClasses[size],
-            'max-h-[calc(100vh-5rem)] overflow-y-auto',
+            'max-h-[90vh] overflow-y-auto',
             'animate-in zoom-in-95 fade-in duration-200',
           ].join(' ')}
         >
@@ -81,6 +82,7 @@ export function Dialog({ isOpen, onClose, title, description, children, size = '
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
