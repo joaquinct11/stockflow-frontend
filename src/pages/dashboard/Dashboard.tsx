@@ -262,7 +262,7 @@ export function Dashboard() {
       let proximosVencerPromise: Promise<MovimientoInventarioDTO[]>;
       if (rol === 'VENDEDOR') {
         movimientosPromise = Promise.resolve([]);
-        proximosVencerPromise = Promise.resolve([]);
+        proximosVencerPromise = movimientoService.getProximosAVencer(90).catch(() => []);
       } else {
         const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
         movimientosPromise = movimientoService

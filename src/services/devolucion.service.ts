@@ -13,6 +13,11 @@ export const devolucionService = {
     return res.data;
   },
 
+  getById: async (id: number): Promise<DevolucionDTO> => {
+    const res = await axiosInstance.get(API_ENDPOINTS.DEVOLUCIONES.GET(id));
+    return res.data;
+  },
+
   crear: async (dto: CrearDevolucionDTO): Promise<DevolucionDTO> => {
     const res = await axiosInstance.post(API_ENDPOINTS.DEVOLUCIONES.CREATE, dto);
     return res.data;

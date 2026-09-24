@@ -159,6 +159,7 @@ export const API_ENDPOINTS = {
   DEVOLUCIONES: {
     LIST: '/devoluciones',
     BY_VENTA: (ventaId: number) => `/devoluciones/venta/${ventaId}`,
+    GET: (id: number) => `/devoluciones/${id}`,
     CREATE: '/devoluciones',
   },
 
