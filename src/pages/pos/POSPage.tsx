@@ -411,19 +411,25 @@ export function POSPage() {
   useEffect(() => () => stopCamera(), [stopCamera]);
 
   // ── Carrito ───────────────────────────────────────────────────────────────
-  const abrirLotePickerParaProducto = async (producto: ProductoDTO) => {
-    if (producto.stockVigente == null) return;
-    try {
-      setLoadingLotes(true);
-      const lotes = await movimientoService.getLotesDisponibles(producto.id!, sucursalId);
-      if (lotes.length > 0) {
-        setLotePickerProducto(producto); setLotesDisponibles(lotes); setLotePickerOpen(true); return;
-      }
-    } catch { /* sin lotes */ } finally { setLoadingLotes(false); }
+  // pp se pasa directamente para evitar leer pendingPresentacion desde closure stale (async/await)
+  const abrirLotePickerParaProducto = async (
+    producto: ProductoDTO,
+    pp?: { id?: number; factor: number; precio: number; label: string } | null,
+  ) => {
+    if (producto.stockVigente != null) {
+      try {
+        setLoadingLotes(true);
+        const lotes = await movimientoService.getLotesDisponibles(producto.id!, sucursalId);
+        if (lotes.length > 0) {
+          // Guardar pp en estado para que los onClick del lote picker lo lean correctamente
+          setPendingPresentacion(pp ?? null);
+          setLotePickerProducto(producto); setLotesDisponibles(lotes); setLotePickerOpen(true); return;
+        }
+      } catch { /* sin lotes */ } finally { setLoadingLotes(false); }
+    }
+    // Sin lotes (o producto sin stockVigente): agregar directo al carrito
     if (getStockDisponible(producto) <= 0) { toast.error(`Sin stock disponible: ${producto.nombre}`); return; }
-    const pending = pendingPresentacion;
-    setPendingPresentacion(null);
-    agregarItemAlCarrito(producto, undefined, pending?.label, true, pending?.precio ?? producto.precioVenta, undefined, undefined, pending?.id, pending?.factor ?? 1);
+    agregarItemAlCarrito(producto, undefined, pp?.label, true, pp?.precio ?? producto.precioVenta, undefined, undefined, pp?.id, pp?.factor ?? 1);
   };
 
   const agregarAlCarrito = async (producto: ProductoDTO, switchToCart = false) => {
@@ -1169,7 +1175,7 @@ export function POSPage() {
             className="w-full h-[50px] flex items-center justify-center gap-2.5 mt-5 rounded-xl font-semibold text-[.98rem] border-0 hover:brightness-105 transition-all cursor-pointer">
             Nueva venta
           </button>
-          <div className="grid grid-cols-2 gap-2 mt-2">
+          <div className={`grid gap-2 mt-2 ${(ultimaVenta && ultimoComprobanteId) ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {ultimaVenta && (
               <button onClick={() => printVentaTicket(ultimaVenta, negocio, clienteSeleccionado?.numeroDocumento ?? undefined, clienteSeleccionado?.nombre ?? undefined)}
                 className="h-[42px] flex items-center justify-center gap-1.5 text-[.85rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] hover:border-primary hover:text-primary transition-colors cursor-pointer">
@@ -1618,9 +1624,9 @@ export function POSPage() {
                   const stockDisp = getStockDisponible(presentacionPickerProducto);
                   if (stockDisp <= 0) { toast.error('Sin stock disponible'); return; }
                   const label = presentacionPickerProducto.unidadMedidaNombre || 'Unidad';
+                  const pp = { id: undefined as number | undefined, factor: 1, precio: Number(presentacionPickerProducto.precioVenta), label };
                   setPresentacionPickerOpen(false);
-                  setPendingPresentacion({ id: undefined, factor: 1, precio: Number(presentacionPickerProducto.precioVenta), label });
-                  await abrirLotePickerParaProducto(presentacionPickerProducto);
+                  await abrirLotePickerParaProducto(presentacionPickerProducto, pp);
                 }}
                 className="w-full flex items-center justify-between rounded-xl border border-border bg-muted/30 hover:bg-muted px-4 py-3 text-left transition-colors">
                 <div>
@@ -1639,9 +1645,9 @@ export function POSPage() {
                     onClick={async () => {
                       if (stockDisp <= 0) { toast.error('Sin stock disponible'); return; }
                       const label = pres.unidadMedidaNombre || pres.unidadMedidaAbreviatura || 'Presentación';
+                      const pp = { id: pres.id, factor, precio: Number(pres.precioVenta), label };
                       setPresentacionPickerOpen(false);
-                      setPendingPresentacion({ id: pres.id, factor, precio: Number(pres.precioVenta), label });
-                      await abrirLotePickerParaProducto(presentacionPickerProducto);
+                      await abrirLotePickerParaProducto(presentacionPickerProducto, pp);
                     }}
                     className="w-full flex items-center justify-between rounded-xl border border-border bg-muted/30 hover:bg-muted px-4 py-3 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                     <div>

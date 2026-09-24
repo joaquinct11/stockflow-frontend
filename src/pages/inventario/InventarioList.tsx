@@ -1286,7 +1286,7 @@ export function InventarioList() {
                           setLoadingLotesProducto(true);
                           try {
                             const lotesData = await movimientoService.getLotesPorProducto(producto.id!);
-                            setLotesDelProducto(lotesData.filter(l => l.diasRestantes != null && (l.stockActual ?? 0) > 0));
+                            setLotesDelProducto(lotesData.filter(l => l.diasRestantes != null));
                           } catch { /* sin lotes */ }
                           finally { setLoadingLotesProducto(false); }
                         }

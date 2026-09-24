@@ -2,7 +2,7 @@ import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
 
 export interface ActividadRecienteDTO {
-  tipo: 'VENTA' | 'COMPROBANTE' | 'ENTRADA' | 'AJUSTE' | 'MERMA' | 'ORDEN_COMPRA';
+  tipo: 'VENTA' | 'COMPROBANTE' | 'ENTRADA' | 'AJUSTE' | 'MERMA' | 'ORDEN_COMPRA' | 'ANULACION' | 'DEVOLUCION';
   descripcion: string;
   detalle?: string | null;
   usuarioNombre?: string | null;

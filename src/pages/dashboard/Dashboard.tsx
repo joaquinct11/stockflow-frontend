@@ -95,8 +95,10 @@ interface ProductoConVencimiento {
 
 function tipoActividadStyle(tipo: string) {
   switch (tipo) {
-    case 'VENTA':       return { bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-700 dark:text-green-400', letter: 'V' };
-    case 'COMPROBANTE': return { bg: 'bg-blue-100 dark:bg-blue-900/40',   text: 'text-blue-700 dark:text-blue-400',   letter: 'F' };
+    case 'VENTA':       return { bg: 'bg-green-100 dark:bg-green-900/40',  text: 'text-green-700 dark:text-green-400',  letter: 'V' };
+    case 'COMPROBANTE': return { bg: 'bg-blue-100 dark:bg-blue-900/40',   text: 'text-blue-700 dark:text-blue-400',    letter: 'F' };
+    case 'ANULACION':   return { bg: 'bg-red-100 dark:bg-red-900/40',     text: 'text-red-700 dark:text-red-400',      letter: 'A' };
+    case 'DEVOLUCION':  return { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-400',  letter: 'D' };
     case 'ENTRADA':     return { bg: 'bg-sky-100 dark:bg-sky-900/40',     text: 'text-sky-700 dark:text-sky-400',     letter: 'E' };
     case 'AJUSTE':      return { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-400', letter: 'A' };
     case 'MERMA':       return { bg: 'bg-red-100 dark:bg-red-900/40',     text: 'text-red-700 dark:text-red-400',     letter: 'M' };
