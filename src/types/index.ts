@@ -275,6 +275,7 @@ export interface NotaCreditoDTO {
   codigo: string;
   devolucionId: number;
   ventaOrigenId?: number;
+  ventaOrigenComprobante?: string;
   montoTotal: number;
   estado: 'PENDIENTE' | 'USADA' | 'ANULADA';
   fechaEmision: string;
@@ -282,6 +283,9 @@ export interface NotaCreditoDTO {
   fechaUso?: string;
   ventaUsoId?: number;
   tenantId?: string;
+  clienteNombre?: string;
+  clienteDocTipo?: string;
+  clienteDocNumero?: string;
 }
 
 export interface ValidarNotaCreditoResponseDTO {

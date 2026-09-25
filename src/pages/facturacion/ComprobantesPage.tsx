@@ -1,20 +1,15 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { facturacionService } from '../../services/facturacion.service';
 import { ventaService } from '../../services/venta.service';
 import { clienteService } from '../../services/cliente.service';
 import type { ComprobanteDTO, EmitirComprobanteForm, EmitirComprobanteRequest, TipoComprobante, VentaDTO, ItemComprobanteDTO } from '../../types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
-import { Input } from '../../components/ui/Input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
-import { Dialog } from '../../components/ui/Dialog';
-import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { Autocomplete } from '../../components/ui/Autocomplete';
 import { Pagination } from '../../components/ui/Pagination';
-import { Plus, Search, FileText, CheckCircle, XCircle, Clock, Eye, DollarSign, X, Send, FileDown, SlidersHorizontal, AlertTriangle, Printer } from 'lucide-react';
+import { Plus, Search, FileText, Eye, X, Send, FileDown, FileSpreadsheet, Filter, Ban, Printer, Calendar, ChevronDown } from 'lucide-react';
+import { exportarComprobantesExcel, exportarComprobantesPDF } from '../../utils/reportes-export';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
@@ -26,17 +21,6 @@ import { OseBanner } from '../../components/shared/OseBanner';
 const TIPO_OPTIONS: TipoComprobante[] = ['BOLETA', 'FACTURA'];
 // const ESTADO_OPTIONS = ['EMITIDO', 'ANULADO'];
 
-function estadoBadgeVariant(estado: string): 'success' | 'destructive' | 'warning' | 'default' {
-  if (estado === 'EMITIDO') return 'success';
-  if (estado === 'ANULADO') return 'destructive';
-  return 'default';
-}
-
-function estadoIcon(estado: string) {
-  if (estado === 'EMITIDO') return <CheckCircle size={14} className="inline mr-1" />;
-  if (estado === 'ANULADO') return <XCircle size={14} className="inline mr-1" />;
-  return <Clock size={14} className="inline mr-1" />;
-}
 
 const emptyForm = (): EmitirComprobanteForm => ({
   ventaId: 0,
@@ -70,7 +54,7 @@ export function ComprobantesPage() {
   const [filterTipo, setFilterTipo] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
   const defaultFechaDesde = (() => {
-    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
+    const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
   })();
   const defaultFechaHasta = new Date().toISOString().slice(0, 10);
 
@@ -78,10 +62,15 @@ export function ComprobantesPage() {
   const [fechaHasta, setFechaHasta] = useState(defaultFechaHasta);
   const [appliedFechaDesde, setAppliedFechaDesde] = useState(defaultFechaDesde);
   const [appliedFechaHasta, setAppliedFechaHasta] = useState(defaultFechaHasta);
-  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  const [showFiltrosPanel, setShowFiltrosPanel] = useState(false);
+  const [showRangoDropdown, setShowRangoDropdown] = useState(false);
+  const [datePreset, setDatePreset] = useState<'hoy'|'ayer'|'7d'|'mes'|'custom'>('mes');
+  const [emitirSearch, setEmitirSearch] = useState('');
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  const [exporting, setExporting] = useState(false);
 
   // Emit dialog
   const [isEmitirOpen, setIsEmitirOpen] = useState(false);
@@ -93,7 +82,7 @@ export function ComprobantesPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // Anular confirm
-  const [confirmAnular, setConfirmAnular] = useState<{ isOpen: boolean; id: number | null; sunatEstado?: string; tipo?: string }>({
+  const [confirmAnular, setConfirmAnular] = useState<{ isOpen: boolean; id: number | null; sunatEstado?: string; tipo?: string; numero?: string; total?: number; receptorNombre?: string; ventaId?: number; ventaFecha?: string }>({
     isOpen: false,
     id: null,
   });
@@ -187,6 +176,23 @@ export function ComprobantesPage() {
       c.receptor?.razonSocial?.toLowerCase().includes(term) ||
       c.receptor?.numeroDocumento?.toLowerCase().includes(term)
     );
+  });
+
+  // KPIs filtrados por rango de fecha (sin search term)
+  const statsComprobantes = comprobantesBase.filter((c) => {
+    if (!appliedFechaDesde && !appliedFechaHasta) return true;
+    const created = c.createdAt ? new Date(c.createdAt) : null;
+    if (!created || Number.isNaN(created.getTime())) return false;
+    const t = created.getTime();
+    if (appliedFechaDesde) {
+      const [y, m, d] = appliedFechaDesde.split('-').map(Number);
+      if (t < startOfDay(new Date(y, m - 1, d)).getTime()) return false;
+    }
+    if (appliedFechaHasta) {
+      const [y, m, d] = appliedFechaHasta.split('-').map(Number);
+      if (t > endOfDay(new Date(y, m - 1, d)).getTime()) return false;
+    }
+    return true;
   });
 
   const sortedComprobantes = [...filteredComprobantes].sort((a, b) => {
@@ -304,6 +310,32 @@ export function ComprobantesPage() {
     }
   };
 
+  const handleDocAutocompletar = async (doc: string) => {
+    if (!doc) {
+      setEmitirForm(prev => ({ ...prev, receptor: { ...prev.receptor, numeroDocumento: '', razonSocial: '', direccion: '' } }));
+      return;
+    }
+    setEmitirForm(prev => ({ ...prev, receptor: { ...prev.receptor, numeroDocumento: doc } }));
+    if (doc.length !== 8 && doc.length !== 11) return;
+    try {
+      const matches = await clienteService.buscarPorDocumento(doc);
+      if (matches.length > 0) {
+        const c = matches[0];
+        const tipoDoc: 'DNI' | 'RUC' = doc.length === 11 ? 'RUC' : 'DNI';
+        setEmitirForm(prev => ({
+          ...prev,
+          tipo: tipoDoc === 'RUC' ? 'FACTURA' : prev.tipo,
+          receptor: {
+            tipoDocumento: tipoDoc,
+            numeroDocumento: doc,
+            razonSocial: c.nombre ?? '',
+            direccion: c.direccion ?? '',
+          },
+        }));
+      }
+    } catch { /* silenciar error */ }
+  };
+
   const handleEmitir = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -368,6 +400,19 @@ export function ComprobantesPage() {
     }
   };
 
+  const handleExportExcel = () => {
+    exportarComprobantesExcel(sortedComprobantes, rangoLabel || 'todos');
+  };
+
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      exportarComprobantesPDF(sortedComprobantes, rangoLabel || 'todos');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // const resetFilters = () => {
   //   setSearchTerm('');
   //   setFilterTipo('');
@@ -382,24 +427,12 @@ export function ComprobantesPage() {
 
   const ventaById = new Map(ventas.map(v => [v.id, v]));
 
-  const activeFiltersCount = [filterTipo, filterEstado, appliedFechaDesde, appliedFechaHasta].filter(Boolean).length;
-
   const limpiarFiltros = () => {
     setFilterTipo('');
     setFilterEstado('');
-    setFechaDesde(defaultFechaDesde);
-    setFechaHasta(defaultFechaHasta);
-    setAppliedFechaDesde(defaultFechaDesde);
-    setAppliedFechaHasta(defaultFechaHasta);
+    setSearchTerm('');
+    setCurrentPage(1);
   };
-
-  const ventasOptions = ventas
-    .filter((v) => !ventasYaFacturadas.has(v.id!))
-    .map((v) => ({
-      id: v.id!,
-      label: `Venta #${v.id} · S/.${v.total.toFixed(2)}`,
-      subtitle: `${v.vendedorNombre ?? ''} · ${v.metodoPago}${v.createdAt ? ' · ' + new Date(v.createdAt).toLocaleDateString('es-PE') : ''}`,
-    }));
 
   const oseNombre = 'ApiSunat';
 
@@ -413,870 +446,909 @@ export function ComprobantesPage() {
     );
   }
 
+  if (loading) return <LoadingSpinner />;
+
+  // ── KPI values ──────────────────────────────────────────────────────
+  const vigentes = statsComprobantes.filter(c => c.estado !== 'ANULADO');
+  const kpiTotal = vigentes.reduce((s, c) => s + (c.total ?? 0), 0);
+  const kpiAceptados = vigentes.filter(c => c.sunatEstado === 'ACEPTADO').length;
+  const kpiPorAtender = vigentes.filter(c => c.sunatEstado !== 'ACEPTADO').length;
+  const kpiBoletas = statsComprobantes.filter(c => c.tipo === 'BOLETA').length;
+  const kpiFacturas = statsComprobantes.filter(c => c.tipo === 'FACTURA').length;
+
+  // ── Date preset helper ───────────────────────────────────────────────
+  const fmtL = (s: string) =>new Date(s + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+  const aplicarPreset = (preset: 'hoy'|'ayer'|'7d'|'mes') => {
+    const h = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    let desde: string, hasta = fmt(h);
+    if (preset === 'hoy') { desde = fmt(h); }
+    else if (preset === 'ayer') { const a = new Date(h); a.setDate(a.getDate() - 1); desde = hasta = fmt(a); }
+    else if (preset === '7d') { const a = new Date(h); a.setDate(a.getDate() - 6); desde = fmt(a); }
+    else { desde = fmt(new Date(h.getFullYear(), h.getMonth(), 1)); }
+    setFechaDesde(desde); setFechaHasta(hasta);
+    setAppliedFechaDesde(desde); setAppliedFechaHasta(hasta);
+    setDatePreset(preset); setShowRangoDropdown(false); setCurrentPage(1);
+  };
+
+  // ── Range label — igual que VentasList ──────────────────────────────
+  const rangoLabel = (() => {
+    if (datePreset === 'hoy') return 'Hoy';
+    if (datePreset === 'ayer') return 'Ayer';
+    if (datePreset === '7d') return 'Últimos 7 días';
+    const d1 = appliedFechaDesde ? fmtL(appliedFechaDesde) : '';
+    const d2 = appliedFechaHasta ? fmtL(appliedFechaHasta) : '';
+    if (!d1 && !d2) return 'Este mes';
+    return d1 === d2 ? d1 : `${d1} → ${d2}`;
+  })();
+
+  // ── Ventas filtradas para el buscador del dialog de emitir ───────────
+  const ventasEmitirFiltradas = ventas
+    .filter(v => !ventasYaFacturadas.has(v.id!))
+    .filter(v => {
+      if (!emitirSearch) return true;
+      const q = emitirSearch.toLowerCase();
+      return String(v.id).includes(q) || (v.vendedorNombre ?? '').toLowerCase().includes(q);
+    })
+    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+    .slice(0, 30);
+
   return (
-    <div className="space-y-6">
-      {/* Banner OSE / facturación */}
+    <div className="space-y-5">
       {oseConfigured === false && <OseBanner />}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Facturación</h1>
-          <p className="text-muted-foreground">Gestión de comprobantes electrónicos</p>
+      {/* ── Header ── */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[1.6rem] font-bold tracking-tight leading-none">Facturación</h1>
+          <p className="text-sm text-muted-foreground mt-1.5">
+            {sortedComprobantes.length} de {statsComprobantes.length} comprobante{statsComprobantes.length !== 1 ? 's' : ''}
+            {appliedFechaDesde && <> · {rangoLabel}</>}
+          </p>
         </div>
-        {canEmitir && (
-          <Button
-            onClick={() => {
-              setEmitirForm(emptyForm());
-              setIsEmitirOpen(true);
-            }}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            Emitir comprobante
-          </Button>
-        )}
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Comprobantes</p>
-            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-              <FileText className="text-blue-600 dark:text-blue-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tight">{comprobantesBase.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Registrados en el sistema</p>
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Emitidos</p>
-            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-              <CheckCircle className="text-emerald-600 dark:text-emerald-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-              {comprobantesBase.filter((c) => c.estado === 'EMITIDO').length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Válidos y enviados</p>
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Anulados</p>
-            <div className="h-9 w-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
-              <XCircle className="text-red-600 dark:text-red-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">
-              {comprobantesBase.filter((c) => c.estado === 'ANULADO').length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Anulados</p>
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Facturado</p>
-            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-              <DollarSign className="text-emerald-600 dark:text-emerald-400" size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-              S/.{comprobantesBase.filter((c) => c.estado === 'EMITIDO').reduce((s, c) => s + (c.total ?? 0), 0).toFixed(2)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">De comprobantes emitidos</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search + Filtros */}
-      <div className="flex flex-col gap-2">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Buscar número, venta, receptor..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-10"
-            />
-          </div>
-          <button
-            onClick={() => setShowFilterDrawer(true)}
-            className={[
-              'flex items-center gap-2 h-10 px-4 rounded-lg border text-sm font-semibold transition-all shrink-0',
-              activeFiltersCount > 0
-                ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                : 'border-input bg-background text-muted-foreground hover:text-foreground hover:border-primary/40',
-            ].join(' ')}
-          >
-            <SlidersHorizontal size={15} />
-            Filtros
-            {activeFiltersCount > 0 && (
-              <span className="h-5 w-5 rounded-full bg-blue-500 text-white text-[11px] font-bold flex items-center justify-center">
-                {activeFiltersCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Active filter chips */}
-        {activeFiltersCount > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {filterTipo && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                Tipo: {filterTipo}
-                <button onClick={() => setFilterTipo('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
-              </span>
-            )}
-            {filterEstado && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                {filterEstado}
-                <button onClick={() => setFilterEstado('')} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
-              </span>
-            )}
-            {appliedFechaDesde && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                Desde {appliedFechaDesde}
-                <button onClick={() => { setFechaDesde(defaultFechaDesde); setAppliedFechaDesde(defaultFechaDesde); }} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
-              </span>
-            )}
-            {appliedFechaHasta && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                Hasta {appliedFechaHasta}
-                <button onClick={() => { setFechaHasta(defaultFechaHasta); setAppliedFechaHasta(defaultFechaHasta); }} className="ml-0.5 hover:text-blue-800"><X size={11} /></button>
-              </span>
-            )}
-            <button onClick={limpiarFiltros} className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors px-1">
-              Limpiar todo
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Filter drawer backdrop */}
-      <div
-        className={`fixed inset-0 bg-black/50 z-[35] transition-opacity duration-300 ${showFilterDrawer ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => setShowFilterDrawer(false)}
-      />
-
-      {/* Filter drawer panel */}
-      <div
-        className={`fixed right-0 top-16 w-80 z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out rounded-l-2xl overflow-hidden bg-slate-900 border-l border-t border-b border-slate-700/50 ${showFilterDrawer ? 'translate-x-0' : 'translate-x-full'}`}
-        style={{ height: 'calc(100vh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 shrink-0 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700/50">
-          <div className="flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-lg bg-blue-500/20 flex items-center justify-center">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-blue-400" />
-            </div>
-            <h2 className="font-semibold text-sm text-white">Filtros</h2>
-            {activeFiltersCount > 0 && (
-              <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{activeFiltersCount}</span>
-            )}
-          </div>
-          <button onClick={() => setShowFilterDrawer(false)} className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-          {/* Rango de fechas */}
-          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Rango de fechas</p>
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Desde</label>
-                <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)}
-                  className="w-full h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 text-sm px-3 focus:outline-none focus:border-blue-500" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Hasta</label>
-                <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)}
-                  className="w-full h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 text-sm px-3 focus:outline-none focus:border-blue-500" />
-              </div>
-            </div>
-          </div>
-
-          {/* Tipo */}
-          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tipo</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(['', 'BOLETA', 'FACTURA'] as const).map((key) => (
-                <button
-                  key={key || 'ALL'}
-                  onClick={() => setFilterTipo(key)}
-                  className={[
-                    'px-3 py-2 rounded-lg text-xs font-semibold border transition-all',
-                    filterTipo === key
-                      ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500',
-                  ].join(' ')}
-                >
-                  {key === '' ? 'Todos' : key === 'BOLETA' ? 'Boleta' : 'Factura'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Estado */}
-          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Estado</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(['', 'EMITIDO', 'ANULADO'] as const).map((key) => (
-                <button
-                  key={key || 'ALL'}
-                  onClick={() => setFilterEstado(key)}
-                  className={[
-                    'px-3 py-2 rounded-lg text-xs font-semibold border transition-all',
-                    filterEstado === key
-                      ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-                      : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500',
-                  ].join(' ')}
-                >
-                  {key === '' ? 'Todos' : key === 'EMITIDO' ? 'Emitido' : 'Anulado'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex gap-2">
-          <button onClick={limpiarFiltros} className="flex-1 h-9 rounded-xl border border-slate-600 text-xs font-semibold text-slate-400 hover:text-white hover:border-slate-500 transition-all">
-            Limpiar todo
-          </button>
-          <button onClick={() => { setAppliedFechaDesde(fechaDesde); setAppliedFechaHasta(fechaHasta); setShowFilterDrawer(false); }} className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all">
-            Ver {sortedComprobantes.length} resultado{sortedComprobantes.length !== 1 ? 's' : ''}
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader>
-          <CardTitle>Comprobantes</CardTitle>
-          <CardDescription>
-            {sortedComprobantes.length} comprobante{sortedComprobantes.length !== 1 ? 's' : ''} encontrado
-            {sortedComprobantes.length !== 1 ? 's' : ''}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <LoadingSpinner />
-          ) : sortedComprobantes.length === 0 ? (
-            <EmptyState
-              icon={FileText}
-              title={comprobantesBase.length === 0 ? 'Todavía no hay comprobantes' : 'Sin resultados'}
-              description={comprobantesBase.length === 0
-                ? 'Los comprobantes electrónicos (boletas y facturas) se generan desde el módulo de Ventas al emitirlos hacia SUNAT a través de tu OSE.'
-                : 'No se encontraron comprobantes con los filtros aplicados.'}
-            />
-          ) : (
+        <div className="flex flex-wrap gap-2">
+          {sortedComprobantes.length > 0 && (
             <>
-              <div className="overflow-x-auto rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead>Número</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Venta</TableHead>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead>Receptor</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedComprobantes.map((c) => {
-                      const vendedor = ventaById.get(c.ventaId)?.vendedorNombre;
-                      return (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-mono font-semibold">{c.numero ?? '—'}</TableCell>
-                        <TableCell>
-                          <Badge variant={c.tipo === 'FACTURA' ? 'default' : 'secondary'}>{c.tipo}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">#{c.ventaId}</TableCell>
-                        <TableCell className="max-w-[140px] truncate text-sm">
-                          {vendedor ?? <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell className="max-w-[160px] truncate">
-                          {c.receptor?.razonSocial || c.receptor?.numeroDocumento || '—'}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {c.total != null ? `S/.${c.total.toFixed(2)}` : '—'}
-                        </TableCell>
-                        <TableCell>
-                          {c.estado === 'ANULADO' ? (
-                            <Badge variant="destructive" className="gap-1">
-                              <XCircle size={12} /> Anulado
-                            </Badge>
-                          ) : c.sunatEstado === 'ACEPTADO' ? (
-                            <Badge variant="success" className="gap-1 text-xs" title={c.sunatMensaje ?? undefined}>
-                              <CheckCircle size={12} /> SUNAT Aceptado
-                            </Badge>
-                          ) : c.sunatEstado === 'RECHAZADO' ? (
-                            <div className="flex flex-col gap-1">
-                              <Badge variant="destructive" className="gap-1 text-xs" title={c.sunatMensaje ?? undefined}>
-                                <XCircle size={12} /> SUNAT Rechazado
-                              </Badge>
-                            </div>
-                          ) : c.sunatEstado === 'ERROR' ? (
-                            <div className="flex flex-col gap-1">
-                              <Badge variant="destructive" className="gap-1 text-xs opacity-80" title={c.sunatMensaje ?? undefined}>
-                                <AlertTriangle size={12} /> Error SUNAT
-                              </Badge>
-                            </div>
-                          ) : c.sunatEstado === 'PENDIENTE' ? (
-                            <Badge variant="warning" className="gap-1 text-xs" title={c.sunatMensaje ?? undefined}>
-                              <Clock size={12} /> Pendiente SUNAT
-                            </Badge>
-                          ) : (
-                            <div className="flex flex-col gap-1">
-                              <Badge variant="success" className="gap-1 text-xs">
-                                <CheckCircle size={12} /> Emitido
-                              </Badge>
-                              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-400 w-fit">
-                                <Clock size={9} /> Sin enviar a SUNAT
-                              </span>
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {c.createdAt ? new Date(c.createdAt).toLocaleDateString('es-PE') : '—'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-1 justify-end">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedComprobante(c);
-                                setIsDetailOpen(true);
-                              }}
-                              title="Ver"
-                            >
-                              <Eye className="h-4 w-4 text-blue-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={downloadingPdf === c.id}
-                              title="Descargar PDF A4"
-                              onClick={() => handleDownloadPdf(c)}
-                            >
-                              {downloadingPdf === c.id
-                                ? <span className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin inline-block" />
-                                : <FileDown className="h-4 w-4 text-slate-500" />
-                              }
-                            </Button>
-                            {c.pdfTicketUrl && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                title="Descargar PDF Ticket (80mm)"
-                                onClick={() => handleDownloadTicket(c)}
-                              >
-                                <Printer className="h-4 w-4 text-slate-500" />
-                              </Button>
-                            )}
-                            {canEnviarSunat && c.estado === 'EMITIDO' && c.sunatEstado !== 'ACEPTADO' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={enviandoSunat === c.id}
-                                title={c.sunatEstado === 'RECHAZADO' ? 'Reenviar a SUNAT' : 'Enviar a SUNAT'}
-                                onClick={() => handleEnviarSunat(c)}
-                              >
-                                {enviandoSunat === c.id
-                                  ? <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin inline-block" />
-                                  : <Send className={`h-4 w-4 ${c.sunatEstado === 'RECHAZADO' ? 'text-red-500' : 'text-indigo-500'}`} />
-                                }
-                              </Button>
-                            )}
-                            {canAnular && c.estado === 'EMITIDO' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => setConfirmAnular({ isOpen: true, id: c.id!, sunatEstado: c.sunatEstado, tipo: c.tipo })}
-                              >
-                                Anular
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );})}
-                  </TableBody>
-                </Table>
-              </div>
-              {totalPages > 1 && (
-                <div className="mt-4">
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    totalItems={sortedComprobantes.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setCurrentPage}
-                  />
-                </div>
-              )}
+              <button type="button" onClick={handleExportExcel}
+                className="flex items-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-emerald-500 hover:text-emerald-600 transition-colors">
+                <FileSpreadsheet size={15} />
+                Excel
+              </button>
+              <button type="button" onClick={handleExportPDF} disabled={exporting}
+                className="flex items-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-red-500 hover:text-red-600 transition-colors disabled:opacity-50">
+                <FileDown size={15} />
+                {exporting ? 'Exportando...' : 'PDF'}
+              </button>
             </>
           )}
-        </CardContent>
-      </Card>
+          {canEmitir && (
+            <Button onClick={() => { setEmitirForm(emptyForm()); setIsEmitirOpen(true); }} className="gap-2 h-9">
+              <Plus size={15} />
+              Emitir comprobante
+            </Button>
+          )}
+        </div>
+      </div>
 
-      {/* Emitir Comprobante Dialog */}
-      <Dialog
-        isOpen={isEmitirOpen}
-        onClose={() => {
-          setIsEmitirOpen(false);
-          setEmitirForm(emptyForm());
-        }}
-        title="Emitir Comprobante"
-        description="Genera un comprobante electrónico para una venta"
-        size="md"
-      >
-        <form onSubmit={handleEmitir} className="space-y-4">
-          {/* Venta */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium">
-              Venta <span className="text-destructive">*</span>
-            </label>
-            <Autocomplete
-              options={ventasOptions}
-              value={ventasOptions.find((o) => o.id === emitirForm.ventaId) ?? null}
-              onChange={(opt) => handleVentaSelect(opt ? { id: Number(opt.id) } : null)}
-              placeholder="Buscar venta por ID, vendedor..."
-              emptyMessage="No se encontraron ventas"
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
+          <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Total facturado</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">
+            S/ {kpiTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">Comprobantes no anulados</p>
+        </div>
+        <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
+          <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Comprobantes</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">{statsComprobantes.length}</p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">
+            {kpiBoletas} boleta{kpiBoletas !== 1 ? 's' : ''} · {kpiFacturas} factura{kpiFacturas !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
+          <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Aceptados SUNAT</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">{kpiAceptados}</p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">de {vigentes.length} vigente{vigentes.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className={`p-[16px_18px] rounded-[14px] shadow-sm border ${kpiPorAtender > 0 ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-700/40' : 'bg-card border-border'}`}>
+          <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Por atender</p>
+          <p className={`text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums ${kpiPorAtender > 0 ? 'text-amber-700 dark:text-amber-400' : ''}`}>{kpiPorAtender}</p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">Pendientes / sin enviar a SUNAT</p>
+        </div>
+      </div>
+
+      {/* ── Table card ── */}
+      <div className="bg-card border rounded-2xl shadow-sm overflow-hidden">
+
+        {/* Filter toolbar */}
+        <div className="grid grid-cols-[1fr_auto_auto] gap-2.5 p-3.5 border-b border-border/60">
+          <div className="relative min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Buscar número, venta, receptor…"
+              className="w-full h-10 pl-9 pr-3 text-sm bg-muted/50 border border-transparent rounded-xl outline-none focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             />
           </div>
-
-          {/* Tipo */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium">
-              Tipo de Comprobante <span className="text-destructive">*</span>
-            </label>
-            <div className="flex gap-3">
-              {TIPO_OPTIONS.map((tipo) => (
-                <label
-                  key={tipo}
-                  className={`flex-1 flex items-center justify-center gap-2 rounded-md border-2 px-4 py-3 cursor-pointer transition-colors ${
-                    emitirForm.tipo === tipo
-                      ? 'border-primary bg-primary/10 font-semibold'
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    className="sr-only"
-                    checked={emitirForm.tipo === tipo}
-                    onChange={() =>
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        tipo,
-                        receptor:
-                          tipo === 'BOLETA'
-                            ? { tipoDocumento: 'DNI', numeroDocumento: '', razonSocial: '', direccion: '' }
-                            : { tipoDocumento: 'RUC', numeroDocumento: '', razonSocial: '', direccion: '' },
-                      }))
-                    }
-                  />
-                  {tipo}
-                  <span className="text-xs text-muted-foreground font-normal">
-                    {tipo === 'BOLETA' ? 'con DNI opcional' : 'requiere RUC'}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Receptor */}
-          <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
-            <p className="text-sm font-medium">
-              Datos del receptor{' '}
-              {emitirForm.tipo === 'FACTURA' && <span className="text-destructive">*</span>}
-            </p>
-
-            {emitirForm.tipo === 'FACTURA' ? (
+          <div className="relative min-w-0">
+            <button
+              type="button"
+              onClick={() => setShowRangoDropdown(o => !o)}
+              className={`flex items-center justify-center gap-2 h-10 px-[13px] font-mono text-[.8rem] rounded-[10px] cursor-pointer whitespace-nowrap transition-all ${
+                showRangoDropdown || datePreset !== 'mes'
+                  ? 'text-primary bg-primary/10 border border-primary/30'
+                  : 'text-muted-foreground bg-muted border border-transparent hover:bg-muted/80'
+              }`}
+            >
+              <Calendar size={15} className="flex-shrink-0" />
+              {rangoLabel}
+              <ChevronDown size={14} className={`flex-shrink-0 opacity-70 transition-transform ${showRangoDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            {showRangoDropdown && (
               <>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground font-medium">
-                    RUC <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    placeholder="20xxxxxxxxx (11 dígitos)"
-                    maxLength={11}
-                    value={emitirForm.receptor?.numeroDocumento ?? ''}
-                    onChange={(e) =>
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        receptor: { ...prev.receptor, tipoDocumento: 'RUC', numeroDocumento: e.target.value },
-                      }))
-                    }
-                    required={emitirForm.tipo === 'FACTURA'}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground font-medium">
-                    Razón Social <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    placeholder="Nombre de la empresa"
-                    value={emitirForm.receptor?.razonSocial ?? ''}
-                    onChange={(e) =>
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        receptor: { ...prev.receptor, razonSocial: e.target.value },
-                      }))
-                    }
-                    required={emitirForm.tipo === 'FACTURA'}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground font-medium">
-                    DNI <span className="text-muted-foreground">(opcional)</span>
-                  </label>
-                  <Input
-                    placeholder="DNI del cliente"
-                    maxLength={8}
-                    value={emitirForm.receptor?.numeroDocumento ?? ''}
-                    onChange={(e) =>
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        receptor: { ...prev.receptor, tipoDocumento: 'DNI', numeroDocumento: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground font-medium">
-                    Nombre <span className="text-muted-foreground">(opcional)</span>
-                  </label>
-                  <Input
-                    placeholder="Nombre del cliente"
-                    value={emitirForm.receptor?.razonSocial ?? ''}
-                    onChange={(e) =>
-                      setEmitirForm((prev) => ({
-                        ...prev,
-                        receptor: { ...prev.receptor, razonSocial: e.target.value },
-                      }))
-                    }
-                  />
+                <div className="fixed inset-0 z-[55]" onClick={() => setShowRangoDropdown(false)} />
+                <div className="absolute top-[calc(100%+6px)] right-0 z-[60] w-[280px] max-w-[calc(100vw-40px)] bg-card border border-border rounded-[14px] shadow-[0_22px_50px_-22px_rgba(0,0,0,.45)] p-2">
+                  {([
+                    { key: 'hoy' as const, label: 'Hoy' },
+                    { key: 'ayer' as const, label: 'Ayer' },
+                    { key: '7d' as const, label: 'Últimos 7 días' },
+                    { key: 'mes' as const, label: 'Este mes' },
+                  ]).map(p => (
+                    <button key={p.key} type="button" onClick={() => aplicarPreset(p.key)}
+                      className={`w-full flex items-center h-9 px-[10px] text-[.845rem] border-0 rounded-lg cursor-pointer transition-all text-left ${
+                        datePreset === p.key ? 'font-[650] text-primary bg-primary/10' : 'font-medium text-foreground bg-transparent hover:bg-muted'
+                      }`}>
+                      {p.label}
+                    </button>
+                  ))}
+                  <div className="h-px bg-border/60 my-2 mx-1" />
+                  <div className="p-[4px_6px_6px]">
+                    <p className="font-mono text-[.66rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-2">Personalizado</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="grid gap-1 text-[.74rem] text-muted-foreground">
+                        Desde
+                        <input type="date" value={fechaDesde} onChange={e => { setFechaDesde(e.target.value); setDatePreset('custom'); }}
+                          className="w-full h-9 px-2 text-[.8rem] text-foreground bg-muted border border-border rounded-lg outline-none focus:border-primary" />
+                      </label>
+                      <label className="grid gap-1 text-[.74rem] text-muted-foreground">
+                        Hasta
+                        <input type="date" value={fechaHasta} onChange={e => { setFechaHasta(e.target.value); setDatePreset('custom'); }}
+                          className="w-full h-9 px-2 text-[.8rem] text-foreground bg-muted border border-border rounded-lg outline-none focus:border-primary" />
+                      </label>
+                    </div>
+                    {datePreset === 'custom' && (
+                      <button type="button" onClick={() => { setAppliedFechaDesde(fechaDesde); setAppliedFechaHasta(fechaHasta); setShowRangoDropdown(false); setCurrentPage(1); }}
+                        className="w-full mt-2 h-8 text-[.8rem] font-semibold text-white bg-primary rounded-lg border-0 cursor-pointer hover:brightness-105">
+                        Aplicar
+                      </button>
+                    )}
+                  </div>
                 </div>
               </>
             )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFiltrosPanel(o => !o)}
+            className={`flex items-center gap-2 h-10 px-[14px] text-[.855rem] font-semibold rounded-[10px] cursor-pointer whitespace-nowrap transition-all ${
+              showFiltrosPanel || (filterTipo || filterEstado)
+                ? 'text-primary bg-primary/10 border border-primary/30'
+                : 'text-muted-foreground bg-card border border-border hover:bg-muted'
+            }`}
+          >
+            <Filter size={15} className="flex-shrink-0" />
+            Filtros
+            {(filterTipo || filterEstado) && (
+              <span className="min-w-[18px] h-[18px] px-[5px] grid place-items-center rounded-full text-[.68rem] font-bold text-white bg-primary">
+                {[filterTipo, filterEstado].filter(Boolean).length}
+              </span>
+            )}
+          </button>
+        </div>
 
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">
-                Dirección <span className="text-muted-foreground">(opcional)</span>
-              </label>
-              <Input
-                placeholder="Dirección del receptor"
-                value={emitirForm.receptor?.direccion ?? ''}
-                onChange={(e) =>
-                  setEmitirForm((prev) => ({
-                    ...prev,
-                    receptor: { ...prev.receptor, direccion: e.target.value },
-                  }))
-                }
-              />
+        {/* Filter panel */}
+        {showFiltrosPanel && (
+          <div className="grid grid-cols-2 gap-[18px] p-[16px_18px] border-b border-border/60 bg-muted/30">
+            <div>
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-[9px]">Tipo de comprobante</p>
+              <div className="flex flex-wrap gap-[7px]">
+                {([
+                  { key: '', label: 'Todos' },
+                  { key: 'BOLETA', label: 'Boleta' },
+                  { key: 'FACTURA', label: 'Factura' },
+                ]).map(t => (
+                  <button key={t.key || 'all'} type="button" onClick={() => { setFilterTipo(t.key); setCurrentPage(1); }}
+                    className={`h-8 px-[13px] text-[.81rem] font-semibold rounded-[9px] cursor-pointer whitespace-nowrap transition-all border ${
+                      filterTipo === t.key
+                        ? 'text-white bg-primary border-primary'
+                        : 'text-muted-foreground bg-card border-border hover:border-primary/40'
+                    }`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-[9px]">Estado</p>
+              <div className="flex flex-wrap gap-[7px]">
+                {([
+                  { key: '', label: 'Todos' },
+                  { key: 'EMITIDO', label: 'Emitido' },
+                  { key: 'ANULADO', label: 'Anulado' },
+                ]).map(e => (
+                  <button key={e.key || 'all'} type="button" onClick={() => { setFilterEstado(e.key); setCurrentPage(1); }}
+                    className={`h-8 px-[13px] text-[.81rem] font-semibold rounded-[9px] cursor-pointer whitespace-nowrap transition-all border ${
+                      filterEstado === e.key
+                        ? 'text-white bg-primary border-primary'
+                        : 'text-muted-foreground bg-card border-border hover:border-primary/40'
+                    }`}>
+                    {e.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
+        )}
 
-          <div className="flex gap-2 justify-end pt-2 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setIsEmitirOpen(false);
-                setEmitirForm(emptyForm());
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Emitiendo...' : 'Emitir Comprobante'}
-            </Button>
+        {/* Active filter chips — solo tipo/estado, la fecha va en el botón */}
+        {(filterTipo || filterEstado || searchTerm) && (
+          <div className="flex flex-wrap items-center gap-2 px-[18px] py-3 border-b border-border/60">
+            <span className="text-[.79rem] text-muted-foreground">Filtros activos:</span>
+            {filterTipo && (
+              <button type="button" onClick={() => setFilterTipo('')}
+                className="flex items-center gap-[7px] h-7 px-[10px] text-[.78rem] font-semibold text-primary bg-primary/10 border border-primary/30 rounded-full cursor-pointer hover:brightness-95">
+                Tipo: {filterTipo === 'BOLETA' ? 'Boleta' : 'Factura'}
+                <X size={12} className="flex-shrink-0" />
+              </button>
+            )}
+            {filterEstado && (
+              <button type="button" onClick={() => setFilterEstado('')}
+                className="flex items-center gap-[7px] h-7 px-[10px] text-[.78rem] font-semibold text-primary bg-primary/10 border border-primary/30 rounded-full cursor-pointer hover:brightness-95">
+                Estado: {filterEstado === 'EMITIDO' ? 'Emitido' : 'Anulado'}
+                <X size={12} className="flex-shrink-0" />
+              </button>
+            )}
+            {(filterTipo || filterEstado) && (
+              <button type="button" onClick={limpiarFiltros}
+                className="text-[.79rem] text-muted-foreground hover:text-destructive transition-colors underline underline-offset-2">
+                Limpiar todo
+              </button>
+            )}
           </div>
-        </form>
-      </Dialog>
+        )}
 
-      {/* Detail Dialog — vista tipo comprobante real */}
-      <Dialog
-        isOpen={isDetailOpen}
-        onClose={() => {
-          setIsDetailOpen(false);
-          setSelectedComprobante(null);
-        }}
-        title=""
-        description=""
-        size="lg"
-      >
-        {selectedComprobante && (
-          <div className="space-y-0 text-sm" id="comprobante-print">
-
-            {/* ── Cabecera del comprobante ── */}
-            <div className="text-center border-b pb-4 mb-4 space-y-1">
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <Badge
-                  variant={selectedComprobante.tipo === 'FACTURA' ? 'default' : 'secondary'}
-                  className="text-base px-3 py-1"
-                >
-                  {selectedComprobante.tipo === 'BOLETA' ? '🧾 BOLETA DE VENTA' : '🏢 FACTURA ELECTRÓNICA'}
-                </Badge>
-                <Badge variant={estadoBadgeVariant(selectedComprobante.estado)} className="text-xs">
-                  {estadoIcon(selectedComprobante.estado)}
-                  {selectedComprobante.estado}
-                </Badge>
-              </div>
-              <p className="text-xl font-bold tracking-wide">{selectedComprobante.numero ?? '—'}</p>
-              <p className="text-xs text-muted-foreground">
-                Fecha de emisión:{' '}
-                {selectedComprobante.createdAt
-                  ? new Date(selectedComprobante.createdAt).toLocaleString('es-PE', {
-                      day: '2-digit', month: '2-digit', year: 'numeric',
-                      hour: '2-digit', minute: '2-digit',
-                    })
-                  : '—'}
-              </p>
+        {/* Table content */}
+        {loading ? (
+          <div className="py-16 flex justify-center"><LoadingSpinner /></div>
+        ) : sortedComprobantes.length === 0 ? (
+          <div className="py-14 px-6 text-center">
+            <div className="w-12 h-12 mx-auto mb-4 grid place-items-center rounded-2xl bg-muted text-muted-foreground">
+              <FileText size={24} />
             </div>
-
-            {/* ── Receptor ── */}
-            <div className="border rounded-lg p-3 mb-4 space-y-1 bg-muted/30">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                {selectedComprobante.tipo === 'FACTURA' ? 'Razón Social' : 'Cliente'}
-              </p>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {selectedComprobante.receptorDocTipo ?? selectedComprobante.receptor?.tipoDocumento ?? 'DOC'}
-                </span>
-                <span className="font-medium">
-                  {selectedComprobante.receptorDocNumero
-                    ?? selectedComprobante.receptor?.numeroDocumento
-                    ?? 'CLIENTES VARIOS'}
-                </span>
-              </div>
-              {(selectedComprobante.receptorNombre ?? selectedComprobante.receptor?.razonSocial) && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Nombre / Razón Social</span>
-                  <span className="font-medium text-right max-w-[60%]">
-                    {selectedComprobante.receptorNombre ?? selectedComprobante.receptor?.razonSocial}
-                  </span>
-                </div>
-              )}
-              {(selectedComprobante.receptorDireccion ?? selectedComprobante.receptor?.direccion) && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Dirección</span>
-                  <span className="font-medium text-right max-w-[60%]">
-                    {selectedComprobante.receptorDireccion ?? selectedComprobante.receptor?.direccion}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* ── Detalle de productos ── */}
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Detalle
-              </p>
-              <div className="rounded-md border overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted text-left">
-                      <th className="px-3 py-2 font-semibold text-xs">Producto</th>
-                      <th className="px-3 py-2 font-semibold text-xs text-center">Cant.</th>
-                      <th className="px-3 py-2 font-semibold text-xs text-right">P. Unit.</th>
-                      <th className="px-3 py-2 font-semibold text-xs text-right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedComprobante.items && selectedComprobante.items.length > 0 ? (
-                      selectedComprobante.items.map((item: ItemComprobanteDTO, idx: number) => (
-                        <tr key={idx} className="border-t">
-                          <td className="px-3 py-2">
-                            <p className="font-medium leading-tight">{item.productoNombre ?? `Producto #${item.productoId}`}</p>
-                            {item.codigoBarras && (
-                              <p className="text-xs text-muted-foreground">{item.codigoBarras}</p>
+            <p className="font-semibold">{comprobantesBase.length === 0 ? 'Todavía no hay comprobantes' : 'Ningún comprobante coincide con estos filtros'}</p>
+            <p className="text-sm text-muted-foreground mt-2 max-w-sm mx-auto leading-relaxed">
+              {comprobantesBase.length === 0
+                ? 'Los comprobantes electrónicos (boletas y facturas) se generan desde el módulo de Ventas.'
+                : 'Prueba con otro rango de fechas o tipo, o quita los filtros para ver todo el periodo.'}
+            </p>
+            {comprobantesBase.length > 0 && (
+              <button onClick={limpiarFiltros} className="mt-4 h-9 px-4 text-sm font-semibold text-primary bg-primary/10 border border-primary/20 rounded-xl hover:bg-primary/15 transition-colors">
+                Quitar filtros
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[960px]">
+                <thead>
+                  <tr className="bg-muted/40">
+                    <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Comprobante</th>
+                    <th className="text-left px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Tipo</th>
+                    <th className="text-left px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Receptor</th>
+                    <th className="text-left px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Venta</th>
+                    <th className="text-left px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Estado</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Total</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedComprobantes.map((c) => {
+                    const vendedor = ventaById.get(c.ventaId)?.vendedorNombre;
+                    const isAnulado = c.estado === 'ANULADO';
+                    return (
+                      <tr
+                        key={c.id}
+                        onClick={() => { setSelectedComprobante(c); setIsDetailOpen(true); }}
+                        className={`border-t border-border/40 cursor-pointer hover:bg-muted/30 transition-colors ${isAnulado ? 'opacity-60' : ''}`}
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="font-bold text-sm">{c.numero ?? '—'}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {c.createdAt ? new Date(c.createdAt).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' }) : '—'}
+                            {c.createdAt && <> · {new Date(c.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })}</>}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${c.tipo === 'FACTURA' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                            {c.tipo === 'FACTURA' ? 'Factura' : 'Boleta'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 max-w-[200px]">
+                          <div className="font-semibold truncate">{c.receptor?.razonSocial || c.receptorNombre || 'Público general'}</div>
+                          <div className="font-mono text-xs text-muted-foreground mt-0.5">
+                            {(c.receptor?.tipoDocumento || c.receptorDocTipo) && <>{c.receptor?.tipoDocumento || c.receptorDocTipo} </>}
+                            {c.receptor?.numeroDocumento || c.receptorDocNumero || '—'}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <div className="font-mono font-semibold text-sm">#{c.ventaId}</div>
+                          {vendedor && <div className="text-xs text-muted-foreground mt-0.5">{vendedor}</div>}
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          {isAnulado ? (
+                            <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-destructive/10 text-destructive">Anulado</span>
+                          ) : c.sunatEstado === 'ACEPTADO' ? (
+                            <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Aceptado</span>
+                          ) : c.sunatEstado === 'RECHAZADO' ? (
+                            <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-destructive/10 text-destructive">Rechazado</span>
+                          ) : c.sunatEstado === 'ERROR' ? (
+                            <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-destructive/10 text-destructive">Error envío</span>
+                          ) : c.sunatEstado === 'PENDIENTE' ? (
+                            <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400">Pendiente</span>
+                          ) : (
+                            <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">Sin enviar</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-right whitespace-nowrap font-bold tabular-nums">
+                          {c.total != null ? `S/ ${Number(c.total).toFixed(2)}` : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <div className="inline-flex gap-0.5">
+                            <button type="button" onClick={e => { e.stopPropagation(); setSelectedComprobante(c); setIsDetailOpen(true); }} title="Ver detalle" className="w-8 h-8 grid place-items-center rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors">
+                              <Eye size={15} />
+                            </button>
+                            <button type="button" onClick={e => { e.stopPropagation(); handleDownloadPdf(c); }} title="PDF A4" disabled={downloadingPdf === c.id} className="w-8 h-8 grid place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50">
+                              {downloadingPdf === c.id ? <span className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" /> : <FileDown size={15} />}
+                            </button>
+                            {c.pdfTicketUrl && (
+                              <button type="button" onClick={e => { e.stopPropagation(); handleDownloadTicket(c); }} title="Ticket 80mm" className="w-8 h-8 grid place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                                <Printer size={15} />
+                              </button>
                             )}
-                          </td>
-                          <td className="px-3 py-2 text-center">{item.cantidad}</td>
-                          <td className="px-3 py-2 text-right">S/.{Number(item.precioUnitario).toFixed(2)}</td>
-                          <td className="px-3 py-2 text-right font-medium">S/.{Number(item.subtotal).toFixed(2)}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={4} className="px-3 py-4 text-center text-muted-foreground text-xs">
-                          Sin detalle de productos
+                            {canEnviarSunat && c.estado === 'EMITIDO' && c.sunatEstado !== 'ACEPTADO' && c.sunatEstado !== 'PENDIENTE' && (
+                              <button type="button" onClick={e => { e.stopPropagation(); handleEnviarSunat(c); }} title={c.sunatEstado === 'RECHAZADO' ? 'Reenviar a SUNAT' : 'Enviar a SUNAT'} disabled={enviandoSunat === c.id} className="w-8 h-8 grid place-items-center rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors disabled:opacity-50">
+                                {enviandoSunat === c.id ? <span className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" /> : <Send size={15} />}
+                              </button>
+                            )}
+                            {canAnular && c.estado === 'EMITIDO' && (
+                              <button type="button" onClick={e => { e.stopPropagation(); setConfirmAnular({ isOpen: true, id: c.id!, sunatEstado: c.sunatEstado, tipo: c.tipo, numero: c.numero, total: c.total, receptorNombre: c.receptorNombre || c.receptor?.razonSocial, ventaId: c.ventaId, ventaFecha: c.createdAt }); }} title="Anular" className="w-8 h-8 grid place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+                                <Ban size={15} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+            {totalPages > 1 && (
+              <div className="px-4 py-3 border-t border-border/50">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={sortedComprobantes.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
-            {/* ── Resumen financiero ── */}
-            <div className="border rounded-lg overflow-hidden mb-4">
-              <div className="flex justify-between px-4 py-2 border-b bg-muted/30">
-                <span className="text-sm text-muted-foreground">OP. GRAVADA</span>
-                <span className="text-sm font-medium">
-                  S/.{selectedComprobante.subtotal != null ? Number(selectedComprobante.subtotal).toFixed(2) : '—'}
-                </span>
-              </div>
-              <div className="flex justify-between px-4 py-2 border-b bg-muted/30">
-                <span className="text-sm text-muted-foreground">IGV ({tenantConfig?.igvPorcentaje ?? 18}%)</span>
-                <span className="text-sm font-medium">
-                  S/.{selectedComprobante.igv != null ? Number(selectedComprobante.igv).toFixed(2) : '—'}
-                </span>
-              </div>
-              <div className="flex justify-between px-4 py-3 bg-primary/10">
-                <span className="font-bold text-base">IMPORTE TOTAL</span>
-                <span className="text-xl font-bold text-primary">
-                  S/.{selectedComprobante.total != null ? Number(selectedComprobante.total).toFixed(2) : '—'}
-                </span>
-              </div>
-            </div>
+      {/* ── Detail slide-in panel ── */}
+      {isDetailOpen && selectedComprobante && createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex justify-end"
+          style={{ background: 'rgba(9,11,16,.5)', backdropFilter: 'blur(3px)' }}
+          onClick={() => { setIsDetailOpen(false); setSelectedComprobante(null); }}
+        >
+          <style>{`@keyframes slideFromRight { from { transform:translateX(28px); opacity:0; } to { transform:none; opacity:1; } }`}</style>
+          <aside
+            className="w-full max-w-[520px] h-full flex flex-col bg-card border-l border-border shadow-[_-20px_0_60px_-30px_rgba(0,0,0,.6)]"
+            onClick={e => e.stopPropagation()}
+            style={{ animation: 'slideFromRight .24s cubic-bezier(.4,0,.2,1)' }}
+          >
 
-            {/* ── Estado SUNAT ── */}
-            {(selectedComprobante.sunatEstado || selectedComprobante.estado === 'EMITIDO') && (
-              <div className={[
-                'rounded-lg px-4 py-3 mb-4 text-sm',
-                selectedComprobante.sunatEstado === 'ACEPTADO'  ? 'bg-emerald-500/10 border border-emerald-500/30' :
-                selectedComprobante.sunatEstado === 'RECHAZADO' ? 'bg-red-500/10 border border-red-500/30' :
-                selectedComprobante.sunatEstado === 'ERROR'     ? 'bg-red-500/10 border border-red-500/30' :
-                selectedComprobante.sunatEstado === 'PENDIENTE' ? 'bg-amber-500/10 border border-amber-500/30' :
-                'bg-muted/40 border border-border',
-              ].join(' ')}>
-                <div className="flex items-center justify-between">
-                  <span className={[
-                    'font-semibold text-xs uppercase tracking-wide',
-                    selectedComprobante.sunatEstado === 'ACEPTADO'  ? 'text-emerald-600 dark:text-emerald-400' :
-                    selectedComprobante.sunatEstado === 'RECHAZADO' ? 'text-red-600 dark:text-red-400' :
-                    selectedComprobante.sunatEstado === 'ERROR'     ? 'text-red-600 dark:text-red-400' :
-                    selectedComprobante.sunatEstado === 'PENDIENTE' ? 'text-amber-600 dark:text-amber-400' :
-                    'text-muted-foreground',
-                  ].join(' ')}>
-                    🏛️ SUNAT:{' '}
-                    {selectedComprobante.sunatEstado === 'ACEPTADO'  ? '✓ ACEPTADO' :
-                     selectedComprobante.sunatEstado === 'RECHAZADO' ? '✗ RECHAZADO' :
-                     selectedComprobante.sunatEstado === 'PENDIENTE' ? '⏳ PENDIENTE' :
-                     selectedComprobante.sunatEstado === 'ERROR'     ? '⚠ ERROR' :
+            {/* Header */}
+            <div className="flex items-start gap-3 p-[20px_22px] border-b border-border/60 flex-shrink-0">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="font-mono text-[1.08rem] font-semibold tracking-[-0.01em] m-0">
+                    {selectedComprobante.numero ?? `#${selectedComprobante.id}`}
+                  </h2>
+                  <span className="inline-flex items-center text-[.74rem] font-[650] px-[8px] py-[2.5px] rounded-full bg-primary/10 text-primary">
+                    {selectedComprobante.tipo === 'FACTURA' ? 'Factura' : 'Boleta'}
+                  </span>
+                  <span className={`inline-flex items-center text-[.74rem] font-[650] px-[8px] py-[2.5px] rounded-full ${
+                    selectedComprobante.estado === 'ANULADO' ? 'text-destructive bg-destructive/10' :
+                    selectedComprobante.sunatEstado === 'ACEPTADO' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10' :
+                    selectedComprobante.sunatEstado === 'RECHAZADO' ? 'text-destructive bg-destructive/10' :
+                    selectedComprobante.sunatEstado === 'PENDIENTE' ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10' :
+                    'text-muted-foreground bg-muted'
+                  }`}>
+                    {selectedComprobante.estado === 'ANULADO' ? 'Anulado' :
+                     selectedComprobante.sunatEstado === 'ACEPTADO' ? 'Aceptado' :
+                     selectedComprobante.sunatEstado === 'RECHAZADO' ? 'Rechazado' :
+                     selectedComprobante.sunatEstado === 'PENDIENTE' ? 'Pendiente' :
                      'Sin enviar'}
                   </span>
                 </div>
-                {selectedComprobante.sunatMensaje && (
-                  <p className="text-xs text-muted-foreground mt-1">{selectedComprobante.sunatMensaje}</p>
-                )}
-                {!selectedComprobante.sunatEstado && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Aún no se ha enviado a SUNAT. Usa el botón para enviarlo.
+                <p className="font-mono text-[.78rem] text-muted-foreground mt-[6px]">
+                  Venta #{selectedComprobante.ventaId}
+                  {selectedComprobante.createdAt && <> · {new Date(selectedComprobante.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })} · {new Date(selectedComprobante.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}</>}
+                  {ventaById.get(selectedComprobante.ventaId)?.vendedorNombre && <> · {ventaById.get(selectedComprobante.ventaId)?.vendedorNombre}</>}
+                </p>
+              </div>
+              <button type="button" onClick={() => { setIsDetailOpen(false); setSelectedComprobante(null); }}
+                className="w-[30px] h-[30px] flex-shrink-0 grid place-items-center text-muted-foreground bg-transparent border-0 rounded-lg cursor-pointer hover:bg-muted hover:text-foreground transition-colors">
+                <X size={16} strokeWidth={2.2} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-[20px_22px]">
+
+              {/* Receptor */}
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mb-[10px]">Receptor</p>
+              <div className="grid gap-px border border-border rounded-xl overflow-hidden" style={{ background: 'var(--border)' }}>
+                <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--border)' }}>
+                  <div className="p-[12px_14px] bg-muted">
+                    <p className="text-[.74rem] text-muted-foreground">
+                      {selectedComprobante.receptorDocTipo || selectedComprobante.receptor?.tipoDocumento || 'Doc.'}
+                    </p>
+                    <p className="font-mono text-[.88rem] font-semibold mt-1">
+                      {selectedComprobante.receptorDocNumero || selectedComprobante.receptor?.numeroDocumento || '—'}
+                    </p>
+                  </div>
+                  <div className="p-[12px_14px] bg-muted">
+                    <p className="text-[.74rem] text-muted-foreground">
+                      {selectedComprobante.tipo === 'FACTURA' ? 'Razón Social' : 'Nombre'}
+                    </p>
+                    <p className="text-[.88rem] font-[650] mt-1 break-words">
+                      {selectedComprobante.receptorNombre || selectedComprobante.receptor?.razonSocial || 'Público general'}
+                    </p>
+                  </div>
+                </div>
+                <div className="p-[12px_14px] bg-muted">
+                  <p className="text-[.74rem] text-muted-foreground">Dirección</p>
+                  <p className="text-[.86rem] text-muted-foreground mt-1">
+                    {selectedComprobante.receptorDireccion || selectedComprobante.receptor?.direccion || '—'}
                   </p>
+                </div>
+              </div>
+
+              {/* Detalle */}
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mt-[22px] mb-[10px]">Detalle</p>
+              <div className="border border-border rounded-xl overflow-hidden">
+                {selectedComprobante.items && selectedComprobante.items.length > 0 ? (
+                  selectedComprobante.items.map((item: ItemComprobanteDTO, idx: number) => (
+                    <div key={idx} className={`flex items-start gap-[14px] p-[12px_14px] ${idx > 0 ? 'border-t border-border/60' : ''}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[.865rem] font-semibold leading-[1.35]">{item.productoNombre ?? `Producto #${item.productoId}`}</p>
+                        <p className="font-mono text-[.74rem] text-muted-foreground mt-[3px]">x{item.cantidad} · S/ {Number(item.precioUnitario).toFixed(2)}</p>
+                      </div>
+                      <p className="flex-shrink-0 text-[.86rem] font-[650] tabular-nums">S/ {Number(item.subtotal).toFixed(2)}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-[12px_14px] text-center text-[.865rem] text-muted-foreground">Sin detalle de productos</div>
                 )}
               </div>
-            )}
 
-            {/* ── Footer info ── */}
-            <div className="text-center text-xs text-muted-foreground border-t pt-3 mb-4">
-              <p>Venta #{selectedComprobante.ventaId}</p>
-              {selectedComprobante.estado === 'ANULADO' && selectedComprobante.updatedAt && (
-                <p className="text-destructive font-medium mt-1">
-                  Anulado: {new Date(selectedComprobante.updatedAt).toLocaleString('es-PE')}
-                </p>
-              )}
+              {/* Totales */}
+              <div className="grid gap-2 mt-[14px] p-[15px_16px] rounded-xl bg-muted/60 border border-border text-[.87rem]">
+                <div className="flex justify-between gap-3 text-muted-foreground">
+                  <span>Op. gravada</span>
+                  <span className="tabular-nums">S/ {selectedComprobante.subtotal != null ? Number(selectedComprobante.subtotal).toFixed(2) : '—'}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-muted-foreground">
+                  <span>IGV ({tenantConfig?.igvPorcentaje ?? 18}%)</span>
+                  <span className="tabular-nums">S/ {selectedComprobante.igv != null ? Number(selectedComprobante.igv).toFixed(2) : '—'}</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-3 pt-[9px] border-t border-border">
+                  <span className="font-[650]">Importe total</span>
+                  <span className="text-[1.32rem] font-bold tracking-[-0.03em] tabular-nums">S/ {selectedComprobante.total != null ? Number(selectedComprobante.total).toFixed(2) : '—'}</span>
+                </div>
+              </div>
+
+              {/* SUNAT */}
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground mt-[22px] mb-[10px]">SUNAT</p>
+              {(() => {
+                const est = selectedComprobante.sunatEstado;
+                const anulado = selectedComprobante.estado === 'ANULADO';
+                const boxCls = anulado || est === 'RECHAZADO' || est === 'ERROR'
+                  ? 'bg-destructive/8 border-destructive/20 text-destructive'
+                  : est === 'ACEPTADO'
+                  ? 'bg-emerald-500/[.07] border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                  : est === 'PENDIENTE'
+                  ? 'bg-amber-500/[.07] border-amber-500/20 text-amber-700 dark:text-amber-400'
+                  : 'bg-muted border-border text-muted-foreground';
+                const estadoLabel = anulado ? 'Comprobante anulado'
+                  : est === 'ACEPTADO' ? 'Aceptado por SUNAT'
+                  : est === 'RECHAZADO' ? 'Rechazado por SUNAT'
+                  : est === 'PENDIENTE' ? 'Pendiente de respuesta'
+                  : est === 'ERROR' ? 'Error de envío'
+                  : 'Aún no enviado';
+                const mensaje = selectedComprobante.sunatMensaje || (est !== 'ACEPTADO' && est !== 'PENDIENTE' && !anulado ? 'No se ha enviado a SUNAT. Envíalo para que tenga validez tributaria.' : '');
+                return (
+                  <div className={`p-[13px_14px] rounded-xl border text-[.86rem] ${boxCls}`}>
+                    <div className="flex items-center justify-between gap-[10px] flex-wrap">
+                      <span className="font-[650]">{estadoLabel}</span>
+                      {(est === 'ACEPTADO' || est === 'PENDIENTE' || est === 'RECHAZADO') && (
+                        <span className="font-mono text-[.72rem] text-muted-foreground">vía Nubefact</span>
+                      )}
+                    </div>
+                    {mensaje && <p className="text-[.83rem] leading-[1.55] mt-[7px] opacity-90">{mensaje}</p>}
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* ── Acciones ── */}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                className="flex-1 gap-2 min-w-[130px]"
-                disabled={downloadingPdf === selectedComprobante.id}
-                onClick={() => handleDownloadPdf(selectedComprobante)}
-                title="PDF tamaño A4"
-              >
-                <FileDown size={15} />
-                {downloadingPdf === selectedComprobante.id ? 'Generando...' : 'PDF A4'}
-              </Button>
-              {selectedComprobante.pdfTicketUrl && (
-                <Button
-                  variant="outline"
-                  className="flex-1 gap-2 min-w-[130px]"
-                  onClick={() => handleDownloadTicket(selectedComprobante)}
-                  title="PDF Ticket 80mm para impresora térmica"
-                >
-                  <Printer size={15} />
-                  PDF Ticket
-                </Button>
-              )}
-              {canEnviarSunat && selectedComprobante.estado === 'EMITIDO' && selectedComprobante.sunatEstado !== 'ACEPTADO' && (
-                <Button
-                  variant="outline"
-                  className="flex-1 gap-2 min-w-[130px] border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
-                  disabled={enviandoSunat === selectedComprobante.id}
-                  onClick={() => handleEnviarSunat(selectedComprobante)}
-                >
-                  {enviandoSunat === selectedComprobante.id
-                    ? <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin inline-block" />
-                    : <Send size={15} />
-                  }
+            {/* Footer */}
+            <div className="flex flex-wrap gap-[9px] p-[16px_22px] border-t border-border/60 flex-shrink-0">
+              {canEnviarSunat && selectedComprobante.estado === 'EMITIDO' && selectedComprobante.sunatEstado !== 'ACEPTADO' && selectedComprobante.sunatEstado !== 'PENDIENTE' && (
+                <button type="button" onClick={() => handleEnviarSunat(selectedComprobante)} disabled={enviandoSunat === selectedComprobante.id}
+                  className="flex-[1_1_100%] h-11 flex items-center justify-center gap-2 text-[.9rem] font-[650] text-primary-foreground bg-primary border-0 rounded-[11px] cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 shadow-[0_8px_20px_-10px_var(--primary)]">
+                  {enviandoSunat === selectedComprobante.id ? <span className="w-4 h-4 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" /> : <Send size={15} />}
                   {selectedComprobante.sunatEstado === 'RECHAZADO' ? 'Reenviar a SUNAT' : 'Enviar a SUNAT'}
-                </Button>
+                </button>
               )}
-              <Button
-                className="flex-1 min-w-[80px]"
-                onClick={() => {
-                  setIsDetailOpen(false);
-                  setSelectedComprobante(null);
-                }}
-              >
-                Cerrar
-              </Button>
+              <button type="button" onClick={() => handleDownloadPdf(selectedComprobante)} disabled={downloadingPdf === selectedComprobante.id}
+                className="flex-1 min-w-[130px] h-11 flex items-center justify-center gap-2 text-[.88rem] font-semibold text-muted-foreground bg-card border border-border rounded-[11px] cursor-pointer hover:border-primary hover:text-primary transition-colors disabled:opacity-50">
+                {downloadingPdf === selectedComprobante.id ? <span className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" /> : <FileDown size={15} />}
+                PDF A4
+              </button>
+              {selectedComprobante.pdfTicketUrl && (
+                <button type="button" onClick={() => handleDownloadTicket(selectedComprobante)}
+                  className="flex-1 min-w-[130px] h-11 flex items-center justify-center gap-2 text-[.88rem] font-semibold text-muted-foreground bg-card border border-border rounded-[11px] cursor-pointer hover:border-primary hover:text-primary transition-colors">
+                  <Printer size={15} />
+                  Ticket 80 mm
+                </button>
+              )}
+              {canAnular && selectedComprobante.estado === 'EMITIDO' && (
+                <button type="button" onClick={() => { setConfirmAnular({ isOpen: true, id: selectedComprobante.id!, sunatEstado: selectedComprobante.sunatEstado, tipo: selectedComprobante.tipo, numero: selectedComprobante.numero, total: selectedComprobante.total, receptorNombre: selectedComprobante.receptorNombre || selectedComprobante.receptor?.razonSocial, ventaId: selectedComprobante.ventaId, ventaFecha: selectedComprobante.createdAt }); setIsDetailOpen(false); }}
+                  title="Anular comprobante" aria-label="Anular comprobante"
+                  className="w-11 h-11 flex-shrink-0 grid place-items-center text-destructive bg-card border border-border rounded-[11px] cursor-pointer hover:bg-destructive/8 hover:border-destructive/40 transition-colors">
+                  <Ban size={16} strokeWidth={1.9} />
+                </button>
+              )}
+            </div>
+          </aside>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Emitir Comprobante Dialog ── */}
+      {isEmitirOpen && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-5"
+          style={{ background: 'rgba(9,11,16,.55)', backdropFilter: 'blur(3px)' }}
+          onClick={() => { setIsEmitirOpen(false); setEmitirForm(emptyForm()); setEmitirSearch(''); }}>
+          <style>{`@keyframes fx-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }`}</style>
+          <div className="w-full max-w-[580px] max-h-[calc(100vh-40px)] flex flex-col bg-card border border-border rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,.55)] overflow-hidden"
+            style={{ animation: 'fx-in .2s ease' }}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-start gap-3 px-[22px] pt-5 pb-4 border-b border-border/60 shrink-0">
+              <span className="w-[38px] h-[38px] shrink-0 grid place-items-center rounded-[11px] bg-primary/10 text-primary">
+                <FileText size={18} strokeWidth={1.9} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[1.08rem] font-bold tracking-[-0.02em] m-0">Emitir comprobante</h2>
+                <p className="font-mono text-[.76rem] text-muted-foreground mt-1">
+                  {emitirForm.ventaId > 0
+                    ? `Venta #${emitirForm.ventaId} · S/ ${(ventas.find(v => v.id === emitirForm.ventaId)?.total ?? 0).toFixed(2)}`
+                    : 'Selecciona una venta sin comprobante'}
+                </p>
+              </div>
+              <button type="button" onClick={() => { setIsEmitirOpen(false); setEmitirForm(emptyForm()); setEmitirSearch(''); }}
+                className="w-[30px] h-[30px] shrink-0 grid place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors border-0 bg-transparent cursor-pointer">
+                <X size={16} strokeWidth={2.2} />
+              </button>
+            </div>
+
+            {/* Body scrolleable */}
+            <form id="emitir-form" onSubmit={handleEmitir} className="flex-1 min-h-0 overflow-y-auto p-[18px_22px_20px]">
+
+              {/* 1 · Venta */}
+              <p className="font-mono text-[.68rem] font-semibold uppercase tracking-[.09em] text-muted-foreground mb-[9px]">1 · Venta</p>
+              <div className="relative">
+                <Search size={15} className="absolute left-[13px] top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  value={emitirSearch}
+                  onChange={e => setEmitirSearch(e.target.value)}
+                  placeholder="Buscar venta por ID o vendedor…"
+                  className="w-full h-[42px] pr-3 text-[.875rem] text-foreground bg-background border border-border rounded-[10px] outline-none transition-all"
+                  style={{ paddingLeft: '36px' }}
+                  onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px var(--primary-soft, color-mix(in srgb, var(--primary) 15%, transparent))'; }}
+                  onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+                />
+              </div>
+              <div className="grid gap-1.5 mt-2 max-h-[196px] overflow-y-auto">
+                {ventasEmitirFiltradas.length === 0 ? (
+                  <div className="p-[14px] rounded-[10px] bg-muted text-[.82rem] text-muted-foreground text-center">
+                    {emitirSearch ? 'Sin resultados' : 'No hay ventas sin comprobante que coincidan.'}
+                  </div>
+                ) : (
+                  ventasEmitirFiltradas.map((v) => {
+                    const selected = emitirForm.ventaId === v.id;
+                    const nProd = v.detalles?.length ?? 0;
+                    const fechaStr = v.createdAt
+                      ? new Date(v.createdAt).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' }) + ' · ' + new Date(v.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })
+                      : '';
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => handleVentaSelect({ id: v.id! })}
+                        className={`w-full flex items-center gap-2.5 px-[14px] py-3 rounded-[11px] text-left border transition-colors cursor-pointer ${
+                          selected
+                            ? 'border-primary/40 bg-primary/[.07]'
+                            : 'border-border hover:border-primary/30 hover:bg-muted/50'
+                        }`}
+                      >
+                        <span className={`w-[14px] h-[14px] shrink-0 rounded-full box-border transition-all ${selected ? 'border-[4.5px] border-primary' : 'border-[1.5px] border-muted-foreground/50'}`} />
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="block font-mono text-[.84rem] font-semibold">#{v.id}</span>
+                          <span className="block text-[.75rem] text-muted-foreground mt-0.5">
+                            {fechaStr}{v.vendedorNombre ? ` · ${v.vendedorNombre}` : ''}{nProd > 0 ? ` · ${nProd} producto${nProd !== 1 ? 's' : ''}` : ''}
+                          </span>
+                        </span>
+                        <span className="text-[.88rem] font-bold tabular-nums shrink-0">S/ {v.total.toFixed(2)}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* 2 · Tipo */}
+              <p className="font-mono text-[.68rem] font-semibold uppercase tracking-[.09em] text-muted-foreground mt-[22px] mb-[9px]">2 · Tipo</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {TIPO_OPTIONS.map(tipo => {
+                  const selected = emitirForm.tipo === tipo;
+                  return (
+                    <button
+                      key={tipo}
+                      type="button"
+                      onClick={() => setEmitirForm(prev => ({
+                        ...prev,
+                        tipo,
+                        receptor: tipo === 'BOLETA'
+                          ? { tipoDocumento: 'DNI', numeroDocumento: '', razonSocial: '', direccion: '' }
+                          : { tipoDocumento: 'RUC', numeroDocumento: '', razonSocial: '', direccion: '' },
+                      }))}
+                      className={`flex items-center gap-2.5 px-[14px] py-3 rounded-[11px] text-left border transition-all cursor-pointer ${
+                        selected ? 'border-primary/40 bg-primary/[.07]' : 'border-border hover:border-primary/30 hover:bg-muted/50'
+                      }`}
+                    >
+                      <span className={`w-[14px] h-[14px] shrink-0 rounded-full box-border transition-all ${selected ? 'border-[4.5px] border-primary' : 'border-[1.5px] border-muted-foreground/50'}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[.92rem] font-[650]">{tipo === 'BOLETA' ? 'Boleta' : 'Factura'}</span>
+                        <span className="block text-[.75rem] text-muted-foreground mt-0.5">{tipo === 'BOLETA' ? 'Consumidor final · DNI opcional' : 'Empresas · RUC obligatorio'}</span>
+                      </span>
+                      <span className="font-mono text-[.72rem] font-semibold text-muted-foreground shrink-0">{tipo === 'BOLETA' ? 'B001' : 'F001'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 3 · Receptor */}
+              <p className="font-mono text-[.68rem] font-semibold uppercase tracking-[.09em] text-muted-foreground mt-[22px] mb-[9px]">3 · Receptor</p>
+              <div className="grid gap-[14px]">
+                {emitirForm.tipo === 'FACTURA' ? (
+                  <>
+                    <div>
+                      <label className="block text-[.8rem] font-semibold text-muted-foreground mb-[6px]">RUC <span className="text-destructive">*</span></label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="20xxxxxxxxx (11 dígitos)"
+                        maxLength={11}
+                        value={emitirForm.receptor?.numeroDocumento ?? ''}
+                        onChange={e => handleDocAutocompletar(e.target.value)}
+                        required
+                        className="w-full h-[42px] px-[13px] text-[.875rem] text-foreground bg-background border border-border rounded-[10px] outline-none font-mono tracking-[.04em] transition-all"
+                        onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px var(--primary-soft, color-mix(in srgb, var(--primary) 15%, transparent))'; }}
+                        onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[.8rem] font-semibold text-muted-foreground mb-[6px]">Razón Social <span className="text-destructive">*</span></label>
+                      <input
+                        type="text"
+                        placeholder="Nombre de la empresa"
+                        value={emitirForm.receptor?.razonSocial ?? ''}
+                        onChange={e => setEmitirForm(prev => ({ ...prev, receptor: { ...prev.receptor, razonSocial: e.target.value } }))}
+                        required
+                        className="w-full h-[42px] px-[13px] text-[.875rem] text-foreground bg-background border border-border rounded-[10px] outline-none transition-all"
+                        onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px var(--primary-soft, color-mix(in srgb, var(--primary) 15%, transparent))'; }}
+                        onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <label className="block text-[.8rem] font-semibold text-muted-foreground mb-[6px]">DNI <span className="text-[.76rem] font-normal">(opcional)</span></label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="8 dígitos"
+                      maxLength={8}
+                      value={emitirForm.receptor?.numeroDocumento ?? ''}
+                      onChange={e => handleDocAutocompletar(e.target.value)}
+                      className="w-full h-[42px] px-[13px] text-[.875rem] text-foreground bg-background border border-border rounded-[10px] outline-none font-mono tracking-[.04em] transition-all"
+                      onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px var(--primary-soft, color-mix(in srgb, var(--primary) 15%, transparent))'; }}
+                      onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+                    />
+                  </div>
+                )}
+                {emitirForm.tipo === 'BOLETA' && (
+                  <div>
+                    <label className="block text-[.8rem] font-semibold text-muted-foreground mb-[6px]">Nombre <span className="text-[.76rem] font-normal">(opcional)</span></label>
+                    <input
+                      type="text"
+                      placeholder="Nombre del cliente"
+                      value={emitirForm.receptor?.razonSocial ?? ''}
+                      onChange={e => setEmitirForm(prev => ({ ...prev, receptor: { ...prev.receptor, razonSocial: e.target.value } }))}
+                      className="w-full h-[42px] px-[13px] text-[.875rem] text-foreground bg-background border border-border rounded-[10px] outline-none transition-all"
+                      onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px var(--primary-soft, color-mix(in srgb, var(--primary) 15%, transparent))'; }}
+                      onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-[.8rem] font-semibold text-muted-foreground mb-[6px]">Dirección <span className="text-[.76rem] font-normal">(opcional)</span></label>
+                  <input
+                    type="text"
+                    placeholder="Av., calle, distrito"
+                    value={emitirForm.receptor?.direccion ?? ''}
+                    onChange={e => setEmitirForm(prev => ({ ...prev, receptor: { ...prev.receptor, direccion: e.target.value } }))}
+                    className="w-full h-[42px] px-[13px] text-[.875rem] text-foreground bg-background border border-border rounded-[10px] outline-none transition-all"
+                    onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px var(--primary-soft, color-mix(in srgb, var(--primary) 15%, transparent))'; }}
+                    onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+                  />
+                </div>
+              </div>
+
+              {/* Resumen financiero */}
+              {emitirForm.ventaId > 0 && (() => {
+                const venta = ventas.find(v => v.id === emitirForm.ventaId);
+                if (!venta) return null;
+                const igvRate = (tenantConfig?.igvPorcentaje ?? 18) / 100;
+                const base = venta.total / (1 + igvRate);
+                const igv = venta.total - base;
+                return (
+                  <div className="grid grid-cols-3 gap-px mt-5 bg-border border border-border rounded-[12px] overflow-hidden">
+                    {[
+                      { label: 'Op. gravada', value: `S/ ${base.toFixed(2)}` },
+                      { label: `IGV ${tenantConfig?.igvPorcentaje ?? 18}%`, value: `S/ ${igv.toFixed(2)}` },
+                      { label: 'Total', value: `S/ ${venta.total.toFixed(2)}`, bold: true },
+                    ].map(col => (
+                      <div key={col.label} className="bg-muted/40 px-[13px] py-[11px]">
+                        <div className="text-[.72rem] text-muted-foreground">{col.label}</div>
+                        <div className={`text-[.9rem] mt-[3px] tabular-nums ${col.bold ? 'font-bold' : 'font-[650]'}`}>{col.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </form>
+
+            {/* Footer */}
+            <div className="flex gap-[9px] px-[22px] py-[14px] border-t border-border/60 shrink-0">
+              <button type="button" onClick={() => { setIsEmitirOpen(false); setEmitirForm(emptyForm()); setEmitirSearch(''); }}
+                className="flex-none min-w-[110px] h-11 px-[18px] text-[.9rem] font-semibold text-muted-foreground bg-card border border-border rounded-[11px] hover:bg-muted transition-colors cursor-pointer">
+                Cancelar
+              </button>
+              <button type="submit" form="emitir-form" disabled={submitting}
+                className="flex-1 h-11 flex items-center justify-center gap-2 text-[.9rem] font-[650] text-primary-foreground bg-primary border-0 rounded-[11px] cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ boxShadow: '0 8px 20px -10px var(--primary)' }}>
+                {submitting ? 'Emitiendo…' : `Emitir ${emitirForm.tipo === 'FACTURA' ? 'factura' : 'boleta'}`}
+              </button>
             </div>
           </div>
-        )}
-      </Dialog>
+        </div>,
+        document.body
+      )}
 
-      {/* Anular Confirm */}
-      <ConfirmDialog
-        isOpen={confirmAnular.isOpen}
-        type="danger"
-        title="Anular Comprobante"
-        description={
-          (confirmAnular.sunatEstado === 'ACEPTADO' || confirmAnular.sunatEstado === 'PENDIENTE')
-            ? confirmAnular.tipo === 'BOLETA'
-              ? `Esta boleta fue enviada a SUNAT (${confirmAnular.sunatEstado}). Al confirmar se enviará un resumen diario de baja a SUNAT vía ${oseNombre}.\n\nNota: SUNAT procesa las bajas de boletas de forma asíncrona, por lo que el estado quedará PENDIENTE hasta que SUNAT lo confirme. El stock se repondrá automáticamente.`
-              : `Esta factura fue enviada a SUNAT (${confirmAnular.sunatEstado}). Al confirmar se enviará una comunicación de baja electrónica a SUNAT vía ${oseNombre} y el stock se repondrá automáticamente.`
-            : '¿Estás seguro de que deseas anular este comprobante? Se repondrá el stock de los productos automáticamente.'
-        }
-        confirmText="Anular Comprobante"
-        onConfirm={handleAnular}
-        onCancel={() => setConfirmAnular({ isOpen: false, id: null })}
-      />
+      {/* ── Anular dialog custom ── */}
+      {confirmAnular.isOpen && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: 'rgba(9,11,16,.5)', backdropFilter: 'blur(3px)' }}>
+          <div className="w-full max-w-[480px] bg-background rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-start gap-4 px-6 pt-6 pb-5">
+              <div className="w-11 h-11 shrink-0 rounded-xl bg-destructive/10 grid place-items-center">
+                <Ban size={22} className="text-destructive" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-[1.05rem] leading-tight">Anular comprobante</h3>
+                <p className="font-mono text-sm text-muted-foreground mt-0.5">
+                  {confirmAnular.numero} · S/ {confirmAnular.total?.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <button type="button" onClick={() => setConfirmAnular({ isOpen: false, id: null })} className="w-8 h-8 shrink-0 grid place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                <X size={16} />
+              </button>
+            </div>
 
+            <div className="px-6 pb-6 space-y-4">
+              {/* Info box */}
+              <div className="rounded-xl bg-muted/50 border border-border divide-y divide-border/60 text-sm">
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">Receptor</span>
+                  <span className="font-semibold text-right max-w-[60%] truncate">{confirmAnular.receptorNombre || 'Público general'}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">Venta</span>
+                  <span className="font-semibold font-mono">
+                    #{confirmAnular.ventaId}
+                    {confirmAnular.ventaFecha && <> · {new Date(confirmAnular.ventaFecha).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })} · {new Date(confirmAnular.ventaFecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })}</>}
+                  </span>
+                </div>
+                {confirmAnular.sunatEstado && (
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-muted-foreground">Estado SUNAT</span>
+                    <span className={`font-semibold ${confirmAnular.sunatEstado === 'ACEPTADO' ? 'text-emerald-600 dark:text-emerald-400' : confirmAnular.sunatEstado === 'RECHAZADO' ? 'text-destructive' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {confirmAnular.sunatEstado.charAt(0) + confirmAnular.sunatEstado.slice(1).toLowerCase()}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Warning si fue enviado a SUNAT */}
+              {(confirmAnular.sunatEstado === 'ACEPTADO' || confirmAnular.sunatEstado === 'PENDIENTE') && (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-4 py-3">
+                  <p className="font-semibold text-sm text-amber-800 dark:text-amber-300">
+                    {confirmAnular.tipo === 'BOLETA' ? 'Se enviará un resumen diario de baja' : 'Se enviará comunicación de baja'}
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1 leading-snug">
+                    {confirmAnular.tipo === 'BOLETA'
+                      ? `Esta boleta fue enviada a SUNAT (${confirmAnular.sunatEstado?.toLowerCase()}). SUNAT procesa las bajas de boletas de forma asíncrona, así que el estado quedará pendiente hasta que la confirme.`
+                      : `Esta factura fue enviada a SUNAT. Al confirmar se enviará una comunicación de baja electrónica vía ${oseNombre}.`
+                    }
+                  </p>
+                </div>
+              )}
+
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <span className="text-base">📦</span>
+                El stock de los productos se repone automáticamente al confirmar.
+              </p>
+
+              {/* Botones */}
+              <div className="flex gap-2.5 pt-1">
+                <button type="button" onClick={() => setConfirmAnular({ isOpen: false, id: null })}
+                  className="flex-1 h-11 rounded-xl border border-border bg-card text-sm font-semibold text-foreground hover:bg-muted transition-colors">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleAnular}
+                  className="flex-1 h-11 rounded-xl bg-destructive text-destructive-foreground text-sm font-bold hover:brightness-110 transition-all">
+                  Anular comprobante
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
