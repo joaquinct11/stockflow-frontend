@@ -110,7 +110,7 @@ export function ComprobantesPage() {
       const inicioISO = new Date(appliedFechaDesde + 'T00:00:00').toISOString().slice(0, 19);
       const finISO    = new Date(appliedFechaHasta + 'T23:59:59').toISOString().slice(0, 19);
       const data = isVendedor && user?.usuarioId
-        ? await ventaService.getByVendorAndPeriod(user.usuarioId, inicioISO, finISO)
+        ? await ventaService.getByVendorAndPeriod(user.usuarioId, inicioISO, finISO, sucursalId)
         : await ventaService.getByPeriod(inicioISO, finISO, sucursalId);
       setVentas(data);
     } catch { /* no bloquear si falla */ }

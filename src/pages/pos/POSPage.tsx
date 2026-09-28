@@ -7,6 +7,7 @@ import {
   Camera, CameraOff, Printer, Download, Edit2, ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 import { productoService } from '../../services/producto.service';
 import { sucursalService } from '../../services/sucursal.service';
 import { ventaService } from '../../services/venta.service';
@@ -153,6 +154,32 @@ export function POSPage() {
   // ── Precio editable (solo TIENDA_ROPA) ───────────────────────────────
   const [editandoPrecio, setEditandoPrecio] = useState<{ key: string; valor: string } | null>(null);
 
+  // ── Cantidad editable ─────────────────────────────────────────────────
+  const [editandoCantidad, setEditandoCantidad] = useState<{ key: string; valor: string } | null>(null);
+
+  const getStockMax = (item: typeof cart[0]) => {
+    const f = item.factor ?? 1;
+    if (item.varianteId)
+      return Math.floor((variantesDisponibles.find(v => v.id === item.varianteId)?.stockActual ?? getStockDisponible(item.producto)) / f);
+    if (item.stockLoteId)
+      return Math.floor((lotesDisponibles.find(l => l.id === item.stockLoteId)?.stockActual ?? getStockDisponible(item.producto)) / f);
+    return Math.floor(getStockDisponible(item.producto) / f);
+  };
+
+  const confirmarCantidad = (key: string) => {
+    const nueva = parseInt(editandoCantidad?.valor ?? '');
+    if (!isNaN(nueva) && nueva >= 1) {
+      const item = cart.find(i => cartItemKey(i) === key);
+      const max = item ? getStockMax(item) : Infinity;
+      if (nueva > max) toast.error(`Stock máximo disponible: ${max}`);
+      setCart(prev => prev.map(i => {
+        if (cartItemKey(i) !== key) return i;
+        return { ...i, cantidad: Math.min(nueva, getStockMax(i)) };
+      }));
+    }
+    setEditandoCantidad(null);
+  };
+
   const iniciarEditarPrecio = (key: string, precioActual: number) => {
     setEditandoPrecio({ key, valor: String(precioActual) });
   };
@@ -229,7 +256,8 @@ export function POSPage() {
     }).catch(() => {});
   }, [esFarmacia]);
 
-  const getStockDisponible = (p: ProductoDTO) => p.stockVigente ?? p.stockActual ?? 0;
+  const getStockDisponible = (p: ProductoDTO) =>
+    p.stockVigente != null ? p.stockVigente : (p.stockActual ?? 0);
 
   // ── Precargar carrito desde venta anulada ────────────────────────────
   useEffect(() => {
@@ -459,7 +487,7 @@ export function POSPage() {
         }
       } catch { /* sin presentaciones */ } finally { setLoadingPresentaciones(false); }
     }
-    if (esFarmacia && producto.stockVigente != null) {
+    if (esFarmacia && producto.stockVigente != null && producto.stockVigente > 0) {
       await abrirLotePickerParaProducto(producto);
       return;
     }
@@ -472,20 +500,22 @@ export function POSPage() {
     switchToCart = false, precioOverride?: number, stockLoteId?: number, stockLoteLabel?: string,
     presentacionId?: number, factor?: number,
   ) => {
+    const key = cartItemKey({ producto, varianteId, stockLoteId });
+    const existing = cart.find(i => cartItemKey(i) === key);
+    if (existing) {
+      const itemFactor = existing.factor ?? 1;
+      const stockMax = varianteId
+        ? Math.floor((variantesDisponibles.find(v => v.id === varianteId)?.stockActual ?? getStockDisponible(producto)) / itemFactor)
+        : stockLoteId
+          ? Math.floor((lotesDisponibles.find(l => l.id === stockLoteId)?.stockActual ?? getStockDisponible(producto)) / itemFactor)
+          : Math.floor(getStockDisponible(producto) / itemFactor);
+      if (existing.cantidad >= stockMax) { toast.error(`Stock máximo disponible: ${stockMax}`); return; }
+    }
     setCart(prev => {
-      const key = cartItemKey({ producto, varianteId, stockLoteId });
       const idx = prev.findIndex(i => cartItemKey(i) === key);
       if (idx >= 0) {
         const newCart = [...prev];
-        const item = newCart[idx];
-        const itemFactor = item.factor ?? 1;
-        const stockMax = varianteId
-          ? (variantesDisponibles.find(v => v.id === varianteId)?.stockActual ?? getStockDisponible(producto))
-          : stockLoteId
-            ? (lotesDisponibles.find(l => l.id === stockLoteId)?.stockActual ?? getStockDisponible(producto))
-            : Math.floor(getStockDisponible(producto) / itemFactor);
-        if (item.cantidad >= stockMax) { toast.error(`Stock máximo disponible: ${stockMax}`); return prev; }
-        newCart[idx] = { ...item, cantidad: item.cantidad + 1 };
+        newCart[idx] = { ...newCart[idx], cantidad: newCart[idx].cantidad + 1 };
         return newCart;
       }
       const precio = (precioOverride != null && precioOverride > 0) ? precioOverride : (producto.precioVenta ?? 0);
@@ -496,7 +526,17 @@ export function POSPage() {
   };
 
   const cambiarCantidad = (key: string, delta: number) => {
-    setCart(prev => prev.map(item => cartItemKey(item) === key ? { ...item, cantidad: item.cantidad + delta } : item).filter(item => item.cantidad > 0));
+    if (delta > 0) {
+      const item = cart.find(i => cartItemKey(i) === key);
+      if (item) {
+        const max = getStockMax(item);
+        if (item.cantidad + delta > max) { toast.error(`Stock máximo disponible: ${max}`); return; }
+      }
+    }
+    setCart(prev => prev.map(item => {
+      if (cartItemKey(item) !== key) return item;
+      return { ...item, cantidad: item.cantidad + delta };
+    }).filter(item => item.cantidad > 0));
   };
 
   const quitarItem = (key: string) => { setCart(prev => prev.filter(i => cartItemKey(i) !== key)); refocus(); };
@@ -547,7 +587,7 @@ export function POSPage() {
       setNcInfo(result);
       if (!result.valida) toast.error(result.mensaje);
       else toast.success(`Nota de crédito válida: ${moneda} ${result.montoTotal.toFixed(2)}`);
-    } catch { toast.error('Error al validar la nota de crédito'); }
+    } catch (err) { notify.fromError(err, 'No se pudo validar la nota de crédito.'); }
     finally { setNcLoading(false); }
   };
 
@@ -593,22 +633,22 @@ export function POSPage() {
   };
 
   const handleRegistrarReceptor = async () => {
-    if (!receptor.nombre.trim()) { toast.error('El nombre es requerido'); return; }
+    if (!receptor.nombre.trim()) { notify.error('El nombre del receptor es requerido', { detail: 'Ingresa el nombre del cliente para continuar.' }); return; }
     setGuardandoCliente(true);
     try {
       const creado = await clienteService.create({ nombre: receptor.nombre.trim(), tipoDocumento: tipoComprobante === 'FACTURA' ? 'RUC' : (receptor.docTipo || 'DNI'), numeroDocumento: receptor.docNumero.trim() || undefined });
       seleccionarClienteComoReceptor(creado); toast.success(`Cliente "${creado.nombre}" registrado`);
-    } catch { toast.error('Error al registrar el cliente'); }
+    } catch (err) { notify.fromError(err, 'No se pudo registrar el cliente.'); }
     finally { setGuardandoCliente(false); }
   };
 
   const handleRegistrarCliente = async () => {
-    if (!nuevoClienteForm.nombre.trim()) { toast.error('El nombre del cliente es requerido'); return; }
+    if (!nuevoClienteForm.nombre.trim()) { notify.error('El nombre del cliente es requerido', { detail: 'Ingresa al menos el nombre para registrarlo.' }); return; }
     setGuardandoCliente(true);
     try {
       const creado = await clienteService.create({ nombre: nuevoClienteForm.nombre.trim(), tipoDocumento: nuevoClienteForm.tipoDocumento || undefined, numeroDocumento: nuevoClienteForm.numeroDocumento.trim() || undefined });
       seleccionarCliente(creado); toast.success(`Cliente "${creado.nombre}" registrado`);
-    } catch { toast.error('Error al registrar el cliente'); }
+    } catch (err) { notify.fromError(err, 'No se pudo registrar el cliente.'); }
     finally { setGuardandoCliente(false); }
   };
 
@@ -617,7 +657,7 @@ export function POSPage() {
     if (cart.length === 0) return;
     if (metodoPago === 'EFECTIVO') {
       const pagado = parseFloat(montoPagado);
-      if (isNaN(pagado) || pagado < total) { toast.error('El monto pagado es insuficiente'); return; }
+      if (isNaN(pagado) || pagado < total) { notify.error('Monto insuficiente', { detail: `El total es S/ ${total.toFixed(2)}. Ingresa un monto igual o mayor.` }); return; }
     }
     setCobrando(true);
     try {
@@ -660,12 +700,15 @@ export function POSPage() {
           setUltimoComprobanteId(comp.id ?? null);
         } catch (err: any) {
           const backendMsg = err?.response?.data?.mensaje || err?.response?.data?.message || err?.message || '';
-          toast.error(backendMsg ? `No se pudo emitir el comprobante: ${backendMsg}. Emítelo desde Facturación.` : 'Venta registrada, pero no se pudo emitir el comprobante.');
+          notify.error(
+            backendMsg ? `No se pudo emitir el comprobante: ${backendMsg}` : 'Venta registrada, pero no se pudo emitir el comprobante.',
+            { detail: 'Puedes emitirlo manualmente desde el módulo de Facturación.', action: { label: 'Ir a Facturación', fn: () => window.location.href = '/facturacion' } }
+          );
           if (import.meta.env.DEV) console.error('[comprobante]', err?.response?.status, err?.response?.data);
         }
       }
       setNcCodigo(''); setNcInfo(null); setStep('exito');
-    } catch { toast.error('Error al registrar la venta'); }
+    } catch (err) { notify.fromError(err, 'No se pudo registrar la venta. Intenta de nuevo.'); }
     finally { setCobrando(false); }
   };
 
@@ -814,9 +857,24 @@ export function POSPage() {
                           className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card rounded-[7px] transition-colors cursor-pointer border-0 bg-transparent">
                           <Minus size={13} />
                         </button>
-                        <span className="w-6 text-center text-[.85rem] font-bold font-mono">{item.cantidad}</span>
+                        {editandoCantidad?.key === cartItemKey(item) ? (
+                          <input
+                            type="number" min="1" autoFocus
+                            value={editandoCantidad.valor}
+                            onChange={e => setEditandoCantidad({ key: cartItemKey(item), valor: e.target.value })}
+                            onBlur={() => confirmarCantidad(cartItemKey(item))}
+                            onKeyDown={e => { if (e.key === 'Enter') confirmarCantidad(cartItemKey(item)); if (e.key === 'Escape') setEditandoCantidad(null); }}
+                            className="w-10 text-center text-[.85rem] font-bold font-mono bg-card border border-primary rounded-[5px] px-1 py-0 focus:outline-none"
+                          />
+                        ) : (
+                          <span
+                            className="w-6 text-center text-[.85rem] font-bold font-mono cursor-text hover:text-primary select-none"
+                            title="Clic para editar"
+                            onClick={() => setEditandoCantidad({ key: cartItemKey(item), valor: String(item.cantidad) })}
+                          >{item.cantidad}</span>
+                        )}
                         <button onClick={() => cambiarCantidad(cartItemKey(item), 1)}
-                          disabled={item.cantidad >= Math.floor(getStockDisponible(item.producto) / (item.factor ?? 1))}
+                          disabled={item.cantidad >= getStockMax(item)}
                           className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card rounded-[7px] transition-colors disabled:opacity-30 cursor-pointer border-0 bg-transparent">
                           <Plus size={13} />
                         </button>
@@ -1687,8 +1745,13 @@ export function POSPage() {
                   const label = [lote.lote ? `Lote ${lote.lote}` : null, lote.proveedorNombre ? `· ${lote.proveedorNombre}` : null].filter(Boolean).join(' ') || `Lote #${lote.id}`;
                   const proximo = lote.diasParaVencer <= 30;
                   const precio = lote.precioVenta ?? lotePickerProducto.precioVenta ?? 0;
+                  const pFactor = pendingPresentacion?.factor ?? 1;
+                  const stockEnPresentacion = Math.floor((lote.stockActual ?? 0) / pFactor);
+                  const sinStock = stockEnPresentacion < 1;
+                  const stockLabel = pFactor > 1 ? `${stockEnPresentacion} ${pendingPresentacion?.label ?? 'uds'}` : `${lote.stockActual} uds`;
                   return (
                     <button key={lote.id}
+                      disabled={sinStock}
                       onClick={() => {
                         const pp = pendingPresentacion;
                         setPendingPresentacion(null);
@@ -1696,7 +1759,7 @@ export function POSPage() {
                           pp?.precio ?? lote.precioVenta ?? undefined, lote.id, label, pp?.id, pp?.factor ?? 1);
                         setLotePickerOpen(false);
                       }}
-                      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors cursor-pointer bg-transparent">
+                      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate">{label}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
@@ -1706,7 +1769,7 @@ export function POSPage() {
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-sm font-bold font-mono">{fmt(precio)}</p>
-                        <span className="text-xs text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-lg">{lote.stockActual} uds</span>
+                        <span className="text-xs text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-lg">{stockLabel}</span>
                       </div>
                     </button>
                   );

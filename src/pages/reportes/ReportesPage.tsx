@@ -69,6 +69,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useSucursalStore } from '../../store/sucursalStore';
 import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 
 // ─── Labels de categorías de gasto ───────────────────────────────────────────
 
@@ -1638,7 +1639,7 @@ export function ReportesPage() {
     try {
       setResumenLoading(true); setResumenError(null);
       setResumenData(await reportesService.getResumen(d, h, sucursalId));
-    } catch { setResumenError('Error al cargar el resumen.'); toast.error('Error al cargar el resumen.');
+    } catch (err) { setResumenError('No se pudo cargar el resumen.'); notify.fromError(err, 'No se pudo cargar el resumen del período.');
     } finally { setResumenLoading(false); }
   };
 
@@ -1653,7 +1654,7 @@ export function ReportesPage() {
         reportesService.getVentasProductos(d, h, 10, 'MENOS', met, sucursalId),
       ]);
       setVentasData({ tendencia, porVendedor, porCategoria, porMetodoPago, topProductos, menosProductos });
-    } catch { setVentasError('Error al cargar datos de ventas.'); toast.error('Error al cargar datos de ventas.');
+    } catch (err) { setVentasError('No se pudieron cargar los datos de ventas.'); notify.fromError(err, 'No se pudieron cargar los datos de ventas.');
     } finally { setVentasLoading(false); }
   };
 
@@ -1667,21 +1668,21 @@ export function ReportesPage() {
         reportesService.getMermas(desde, hasta).catch(() => []),
       ]);
       setInventarioData({ abc, slowMovers, cobertura, vencimientos, mermas });
-    } catch { setInventarioError('Error al cargar datos de inventario.'); toast.error('Error al cargar datos de inventario.');
+    } catch (err) { setInventarioError('No se pudieron cargar los datos de inventario.'); notify.fromError(err, 'No se pudieron cargar los datos de inventario.');
     } finally { setInventarioLoading(false); setMermasLoading(false); }
   };
 
   const fetchCompras = async () => {
     try { setComprasLoading(true); setComprasError(null);
       setComprasData(await reportesService.getComprasPorProveedor(desde, hasta, 20, sucursalId));
-    } catch { setComprasError('Error al cargar datos de compras.'); toast.error('Error al cargar datos de compras.');
+    } catch (err) { setComprasError('No se pudieron cargar los datos de compras.'); notify.fromError(err, 'No se pudieron cargar los datos de compras.');
     } finally { setComprasLoading(false); }
   };
 
   const fetchFinanciero = async (d = desde, h = hasta) => {
     try { setFinancieroLoading(true); setFinancieroError(null);
       setFinancieroData(await reportesService.getFinanciero(d, h, sucursalId));
-    } catch { setFinancieroError('Error al cargar datos financieros.'); toast.error('Error al cargar datos financieros.');
+    } catch (err) { setFinancieroError('No se pudieron cargar los datos financieros.'); notify.fromError(err, 'No se pudieron cargar los datos financieros.');
     } finally { setFinancieroLoading(false); }
   };
 
@@ -1698,7 +1699,7 @@ export function ReportesPage() {
   const fetchClientes = async (d = desde, h = hasta) => {
     try { setClientesLoading(true); setClientesError(null);
       setClientesData(await reportesService.getTopClientes(d, h, 30, sucursalId));
-    } catch { setClientesError('Error al cargar datos de clientes.'); toast.error('Error al cargar datos de clientes.');
+    } catch (err) { setClientesError('No se pudieron cargar los datos de clientes.'); notify.fromError(err, 'No se pudieron cargar los datos de clientes.');
     } finally { setClientesLoading(false); }
   };
 
@@ -1763,7 +1764,7 @@ export function ReportesPage() {
         negocioConfig,
       );
       toast.success('Excel descargado');
-    } catch { toast.error('Error al exportar Excel');
+    } catch (err) { notify.fromError(err, 'No se pudo exportar el Excel. Intenta de nuevo.');
     } finally { setExporting(false); }
   };
 
@@ -1791,7 +1792,7 @@ export function ReportesPage() {
         negocioConfig,
       );
       toast.success('PDF descargado');
-    } catch { toast.error('Error al exportar PDF');
+    } catch (err) { notify.fromError(err, 'No se pudo exportar el PDF. Intenta de nuevo.');
     } finally { setExporting(false); }
   };
 

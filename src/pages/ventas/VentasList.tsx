@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { printVentaTicket } from '../../utils/printTicket';
 import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 import { Input } from '../../components/ui/Input';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -214,7 +215,7 @@ export function VentasList() {
       const finISO    = new Date(hasta + 'T23:59:59').toISOString().slice(0, 19);
       const ventasPromise = (() => {
         if (canViewAll('VENTAS')) return ventaService.getByPeriod(inicioISO, finISO, sucId);
-        if (canViewOwn('VENTAS')) return ventaService.getByVendorAndPeriod(userId!, inicioISO, finISO);
+        if (canViewOwn('VENTAS')) return ventaService.getByVendorAndPeriod(userId!, inicioISO, finISO, sucId);
         return Promise.resolve([] as VentaDTO[]);
       })();
 
@@ -236,7 +237,7 @@ export function VentasList() {
       setComprobantes(comprobantesData);
       setClientes(clientesData);
     } catch (error) {
-      toast.error('Error al cargar datos');
+      notify.fromError(error, 'No se pudieron cargar las ventas. Intenta de nuevo.');
       if (import.meta.env.DEV) console.error(error);
       setVentas([]);
     } finally {
@@ -505,14 +506,14 @@ export function VentasList() {
   const handleExportExcel = () => {
     try {
       exportarVentasExcel(filteredVentas, etiquetaFiltro);
-    } catch { toast.error('Error al exportar Excel'); }
+    } catch (err) { notify.fromError(err, 'No se pudo exportar a Excel. Intenta de nuevo.'); }
   };
 
   const handleExportPDF = async () => {
     setExporting(true);
     try {
       exportarVentasPDF(filteredVentas, etiquetaFiltro, negocioConfig);
-    } catch { toast.error('Error al exportar PDF'); }
+    } catch (err) { notify.fromError(err, 'No se pudo exportar a PDF. Intenta de nuevo.'); }
     finally { setExporting(false); }
   };
 
