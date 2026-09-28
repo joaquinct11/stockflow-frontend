@@ -13,6 +13,7 @@ import {
   Calendar, Building2, FileText, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 
 const PER_PAGE = 10;
 
@@ -53,8 +54,8 @@ export function ComisionesPage() {
     setLoading(true);
     try {
       setComisiones(await comisionService.listar(sucursalId));
-    } catch {
-      toast.error('Error al cargar comisiones');
+    } catch (err) {
+      notify.fromError(err, 'No se pudieron cargar las comisiones.');
     } finally {
       setLoading(false);
     }
@@ -106,8 +107,8 @@ export function ComisionesPage() {
       }
       setDialogOpen(false);
       cargar();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? 'Error al guardar');
+    } catch (e) {
+      notify.fromError(e, 'No se pudo guardar la comisión.');
     } finally {
       setSaving(false);
     }
@@ -119,8 +120,8 @@ export function ComisionesPage() {
       await comisionService.eliminar(confirmId);
       toast.success('Comisión eliminada');
       cargar();
-    } catch {
-      toast.error('Error al eliminar');
+    } catch (err) {
+      notify.fromError(err, 'No se pudo eliminar la comisión.');
     } finally {
       setConfirmId(null);
     }

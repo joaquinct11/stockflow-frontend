@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { movimientoService } from '../../services/movimiento.service';
 import { refreshOnboarding } from '../../utils/onboardingEvents';
@@ -10,44 +11,53 @@ import { productoVarianteService } from '../../services/productoVariante.service
 import { productoPresentacionService } from '../../services/productoPresentacion.service';
 import type { MovimientoInventarioDTO, ProductoDTO, ProductoVarianteDTO, ProductoPresentacionDTO, ProveedorDTO, UnidadMedidaDTO } from '../../types';
 import { useSucursalStore } from '../../store/sucursalStore';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
-import { Dialog } from '../../components/ui/Dialog';
-import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
-import { EmptyState } from '../../components/shared/EmptyState';
-import { Input } from '../../components/ui/Input';
 import { Autocomplete } from '../../components/ui/Autocomplete';
-import { Pagination } from '../../components/ui/Pagination';
-import {
-  Plus,
-  Package,
-  PackageOpen,
-  Search,
-  TrendingUp,
-  TrendingDown,
-  RotateCcw,
-  ArrowLeftRight,
-  Eye,
-  Lock,
-  Star,
-  AlertTriangle,
-  DollarSign,
-  FileSpreadsheet,
-  FileDown,
-  Upload,
-  FlaskConical,
-  ArrowUpAZ,
-  ArrowDownAZ,
-  Pencil,
-} from 'lucide-react';
-import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePermissions } from '../../hooks/usePermissions';
 import { exportarStockExcel, exportarStockPDF } from '../../utils/reportes-export';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { ImportarProductosModal } from '../../components/inventario/ImportarProductosModal';
+
+const T = {
+  bg: '#F6F7F9', surface: '#FFFFFF', surface2: '#F1F3F6', surface3: '#EDF0F4',
+  text: '#0F1623', text2: '#4A5568', text3: '#8896A5',
+  primary: '#4F6EF7', primarySoft: '#EEF1FE', primaryLine: '#C7D2FC',
+  line: '#E4E8EF', lineSoft: '#F0F2F5',
+  ok: '#16A34A', okSoft: '#DCFCE7', okLine: '#BBF7D0',
+  bad: '#DC2626', badSoft: '#FEE2E2', badLine: '#FECACA',
+  warn: '#D97706', warnSoft: '#FEF3C7', warnLine: '#FDE68A',
+  shadow: '0 2px 8px -2px rgba(15,22,35,.08)',
+};
+
+const iniciales = (n: string) => n.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+const avatarStyle = (n: string): React.CSSProperties => {
+  const cols = ['#4F6EF7','#7C3AED','#059669','#D97706','#DC2626','#0891B2'];
+  const c = cols[(n.charCodeAt(0) || 0) % cols.length];
+  return { width: 36, height: 36, borderRadius: 9, background: c + '22', color: c, display: 'grid', placeItems: 'center', fontFamily: 'Inter,sans-serif', fontSize: '.78rem', fontWeight: 700, flexShrink: 0 };
+};
+
+const FxInput = ({ style: s, ...p }: React.InputHTMLAttributes<HTMLInputElement>) => (
+  <input {...p} style={{ width: '100%', height: 44, padding: '0 13px', fontFamily: 'Inter,sans-serif', fontSize: '.9rem', color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, outline: 'none', boxSizing: 'border-box', ...s }}
+    onFocus={e => { e.currentTarget.style.borderColor = T.primary; e.currentTarget.style.boxShadow = `0 0 0 3px ${T.primarySoft}`; if (p.onFocus) (p.onFocus as React.FocusEventHandler<HTMLInputElement>)(e); }}
+    onBlur={e => { e.currentTarget.style.borderColor = (s as React.CSSProperties)?.borderColor ?? T.line; e.currentTarget.style.boxShadow = 'none'; if (p.onBlur) (p.onBlur as React.FocusEventHandler<HTMLInputElement>)(e); }} />
+);
+
+const FxSelect = ({ style: s, children, ...p }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
+  <div style={{ position: 'relative', width: '100%' }}>
+    <select {...p} style={{ width: '100%', height: 44, padding: '0 34px 0 13px', fontFamily: 'Inter,sans-serif', fontSize: '.9rem', color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, outline: 'none', appearance: 'none', cursor: 'pointer', boxSizing: 'border-box', ...s }}>
+      {children}
+    </select>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="2" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><path d="m6 9 6 6 6-6" /></svg>
+  </div>
+);
+
+if (typeof document !== 'undefined' && !document.getElementById('fx-inv-kf')) {
+  const s = document.createElement('style');
+  s.id = 'fx-inv-kf';
+  s.textContent = `@keyframes fx-in{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}`;
+  document.head.appendChild(s);
+}
 
 export function InventarioList() {
   const { userId, tenantId } = useCurrentUser();
@@ -68,6 +78,7 @@ export function InventarioList() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [movStep, setMovStep] = useState<1 | 2 | 3>(1);
 
   // Auto-abrir dialog si viene desde acceso rápido del dashboard
@@ -88,6 +99,10 @@ export function InventarioList() {
   const [selectedVarianteId, setSelectedVarianteId] = useState<number | null>(null);
   const [loadingVariantes, setLoadingVariantes] = useState(false);
 
+  const [costoStr, setCostoStr] = useState('');
+  const [precioStr, setPrecioStr] = useState('');
+  const [ajusteCostoStr, setAjusteCostoStr] = useState('');
+  const [ajustePrecioStr, setAjustePrecioStr] = useState('');
   const [isKardexOpen, setIsKardexOpen] = useState(false);
   const [kardexLoading, setKardexLoading] = useState(false);
   const [kardexProducto, setKardexProducto] = useState<ProductoDTO | null>(null);
@@ -186,7 +201,7 @@ export function InventarioList() {
       setLotesLoading(true);
       movimientoService.getLotes()
         .then(setLotes)
-        .catch(() => toast.error('Error al cargar lotes'))
+        .catch((err) => notify.fromError(err, 'No se pudieron cargar los lotes del producto.'))
         .finally(() => setLotesLoading(false));
     }
   }, [activeTab, hasViewPermission]);
@@ -204,9 +219,8 @@ export function InventarioList() {
         const proveedoresData = await proveedorService.getAll();
         setProveedores(proveedoresData);
       }
-    } catch (error) {
-      toast.error('Error al cargar datos del formulario');
-      if (import.meta.env.DEV) console.error(error);
+    } catch (err) {
+      notify.fromError(err, 'No se pudieron cargar los datos del formulario.');
     }
   };
 
@@ -225,9 +239,8 @@ export function InventarioList() {
         const proveedoresData = await proveedorService.getAll();
         setProveedores(proveedoresData);
       }
-    } catch (error) {
-      toast.error('Error al cargar datos');
-      if (import.meta.env.DEV) console.error(error);
+    } catch (err) {
+      notify.fromError(err, 'No se pudieron cargar los productos de inventario.');
     } finally {
       setLoading(false);
     }
@@ -239,11 +252,6 @@ export function InventarioList() {
     return m;
   }, [unidadesMedida]);
 
-  const proveedorById = useMemo(() => {
-    const m = new Map<number, ProveedorDTO>();
-    proveedores.forEach((p) => m.set(p.id!, p));
-    return m;
-  }, [proveedores]);
 
   // Para dealer: movimientos solo aplica a productos físicos (tipo PRODUCTO)
   // Para la TABLA: solo productos de la sucursal actual (Option B)
@@ -282,9 +290,8 @@ export function InventarioList() {
         return da - db;
       });
       setKardexMovimientos(sorted);
-    } catch (e) {
-      if (import.meta.env.DEV) console.error(e);
-      toast.error('Error al cargar kardex');
+    } catch (err) {
+      notify.fromError(err, 'No se pudo cargar el Kardex de este producto.');
     } finally {
       setKardexLoading(false);
     }
@@ -331,52 +338,82 @@ export function InventarioList() {
     e.preventDefault();
 
     if (formData.productoId === 0) {
-      toast.error('Debes seleccionar un producto');
+      notify.error('Debes seleccionar un producto');
       return;
     }
 
     if (!formData.usuarioId) {
-      toast.error('Usuario requerido');
+      notify.error('Usuario requerido');
       return;
     }
 
     const esAjusteSoloPrecio = formData.tipo === 'AJUSTE' && tipoAjuste === 'PRECIO';
-    if (!esAjusteSoloPrecio && formData.cantidad <= 0) {
-      toast.error('La cantidad debe ser mayor a 0');
+    // AJUSTE permite cantidad=0 (p.ej. poner lote a cero); otros tipos requieren > 0
+    if (!esAjusteSoloPrecio && formData.tipo !== 'AJUSTE' && formData.cantidad <= 0) {
+      notify.error('La cantidad debe ser mayor a 0');
       return;
     }
-    if (esAjusteSoloPrecio && !formData.costoUnitario && !formData.precioVenta) {
-      toast.error('Debes ingresar al menos un precio a actualizar');
+    const ajusteCostoFinal = parseFloat(ajusteCostoStr);
+    const ajustePrecioFinal = parseFloat(ajustePrecioStr);
+    if (esAjusteSoloPrecio && !ajusteCostoStr && !ajustePrecioStr) {
+      notify.error('Debes ingresar al menos un precio a actualizar');
+      return;
+    }
+    if (esAjusteSoloPrecio) {
+      if (ajusteCostoStr && (isNaN(ajusteCostoFinal) || ajusteCostoFinal < 0)) {
+        notify.error('El costo unitario ingresado no es válido');
+        return;
+      }
+      if (ajustePrecioStr && (isNaN(ajustePrecioFinal) || ajustePrecioFinal < 0)) {
+        notify.error('El precio de venta ingresado no es válido');
+        return;
+      }
+    }
+
+    const costoFinal = parseFloat(costoStr);
+    if (formData.tipo === 'ENTRADA' && costoStr !== '' && !isNaN(costoFinal) && costoFinal <= 0) {
+      notify.error('El costo unitario debe ser mayor a 0', { detail: 'Ingresa el costo de compra por unidad, por ejemplo: 0.50, 1.20, 15.00' });
       return;
     }
 
-
-
-    if (formData.tipo === 'ENTRADA' && formData.costoUnitario !== undefined && formData.costoUnitario <= 0) {
-      toast.error('El costo unitario debe ser mayor a 0');
+    // Para farmacia: fecha de vencimiento obligatoria en ENTRADA y DEVOLUCIÓN
+    if (esFarmacia && (formData.tipo === 'ENTRADA' || formData.tipo === 'DEVOLUCION') && !formData.fechaVencimiento) {
+      notify.error('Los medicamentos requieren fecha de vencimiento');
+      return;
+    }
+    if (esFarmacia && (formData.tipo === 'ENTRADA' || formData.tipo === 'DEVOLUCION') && formData.fechaVencimiento) {
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      if (new Date(formData.fechaVencimiento) < hoy) {
+        notify.error('No se puede ingresar un medicamento ya vencido');
+        return;
+      }
+    }
+    if (esFarmacia && formData.tipo === 'ENTRADA' && !(formData.registroSanitario ?? '').trim()) {
+      notify.error('El registro sanitario es obligatorio para medicamentos');
       return;
     }
 
     // Para TIENDA_ROPA: si el producto tiene variantes, requerir selección
     if (esRopa && variantesProducto.length > 0 && !selectedVarianteId) {
-      toast.error('Selecciona una variante (talla/color) para este producto');
+      notify.error('Selecciona una variante (talla/color) para este producto');
       return;
     }
 
-    // Para FARMACIA con ajuste de stock: si el producto tiene lotes, requerir selección de lote
-    if (esFarmacia && formData.tipo === 'AJUSTE' && tipoAjuste === 'STOCK' && lotesDelProducto.length > 0 && !ajusteLoteMovimientoId) {
-      toast.error('Selecciona el lote al que aplica el ajuste');
-      return;
-    }
 
     // Resolver tipo real para AJUSTE según sub-tipo seleccionado
     const tipoReal = (formData.tipo === 'AJUSTE' && tipoAjuste === 'PRECIO')
       ? 'AJUSTE_PRECIO'
       : formData.tipo;
 
+    // Parsear valores finales desde los strings para evitar estado intermedio (ej: "0.")
+    const costoEntradaFinal = costoStr ? (isNaN(parseFloat(costoStr)) ? undefined : parseFloat(costoStr)) : undefined;
+    const precioEntradaFinal = precioStr ? (isNaN(parseFloat(precioStr)) ? undefined : parseFloat(precioStr)) : undefined;
+    const costoAjusteFinal = ajusteCostoStr ? (isNaN(parseFloat(ajusteCostoStr)) ? undefined : parseFloat(ajusteCostoStr)) : undefined;
+    const precioAjusteFinal = ajustePrecioStr ? (isNaN(parseFloat(ajustePrecioStr)) ? undefined : parseFloat(ajustePrecioStr)) : undefined;
+
     const payload: MovimientoInventarioDTO =
       formData.tipo === 'ENTRADA'
-        ? { ...formData, varianteId: selectedVarianteId ?? undefined, sucursalId }
+        ? { ...formData, costoUnitario: costoEntradaFinal, precioVenta: precioEntradaFinal, varianteId: selectedVarianteId ?? undefined, sucursalId }
         : {
             productoId: formData.productoId,
             tipo: tipoReal,
@@ -386,8 +423,8 @@ export function InventarioList() {
             usuarioId: formData.usuarioId,
             tenantId: formData.tenantId,
             varianteId: selectedVarianteId ?? undefined,
-            costoUnitario: (formData.tipo === 'AJUSTE') ? formData.costoUnitario : undefined,
-            precioVenta:   (formData.tipo === 'AJUSTE') ? formData.precioVenta   : undefined,
+            costoUnitario: (formData.tipo === 'AJUSTE') ? costoAjusteFinal : undefined,
+            precioVenta:   (formData.tipo === 'AJUSTE') ? precioAjusteFinal : undefined,
             sucursalId,
             ajusteLoteMovimientoId: (formData.tipo === 'AJUSTE' && tipoAjuste !== 'PRECIO' && ajusteLoteMovimientoId)
               ? ajusteLoteMovimientoId : undefined,
@@ -410,14 +447,13 @@ export function InventarioList() {
         if (updates.length > 0) await Promise.all(updates);
       }
 
-      toast.success(`Movimiento de ${formData.tipo} registrado`);
+      notify.success(`Movimiento de ${formData.tipo} registrado`);
       refreshOnboarding();
       resetForm();
       await fetchData();
     } catch (error: any) {
       if (import.meta.env.DEV) console.error('Error:', error.response?.data);
-      const message = error.response?.data?.mensaje || error.message || 'Error al registrar movimiento';
-      toast.error(message);
+      notify.fromError(error, 'No se pudo registrar el movimiento. Revisa los datos e intenta de nuevo.');
     }
   };
 
@@ -445,42 +481,30 @@ export function InventarioList() {
     setSelectedVarianteId(null);
     setLotesDelProducto([]);
     setAjusteLoteMovimientoId(null);
+    setCostoStr('');
+    setPrecioStr('');
+    setAjusteCostoStr('');
+    setAjustePrecioStr('');
     setMovStep(1);
     setIsDialogOpen(false);
   };
 
-  const getMovimientoIcon = (tipo: string) => {
-    switch (tipo) {
-      case 'ENTRADA':
-        return <TrendingUp className="h-4 w-4 text-green-600" />;
-      case 'SALIDA':
-        return <TrendingDown className="h-4 w-4 text-red-600" />;
-      case 'AJUSTE':
-        return <RotateCcw className="h-4 w-4 text-blue-600" />;
-      case 'DEVOLUCION':
-        return <ArrowLeftRight className="h-4 w-4 text-orange-600" />;
-      case 'SALDO_INICIAL':
-        return <Star className="h-4 w-4 text-purple-600" />;
-      default:
-        return null;
-    }
+  const getTipoStyle = (tipo: string): React.CSSProperties => {
+    const map: Record<string, { bg: string; color: string }> = {
+      ENTRADA:       { bg: T.okSoft,      color: T.ok },
+      SALIDA:        { bg: T.badSoft,     color: T.bad },
+      AJUSTE:        { bg: T.primarySoft, color: T.primary },
+      AJUSTE_PRECIO: { bg: T.primarySoft, color: T.primary },
+      DEVOLUCION:    { bg: T.warnSoft,    color: T.warn },
+      SALDO_INICIAL: { bg: '#F3E8FF',     color: '#7C3AED' },
+      MERMA:         { bg: '#FEF3C7',     color: '#B45309' },
+    };
+    const c = map[tipo] ?? { bg: T.surface2, color: T.text3 };
+    return { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 20, background: c.bg, fontSize: '.76rem', fontWeight: 600, color: c.color, whiteSpace: 'nowrap' as const };
   };
-
-  const getMovimientoBadge = (tipo: string) => {
-    switch (tipo) {
-      case 'ENTRADA':
-        return <Badge variant="success">Entrada</Badge>;
-      case 'SALIDA':
-        return <Badge variant="destructive">Salida</Badge>;
-      case 'AJUSTE':
-        return <Badge variant="outline">Ajuste</Badge>;
-      case 'DEVOLUCION':
-        return <Badge variant="warning">Devolución</Badge>;
-      case 'SALDO_INICIAL':
-        return <Badge variant="secondary">Saldo Inicial</Badge>;
-      default:
-        return <Badge variant="secondary">{tipo}</Badge>;
-    }
+  const getTipoDot = (tipo: string): React.CSSProperties => {
+    const map: Record<string, string> = { ENTRADA: T.ok, SALIDA: T.bad, AJUSTE: T.primary, AJUSTE_PRECIO: T.primary, DEVOLUCION: T.warn, SALDO_INICIAL: '#7C3AED', MERMA: '#B45309' };
+    return { width: 6, height: 6, borderRadius: '50%', background: map[tipo] ?? T.text3, flexShrink: 0 };
   };
 
   const filteredProductos = productosFisicos
@@ -525,1345 +549,1151 @@ export function InventarioList() {
     });
   }, [lotes, lotesFiltro, lotesSearch]);
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
+      <div style={{ width: 28, height: 28, border: `3px solid ${T.primarySoft}`, borderTopColor: T.primary, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+    </div>
+  );
+
+  // ── helpers para la tabla
+  const stockEfectivo = (p: ProductoDTO) => (esFarmacia && p.stockVigente != null) ? p.stockVigente : (p.stockActual ?? 0);
+  const stockColor = (p: ProductoDTO) => stockEfectivo(p) <= (p.stockMinimo ?? 0) ? T.bad : T.ok;
+  const stockBarPct = (p: ProductoDTO) => {
+    const eff = stockEfectivo(p);
+    const max = Math.max(eff, p.stockMinimo ?? 0, 1);
+    return Math.min(100, Math.round((eff / max) * 100));
+  };
+
+  const OVERLAY: React.CSSProperties = { position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(9,11,16,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 };
+  const CARD: React.CSSProperties = { background: T.surface, border: `1px solid ${T.line}`, borderRadius: 18, boxShadow: '0 30px 80px -30px rgba(0,0,0,.55)', animation: 'fx-in .2s ease', overflow: 'hidden', display: 'flex', flexDirection: 'column' };
+  const MODAL_HDR: React.CSSProperties = { display: 'flex', alignItems: 'flex-start', gap: 12, padding: '20px 22px 16px', borderBottom: `1px solid ${T.lineSoft}`, flexShrink: 0 };
+  const MODAL_FTR: React.CSSProperties = { display: 'flex', gap: 9, padding: '14px 22px', borderTop: `1px solid ${T.lineSoft}`, flexShrink: 0 };
+  const BTN_SEC: React.CSSProperties = { minWidth: 104, height: 44, padding: '0 18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontFamily: 'Inter,sans-serif', fontSize: '.9rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 11, cursor: 'pointer' };
+  const BTN_PRI: React.CSSProperties = { flex: 1, height: 44, fontFamily: 'Inter,sans-serif', fontSize: '.9rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 11, cursor: 'pointer', boxShadow: `0 8px 20px -10px ${T.primary}` };
+  const BTN_DANGER: React.CSSProperties = { ...BTN_PRI, background: T.bad, boxShadow: `0 8px 20px -10px ${T.bad}` };
+  const LABEL: React.CSSProperties = { display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 };
+  const MONO_LABEL: React.CSSProperties = { fontFamily: "'IBM Plex Mono',monospace", fontSize: '.68rem', fontWeight: 600, letterSpacing: '.09em', textTransform: 'uppercase' as const, color: T.text3, marginBottom: 12 };
+
+  // lotes próximos a vencer (badge)
+  const lotesBadge = lotes.filter(l => l.diasRestantes !== null && l.diasRestantes <= 30).length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div style={{ fontFamily: 'Inter,sans-serif' }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Inventario</h1>
-          <p className="text-muted-foreground">Consulta el stock de productos y registra movimientos</p>
+          <h1 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 700, letterSpacing: '-.025em', color: T.text }}>Movimientos de inventario</h1>
+          <div style={{ fontSize: '.85rem', color: T.text3, marginTop: 4 }}>Entradas, salidas, ajustes y kardex por producto</div>
         </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           {hasViewPermission && productos.length > 0 && (
-            <>
-              <Button
-                variant="outline" size="sm"
-                onClick={() => {
-                  try { exportarStockExcel(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—'); }
-                  catch { toast.error('Error al exportar Excel'); }
-                }}
-                className="flex-1 sm:flex-none"
-              >
-                <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" />
-                Excel
-              </Button>
-              <Button
-                variant="outline" size="sm"
-                onClick={() => {
-                  try { exportarStockPDF(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—', negocioConfig); }
-                  catch { toast.error('Error al exportar PDF'); }
-                }}
-                className="flex-1 sm:flex-none"
-              >
-                <FileDown className="mr-2 h-4 w-4 text-red-500" />
-                PDF
-              </Button>
-            </>
+            <div style={{ position: 'relative' }}>
+              <button type="button"
+                onClick={() => setShowExportMenu(v => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 14px', fontFamily: 'Inter,sans-serif', fontSize: '.855rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, cursor: 'pointer' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
+                Exportar
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: .7 }}><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              {showExportMenu && (
+                <>
+                  <div onClick={() => setShowExportMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 41, width: 220, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: '0 22px 50px -22px rgba(0,0,0,.45)', padding: 6, animation: 'fx-in .16s ease' }}>
+                    <button type="button"
+                      onClick={() => { setShowExportMenu(false); try { exportarStockExcel(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—'); } catch (err) { notify.fromError(err, 'Error al exportar'); } }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, height: 38, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.845rem', fontWeight: 500, color: T.text, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = T.surface2)}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: T.ok, flexShrink: 0 }} />
+                      Stock en Excel
+                    </button>
+                    <button type="button"
+                      onClick={() => { setShowExportMenu(false); try { exportarStockPDF(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—', negocioConfig); } catch (err) { notify.fromError(err, 'Error al exportar'); } }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, height: 38, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.845rem', fontWeight: 500, color: T.text, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = T.surface2)}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: T.bad, flexShrink: 0 }} />
+                      Stock en PDF
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
           {canCreate('INVENTARIO') && (
-            <Button variant="outline" onClick={() => setIsImportOpen(true)} className="flex-1 sm:flex-none">
-              <Upload className="mr-2 h-4 w-4 text-primary" />
+            <button type="button" onClick={() => setIsImportOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 14px', fontFamily: 'Inter,sans-serif', fontSize: '.855rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, cursor: 'pointer' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
               Importar
-            </Button>
+            </button>
           )}
           {canCreate('INVENTARIO') && (
-            <Button onClick={() => setIsDialogOpen(true)} className="flex-1 sm:flex-none">
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Movimiento
-            </Button>
+            <button type="button" onClick={() => setIsDialogOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', fontFamily: 'Inter,sans-serif', fontSize: '.855rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 10, cursor: 'pointer', boxShadow: `0 6px 16px -8px ${T.primary}` }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              Nuevo movimiento
+            </button>
           )}
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 [&>*:last-child]:col-span-2 [&>*:last-child]:mx-auto [&>*:last-child]:max-w-[calc(50%-0.5rem)] sm:[&>*:last-child]:col-auto sm:[&>*:last-child]:max-w-none sm:[&>*:last-child]:mx-0">
-        {/* Total */}
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Productos en inventario</p>
-            <div className="h-9 w-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-              <Package className="h-4 w-4 text-blue-600" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-3xl font-bold tracking-tight text-blue-600">{invStats.total}</p>
-          </CardContent>
-        </Card>
-
-        {/* Bajo stock */}
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Requieren reabastecimiento</p>
-            <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className={`text-3xl font-bold tracking-tight ${invStats.bajoStock > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-              {invStats.bajoStock}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Valor */}
-        <Card className="relative overflow-hidden border-0 shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valorizado al costo</p>
-            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-              <DollarSign className="h-4 w-4 text-emerald-600" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-3xl font-bold tracking-tight text-emerald-600">S/.{invStats.valor.toFixed(2)}</p>
-          </CardContent>
-        </Card>
+      {/* ── KPIs ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 16 }}>
+        {[
+          { label: 'Productos en inventario', value: String(invStats.total), sub: `${productosFisicos.reduce((a,p) => a + (p.stockActual ?? 0), 0)} unidades totales`, valColor: T.text },
+          { label: 'Requieren reabastecimiento', value: String(invStats.bajoStock), sub: invStats.bajoStock > 0 ? 'Stock igual o menor al mínimo' : 'Todo en orden', valColor: invStats.bajoStock > 0 ? T.bad : T.ok },
+          { label: 'Valorizado al costo', value: `S/ ${invStats.valor.toFixed(2)}`, sub: 'Stock actual × costo unitario', valColor: T.text },
+        ].map((k) => (
+          <div key={k.label} style={{ padding: '16px 18px', background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow }}>
+            <div style={{ ...MONO_LABEL, marginBottom: 0 }}>{k.label}</div>
+            <div style={{ fontSize: '1.72rem', fontWeight: 700, letterSpacing: '-.032em', marginTop: 9, fontVariantNumeric: 'tabular-nums', color: k.valColor }}>{k.value}</div>
+            <div style={{ fontSize: '.79rem', color: T.text3, marginTop: 5 }}>{k.sub}</div>
+          </div>
+        ))}
       </div>
 
-      {!hasViewPermission ? (
-        <EmptyState
-          icon={Lock}
-          title="Sin acceso al listado"
-          description="No tienes permisos para ver el listado de productos. Puedes registrar nuevos movimientos con el botón de arriba."
-        />
-      ) : (
-        <>
-          {/* ── Tabs de navegación ── */}
-          <div className="flex gap-1 border-b">
-            {([
-              { key: 'stock',  label: 'Stock',  icon: <Package className="h-4 w-4" />, visible: true },
-              { key: 'lotes',  label: 'Lotes',  icon: <FlaskConical className="h-4 w-4" />, visible: !esRopa && !esServicios },
-            ] as const).filter(t => t.visible).map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={[
-                  'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
-                  activeTab === tab.key
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                ].join(' ')}
-              >
+      {/* ── Main card ── */}
+      <div style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow }}>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '12px 18px 0', borderBottom: `1px solid ${T.lineSoft}` }}>
+          {([
+            { key: 'stock' as const, label: 'Stock', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg>, badge: 0, visible: true },
+            { key: 'lotes' as const, label: 'Lotes y vencimientos', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5a2 2 0 0 1-2-2V9m6 5h10a2 2 0 0 0 2-2V9m0 0H3"/></svg>, badge: lotesBadge, visible: !esRopa && !esServicios },
+          ] as const).filter(t => t.visible).map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38, padding: '0 12px', fontFamily: 'Inter,sans-serif', fontSize: '.855rem', fontWeight: active ? 650 : 500, color: active ? T.primary : T.text3, background: 'transparent', border: 0, borderBottom: `2px solid ${active ? T.primary : 'transparent'}`, borderRadius: 0, cursor: 'pointer', marginBottom: -1, transition: 'color .14s' }}>
                 {tab.icon}
                 {tab.label}
-                {tab.key === 'lotes' && lotes.filter(l => l.diasRestantes !== null && l.diasRestantes <= 30).length > 0 && (
-                  <span className="ml-1 rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
-                    {lotes.filter(l => l.diasRestantes <= 30).length}
-                  </span>
-                )}
+                {tab.badge > 0 && <span style={{ minWidth: 18, height: 18, padding: '0 5px', display: 'grid', placeItems: 'center', borderRadius: 20, fontSize: '.68rem', fontWeight: 700, color: '#fff', background: T.bad }}>{tab.badge}</span>}
               </button>
-            ))}
+            );
+          })}
+        </div>
+
+        {/* Filters */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}` }}>
+          <div style={{ position: 'relative', flex: '1 1 280px', minWidth: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input
+              type="text" value={activeTab === 'stock' ? searchTerm : lotesSearch}
+              onChange={e => activeTab === 'stock' ? setSearchTerm(e.target.value) : (setLotesSearch(e.target.value), setLotesPage(1))}
+              placeholder={activeTab === 'stock' ? 'Buscar producto por nombre, código o categoría...' : 'Buscar producto o lote...'}
+              style={{ width: '100%', height: 40, padding: '0 13px 0 38px', fontFamily: 'Inter,sans-serif', fontSize: '.875rem', color: T.text, background: T.surface2, border: '1px solid transparent', borderRadius: 10, outline: 'none', boxSizing: 'border-box' }}
+              onFocus={e => { e.currentTarget.style.background = T.surface; e.currentTarget.style.borderColor = T.primary; e.currentTarget.style.boxShadow = `0 0 0 3px ${T.primarySoft}`; }}
+              onBlur={e => { e.currentTarget.style.background = T.surface2; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
+            />
           </div>
-
-          {/* ── Tab Stock ── */}
-          {activeTab === 'stock' && (
-            <>
-              {/* Search */}
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar producto por nombre, código o categoría..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-8"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Products table */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Productos</CardTitle>
-                  <CardDescription>
-                    {filteredProductos.length} producto(s) — haz clic en <Eye className="inline h-3 w-3" /> para ver el detalle
-                    (Kardex)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {filteredProductos.length === 0 ? (
-                    <EmptyState
-                      icon={PackageOpen}
-                      title={productos.length === 0 ? 'Todavía no hay productos en el inventario' : 'Sin resultados'}
-                      description={productos.length === 0
-                        ? 'Agrega productos desde el módulo de Productos para empezar a controlar el stock, ver movimientos y recibir alertas de reposición.'
-                        : 'No se encontraron productos que coincidan con la búsqueda.'}
-                    />
-                  ) : (
-                    <>
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>
-                                <button
-                                  onClick={() => { setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); }}
-                                  className="flex items-center gap-1 font-semibold uppercase tracking-wider text-xs hover:text-primary transition-colors"
-                                >
-                                  Producto
-                                  {sortOrder === 'asc' ? <ArrowUpAZ className="h-3.5 w-3.5" /> : <ArrowDownAZ className="h-3.5 w-3.5" />}
-                                </button>
-                              </TableHead>
-                              <TableHead>Categoría</TableHead>
-                              <TableHead>Unidad</TableHead>
-                              <TableHead className="text-center">Stock Actual</TableHead>
-                              <TableHead className="text-right">Costo Unit.</TableHead>
-                              <TableHead className="text-right">Precio Venta</TableHead>
-                              <TableHead className="text-right">Ver detalle</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {currentProductos.map((producto) => (
-                              <TableRow key={producto.id}>
-                                <TableCell>
-                                  <div>
-                                    <p className="font-medium">{producto.nombre}</p>
-                                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                      <Package className="h-3 w-3" />
-                                      {producto.codigoBarras || 'Sin código'}
-                                    </p>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-muted-foreground text-sm">{producto.categoriaNombre || '-'}</TableCell>
-                                <TableCell className="text-muted-foreground text-sm">
-                                  {unidadById.get(producto.unidadMedidaId)?.nombre || '-'}
-                                </TableCell>
-                                <TableCell className="text-center font-semibold">
-                                  <span
-                                    className={
-                                      producto.stockActual <= producto.stockMinimo ? 'text-red-600' : 'text-green-700'
-                                    }
-                                  >
-                                    {producto.stockActual}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-right text-muted-foreground text-sm">
-                                  S/.{producto.costoUnitario.toFixed(2)}
-                                </TableCell>
-                                <TableCell className="text-right text-muted-foreground text-sm">
-                                  S/.{producto.precioVenta.toFixed(2)}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => openKardex(producto)}
-                                    title="Ver detalle (Kardex)"
-                                  >
-                                    <Eye className="h-4 w-4 text-blue-600" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      <Pagination
-                        currentPage={currentPage}
-                        totalPages={totalPages}
-                        onPageChange={setCurrentPage}
-                        totalItems={filteredProductos.length}
-                        itemsPerPage={itemsPerPage}
-                      />
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {/* ── Tab Lotes ── */}
           {activeTab === 'lotes' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FlaskConical className="h-5 w-5 text-primary" />
-                  Lotes y Vencimientos
-                </CardTitle>
-                <CardDescription>
-                  Movimientos de entrada con fecha de vencimiento registrada
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Filtros */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex flex-wrap gap-1">
-                    {([
-                      { key: 'todos',      label: 'Todos' },
-                      { key: 'vencidos',   label: 'Vencidos' },
-                      { key: 'proximos90', label: 'Próx. 90 días' },
-                    ] as const).map((f) => (
-                      <button
-                        key={f.key}
-                        type="button"
-                        onClick={() => { setLotesFiltro(f.key); setLotesPage(1); }}
-                        className={[
-                          'px-3 py-1 rounded-md text-xs font-medium border transition',
-                          lotesFiltro === f.key
-                            ? 'bg-primary text-primary-foreground border-primary'
-                            : 'border-input bg-background text-muted-foreground hover:text-foreground',
-                        ].join(' ')}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="relative sm:ml-auto sm:w-64">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar producto o lote..."
-                      value={lotesSearch}
-                      onChange={(e) => { setLotesSearch(e.target.value); setLotesPage(1); }}
-                      className="pl-8"
-                    />
-                  </div>
+            <div style={{ display: 'flex', gap: 3, padding: 3, background: T.surface2, borderRadius: 10, flexShrink: 0 }}>
+              {([
+                { key: 'todos' as const, label: 'Todos', dot: T.text3 },
+                { key: 'vencidos' as const, label: 'Vencidos', dot: T.bad },
+                { key: 'proximos30' as const, label: 'Próx. 30d', dot: T.warn },
+                { key: 'proximos90' as const, label: 'Próx. 90d', dot: '#D97706' },
+              ]).map(f => {
+                const active = lotesFiltro === f.key;
+                return (
+                  <button key={f.key} type="button" onClick={() => { setLotesFiltro(f.key); setLotesPage(1); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', fontWeight: active ? 600 : 500, color: active ? T.text : T.text3, background: active ? T.surface : 'transparent', border: 0, borderRadius: 8, cursor: 'pointer', boxShadow: active ? T.shadow : 'none', transition: 'all .12s' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: f.dot }} />
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {activeTab === 'stock' && (
+            <button type="button" onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', fontWeight: 500, color: T.text2, background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 10, cursor: 'pointer' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+              {sortOrder === 'asc' ? 'A→Z' : 'Z→A'}
+            </button>
+          )}
+        </div>
+
+        {/* ── Tab Stock ── */}
+        {activeTab === 'stock' && (
+          hasViewPermission ? (
+            filteredProductos.length === 0 ? (
+              <div style={{ padding: '56px 24px', textAlign: 'center' }}>
+                <div style={{ width: 52, height: 52, margin: '0 auto', display: 'grid', placeItems: 'center', borderRadius: 14, background: T.surface2, color: T.text3 }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg>
                 </div>
+                <div style={{ fontSize: '1rem', fontWeight: 650, marginTop: 14, color: T.text }}>Sin resultados</div>
+                <p style={{ fontSize: '.865rem', color: T.text3, lineHeight: 1.55, margin: '7px auto 0', maxWidth: 380 }}>Revisa el nombre, código o categoría, o quita los filtros.</p>
+                <button type="button" onClick={() => setSearchTerm('')}
+                  style={{ height: 38, marginTop: 16, padding: '0 16px', fontFamily: 'Inter,sans-serif', fontSize: '.855rem', fontWeight: 600, color: T.primary, background: T.primarySoft, border: `1px solid ${T.primaryLine}`, borderRadius: 10, cursor: 'pointer' }}>
+                  Quitar filtros
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.84rem', minWidth: 820 }}>
+                    <thead>
+                      <tr style={{ background: T.surface3 }}>
+                        {['Producto','Categoría','Unidad','Stock actual','Costo unit.','Precio venta','Kardex'].map((h, i) => (
+                          <th key={h} style={{ textAlign: i >= 3 ? 'right' : 'left', padding: i === 0 ? '10px 18px' : i === 6 ? '10px 18px 10px 14px' : '10px 14px', fontSize: '.72rem', fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentProductos.map(p => (
+                        <tr key={p.id} onClick={() => openKardex(p)} style={{ borderTop: `1px solid ${T.lineSoft}`, cursor: 'pointer', transition: 'background .14s' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = T.surface3)}
+                          onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                          <td style={{ padding: '11px 18px', maxWidth: 300 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                              <span style={avatarStyle(p.nombre)}>{iniciales(p.nombre)}</span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: T.text }}>{p.nombre}</div>
+                                <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.72rem', color: T.text3, marginTop: 2 }}>{p.codigoBarras || 'Sin código'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: '.78rem', fontWeight: 600, color: T.text2, background: T.surface2, padding: '3px 10px 3px 8px', borderRadius: 20 }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.primary, flexShrink: 0 }} />
+                              {p.categoriaNombre || '—'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '11px 14px', whiteSpace: 'nowrap', color: T.text2 }}>{unidadById.get(p.unidadMedidaId)?.nombre || '—'}</td>
+                          <td style={{ padding: '11px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 700, color: stockColor(p), fontVariantNumeric: 'tabular-nums' }}>{stockEfectivo(p)}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 7, marginTop: 5 }}>
+                              <span style={{ fontSize: '.72rem', color: T.text3 }}>mín {p.stockMinimo ?? 0}</span>
+                              <span style={{ width: 44, height: 4, borderRadius: 4, background: T.surface2, overflow: 'hidden', display: 'block' }}>
+                                <span style={{ display: 'block', height: '100%', width: `${stockBarPct(p)}%`, background: stockColor(p), borderRadius: 4 }} />
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '11px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>S/ {p.costoUnitario.toFixed(2)}</td>
+                          <td style={{ padding: '11px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: T.text }}>S/ {p.precioVenta.toFixed(2)}</td>
+                          <td style={{ padding: '11px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            <button type="button" onClick={e => { e.stopPropagation(); openKardex(p); }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 30, padding: '0 11px', fontFamily: 'Inter,sans-serif', fontSize: '.78rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, cursor: 'pointer' }}
+                              onMouseEnter={e => { const b = e.currentTarget; b.style.borderColor = T.primary; b.style.color = T.primary; b.style.background = T.primarySoft; }}
+                              onMouseLeave={e => { const b = e.currentTarget; b.style.borderColor = T.line; b.style.color = T.text2; b.style.background = T.surface; }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/></svg>
+                              Ver kardex
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPages > 1 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '13px 18px', borderTop: `1px solid ${T.lineSoft}` }}>
+                    <span style={{ fontSize: '.8rem', color: T.text3 }}>{filteredProductos.length} productos · página {currentPage} de {totalPages}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}
+                        style={{ height: 32, padding: '0 12px', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.4 : 1 }}>Anterior</button>
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        const pg = currentPage <= 3 ? i + 1 : currentPage + i - 2;
+                        if (pg < 1 || pg > totalPages) return null;
+                        const active = pg === currentPage;
+                        return (
+                          <button key={pg} type="button" onClick={() => setCurrentPage(pg)}
+                            style={{ width: 32, height: 32, fontFamily: 'Inter,sans-serif', fontSize: '.8rem', fontWeight: active ? 700 : 500, color: active ? '#fff' : T.text2, background: active ? T.primary : T.surface, border: `1px solid ${active ? T.primary : T.line}`, borderRadius: 8, cursor: 'pointer' }}>{pg}</button>
+                        );
+                      })}
+                      <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}
+                        style={{ height: 32, padding: '0 12px', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.4 : 1 }}>Siguiente</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          ) : (
+            <div style={{ padding: '56px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '1rem', fontWeight: 650, color: T.text }}>Sin acceso al listado</div>
+              <p style={{ fontSize: '.865rem', color: T.text3, marginTop: 6 }}>No tienes permisos para ver el listado. Puedes registrar movimientos con el botón de arriba.</p>
+            </div>
+          )
+        )}
 
-                {lotesLoading ? (
-                  <LoadingSpinner />
-                ) : lotesFiltrados.length === 0 ? (
-                  <EmptyState
-                    icon={FlaskConical}
-                    title="Sin lotes"
-                    description={
-                      lotesFiltro === 'todos'
-                        ? 'No hay movimientos de entrada con fecha de vencimiento registrada'
-                        : 'No hay lotes que coincidan con el filtro seleccionado'
-                    }
+        {/* ── Tab Lotes ── */}
+        {activeTab === 'lotes' && (
+          lotesLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+              <div style={{ width: 24, height: 24, border: `3px solid ${T.primarySoft}`, borderTopColor: T.primary, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+            </div>
+          ) : lotesFiltrados.length === 0 ? (
+            <div style={{ padding: '56px 24px', textAlign: 'center' }}>
+              <div style={{ width: 52, height: 52, margin: '0 auto', display: 'grid', placeItems: 'center', borderRadius: 14, background: T.surface2, color: T.text3 }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5a2 2 0 0 1-2-2V9m6 5h10a2 2 0 0 0 2-2V9m0 0H3"/></svg>
+              </div>
+              <div style={{ fontSize: '1rem', fontWeight: 650, marginTop: 14, color: T.text }}>Sin lotes</div>
+              <p style={{ fontSize: '.865rem', color: T.text3, marginTop: 6, maxWidth: 380, margin: '6px auto 0' }}>{lotesFiltro === 'todos' ? 'No hay movimientos de entrada con fecha de vencimiento registrada.' : 'No hay lotes que coincidan con el filtro.'}</p>
+            </div>
+          ) : (
+            <>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.84rem', minWidth: 1050 }}>
+                  <thead>
+                    <tr style={{ background: T.surface3 }}>
+                      {['Producto','Lote','Vencimiento',esFarmacia ? 'Reg. sanitario' : null,'Proveedor','Recibido','Stock lote','Estado','Acciones'].filter(Boolean).map((h, i) => (
+                        <th key={h!} style={{ textAlign: i >= 5 ? 'right' : 'left', padding: i === 0 ? '10px 18px' : i === 8 ? '10px 18px 10px 14px' : '10px 14px', fontSize: '.72rem', fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lotesFiltrados.slice((lotesPage - 1) * LOTES_PER_PAGE, lotesPage * LOTES_PER_PAGE).map(l => {
+                      const vencido = l.diasRestantes < 0;
+                      const critico = !vencido && l.diasRestantes <= 7;
+                      const proximo = !vencido && l.diasRestantes <= 90;
+                      const estadoColor = vencido ? T.bad : critico ? T.bad : proximo ? T.warn : T.ok;
+                      const estadoBg = vencido ? T.badSoft : critico ? T.badSoft : proximo ? T.warnSoft : T.okSoft;
+                      const estadoLabel = vencido ? 'Vencido' : critico ? 'Crítico' : proximo ? `${l.diasRestantes}d` : 'Vigente';
+                      const rowBg = vencido ? `${T.bad}08` : critico ? `${T.warn}08` : '';
+                      return (
+                        <tr key={l.movimientoId} style={{ borderTop: `1px solid ${T.lineSoft}`, background: rowBg }}
+                          onMouseEnter={e => (e.currentTarget.style.background = T.surface3)}
+                          onMouseLeave={e => (e.currentTarget.style.background = rowBg)}>
+                          <td style={{ padding: '11px 18px', maxWidth: 240 }}>
+                            <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: T.text }}>{l.productoNombre}</div>
+                            <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.72rem', color: T.text3, marginTop: 2 }}>{l.codigoBarras || ''}</div>
+                          </td>
+                          <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
+                            <span style={{ display: 'inline-block', fontFamily: "'IBM Plex Mono',monospace", fontSize: '.8rem', fontWeight: 600, padding: '2px 8px', background: T.surface2, borderRadius: 6, color: T.text2 }}>{l.lote || '—'}</span>
+                          </td>
+                          <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.82rem', fontWeight: 600, color: T.text }}>{l.fechaVencimiento ? new Date(l.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>
+                            <div style={{ fontSize: '.72rem', color: estadoColor, marginTop: 2 }}>{vencido ? `Venció hace ${Math.abs(l.diasRestantes)}d` : `${l.diasRestantes}d restantes`}</div>
+                          </td>
+                          {esFarmacia && <td style={{ padding: '11px 14px', whiteSpace: 'nowrap', fontFamily: "'IBM Plex Mono',monospace", fontSize: '.78rem', color: T.text2 }}>{l.registroSanitario || '—'}</td>}
+                          <td style={{ padding: '11px 14px', maxWidth: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: T.text2 }}>{l.proveedorNombre || '—'}</td>
+                          <td style={{ padding: '11px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text3, fontVariantNumeric: 'tabular-nums' }}>{l.cantidad ?? '—'}</td>
+                          <td style={{ padding: '11px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: T.text }}>{l.stockActual ?? 0}</td>
+                          <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 20, background: estadoBg, fontSize: '.76rem', fontWeight: 600, color: estadoColor }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: estadoColor }} />
+                              {estadoLabel}
+                            </span>
+                          </td>
+                          <td style={{ padding: '11px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'inline-flex', gap: 3 }}>
+                              <button type="button" title="Editar datos del lote"
+                                onClick={() => { setLoteEditando(l); setEditProveedorId(l.proveedorId ?? ''); setEditPrecioVenta(l.precioVenta != null ? String(l.precioVenta) : ''); setEditLoteNumero(l.lote || ''); setEditFechaVencimiento(l.fechaVencimiento ? String(l.fechaVencimiento) : ''); }}
+                                style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = T.primarySoft; e.currentTarget.style.color = T.primary; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = T.text3; }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                              </button>
+                              {vencido && (l.stockActual ?? 0) > 0 && (
+                                <button type="button" title="Dar de baja lote"
+                                  onClick={() => { setLoteMerma(l); setMermaCantidad(String(l.stockActual ?? 1)); setMermaMotivo('VENCIMIENTO'); setMermaObservaciones(''); }}
+                                  style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = T.badSoft; e.currentTarget.style.color = T.bad; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = T.text3; }}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', borderTop: `1px solid ${T.lineSoft}`, fontSize: '.78rem', color: T.text3 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1Z"/></svg>
+                Los lotes se ordenan del más próximo a vencer al más lejano.
+                {lotesFiltrados.length > LOTES_PER_PAGE && (
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 5 }}>
+                    <button type="button" disabled={lotesPage === 1} onClick={() => setLotesPage(p => p - 1)}
+                      style={{ height: 28, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.78rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 7, cursor: lotesPage === 1 ? 'not-allowed' : 'pointer', opacity: lotesPage === 1 ? 0.4 : 1 }}>←</button>
+                    <button type="button" disabled={lotesPage >= Math.ceil(lotesFiltrados.length / LOTES_PER_PAGE)} onClick={() => setLotesPage(p => p + 1)}
+                      style={{ height: 28, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.78rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 7, cursor: lotesPage >= Math.ceil(lotesFiltrados.length / LOTES_PER_PAGE) ? 'not-allowed' : 'pointer', opacity: lotesPage >= Math.ceil(lotesFiltrados.length / LOTES_PER_PAGE) ? 0.4 : 1 }}>→</button>
+                  </div>
+                )}
+              </div>
+            </>
+          )
+        )}
+      </div>
+
+      {/* ══ MODAL: Nuevo Movimiento ══ */}
+      {isDialogOpen && createPortal(
+        <div style={OVERLAY} onClick={resetForm}>
+          <div style={{ ...CARD, width: '100%', maxWidth: 640, maxHeight: 'calc(100vh - 40px)' }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={MODAL_HDR}>
+              <span style={{ width: 38, height: 38, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 11, background: T.primarySoft, color: T.primary }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 700, letterSpacing: '-.02em', color: T.text }}>Nuevo movimiento</h2>
+                <div style={{ fontSize: '.8rem', color: T.text3, marginTop: 4 }}>{formData.tipo === 'ENTRADA' ? 'Registrar compra / entrada de stock' : formData.tipo === 'SALIDA' ? 'Registrar salida de stock' : formData.tipo === 'AJUSTE' ? 'Ajustar inventario' : formData.tipo === 'DEVOLUCION' ? 'Registrar devolución de cliente' : formData.tipo === 'MERMA' ? 'Registrar baja por merma, pérdida o daño' : 'Selecciona el tipo'}</div>
+              </div>
+              <button type="button" onClick={resetForm} aria-label="Cerrar"
+                style={{ width: 30, height: 30, flexShrink: 0, marginLeft: 'auto', display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+
+            {/* Stepper */}
+            <div style={{ display: 'flex', gap: 6, padding: '14px 22px', borderBottom: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
+              {(['Tipo', 'Producto', 'Detalles'] as const).map((label, i) => {
+                const n = i + 1;
+                const done = movStep > n;
+                const active = movStep === n;
+                return (
+                  <div key={label} style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ height: 3, borderRadius: 4, background: done || active ? T.primary : T.lineSoft, transition: 'background .2s' }} />
+                    <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.65rem', fontWeight: 600, letterSpacing: '.07em', textTransform: 'uppercase', color: done || active ? T.primary : T.text3, marginTop: 5 }}>{n} · {label}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '20px 22px 22px' }}>
+
+              {/* ── Paso 1: Tipo ── */}
+              {movStep === 1 && (
+                <>
+                  <div style={MONO_LABEL}>¿Qué tipo de movimiento?</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 }}>
+                    {([
+                      { key: 'ENTRADA',   label: 'Entrada',    desc: 'Compra o ingreso de mercadería',              iconPath: 'M12 5v14M19 12l-7 7-7-7',                                                                   color: T.ok,      colorSoft: T.okSoft },
+                      { key: 'SALIDA',    label: 'Salida',     desc: 'Consumo interno o traslado',                   iconPath: 'M12 19V5M5 12l7-7 7 7',                                                                     color: T.bad,     colorSoft: T.badSoft },
+                      { key: 'AJUSTE',    label: 'Ajuste',     desc: 'Corregir stock tras conteo o cambiar precios', iconPath: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4',                   color: T.primary, colorSoft: T.primarySoft },
+                      { key: 'DEVOLUCION',label: 'Devolución', desc: 'Producto devuelto por un cliente',             iconPath: 'M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11',                                             color: T.warn,    colorSoft: T.warnSoft },
+                      ...(!esFarmacia ? [{
+                        key: 'MERMA' as const, label: 'Merma', desc: 'Baja por daño, pérdida o vencimiento',
+                        iconPath: 'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6',
+                        color: '#B45309', colorSoft: '#FEF3C7',
+                      }] : []),
+                    ] as const).map((t) => {
+                      const active = formData.tipo === t.key;
+                      return (
+                        <button key={t.key} type="button"
+                          onClick={() => {
+                            setTipoAjuste('STOCK');
+                            setFormData(prev => ({
+                              ...prev,
+                              tipo: t.key as MovimientoInventarioDTO['tipo'],
+                              ...(t.key !== 'ENTRADA' && { proveedorId: undefined, costoUnitario: undefined, lote: '', fechaVencimiento: undefined, registroSanitario: '' }),
+                            }));
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', fontFamily: 'Inter,sans-serif', textAlign: 'left', background: active ? t.colorSoft : T.surface, border: `1.5px solid ${active ? t.color : T.line}`, borderRadius: 12, cursor: 'pointer', transition: 'all .14s' }}>
+                          <span style={{ width: 36, height: 36, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 10, background: t.colorSoft, color: t.color }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={t.iconPath} /></svg>
+                          </span>
+                          <span style={{ minWidth: 0, flex: 1 }}>
+                            <span style={{ display: 'block', fontSize: '.92rem', fontWeight: 650, color: T.text }}>{t.label}</span>
+                            <span style={{ display: 'block', fontSize: '.76rem', lineHeight: 1.4, color: T.text3, marginTop: 3 }}>{t.desc}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* ── Paso 2: Producto + Cantidad ── */}
+              {movStep === 2 && (
+                <>
+                  <div style={{ ...MONO_LABEL, marginBottom: 12 }}>Producto *</div>
+                  <Autocomplete
+                    options={productosOptions}
+                    value={selectedProducto}
+                    onChange={async (option) => {
+                      setVariantesProducto([]); setSelectedVarianteId(null); setLotesDelProducto([]); setAjusteLoteMovimientoId(null);
+                      if (option) {
+                        const producto = productosForm.find(p => p.id === option.id);
+                        if (producto) {
+                          setSelectedProducto(option);
+                          const costo = producto.costoUnitario != null ? Number(producto.costoUnitario) : undefined;
+                          const precio = producto.precioVenta != null ? Number(producto.precioVenta) : undefined;
+                          setCostoStr(costo != null ? String(costo) : '');
+                          setPrecioStr(precio != null ? String(precio) : '');
+                          setAjusteCostoStr(costo != null ? String(costo) : '');
+                          setAjustePrecioStr(precio != null ? String(precio) : '');
+                          const regSan = producto.registroSanitario ?? '';
+                          setFormData(prev => ({ ...prev, productoId: producto.id!, costoUnitario: costo, precioVenta: precio, ...(esFarmacia && prev.tipo === 'ENTRADA' && regSan ? { registroSanitario: regSan } : {}) }));
+                          if (esRopa) { setLoadingVariantes(true); try { const vs = await productoVarianteService.getByProducto(producto.id!, sucursalId); setVariantesProducto(vs.filter(v => v.activo !== false)); } catch {} finally { setLoadingVariantes(false); } }
+                          if (esFarmacia) { productoPresentacionService.listar(producto.id!).then(pres => { setPresentacionesProducto(pres); const init: Record<number, string> = {}; pres.forEach(p => { if (p.id) init[p.id] = String(p.precioVenta ?? ''); }); setPreciosPresent(init); }).catch(() => setPresentacionesProducto([])); }
+                          if (esFarmacia && producto.stockVigente != null) { setLoadingLotesProducto(true); try { const ld = await movimientoService.getLotesPorProducto(producto.id!); setLotesDelProducto(ld.filter(l => l.diasRestantes != null)); } catch {} finally { setLoadingLotesProducto(false); } }
+                        }
+                      } else {
+                        setSelectedProducto(null);
+                        setCostoStr(''); setPrecioStr('');
+                        setAjusteCostoStr(''); setAjustePrecioStr('');
+                        setFormData(prev => ({ ...prev, productoId: 0, costoUnitario: undefined, precioVenta: undefined }));
+                      }
+                    }}
+                    placeholder="Buscar producto por nombre o código..."
+                    emptyMessage="No se encontró el producto"
                   />
-                ) : (
-                  <>
-                    <p className="text-xs text-muted-foreground">
-                      {lotesFiltrados.length} de {lotes.length} registros
-                    </p>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Producto</TableHead>
-                            <TableHead>Lote</TableHead>
-                            <TableHead>Fecha venc.</TableHead>
-                            {esFarmacia && <TableHead>Reg. Sanitario</TableHead>}
-                            <TableHead>Proveedor</TableHead>
-                            <TableHead className="text-center">Cant. recibida</TableHead>
-                            <TableHead className="text-center">Stock actual</TableHead>
-                            <TableHead className="text-center">Días restantes</TableHead>
-                            <TableHead className="text-center">Estado</TableHead>
-                            <TableHead></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {lotesFiltrados.slice((lotesPage - 1) * LOTES_PER_PAGE, lotesPage * LOTES_PER_PAGE).map((l) => {
-                            const dias = l.diasRestantes;
-                            const vencido    = dias < 0;
-                            const critico    = !vencido && dias <= 7;
-                            const proximo90  = !vencido && dias <= 90;
 
-                            const estadoBadge = vencido
-                              ? <Badge variant="destructive">Vencido</Badge>
-                              : critico
-                              ? <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">Crítico</span>
-                              : proximo90
-                              ? <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">Próx. 90d</span>
-                              : <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">Vigente</span>;
-
-                            const rowBg = vencido
-                              ? 'bg-red-500/5'
-                              : critico
-                              ? 'bg-red-500/5'
-                              : proximo90
-                              ? 'bg-amber-500/5'
-                              : '';
-
+                  {/* Variantes (ropa) */}
+                  {esRopa && (loadingVariantes || variantesProducto.length > 0) && (
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ ...MONO_LABEL }}>Variante (talla / color) *</div>
+                      {loadingVariantes ? <div style={{ fontSize: '.8rem', color: T.text3 }}>Cargando variantes...</div> : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
+                          {variantesProducto.map(v => {
+                            const desc = [v.talla, v.color].filter(Boolean).join(' / ') || v.sku || `#${v.id}`;
+                            const active = selectedVarianteId === v.id;
                             return (
-                              <TableRow key={l.movimientoId} className={rowBg}>
-                                <TableCell>
-                                  <div>
-                                    <p className="font-medium text-sm">{l.productoNombre}</p>
-                                    {l.codigoBarras && (
-                                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                        <Package className="h-3 w-3" />
-                                        {l.codigoBarras}
-                                      </p>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-sm font-mono">
-                                  {l.lote || <span className="text-muted-foreground text-xs italic">Sin lote</span>}
-                                </TableCell>
-                                <TableCell className="text-sm whitespace-nowrap">
-                                  {new Date(l.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-PE', {
-                                    day: '2-digit', month: 'short', year: 'numeric',
-                                  })}
-                                </TableCell>
-                                {esFarmacia && (
-                                  <TableCell className="text-sm font-mono">
-                                    {l.registroSanitario || <span className="text-muted-foreground text-xs italic">—</span>}
-                                  </TableCell>
-                                )}
-                                <TableCell className="text-sm">
-                                  {l.proveedorNombre
-                                    ? <span className="font-medium">{l.proveedorNombre}</span>
-                                    : <span className="text-muted-foreground text-xs italic">—</span>}
-                                </TableCell>
-                                <TableCell className="text-center text-sm font-semibold">
-                                  {l.cantidad}
-                                </TableCell>
-                                <TableCell className="text-center text-sm font-semibold">
-                                  <span className={
-                                    l.stockActual === 0 ? 'text-red-500' :
-                                    (l.stockActual ?? 0) <= 5 ? 'text-amber-600' :
-                                    'text-emerald-600'
-                                  }>
-                                    {l.stockActual ?? '—'}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center text-sm font-semibold">
-                                  <span className={vencido ? 'text-red-600' : critico ? 'text-red-500' : proximo90 ? 'text-amber-600' : 'text-emerald-600'}>
-                                    {vencido ? `Hace ${Math.abs(dias)} días` : `${dias} días`}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  {estadoBadge}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setLoteEditando(l);
-                                        setEditProveedorId(
-                                          l.proveedorNombre
-                                            ? (proveedores.find(p => p.nombre === l.proveedorNombre)?.id ?? '')
-                                            : ''
-                                        );
-                                        setEditPrecioVenta(l.precioVenta != null ? String(l.precioVenta) : '');
-                                        setEditLoteNumero(l.lote ?? '');
-                                        setEditFechaVencimiento(
-                                          l.fechaVencimiento ? String(l.fechaVencimiento) : ''
-                                        );
-                                      }}
-                                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition"
-                                      title="Editar datos del lote"
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </button>
-                                    {vencido && (l.stockActual ?? 0) > 0 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setLoteMerma(l);
-                                          setMermaCantidad(String(l.stockActual ?? 1));
-                                          setMermaMotivo('VENCIMIENTO');
-                                          setMermaObservaciones('');
-                                        }}
-                                        className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition"
-                                        title="Dar de baja lote vencido"
-                                      >
-                                        <AlertTriangle className="h-3.5 w-3.5" />
-                                      </button>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
+                              <button key={v.id} type="button" onClick={() => setSelectedVarianteId(active ? null : v.id!)}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', fontFamily: 'Inter,sans-serif', background: active ? T.primarySoft : T.surface, border: `1px solid ${active ? T.primary : T.line}`, borderRadius: 10, cursor: 'pointer' }}>
+                                <span style={{ fontSize: '.86rem', fontWeight: 600, color: T.text }}>{desc}</span>
+                                <span style={{ fontSize: '.78rem', fontWeight: 700, color: (v.stockActual ?? 0) <= (v.stockMinimo ?? 0) ? T.bad : T.ok }}>Stock: {v.stockActual}</span>
+                              </button>
                             );
                           })}
-                        </TableBody>
-                      </Table>
+                        </div>
+                      )}
                     </div>
-                    {lotesFiltrados.length > LOTES_PER_PAGE && (
-                      <div className="flex items-center justify-between pt-2">
-                        <p className="text-xs text-muted-foreground">
-                          Página {lotesPage} de {Math.ceil(lotesFiltrados.length / LOTES_PER_PAGE)}
-                        </p>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            disabled={lotesPage === 1}
-                            onClick={() => setLotesPage((p) => p - 1)}
-                            className="px-3 py-1 text-xs rounded-md border border-input bg-background disabled:opacity-40 hover:bg-muted transition"
-                          >
-                            ← Anterior
-                          </button>
-                          <button
-                            type="button"
-                            disabled={lotesPage >= Math.ceil(lotesFiltrados.length / LOTES_PER_PAGE)}
-                            onClick={() => setLotesPage((p) => p + 1)}
-                            className="px-3 py-1 text-xs rounded-md border border-input bg-background disabled:opacity-40 hover:bg-muted transition"
-                          >
-                            Siguiente →
-                          </button>
+                  )}
+
+                  {/* Tipo ajuste */}
+                  {formData.tipo === 'AJUSTE' && (
+                    <div style={{ marginTop: 20 }}>
+                      <div style={MONO_LABEL}>Tipo de ajuste</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 4, padding: 4, background: T.surface2, borderRadius: 11 }}>
+                        {([
+                          { key: 'STOCK' as const, label: 'Stock', desc: 'Ajusta la cantidad' },
+                          { key: 'PRECIO' as const, label: 'Precios', desc: 'Actualiza costos y precios' },
+                          { key: 'AMBOS' as const, label: 'Ambos', desc: 'Stock y precios' },
+                        ]).map(opt => {
+                          const active = tipoAjuste === opt.key;
+                          return (
+                            <button key={opt.key} type="button"
+                              onClick={() => {
+                                setTipoAjuste(opt.key);
+                                const prod = productosForm.find(p => p.id === formData.productoId);
+                                setFormData(prev => {
+                                  const keepPrices = opt.key !== 'STOCK';
+                                  return {
+                                    ...prev,
+                                    ...(opt.key === 'PRECIO' && { cantidad: 0 }),
+                                    costoUnitario: keepPrices ? (prev.costoUnitario ?? (prod?.costoUnitario != null ? Number(prod.costoUnitario) : undefined)) : undefined,
+                                    precioVenta: keepPrices ? (prev.precioVenta ?? (prod?.precioVenta != null ? Number(prod.precioVenta) : undefined)) : undefined,
+                                  };
+                                });
+                              }}
+                              style={{ padding: '8px 6px', fontFamily: 'Inter,sans-serif', textAlign: 'center', background: active ? T.surface : 'transparent', border: 0, borderRadius: 8, cursor: 'pointer', boxShadow: active ? T.shadow : 'none', transition: 'all .12s' }}>
+                              <span style={{ display: 'block', fontSize: '.86rem', fontWeight: 650, color: T.text }}>{opt.label}</span>
+                              <span style={{ display: 'block', fontSize: '.72rem', color: T.text3, marginTop: 2 }}>{opt.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {/* Selector de lote para ajuste farmacia */}
+                      {esFarmacia && tipoAjuste !== 'PRECIO' && (loadingLotesProducto || lotesDelProducto.length > 0) && (
+                        <div style={{ marginTop: 14 }}>
+                          <label style={LABEL}>Lote a ajustar <span style={{ color: T.text3, fontWeight: 400 }}>(opcional)</span></label>
+                          {loadingLotesProducto ? <div style={{ fontSize: '.8rem', color: T.text3 }}>Cargando lotes...</div> : (
+                            <FxSelect value={ajusteLoteMovimientoId ?? ''} onChange={e => {
+                              const id = e.target.value ? Number(e.target.value) : null;
+                              setAjusteLoteMovimientoId(id);
+                              if (id) { const lote = lotesDelProducto.find(l => l.movimientoId === id); if (lote) setFormData(prev => ({ ...prev, cantidad: lote.stockActual ?? 0 })); }
+                            }}>
+                              <option value="">— Sin lote (ajuste de total) —</option>
+                              {lotesDelProducto.map(l => (
+                                <option key={l.movimientoId} value={l.movimientoId}>{l.lote ?? 'Sin código'} | Vence: {l.fechaVencimiento}{l.diasRestantes < 0 ? ' ⚠️ VENCIDO' : ` (${l.diasRestantes}d)`} | Stock: {l.stockActual ?? 0}</option>
+                              ))}
+                            </FxSelect>
+                          )}
+                          {!ajusteLoteMovimientoId && (
+                            <div style={{ fontSize: '.75rem', color: T.text3, marginTop: 5 }}>
+                              Sin lote: actualiza solo el stock total (útil para sincronizar tras conteo físico). Con lote: corrige la cantidad de un lote específico.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Cantidad */}
+                  {(formData.tipo !== 'AJUSTE' || tipoAjuste === 'STOCK' || tipoAjuste === 'AMBOS') && (
+                    <div style={{ marginTop: 20 }}>
+                      <div style={MONO_LABEL}>{formData.tipo === 'AJUSTE' && ajusteLoteMovimientoId ? 'Nueva cantidad del lote' : 'Cantidad *'}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${T.line}`, borderRadius: 12, overflow: 'hidden' }}>
+                          <button type="button" onClick={() => setFormData(prev => ({ ...prev, cantidad: Math.max(0, (prev.cantidad || 0) - 1) }))}
+                            style={{ width: 48, height: 52, display: 'grid', placeItems: 'center', color: T.text2, background: T.surface2, border: 0, cursor: 'pointer', fontSize: '1.2rem', fontWeight: 500 }}>−</button>
+                          <input type="text" inputMode="numeric" value={formData.cantidad === 0 ? '' : formData.cantidad} placeholder="0"
+                            onChange={e => setFormData(prev => ({ ...prev, cantidad: parseInt(e.target.value) || 0 }))}
+                            style={{ width: 92, height: 52, textAlign: 'center', fontFamily: 'Inter,sans-serif', fontSize: '1.4rem', fontWeight: 700, color: T.text, background: T.surface, border: 0, outline: 'none', fontVariantNumeric: 'tabular-nums' }} />
+                          <button type="button" onClick={() => setFormData(prev => ({ ...prev, cantidad: (prev.cantidad || 0) + 1 }))}
+                            style={{ width: 48, height: 52, display: 'grid', placeItems: 'center', color: T.text2, background: T.surface2, border: 0, cursor: 'pointer', fontSize: '1.2rem', fontWeight: 500 }}>+</button>
+                        </div>
+                        {selectedProducto && formData.tipo === 'ENTRADA' && formData.cantidad > 0 && (() => {
+                          const prod = productosForm.find(p => p.id === selectedProducto.id);
+                          const cur = prod ? (stockEnSucursal.get(prod.id!) ?? prod.stockActual ?? 0) : 0;
+                          return <span style={{ fontSize: '.9rem', fontWeight: 600, color: T.ok }}>→ {cur + formData.cantidad} en stock</span>;
+                        })()}
+                        {selectedProducto && (formData.tipo === 'SALIDA' || formData.tipo === 'MERMA') && (() => {
+                          const prod = productos.find(p => p.id === selectedProducto.id) ?? productosForm.find(p => p.id === selectedProducto.id);
+                          const disp = esFarmacia && (prod?.stockVigente != null)
+                            ? prod.stockVigente
+                            : (stockEnSucursal.get(selectedProducto.id) ?? prod?.stockActual ?? 0);
+                          const after = disp - formData.cantidad;
+                          const insuf = formData.cantidad > 0 && after < 0;
+                          return <span style={{ fontSize: '.86rem', fontWeight: 600, color: insuf ? T.bad : T.text2 }}>
+                            Disponible: {disp}{formData.cantidad > 0 ? ` → ${insuf ? '⚠ insuficiente' : after}` : ''}
+                          </span>;
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── Paso 3: Detalles ── */}
+              {movStep === 3 && (
+                <>
+                  {/* Resumen del producto seleccionado */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', marginBottom: 20, borderRadius: 12, background: T.surface2, fontSize: '.82rem' }}>
+                    <span style={{ width: 28, height: 28, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 8, background: T.primarySoft, color: T.primary }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: T.text }}>{selectedProducto?.label ?? '—'}</span>
+                    <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600, color: T.text2, whiteSpace: 'nowrap' }}>{formData.cantidad > 0 ? `×${formData.cantidad}` : ''}</span>
+                  </div>
+
+                  {/* ENTRADA: costo, precio, lote/venc */}
+                  {formData.tipo === 'ENTRADA' && (
+                    <>
+                      <div style={MONO_LABEL}>Costos</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14, marginBottom: 16 }}>
+                        <div>
+                          <label style={LABEL}>Costo unitario (compra)</label>
+                          <div style={{ position: 'relative' }}>
+                            <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: '.88rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
+                            <FxInput type="text" inputMode="decimal" value={costoStr} placeholder="0.00" style={{ paddingLeft: 36 }}
+                              onChange={e => {
+                                const v = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+                                setCostoStr(v);
+                                const n = parseFloat(v);
+                                setFormData(prev => ({ ...prev, costoUnitario: isNaN(n) ? undefined : n }));
+                              }} />
+                          </div>
+                        </div>
+                        <div>
+                          <label style={LABEL}>Precio de venta</label>
+                          <div style={{ position: 'relative' }}>
+                            <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: '.88rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
+                            <FxInput type="text" inputMode="decimal" value={precioStr} placeholder="0.00" style={{ paddingLeft: 36 }}
+                              onChange={e => {
+                                const v = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+                                setPrecioStr(v);
+                                const n = parseFloat(v);
+                                setFormData(prev => ({ ...prev, precioVenta: isNaN(n) ? undefined : n }));
+                              }} />
+                          </div>
                         </div>
                       </div>
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </>
+                      {/* Trazabilidad farmacia */}
+                      {esFarmacia && (
+                        <div style={{ padding: '15px 16px', borderRadius: 12, background: T.warnSoft, border: `1px solid ${T.warnLine}`, marginBottom: 14 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: T.warn }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1Z"/></svg>
+                            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.68rem', fontWeight: 600, letterSpacing: '.09em', textTransform: 'uppercase', color: T.warn }}>Trazabilidad DIGEMID</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14, marginBottom: 12 }}>
+                            <div>
+                              <label style={LABEL}>Lote *</label>
+                              <FxInput type="text" value={formData.lote ?? ''} placeholder="LOT-2026-001" style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.86rem' }}
+                                onChange={e => setFormData(prev => ({ ...prev, lote: e.target.value }))} />
+                            </div>
+                            <div>
+                              <label style={LABEL}>Fecha de vencimiento *</label>
+                              <FxInput type="date" value={formData.fechaVencimiento ?? ''}
+                                onChange={e => setFormData(prev => ({ ...prev, fechaVencimiento: e.target.value || undefined }))} />
+                            </div>
+                          </div>
+                          <div>
+                            <label style={LABEL}>Registro sanitario *</label>
+                            <FxInput type="text" value={formData.registroSanitario ?? ''} placeholder="D.G.S.P. N° 23456-2024" style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.86rem' }}
+                              onChange={e => setFormData(prev => ({ ...prev, registroSanitario: e.target.value }))} />
+                          </div>
+                        </div>
+                      )}
+                      {/* Lote opcional (no farmacia, no ropa) */}
+                      {!esFarmacia && !esRopa && !esServicios && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14, marginBottom: 14 }}>
+                          <div>
+                            <label style={LABEL}>Lote <span style={{ fontWeight: 400, color: T.text3 }}>(opcional)</span></label>
+                            <FxInput type="text" value={formData.lote ?? ''} placeholder="LOT-2026-001" style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.86rem' }}
+                              onChange={e => setFormData(prev => ({ ...prev, lote: e.target.value }))} />
+                          </div>
+                          <div>
+                            <label style={LABEL}>Fecha de vencimiento <span style={{ fontWeight: 400, color: T.text3 }}>(opcional)</span></label>
+                            <FxInput type="date" value={formData.fechaVencimiento ?? ''}
+                              onChange={e => setFormData(prev => ({ ...prev, fechaVencimiento: e.target.value || undefined }))} />
+                          </div>
+                        </div>
+                      )}
+                      <div style={MONO_LABEL}>Origen</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14 }}>
+                        <div>
+                          <label style={LABEL}>Proveedor <span style={{ fontWeight: 400, color: T.text3 }}>(opcional)</span></label>
+                          <Autocomplete
+                            options={proveedores.filter(p => p.activo !== false).map(p => ({ id: p.id!, label: p.nombre, subtitle: p.ruc ? `RUC: ${p.ruc}` : undefined }))}
+                            value={(() => { const p = proveedores.find(p => p.id === formData.proveedorId); return p ? { id: p.id!, label: p.nombre } : null; })()}
+                            onChange={option => setFormData(prev => ({ ...prev, proveedorId: option?.id ? Number(option.id) : undefined }))}
+                            placeholder="Seleccionar proveedor"
+                            emptyMessage="No se encontró"
+                          />
+                        </div>
+                        <div>
+                          <label style={LABEL}>N° pedido / referencia <span style={{ fontWeight: 400, color: T.text3 }}>(opcional)</span></label>
+                          <FxInput type="text" value={formData.referencia} placeholder="PED-2026-001" style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.86rem' }}
+                            onChange={e => setFormData(prev => ({ ...prev, referencia: e.target.value }))} />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* AJUSTE: precios */}
+                  {formData.tipo === 'AJUSTE' && (tipoAjuste === 'PRECIO' || tipoAjuste === 'AMBOS') && (
+                    <>
+                      <div style={MONO_LABEL}>Nuevos precios</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14, marginBottom: 14 }}>
+                        <div>
+                          <label style={LABEL}>Nuevo costo unitario</label>
+                          <div style={{ position: 'relative' }}>
+                            <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: '.88rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
+                            <FxInput type="text" inputMode="decimal" value={ajusteCostoStr} placeholder="0.00" style={{ paddingLeft: 36 }}
+                              onChange={e => {
+                                const v = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+                                setAjusteCostoStr(v);
+                                const n = parseFloat(v);
+                                setFormData(prev => ({ ...prev, costoUnitario: isNaN(n) ? undefined : n }));
+                              }} />
+                          </div>
+                        </div>
+                        <div>
+                          <label style={LABEL}>Nuevo precio de venta</label>
+                          <div style={{ position: 'relative' }}>
+                            <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: '.88rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
+                            <FxInput type="text" inputMode="decimal" value={ajustePrecioStr} placeholder="0.00" style={{ paddingLeft: 36 }}
+                              onChange={e => {
+                                const v = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+                                setAjustePrecioStr(v);
+                                const n = parseFloat(v);
+                                setFormData(prev => ({ ...prev, precioVenta: isNaN(n) ? undefined : n }));
+                              }} />
+                          </div>
+                        </div>
+                      </div>
+                      {presentacionesProducto.length > 0 && (
+                        <div style={{ padding: 14, borderRadius: 12, background: T.surface3, border: `1px solid ${T.line}`, marginBottom: 14 }}>
+                          <div style={{ fontSize: '.78rem', fontWeight: 650, color: T.text2, marginBottom: 10 }}>Precio por presentación adicional</div>
+                          <div style={{ display: 'grid', gap: 8 }}>
+                            {presentacionesProducto.map(pres => (
+                              <div key={pres.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 150px', gap: 10, alignItems: 'center' }}>
+                                <div>
+                                  <div style={{ fontSize: '.84rem', fontWeight: 600, color: T.text }}>{pres.unidadMedidaNombre || pres.unidadMedidaAbreviatura}</div>
+                                  <div style={{ fontSize: '.72rem', color: T.text3, marginTop: 1 }}>Actual S/ {pres.precioVenta?.toFixed(2)} · factor {pres.factor}</div>
+                                </div>
+                                <div style={{ position: 'relative' }}>
+                                  <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: '.8rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
+                                  <FxInput type="text" inputMode="decimal" value={preciosPresent[pres.id!] ?? ''} placeholder={String(pres.precioVenta ?? '0.00')} style={{ paddingLeft: 32, height: 38, fontSize: '.84rem', fontWeight: 600 }}
+                                    onChange={e => setPreciosPresent(prev => ({ ...prev, [pres.id!]: e.target.value }))} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Referencia / Descripción (todos los tipos) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14 }}>
+                    <div>
+                      <label style={LABEL}>Referencia <span style={{ fontWeight: 400, color: T.text3 }}>(opcional)</span></label>
+                      <FxInput type="text" value={formData.referencia} placeholder="Documento / nota" onChange={e => setFormData(prev => ({ ...prev, referencia: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label style={LABEL}>Descripción <span style={{ fontWeight: 400, color: T.text3 }}>(opcional)</span></label>
+                      <FxInput type="text" value={formData.descripcion} placeholder="Motivo o detalles" onChange={e => setFormData(prev => ({ ...prev, descripcion: e.target.value }))} />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={MODAL_FTR}>
+              {movStep === 1 ? (
+                <button type="button" onClick={resetForm} style={BTN_SEC}>Cancelar</button>
+              ) : (
+                <button type="button" onClick={() => setMovStep(s => (s - 1) as 1 | 2 | 3)} style={{ ...BTN_SEC, gap: 6 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 6-6 6 6 6"/></svg>
+                  Atrás
+                </button>
+              )}
+              {movStep < 3 ? (
+                <button type="button" style={BTN_PRI}
+                  onClick={() => {
+                    if (movStep === 1) { setMovStep(2); return; }
+                    if (formData.productoId === 0) { notify.error('Selecciona un producto'); return; }
+                    if (esRopa && variantesProducto.length > 0 && !selectedVarianteId) { notify.error('Selecciona una variante'); return; }
+                    if (formData.tipo !== 'AJUSTE' && formData.cantidad <= 0) { notify.error('La cantidad debe ser mayor a 0'); return; }
+
+                    setMovStep(3);
+                  }}>
+                  Siguiente →
+                </button>
+              ) : (
+                <button type="button" style={BTN_PRI} onClick={handleSubmit as any}>
+                  Registrar movimiento
+                </button>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
-      {/* Modal editar datos del lote */}
-      {loteEditando && (
-        <Dialog
-          isOpen
-          onClose={() => setLoteEditando(null)}
-          title="Editar datos del lote"
-          description={loteEditando.productoNombre}
-        >
-          <div className="space-y-4 pt-2">
-            <div>
-              <label className="text-sm font-medium block mb-1">Número de lote</label>
-              <Input
-                type="text"
-                placeholder="Ej. LOT-2026-001"
-                value={editLoteNumero}
-                onChange={(e) => setEditLoteNumero(e.target.value)}
-              />
+      {/* ══ MODAL: Kardex ══ */}
+      {isKardexOpen && createPortal(
+        <div style={OVERLAY} onClick={closeKardex}>
+          <div style={{ ...CARD, width: '100%', maxWidth: 1040, maxHeight: 'calc(100vh - 40px)' }} onClick={e => e.stopPropagation()}>
+            <div style={MODAL_HDR}>
+              {kardexProducto && <span style={avatarStyle(kardexProducto.nombre)}>{iniciales(kardexProducto.nombre)}</span>}
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 700, letterSpacing: '-.02em', color: T.text }}>{kardexProducto?.nombre ?? 'Kardex'}</h2>
+                <div style={{ fontSize: '.8rem', color: T.text3, marginTop: 4 }}>Kardex · {kardexProducto?.codigoBarras || 'Sin código'} · Stock: {(esFarmacia && kardexProducto?.stockVigente != null) ? kardexProducto.stockVigente : (kardexProducto?.stockActual ?? 0)}</div>
+              </div>
+              <button type="button" onClick={closeKardex} aria-label="Cerrar"
+                style={{ width: 30, height: 30, flexShrink: 0, marginLeft: 'auto', display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
             </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">Fecha de vencimiento</label>
-              <Input
-                type="date"
-                value={editFechaVencimiento}
-                onChange={(e) => setEditFechaVencimiento(e.target.value)}
-              />
+
+            {/* KPI resumen kardex */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 1, background: T.lineSoft, borderBottom: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
+              {[
+                { label: 'Movimientos', value: String(kardexMovimientos.length) },
+                { label: 'Entradas', value: String(kardexMovimientos.filter(m => m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION').reduce((a, m) => a + (m.cantidad ?? 0), 0)) },
+                { label: 'Salidas', value: String(kardexMovimientos.filter(m => m.tipo === 'SALIDA' || m.tipo === 'MERMA').reduce((a, m) => a + (m.cantidad ?? 0), 0)) },
+                { label: 'Stock actual', value: String((esFarmacia && kardexProducto?.stockVigente != null) ? kardexProducto.stockVigente : (kardexProducto?.stockActual ?? 0)) },
+              ].map(r => (
+                <div key={r.label} style={{ padding: '13px 22px', background: T.surface }}>
+                  <div style={{ fontSize: '.72rem', color: T.text3 }}>{r.label}</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: 4, fontVariantNumeric: 'tabular-nums', color: T.text }}>{r.value}</div>
+                </div>
+              ))}
             </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">Proveedor</label>
-              <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={editProveedorId}
-                onChange={(e) => setEditProveedorId(e.target.value ? Number(e.target.value) : '')}
-              >
-                <option value="">— Sin proveedor —</option>
-                {proveedores.map((p) => (
-                  <option key={p.id} value={p.id}>{p.nombre}</option>
-                ))}
-              </select>
+
+            {/* Filtros kardex */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '12px 22px', borderBottom: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 3, padding: 3, background: T.surface2, borderRadius: 10, maxWidth: '100%', overflowX: 'auto' }}>
+                {['TODOS','ENTRADA','SALIDA','AJUSTE','DEVOLUCION','SALDO_INICIAL','MERMA'].map(t => {
+                  const active = kardexTipoFilter === t;
+                  return (
+                    <button key={t} type="button" onClick={() => setKardexTipoFilter(t)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 9px', fontFamily: 'Inter,sans-serif', fontSize: '.78rem', fontWeight: active ? 600 : 500, color: active ? T.text : T.text3, background: active ? T.surface : 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: active ? T.shadow : 'none' }}>
+                      {t !== 'TODOS' && <span style={getTipoDot(t)} />}
+                      {t === 'TODOS' ? 'Todos' : t === 'SALDO_INICIAL' ? 'Saldo ini.' : t.charAt(0) + t.slice(1).toLowerCase()}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+                <input type="date" value={kardexDesde} onChange={e => setKardexDesde(e.target.value)}
+                  style={{ height: 34, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, outline: 'none' }} />
+                <span style={{ fontSize: '.78rem', color: T.text3 }}>a</span>
+                <input type="date" value={kardexHasta} onChange={e => setKardexHasta(e.target.value)}
+                  style={{ height: 34, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, outline: 'none' }} />
+                {(kardexDesde || kardexHasta || kardexTipoFilter !== 'TODOS') && (
+                  <button type="button" onClick={() => { setKardexDesde(''); setKardexHasta(''); setKardexTipoFilter('TODOS'); }}
+                    style={{ fontSize: '.78rem', color: T.primary, background: 'transparent', border: 0, cursor: 'pointer', textDecoration: 'underline' }}>Limpiar</button>
+                )}
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">Precio de venta (S/.)</label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={editPrecioVenta}
-                onChange={(e) => setEditPrecioVenta(e.target.value)}
-              />
+
+            {/* Tabla kardex */}
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              {kardexLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                  <div style={{ width: 24, height: 24, border: `3px solid ${T.primarySoft}`, borderTopColor: T.primary, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                </div>
+              ) : kardexFiltrados.length === 0 ? (
+                <div style={{ padding: 40, textAlign: 'center', fontSize: '.86rem', color: T.text3 }}>Sin movimientos para estos filtros.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.83rem', minWidth: 900 }}>
+                  <thead>
+                    <tr style={{ position: 'sticky', top: 0, zIndex: 1, background: T.surface3 }}>
+                      <th style={{ width: 28, padding: '10px 6px 10px 22px' }}></th>
+                      {['Fecha','Movimiento','Documento','Entrada','Salida','Saldo','Costo unit.','Costo total'].map((h, i) => (
+                        <th key={h} style={{ textAlign: i >= 3 ? 'right' : 'left', padding: '10px 14px', fontSize: '.72rem', fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      let stockAcumulado = 0;
+                      const rows: React.ReactNode[] = [];
+                      const sorted = [...kardexFiltrados].sort((a, b) => { const da = a.createdAt ? new Date(a.createdAt).getTime() : 0; const db = b.createdAt ? new Date(b.createdAt).getTime() : 0; return da - db; });
+                      sorted.forEach(m => {
+                        const esSalida = m.tipo === 'SALIDA';
+                        const esMerma = m.tipo === 'MERMA';
+                        const esDescuento = m.tipo === 'SALIDA' || m.tipo === 'MERMA';
+                        const esEntrada = ['ENTRADA','SALDO_INICIAL','DEVOLUCION'].includes(m.tipo ?? '');
+                        if (esEntrada) stockAcumulado += m.cantidad ?? 0;
+                        else if (m.tipo === 'AJUSTE') stockAcumulado = m.cantidad ?? stockAcumulado;
+                        else if (esDescuento) stockAcumulado -= m.cantidad ?? 0;
+                        const isExpanded = m.id != null && expandedRows.has(m.id);
+                        const isLoading = m.id != null && loadingLotesVenta.has(m.id);
+                        const lotesVenta = m.id != null ? (lotesVentaCache.get(m.id) ?? []) : [];
+                        const costoTotal = m.costoUnitario != null && m.cantidad ? m.costoUnitario * m.cantidad : null;
+                        rows.push(
+                          <tr key={m.id} onClick={() => m.id && toggleKardexRow(m.id)} style={{ borderTop: `1px solid ${T.lineSoft}`, cursor: esSalida ? 'pointer' : 'default', transition: 'background .14s' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = T.surface3)}
+                            onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                            <td style={{ padding: '10px 6px 10px 22px', width: 28 }}>
+                              {esSalida && <span style={{ display: 'grid', placeItems: 'center', color: T.text3, transition: 'transform .2s', transform: isExpanded ? 'rotate(90deg)' : 'none' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+                              </span>}
+                            </td>
+                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.8rem', fontWeight: 600, color: T.text }}>{m.createdAt ? new Date(m.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>
+                              <div style={{ fontSize: '.72rem', color: T.text3, marginTop: 1 }}>{m.createdAt ? new Date(m.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                            </td>
+                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}><span style={getTipoStyle(m.tipo ?? '')}><span style={getTipoDot(m.tipo ?? '')} />{m.tipo === 'SALDO_INICIAL' ? 'Saldo ini.' : m.tipo === 'AJUSTE_PRECIO' ? 'Ajuste precio' : (m.tipo?.charAt(0) ?? '') + (m.tipo?.slice(1).toLowerCase() ?? '')}</span></td>
+                            <td style={{ padding: '10px 14px', maxWidth: 200 }}>
+                              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.78rem', color: T.text2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.referencia || '—'}</div>
+                              <div style={{ fontSize: '.72rem', color: T.text3, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.descripcion || ''}</div>
+                            </td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 650, color: T.ok, fontVariantNumeric: 'tabular-nums' }}>{esEntrada ? `+${m.cantidad}` : ''}</td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 650, color: T.bad, fontVariantNumeric: 'tabular-nums' }}>{(esSalida || esMerma) ? `-${m.cantidad}` : ''}</td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: T.text }}>{stockAcumulado}</td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>{m.costoUnitario != null ? `S/ ${m.costoUnitario.toFixed(2)}` : '—'}</td>
+                            <td style={{ padding: '10px 22px 10px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>{costoTotal != null && costoTotal > 0 ? `S/ ${costoTotal.toFixed(2)}` : '—'}</td>
+                          </tr>
+                        );
+                        if (esSalida && isExpanded) {
+                          if (isLoading) {
+                            rows.push(<tr key={`${m.id}-loading`} style={{ background: T.surface3 }}><td /><td colSpan={8} style={{ padding: '4px 22px 10px 14px', fontSize: '.78rem', color: T.text3 }}>Cargando lotes...</td></tr>);
+                          } else {
+                            rows.push(
+                              <tr key={`${m.id}-lotes`} style={{ background: T.surface3 }}>
+                                <td />
+                                <td colSpan={8} style={{ padding: '4px 22px 12px 14px' }}>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    <span style={{ fontSize: '.74rem', color: T.text3, alignSelf: 'center' }}>Lotes consumidos</span>
+                                    {lotesVenta.length === 0 ? <span style={{ fontSize: '.74rem', color: T.text3, fontStyle: 'italic' }}>Sin detalle disponible</span> : lotesVenta.map((lv, i) => (
+                                      <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 28, padding: '0 10px', fontSize: '.76rem', background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8 }}>
+                                        <strong style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600, color: T.text }}>{lv.lote || '—'}</strong>
+                                        <span style={{ color: T.text3 }}>{lv.proveedorNombre || ''}</span>
+                                        <span style={{ fontWeight: 700, color: T.bad }}>−{lv.cantidadDescontada}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                        }
+                      });
+                      return rows;
+                    })()}
+                  </tbody>
+                </table>
+              )}
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" type="button" onClick={() => setLoteEditando(null)}>
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                disabled={savingLoteEdit}
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 9, padding: '13px 22px', borderTop: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
+              <span style={{ flex: 1, minWidth: 200, fontSize: '.78rem', color: T.text3 }}>{kardexFiltrados.length} de {kardexMovimientos.length} movimientos</span>
+              <button type="button" onClick={() => { closeKardex(); setIsDialogOpen(true); }}
+                style={{ height: 40, display: 'flex', alignItems: 'center', gap: 7, padding: '0 15px', fontFamily: 'Inter,sans-serif', fontSize: '.86rem', fontWeight: 650, color: T.primary, background: T.primarySoft, border: `1px solid ${T.primaryLine}`, borderRadius: 10, cursor: 'pointer' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                Registrar movimiento
+              </button>
+              <button type="button" onClick={closeKardex} style={{ height: 40, padding: '0 18px', fontFamily: 'Inter,sans-serif', fontSize: '.86rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, cursor: 'pointer' }}>Cerrar</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ══ MODAL: Editar lote ══ */}
+      {loteEditando && createPortal(
+        <div style={OVERLAY} onClick={() => setLoteEditando(null)}>
+          <div style={{ ...CARD, width: '100%', maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+            <div style={MODAL_HDR}>
+              <span style={{ width: 38, height: 38, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 11, background: T.primarySoft, color: T.primary }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 700, letterSpacing: '-.02em', color: T.text }}>Editar datos del lote</h2>
+                <div style={{ fontSize: '.8rem', color: T.text3, marginTop: 4 }}>{loteEditando.productoNombre}</div>
+              </div>
+              <button type="button" onClick={() => setLoteEditando(null)} aria-label="Cerrar"
+                style={{ width: 30, height: 30, flexShrink: 0, marginLeft: 'auto', display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+            <div style={{ padding: '20px 22px 22px', display: 'grid', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14 }}>
+                <div>
+                  <label style={LABEL}>Número de lote</label>
+                  <FxInput type="text" value={editLoteNumero} placeholder="Ej. LOT-2026-001" style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.86rem' }}
+                    onChange={e => setEditLoteNumero(e.target.value)} />
+                </div>
+                <div>
+                  <label style={LABEL}>Fecha de vencimiento</label>
+                  <FxInput type="date" value={editFechaVencimiento} onChange={e => setEditFechaVencimiento(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label style={LABEL}>Proveedor</label>
+                <FxSelect value={editProveedorId} onChange={e => setEditProveedorId(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">— Sin proveedor —</option>
+                  {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </FxSelect>
+              </div>
+              <div>
+                <label style={LABEL}>Precio de venta del lote</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: '.88rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
+                  <FxInput type="text" inputMode="decimal" value={editPrecioVenta} placeholder="0.00" style={{ paddingLeft: 36, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+                    onChange={e => setEditPrecioVenta(e.target.value)} />
+                </div>
+                <div style={{ fontSize: '.76rem', lineHeight: 1.5, color: T.text3, marginTop: 6 }}>El precio del lote se usa en el POS cuando se vende de este lote. Déjalo vacío para usar el precio general del producto.</div>
+              </div>
+            </div>
+            <div style={MODAL_FTR}>
+              <button type="button" onClick={() => setLoteEditando(null)} style={BTN_SEC}>Cancelar</button>
+              <button type="button" disabled={savingLoteEdit}
+                style={{ ...BTN_PRI, opacity: savingLoteEdit ? 0.7 : 1 }}
                 onClick={async () => {
                   setSavingLoteEdit(true);
                   try {
                     const pid = editProveedorId !== '' ? Number(editProveedorId) : null;
                     const precio = editPrecioVenta !== '' ? Number(editPrecioVenta) : null;
-                    const loteNum = editLoteNumero.trim() || null;
-                    const fechaVenc = editFechaVencimiento || null;
-                    await movimientoService.actualizarProveedorLote(loteEditando.movimientoId, pid, precio, loteNum, fechaVenc);
-                    toast.success('Lote actualizado');
+                    await movimientoService.actualizarProveedorLote(loteEditando.movimientoId, pid, precio, editLoteNumero.trim() || null, editFechaVencimiento || null);
+                    notify.success('Lote actualizado');
                     setLoteEditando(null);
-                    const data = await movimientoService.getLotes();
-                    setLotes(data);
-                  } catch {
-                    toast.error('Error al actualizar el lote');
-                  } finally {
-                    setSavingLoteEdit(false);
-                  }
-                }}
-              >
-                {savingLoteEdit ? 'Guardando...' : 'Guardar'}
-              </Button>
+                  } catch (err) { notify.fromError(err, 'No se pudo actualizar el lote.'); }
+                  finally { setSavingLoteEdit(false); }
+                  try { const data = await movimientoService.getLotes(); setLotes(data); } catch { /* silent refresh */ }
+                  try { const data = await productoService.getAll(); setProductos(data); setProductosForm(data); } catch { /* silent refresh */ }
+                }}>
+                {savingLoteEdit ? 'Guardando...' : 'Guardar cambios'}
+              </button>
             </div>
           </div>
-        </Dialog>
+        </div>,
+        document.body
       )}
 
-      {/* Modal: dar de baja lote vencido */}
-      {loteMerma && (
-        <Dialog
-          isOpen
-          onClose={() => setLoteMerma(null)}
-          title="Dar de baja lote vencido"
-          description={`${loteMerma.productoNombre} · Lote: ${loteMerma.lote || 'Sin lote'} · Vencido el ${new Date(loteMerma.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}`}
-        >
-          <div className="space-y-4 pt-2">
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-xs text-red-600 dark:text-red-400">
-              Esta acción registra una merma y reduce el stock del producto. No se puede deshacer.
+      {/* ══ MODAL: Baja de lote ══ */}
+      {loteMerma && createPortal(
+        <div style={OVERLAY} onClick={() => setLoteMerma(null)}>
+          <div style={{ ...CARD, width: '100%', maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+            <div style={MODAL_HDR}>
+              <span style={{ width: 38, height: 38, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 11, background: T.badSoft, color: T.bad }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 700, letterSpacing: '-.02em', color: T.text }}>Dar de baja lote</h2>
+                <div style={{ fontSize: '.8rem', color: T.text3, marginTop: 4 }}>Registra una merma. El stock se descuenta de este lote.</div>
+              </div>
+              <button type="button" onClick={() => setLoteMerma(null)} aria-label="Cerrar"
+                style={{ width: 30, height: 30, flexShrink: 0, marginLeft: 'auto', display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
             </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">Cantidad a dar de baja</label>
-              <Input
-                type="number"
-                min="1"
-                max={loteMerma.stockActual ?? 1}
-                value={mermaCantidad}
-                onChange={(e) => setMermaCantidad(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Stock disponible en este lote: {loteMerma.stockActual}</p>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 22px 20px' }}>
+              <div style={{ display: 'grid', gap: 8, padding: '13px 15px', borderRadius: 12, background: T.surface2, fontSize: '.84rem', marginBottom: 18 }}>
+                {[
+                  { k: 'Producto', v: loteMerma.productoNombre },
+                  { k: 'Lote', v: loteMerma.lote || 'Sin código' },
+                  { k: 'Vencimiento', v: loteMerma.fechaVencimiento ? new Date(loteMerma.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+                  { k: 'Stock del lote', v: `${loteMerma.stockActual ?? 0} und` },
+                ].map(r => (
+                  <div key={r.k} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                    <span style={{ flexShrink: 0, color: T.text3 }}>{r.k}</span>
+                    <span style={{ fontWeight: 600, textAlign: 'right', color: T.text }}>{r.v}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={LABEL}>Cantidad a dar de baja *</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <FxInput type="text" inputMode="numeric" value={mermaCantidad} placeholder="0"
+                    style={{ width: 120, textAlign: 'center', fontSize: '1.05rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+                    onChange={e => setMermaCantidad(e.target.value)} />
+                  <button type="button" onClick={() => setMermaCantidad(String(loteMerma.stockActual ?? 1))}
+                    style={{ height: 44, padding: '0 13px', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = T.bad; e.currentTarget.style.color = T.bad; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = T.line; e.currentTarget.style.color = T.text2; }}>
+                    Todo el lote
+                  </button>
+                  <span style={{ fontSize: '.78rem', color: T.text3 }}>de {loteMerma.stockActual}</span>
+                </div>
+                {Number(mermaCantidad) > (loteMerma.stockActual ?? 0) && (
+                  <div style={{ fontSize: '.76rem', fontWeight: 600, color: T.bad, marginTop: 6 }}>La cantidad no puede superar el stock del lote.</div>
+                )}
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={LABEL}>Motivo *</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                  {['VENCIMIENTO','DANO','ROBO','ERROR','OTRO'].map(m => {
+                    const active = mermaMotivo === m;
+                    const labels: Record<string, string> = { VENCIMIENTO: 'Vencimiento', DANO: 'Daño', ROBO: 'Robo / Pérdida', ERROR: 'Error de ingreso', OTRO: 'Otro' };
+                    return (
+                      <button key={m} type="button" onClick={() => setMermaMotivo(m)}
+                        style={{ height: 34, padding: '0 12px', fontFamily: 'Inter,sans-serif', fontSize: '.82rem', fontWeight: active ? 650 : 500, color: active ? '#fff' : T.text2, background: active ? T.bad : T.surface, border: `1px solid ${active ? T.bad : T.line}`, borderRadius: 20, cursor: 'pointer', transition: 'all .12s' }}>
+                        {labels[m]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <label style={LABEL}>Observaciones <span style={{ fontWeight: 400, color: T.text3 }}>(opcional)</span></label>
+                <textarea rows={2} value={mermaObservaciones} placeholder="Descripción adicional…"
+                  onChange={e => setMermaObservaciones(e.target.value)}
+                  style={{ width: '100%', padding: '11px 13px', fontFamily: 'Inter,sans-serif', fontSize: '.875rem', lineHeight: 1.5, color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, outline: 'none', resize: 'none', boxSizing: 'border-box' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = T.primary; e.currentTarget.style.boxShadow = `0 0 0 3px ${T.primarySoft}`; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = T.line; e.currentTarget.style.boxShadow = 'none'; }} />
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">Motivo</label>
-              <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={mermaMotivo}
-                onChange={(e) => setMermaMotivo(e.target.value)}
-              >
-                <option value="VENCIMIENTO">Vencimiento</option>
-                <option value="DANO">Daño o deterioro</option>
-                <option value="ROBO">Robo / Pérdida</option>
-                <option value="ERROR">Error de ingreso</option>
-                <option value="OTRO">Otro</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">Observaciones (opcional)</label>
-              <Input
-                type="text"
-                placeholder="Descripción adicional..."
-                value={mermaObservaciones}
-                onChange={(e) => setMermaObservaciones(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" type="button" onClick={() => setLoteMerma(null)}>
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={savingMerma || !mermaCantidad || Number(mermaCantidad) <= 0}
+            <div style={MODAL_FTR}>
+              <button type="button" onClick={() => setLoteMerma(null)} style={BTN_SEC}>Cancelar</button>
+              <button type="button" disabled={savingMerma || !mermaCantidad || Number(mermaCantidad) <= 0}
+                style={{ ...BTN_DANGER, opacity: (savingMerma || !mermaCantidad || Number(mermaCantidad) <= 0) ? 0.6 : 1 }}
                 onClick={async () => {
                   const cant = Number(mermaCantidad);
-                  if (!cant || cant <= 0) { toast.error('Ingresa una cantidad válida'); return; }
-                  if (cant > (loteMerma.stockActual ?? 0)) { toast.error('Cantidad mayor al stock del lote'); return; }
+                  if (!cant || cant <= 0) { notify.error('Ingresa una cantidad válida', { detail: 'El número de unidades a dar de baja debe ser mayor a 0.' }); return; }
+                  if (cant > (loteMerma.stockActual ?? 0)) { notify.error('Cantidad mayor al stock del lote', { detail: `Este lote tiene ${loteMerma.stockActual} unidades disponibles.` }); return; }
                   setSavingMerma(true);
                   try {
-                    await movimientoService.darDeBajaLote({
-                      movimientoOrigenId: loteMerma.movimientoId,
-                      cantidad: cant,
-                      motivo: mermaMotivo,
-                      observaciones: mermaObservaciones || undefined,
-                    });
-                    toast.success('Baja registrada correctamente');
+                    await movimientoService.darDeBajaLote({ movimientoOrigenId: loteMerma.movimientoId, cantidad: cant, motivo: mermaMotivo, observaciones: mermaObservaciones || undefined });
+                    notify.success('Baja registrada correctamente');
                     setLoteMerma(null);
                     const data = await movimientoService.getLotes();
                     setLotes(data);
-                  } catch {
-                    toast.error('Error al registrar la baja');
-                  } finally {
-                    setSavingMerma(false);
-                  }
-                }}
-              >
+                  } catch (err) { notify.fromError(err, 'No se pudo registrar la baja del lote.'); }
+                  finally { setSavingMerma(false); }
+                }}>
                 {savingMerma ? 'Registrando...' : 'Confirmar baja'}
-              </Button>
+              </button>
             </div>
           </div>
-        </Dialog>
+        </div>,
+        document.body
       )}
 
-      {/* Dialog para crear movimiento (corregido: Producto / Tipo / Cantidad+Referencia / Descripción) */}
-      <Dialog
-        isOpen={isDialogOpen}
-        onClose={resetForm}
-        title="Nuevo Movimiento de Inventario"
-        description="Registra una entrada de stock, ajuste o devolución"
-        size="lg"
-      >
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Stepper indicator */}
-          <div className="flex items-center">
-            {(['Tipo', 'Producto', 'Detalles'] as const).map((label, i) => {
-              const n = (i + 1) as 1 | 2 | 3;
-              const done = movStep > n;
-              const active = movStep === n;
-              return (
-                <div key={label} className="flex items-center" style={{ flex: i < 2 ? 1 : undefined }}>
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium border transition-colors ${done ? 'bg-primary border-primary text-primary-foreground' : active ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
-                      {done ? '✓' : n}
-                    </div>
-                    <span className={`text-xs ${active ? 'font-medium text-primary' : done ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
-                  </div>
-                  {i < 2 && <div className="flex-1 h-px bg-border mx-2" />}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* ── Paso 1: Tipo ── */}
-          {movStep === 1 && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">¿Qué tipo de movimiento vas a registrar?</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {([
-                  { key: 'ENTRADA',   title: 'Ingresar stock',      subtitle: 'Compra / entrada',   icon: <TrendingUp className="h-4 w-4 text-green-600" /> },
-                  { key: 'AJUSTE',    title: 'Ajustar inventario',  subtitle: 'Cantidad o precios', icon: <RotateCcw className="h-4 w-4 text-blue-600" /> },
-                  { key: 'DEVOLUCION',title: 'Devolución',          subtitle: 'Del cliente',        icon: <ArrowLeftRight className="h-4 w-4 text-orange-600" /> },
-                ] as const).map((t) => {
-                  const active = formData.tipo === t.key;
-                  return (
-                    <button key={t.key} type="button"
-                      onClick={() => {
-                        setTipoAjuste('STOCK');
-                        setFormData(prev => ({
-                          ...prev,
-                          tipo: t.key as MovimientoInventarioDTO['tipo'],
-                          ...(t.key !== 'ENTRADA' && { proveedorId: undefined, costoUnitario: undefined, lote: '', fechaVencimiento: undefined, registroSanitario: '' }),
-                        }));
-                        setSelectedProveedorMov(null);
-                      }}
-                      className={`w-full rounded-lg border p-4 text-left transition ${active ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:border-primary/40 hover:bg-muted/40'}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {t.icon}
-                        <div>
-                          <div className="text-sm font-semibold">{t.title}</div>
-                          <div className="text-xs text-muted-foreground">{t.subtitle}</div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── Paso 2: Producto + Cantidad ── */}
-          {movStep === 2 && (
-            <div className="space-y-4">
-              {/* Producto */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Producto <span className="text-red-500">*</span></label>
-                <Autocomplete
-                  options={productosOptions}
-                  value={selectedProducto}
-                  onChange={async (option) => {
-                    setVariantesProducto([]);
-                    setSelectedVarianteId(null);
-                    setLotesDelProducto([]);
-                    setAjusteLoteMovimientoId(null);
-                    if (option) {
-                      const producto = productosForm.find((p) => p.id === option.id);
-                      if (producto) {
-                        setSelectedProducto(option);
-                        setFormData(prev => ({ ...prev, productoId: producto.id!, precioVenta: producto.precioVenta ?? undefined }));
-                        if (esRopa) {
-                          setLoadingVariantes(true);
-                          try {
-                            const vars = await productoVarianteService.getByProducto(producto.id!, sucursalId);
-                            setVariantesProducto(vars.filter(v => v.activo !== false));
-                          } catch { /* sin variantes */ }
-                          finally { setLoadingVariantes(false); }
-                        }
-                        // Cargar presentaciones para ajuste de precio (farmacia)
-                        if (esFarmacia) {
-                          productoPresentacionService.listar(producto.id!).then(pres => {
-                            setPresentacionesProducto(pres);
-                            const init: Record<number, string> = {};
-                            pres.forEach(p => { if (p.id) init[p.id] = String(p.precioVenta ?? ''); });
-                            setPreciosPresent(init);
-                          }).catch(() => setPresentacionesProducto([]));
-                        }
-                        // Si es farmacia y el producto tiene lotes, cargarlos para el selector de ajuste
-                        if (esFarmacia && producto.stockVigente != null) {
-                          setLoadingLotesProducto(true);
-                          try {
-                            const lotesData = await movimientoService.getLotesPorProducto(producto.id!);
-                            setLotesDelProducto(lotesData.filter(l => l.diasRestantes != null));
-                          } catch { /* sin lotes */ }
-                          finally { setLoadingLotesProducto(false); }
-                        }
-                      }
-                    } else {
-                      setSelectedProducto(null);
-                      setFormData(prev => ({ ...prev, productoId: 0, precioVenta: undefined }));
-                    }
-                  }}
-                  placeholder="Buscar producto por nombre..."
-                  emptyMessage="No se encontró el producto"
-                />
-              </div>
-
-              {/* Variantes — solo TIENDA_ROPA */}
-              {esRopa && (loadingVariantes || variantesProducto.length > 0) && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Variante (talla / color) <span className="text-red-500">*</span>
-                  </label>
-                  {loadingVariantes ? (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
-                      Cargando variantes...
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {variantesProducto.map(v => {
-                        const desc = [v.talla, v.color].filter(Boolean).join(' / ') || v.sku || `#${v.id}`;
-                        const active = selectedVarianteId === v.id;
-                        return (
-                          <button key={v.id} type="button"
-                            onClick={() => setSelectedVarianteId(active ? null : v.id!)}
-                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${active ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}
-                          >
-                            <span className="font-medium">{desc}</span>
-                            <span className={`text-xs font-mono ${(v.stockActual ?? 0) <= (v.stockMinimo ?? 0) ? 'text-red-500' : 'text-emerald-600'}`}>
-                              Stock: {v.stockActual}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tipo ajuste — solo AJUSTE */}
-              {formData.tipo === 'AJUSTE' && (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Tipo de ajuste</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {([
-                      { key: 'STOCK', label: 'Stock', desc: 'Ajusta la cantidad' },
-                      { key: 'PRECIO', label: 'Precios', desc: 'Actualiza costo y precio' },
-                      { key: 'AMBOS', label: 'Ambos', desc: 'Stock y precios' },
-                    ] as const).map((opt) => (
-                      <button key={opt.key} type="button"
-                        onClick={() => {
-                          setTipoAjuste(opt.key);
-                          const prod = productosForm.find(p => p.id === formData.productoId);
-                          setFormData(prev => {
-                            const keepPrices = opt.key !== 'STOCK';
-                            const costo  = keepPrices ? (prev.costoUnitario  ?? (prod?.costoUnitario  != null ? Number(prod.costoUnitario)  : undefined)) : undefined;
-                            const precio = keepPrices ? (prev.precioVenta    ?? (prod?.precioVenta    != null ? Number(prod.precioVenta)    : undefined)) : undefined;
-                            return {
-                              ...prev,
-                              ...(opt.key === 'PRECIO' && { cantidad: 0 }),
-                              costoUnitario: costo,
-                              precioVenta:   precio,
-                            };
-                          });
-                        }}
-                        className={`rounded-lg border p-2.5 text-left transition text-sm ${tipoAjuste === opt.key ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/40' : 'border-border hover:border-blue-300 bg-background'}`}
-                      >
-                        <p className="font-medium">{opt.label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
-                      </button>
-                    ))}
-                  </div>
-                  {esFarmacia && tipoAjuste !== 'PRECIO' && (loadingLotesProducto || lotesDelProducto.length > 0) && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Lote a ajustar <span className="text-red-500">*</span></label>
-                      {loadingLotesProducto ? (
-                        <p className="text-xs text-muted-foreground">Cargando lotes...</p>
-                      ) : (
-                        <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={ajusteLoteMovimientoId ?? ''}
-                          onChange={(e) => {
-                            const id = e.target.value ? Number(e.target.value) : null;
-                            setAjusteLoteMovimientoId(id);
-                            if (id) {
-                              const lote = lotesDelProducto.find(l => l.movimientoId === id);
-                              if (lote) setFormData(prev => ({ ...prev, cantidad: lote.stockActual ?? 0 }));
-                            }
-                          }}
-                        >
-                          <option value="">— Selecciona el lote —</option>
-                          {lotesDelProducto.map((l) => (
-                            <option key={l.movimientoId} value={l.movimientoId}>
-                              {l.lote ?? 'Sin código'} | Vence: {l.fechaVencimiento}
-                              {l.diasRestantes < 0 ? ' ⚠️ VENCIDO' : ` (${l.diasRestantes}d)`}
-                              {' | Stock actual: '}{l.stockActual ?? 0}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      {ajusteLoteMovimientoId && (() => {
-                        const lote = lotesDelProducto.find(l => l.movimientoId === ajusteLoteMovimientoId);
-                        return lote ? <p className="text-xs text-muted-foreground">Stock actual del lote: <strong>{lote.stockActual ?? 0}</strong> unidades.</p> : null;
-                      })()}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Cantidad */}
-              {(formData.tipo !== 'AJUSTE' || tipoAjuste === 'STOCK' || tipoAjuste === 'AMBOS') && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {formData.tipo === 'AJUSTE' && ajusteLoteMovimientoId ? 'Nueva cantidad del lote' : 'Cantidad'}
-                    <span className="text-red-500"> *</span>
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <button type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, cantidad: Math.max(0, (prev.cantidad || 0) - 1) }))}
-                      className="h-9 w-9 rounded-lg border border-border bg-muted hover:bg-muted/80 flex items-center justify-center text-lg font-medium"
-                    >−</button>
-                    <Input type="number" min="0"
-                      value={formData.cantidad === 0 ? '' : formData.cantidad}
-                      onChange={(e) => setFormData(prev => ({ ...prev, cantidad: parseInt(e.target.value) || 0 }))}
-                      placeholder="0" className="text-center font-semibold text-lg w-24" required
-                    />
-                    <button type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, cantidad: (prev.cantidad || 0) + 1 }))}
-                      className="h-9 w-9 rounded-lg border border-border bg-muted hover:bg-muted/80 flex items-center justify-center text-lg font-medium"
-                    >+</button>
-                    {selectedProducto && formData.tipo === 'ENTRADA' && formData.cantidad > 0 && (() => {
-                      const prod = productosForm.find(p => p.id === selectedProducto.id);
-                      const cur = prod ? (stockEnSucursal.get(prod.id!) ?? prod.stockActual ?? 0) : 0;
-                      return <span className="text-sm text-emerald-600 font-medium">→ {cur + formData.cantidad} en stock</span>;
-                    })()}
-                    {formData.tipo === 'AJUSTE' && ajusteLoteMovimientoId && formData.cantidad >= 0 && (() => {
-                      const lote = lotesDelProducto.find(l => l.movimientoId === ajusteLoteMovimientoId);
-                      const prod = productosForm.find(p => p.id === formData.productoId);
-                      const totalActual = prod ? (stockEnSucursal.get(prod.id!) ?? prod.stockActual ?? 0) : 0;
-                      const stockOtros = totalActual - (lote?.stockActual ?? 0);
-                      return <span className="text-sm text-blue-600 font-medium">→ {stockOtros + formData.cantidad} total ({stockOtros} otros lotes + {formData.cantidad} este lote)</span>;
-                    })()}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Paso 3: Detalles ── */}
-          {movStep === 3 && (
-            <div className="space-y-4">
-
-              {/* ENTRADA */}
-              {formData.tipo === 'ENTRADA' && (<>
-                <div className="rounded-lg border bg-card p-4 space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Costos</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Costo unitario (compra)</label>
-                      <Input type="number" min="0" step="0.01"
-                        value={formData.costoUnitario ?? ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                        placeholder="0.00"
-                      />
-                      <p className="text-xs text-muted-foreground">Lo que pagaste al proveedor</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Precio de venta</label>
-                      <Input type="number" min="0" step="0.01"
-                        value={formData.precioVenta ?? ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                        placeholder="0.00"
-                        className={formData.precioVenta ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20' : ''}
-                      />
-                      {formData.precioVenta && <p className="text-xs text-emerald-600">Pre-llenado del producto — editable</p>}
-                    </div>
-                  </div>
-                </div>
-
-                {esFarmacia && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">Trazabilidad DIGEMID</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Lote <span className="text-red-500">*</span></label>
-                        <Input type="text" value={formData.lote ?? ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, lote: e.target.value }))}
-                          placeholder="LOT-2025-001" required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Fecha de vencimiento <span className="text-red-500">*</span></label>
-                        <Input type="date" value={formData.fechaVencimiento ?? ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, fechaVencimiento: e.target.value || undefined }))}
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Registro sanitario <span className="text-red-500">*</span></label>
-                      <Input type="text" value={formData.registroSanitario ?? ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, registroSanitario: e.target.value }))}
-                        placeholder="D.G.S.P. N° 23456-2024" required
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {!esFarmacia && !esRopa && !esServicios && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Lote <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                      <Input type="text" value={formData.lote ?? ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, lote: e.target.value }))}
-                        placeholder="LOT-2025-001"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Fecha de vencimiento <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                      <Input type="date" value={formData.fechaVencimiento ?? ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, fechaVencimiento: e.target.value || undefined }))}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {esRopa && (
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">N° Pedido / Referencia <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                    <Input type="text" value={formData.lote ?? ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, lote: e.target.value }))}
-                      placeholder="PED-2025-001"
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Proveedor <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                  <Autocomplete
-                    options={proveedores.filter(p => p.activo !== false).map(p => ({ id: p.id!, label: p.nombre, subtitle: p.ruc ? `RUC: ${p.ruc}` : undefined }))}
-                    value={(() => { const p = proveedores.find(p => p.id === formData.proveedorId); return p ? { id: p.id!, label: p.nombre } : null; })()}
-                    onChange={(option) => { setSelectedProveedorMov(option); setFormData(prev => ({ ...prev, proveedorId: option?.id ? Number(option.id) : undefined })); }}
-                    placeholder="Seleccionar proveedor (opcional)"
-                    emptyMessage="No se encontró el proveedor"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Referencia <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                    <Input type="text" placeholder="Documento / nota / código interno"
-                      value={formData.referencia} onChange={(e) => setFormData(prev => ({ ...prev, referencia: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Descripción <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                    <Input type="text" placeholder="Motivo o detalles del movimiento"
-                      value={formData.descripcion} onChange={(e) => setFormData(prev => ({ ...prev, descripcion: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </>)}
-
-              {/* AJUSTE */}
-              {formData.tipo === 'AJUSTE' && (<>
-                {(tipoAjuste === 'PRECIO' || tipoAjuste === 'AMBOS') && (
-                  <div className="rounded-lg border bg-card p-4 space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nuevos precios</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Nuevo costo unitario</label>
-                        <Input type="number" min="0" step="0.01"
-                          value={formData.costoUnitario ?? ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, costoUnitario: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">
-                          Nuevo precio de venta
-                          {presentacionesProducto.length > 0 && (
-                            <span className="ml-1 text-xs text-muted-foreground font-normal">(unidad base)</span>
-                          )}
-                        </label>
-                        <Input type="number" min="0" step="0.01"
-                          value={formData.precioVenta ?? ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, precioVenta: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-                    {/* Precios por presentación adicional */}
-                    {presentacionesProducto.length > 0 && (
-                      <div className="space-y-2 pt-1 border-t border-border">
-                        <p className="text-xs text-muted-foreground font-medium">Precio por presentación adicional</p>
-                        {presentacionesProducto.map(pres => (
-                          <div key={pres.id} className="flex items-center gap-3">
-                            <span className="text-sm flex-1 text-muted-foreground">
-                              {pres.unidadMedidaNombre || pres.unidadMedidaAbreviatura}
-                              <span className="ml-1 text-xs">(×{pres.factor})</span>
-                            </span>
-                            <div className="relative w-36">
-                              <span className="absolute left-2.5 top-2 text-xs text-muted-foreground">S/</span>
-                              <Input type="number" min="0" step="0.01"
-                                value={preciosPresent[pres.id!] ?? ''}
-                                onChange={e => setPreciosPresent(prev => ({ ...prev, [pres.id!]: e.target.value }))}
-                                placeholder="0.00" className="pl-7 h-9 text-sm"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Referencia <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                    <Input type="text" placeholder="Documento / nota / código interno"
-                      value={formData.referencia} onChange={(e) => setFormData(prev => ({ ...prev, referencia: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Descripción <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                    <Input type="text" placeholder="Motivo o detalles del movimiento"
-                      value={formData.descripcion} onChange={(e) => setFormData(prev => ({ ...prev, descripcion: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </>)}
-
-              {/* DEVOLUCIÓN */}
-              {formData.tipo === 'DEVOLUCION' && (
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Referencia <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                    <Input type="text" placeholder="Documento / nota / código interno"
-                      value={formData.referencia} onChange={(e) => setFormData(prev => ({ ...prev, referencia: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Descripción <span className="text-xs text-muted-foreground">(opcional)</span></label>
-                    <Input type="text" placeholder="Motivo de la devolución"
-                      value={formData.descripcion} onChange={(e) => setFormData(prev => ({ ...prev, descripcion: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Navegación */}
-          <div className="flex flex-col-reverse sm:flex-row gap-2 justify-between pt-3 border-t">
-            {movStep === 1 ? (
-              <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">Cancelar</Button>
-            ) : (
-              <Button type="button" variant="outline" onClick={() => setMovStep(s => (s - 1) as 1 | 2 | 3)} className="w-full sm:w-auto">← Atrás</Button>
-            )}
-            {movStep < 3 ? (
-              <Button type="button" className="w-full sm:w-auto"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (movStep === 1) { setMovStep(2); return; }
-                  if (formData.productoId === 0) { toast.error('Debes seleccionar un producto'); return; }
-                  if (esRopa && variantesProducto.length > 0 && !selectedVarianteId) { toast.error('Selecciona una variante'); return; }
-                  if (formData.tipo !== 'AJUSTE' && formData.cantidad <= 0) { toast.error('La cantidad debe ser mayor a 0'); return; }
-                  if (formData.tipo === 'AJUSTE' && tipoAjuste !== 'PRECIO' && formData.cantidad <= 0) { toast.error('La cantidad debe ser mayor a 0'); return; }
-                  if (esFarmacia && formData.tipo === 'AJUSTE' && tipoAjuste !== 'PRECIO' && lotesDelProducto.length > 0 && !ajusteLoteMovimientoId) { toast.error('Selecciona el lote'); return; }
-                  setMovStep(3);
-                }}
-              >Siguiente →</Button>
-            ) : (
-              <Button type="submit" className="w-full sm:w-auto">Registrar movimiento</Button>
-            )}
-          </div>
-        </form>
-      </Dialog>
-
-      {/* Kardex dialog */}
-      <Dialog
-        isOpen={isKardexOpen}
-        onClose={closeKardex}
-        title="Detalle del producto (Kardex)"
-        description={
-          kardexProducto
-            ? `${kardexProducto.nombre} | Código: ${kardexProducto.codigoBarras || 'N/A'} | Stock actual: ${kardexProducto.stockActual ?? 0}`
-            : 'Historial de movimientos'
-        }
-        size="xl"
-      >
-        {kardexLoading ? (
-          <LoadingSpinner />
-        ) : kardexMovimientos.length === 0 ? (
-          <EmptyState title="Sin movimientos" description="Este producto no tiene movimientos registrados" />
-        ) : (
-          <div className="space-y-4">
-            {/* Filtros kardex */}
-            <div className="flex flex-wrap gap-2 items-center">
-              <div className="flex gap-1 flex-wrap">
-                {['TODOS','ENTRADA','SALIDA','AJUSTE','DEVOLUCION','SALDO_INICIAL'].map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setKardexTipoFilter(t)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${
-                      kardexTipoFilter === t
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'border-input bg-background text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {t === 'TODOS' ? 'Todos' : t === 'SALDO_INICIAL' ? 'Saldo Ini.' : t.charAt(0) + t.slice(1).toLowerCase()}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2 ml-auto">
-                <Input type="date" value={kardexDesde} onChange={(e) => setKardexDesde(e.target.value)} className="h-8 w-36 text-xs" />
-                <span className="text-xs text-muted-foreground">—</span>
-                <Input type="date" value={kardexHasta} onChange={(e) => setKardexHasta(e.target.value)} className="h-8 w-36 text-xs" />
-                {(kardexDesde || kardexHasta || kardexTipoFilter !== 'TODOS') && (
-                  <button type="button" onClick={() => { setKardexDesde(''); setKardexHasta(''); setKardexTipoFilter('TODOS'); }}
-                    className="text-xs text-muted-foreground hover:text-foreground underline">
-                    Limpiar
-                  </button>
-                )}
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">{kardexFiltrados.length} de {kardexMovimientos.length} movimientos</p>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <FlaskConical className="h-3 w-3 inline" />
-              Las ventas muestran los lotes consumidos — haz clic en ▶ para expandir. Para stock por lote ve a la pestaña&nbsp;<strong>Lotes</strong>.
-            </p>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Tipo Movimiento</TableHead>
-                  <TableHead>Documento</TableHead>
-                  <TableHead className="text-center">Entradas</TableHead>
-                  <TableHead className="text-center">Salidas</TableHead>
-                  <TableHead className="text-center">Stock</TableHead>
-                  <TableHead className="text-right">Costo Unit.</TableHead>
-                  <TableHead className="text-right">Costo Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(() => {
-                  let stockAcumulado = 0;
-                  const rows: React.ReactNode[] = [];
-                  kardexFiltrados.forEach((m) => {
-                    const esEntrada = m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION';
-                    const esSalida = m.tipo === 'SALIDA';
-                    const esAjuste = m.tipo === 'AJUSTE';
-
-                    if (esEntrada) stockAcumulado += m.cantidad;
-                    else if (esSalida) stockAcumulado -= m.cantidad;
-                    else if (esAjuste) stockAcumulado = m.cantidad;
-
-                    const costoUnitario = m.costoUnitario ?? 0;
-                    const costoTotal = costoUnitario > 0 ? costoUnitario * m.cantidad : undefined;
-                    const prov = m.proveedorId ? proveedorById.get(m.proveedorId) : undefined;
-                    const isExpanded = expandedRows.has(m.id!);
-                    const isLoading = loadingLotesVenta.has(m.id!);
-                    const lotesVenta = lotesVentaCache.get(m.id!) ?? [];
-
-                    const documentoCell = esSalida && m.referencia?.startsWith('Venta #') ? (
-                      <span className="text-blue-600 dark:text-blue-400 font-medium text-sm">
-                        {m.referencia}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">
-                        {m.referencia ? `Ref: ${m.referencia}` : prov ? `Prov: ${prov.nombre}` : m.descripcion || '-'}
-                      </span>
-                    );
-
-                    rows.push(
-                      <TableRow key={m.id} className={esSalida ? 'cursor-pointer hover:bg-muted/40' : ''} onClick={esSalida ? () => toggleKardexRow(m.id!) : undefined}>
-                        <TableCell className="text-center pr-0">
-                          {esSalida && (
-                            <span className={`text-muted-foreground text-xs transition-transform inline-block ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {m.createdAt ? new Date(m.createdAt).toLocaleDateString('es-PE') : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getMovimientoIcon(m.tipo)}
-                            {getMovimientoBadge(m.tipo)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-[160px] truncate" title={m.referencia ?? ''}>
-                          {documentoCell}
-                        </TableCell>
-                        <TableCell className="text-center font-semibold text-green-700">{esEntrada ? m.cantidad : '-'}</TableCell>
-                        <TableCell className="text-center font-semibold text-red-700">{esSalida ? m.cantidad : '-'}</TableCell>
-                        <TableCell className="text-center font-bold">{stockAcumulado}</TableCell>
-                        <TableCell className="text-right text-muted-foreground text-sm">
-                          {costoUnitario > 0 ? `S/.${costoUnitario.toFixed(2)}` : '-'}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground text-sm">
-                          {costoTotal != null && costoTotal > 0 ? `S/.${costoTotal.toFixed(2)}` : '-'}
-                        </TableCell>
-                      </TableRow>
-                    );
-
-                    if (esSalida && isExpanded) {
-                      if (isLoading) {
-                        rows.push(
-                          <TableRow key={`${m.id}-loading`} className="bg-blue-50/50 dark:bg-blue-950/20">
-                            <TableCell colSpan={9} className="text-xs text-muted-foreground py-2 pl-10">
-                              Cargando lotes...
-                            </TableCell>
-                          </TableRow>
-                        );
-                      } else if (lotesVenta.length === 0) {
-                        rows.push(
-                          <TableRow key={`${m.id}-empty`} className="bg-blue-50/50 dark:bg-blue-950/20">
-                            <TableCell colSpan={9} className="text-xs text-muted-foreground py-2 pl-10 italic">
-                              Sin detalle de lote disponible
-                            </TableCell>
-                          </TableRow>
-                        );
-                      } else {
-                        lotesVenta.forEach((lv, i) => {
-                          rows.push(
-                            <TableRow key={`${m.id}-lote-${i}`} className="bg-blue-50/50 dark:bg-blue-950/20">
-                              <TableCell></TableCell>
-                              <TableCell colSpan={2} className="py-2 pl-10">
-                                <span className="text-xs text-muted-foreground uppercase tracking-wide">Lote&nbsp;</span>
-                                <span className="text-xs font-semibold font-mono">{lv.lote || '—'}</span>
-                              </TableCell>
-                              <TableCell className="py-2">
-                                <span className="text-xs text-muted-foreground uppercase tracking-wide">Proveedor&nbsp;</span>
-                                <span className="text-xs font-medium">{lv.proveedorNombre || '—'}</span>
-                              </TableCell>
-                              <TableCell colSpan={2} className="text-center py-2">
-                                <span className="text-xs font-semibold text-red-600">−{lv.cantidadDescontada}</span>
-                              </TableCell>
-                              <TableCell className="py-2"></TableCell>
-                              <TableCell colSpan={2} className="text-right py-2">
-                                <span className="text-xs text-muted-foreground">Precio venta&nbsp;</span>
-                                <span className="text-xs font-semibold">{lv.precioVenta != null ? `S/.${lv.precioVenta.toFixed(2)}` : '—'}</span>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        });
-                      }
-                    }
-                  });
-                  return rows;
-                })()}
-              </TableBody>
-            </Table>
-          </div>
-          </div>
-        )}
-
-        <div className="flex justify-end pt-4 border-t">
-          <Button variant="outline" type="button" onClick={closeKardex}>
-            Cerrar
-          </Button>
-        </div>
-      </Dialog>
-
-      {/* Modal de importación masiva */}
+      {/* Modal importación masiva */}
       <ImportarProductosModal
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}

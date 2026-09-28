@@ -34,10 +34,12 @@ export const ventaService = {
     return data;
   },
 
-  getByVendorAndPeriod: async (vendedorId: number, inicio: string, fin: string): Promise<VentaDTO[]> => {
+  getByVendorAndPeriod: async (vendedorId: number, inicio: string, fin: string, sucursalId?: number): Promise<VentaDTO[]> => {
+    const params: Record<string, unknown> = { inicio, fin };
+    if (sucursalId) params.sucursalId = sucursalId;
     const { data } = await axiosInstance.get<VentaDTO[]>(
       API_ENDPOINTS.VENTAS.GET_BY_VENDOR(vendedorId),
-      { params: { inicio, fin } }
+      { params }
     );
     return data;
   },

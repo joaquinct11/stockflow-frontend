@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
 
 interface LegalLayoutProps {
   children: ReactNode;
@@ -27,7 +26,7 @@ export function LegalLayout({ children, maxWidth = 'md' }: LegalLayoutProps) {
             style={{ color: '#9898b0' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#e8e8f0')}
             onMouseLeave={e => (e.currentTarget.style.color = '#9898b0')}>
-            <ArrowLeft className="h-4 w-4" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             Volver al inicio
           </Link>
           <Link to="/" className="flex items-center gap-2 no-underline">

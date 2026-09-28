@@ -13,6 +13,7 @@ export interface LoteVencimientoDTO {
   stockActual?: number;
   diasRestantes: number; // negativo = ya vencido
   registroSanitario?: string;
+  proveedorId?: number;
   proveedorNombre?: string;
   precioVenta?: number;
 }

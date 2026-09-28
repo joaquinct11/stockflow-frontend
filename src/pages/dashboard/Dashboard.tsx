@@ -10,7 +10,7 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { gastoService } from '../../services/gasto.service';
 import { comisionService } from '../../services/comision.service';
 import { Button } from '../../components/ui/Button';
-import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
@@ -201,9 +201,10 @@ export function Dashboard() {
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().slice(0, 19);
     const rangeStart = getRangeStart(timeFilter, now);
+    const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
     const promise = rol === 'ADMIN'
-      ? ventaService.getByPeriod(fmt(rangeStart), fmt(now))
-      : (userId ? ventaService.getByVendorAndPeriod(userId, fmt(rangeStart), fmt(now)) : Promise.resolve([] as VentaDTO[]));
+      ? ventaService.getByPeriod(fmt(rangeStart), fmt(now), sucId)
+      : (userId ? ventaService.getByVendorAndPeriod(userId, fmt(rangeStart), fmt(now), sucId) : Promise.resolve([] as VentaDTO[]));
     promise
       .then(setVentas)
       .catch(() => {});
@@ -277,12 +278,13 @@ export function Dashboard() {
       // Ventas: carga según el tab activo (timeFilter)
       const rangeStart = getRangeStart(timeFilter, now);
       let ventasPromise: Promise<VentaDTO[]>;
+      const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
       if (rol === 'ADMIN') {
         setCanLoadVentas(true);
-        ventasPromise = ventaService.getByPeriod(fmt(rangeStart), fmt(now));
+        ventasPromise = ventaService.getByPeriod(fmt(rangeStart), fmt(now), sucId);
       } else if (rol === 'VENDEDOR' && userId) {
         setCanLoadVentas(true);
-        ventasPromise = ventaService.getByVendorAndPeriod(userId, fmt(rangeStart), fmt(now));
+        ventasPromise = ventaService.getByVendorAndPeriod(userId, fmt(rangeStart), fmt(now), sucId);
       } else {
         setCanLoadVentas(rol === 'VENDEDOR');
         ventasPromise = Promise.resolve([]);
@@ -305,9 +307,9 @@ export function Dashboard() {
       if (error?.response?.status === 403) {
         setVentas([]);
         setCanLoadVentas(false);
-        toast.error('No tienes permisos para ver ventas');
+        notify.error('Sin acceso a ventas', { detail: 'Tu rol no tiene permiso para ver el historial de ventas.' });
       } else {
-        toast.error('Error al cargar datos del dashboard');
+        notify.fromError(error, 'No se pudieron cargar los datos del dashboard. Intenta recargar la página.');
       }
       if (import.meta.env.DEV) { console.error('❌ Error en fetchData:', error);}
     } finally {

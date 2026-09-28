@@ -15,6 +15,7 @@ import {
   Clock, Calendar, User, ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useSucursalStore } from '../../store/sucursalStore';
 
@@ -98,8 +99,8 @@ export function CertificadosPage() {
       ]);
       setCertificados(certs);
       setTipos(tiposData);
-    } catch {
-      toast.error('Error al cargar los certificados');
+    } catch (err) {
+      notify.fromError(err, 'No se pudieron cargar los certificados.');
     } finally {
       setLoading(false);
     }
@@ -142,8 +143,8 @@ export function CertificadosPage() {
       }
       setIsDialogOpen(false);
       fetchData();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Error al guardar');
+    } catch (err) {
+      notify.fromError(err, 'No se pudo guardar el certificado.');
     } finally {
       setSaving(false);
     }
@@ -155,8 +156,8 @@ export function CertificadosPage() {
       await certificadoService.eliminar(confirmDialog.id);
       toast.success('Certificado eliminado');
       fetchData();
-    } catch {
-      toast.error('Error al eliminar');
+    } catch (err) {
+      notify.fromError(err, 'No se pudo eliminar el certificado.');
     } finally {
       setConfirmDialog({ isOpen: false, id: null });
     }
