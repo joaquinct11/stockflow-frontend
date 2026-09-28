@@ -28,7 +28,7 @@ import {
   ArrowUpAZ,
   ArrowDownAZ,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 import { usePermissions } from '../../hooks/usePermissions';
 
 export function KardexPage() {
@@ -81,7 +81,7 @@ export function KardexPage() {
         setProveedores(proveedoresData);
       }
     } catch (error) {
-      toast.error('Error al cargar datos');
+      notify.fromError(error, 'No se pudieron cargar los productos del Kardex.');
       if (import.meta.env.DEV) { console.error(error);}
     } finally {
       setLoading(false);
@@ -114,7 +114,7 @@ export function KardexPage() {
       setKardexMovimientos(sorted);
     } catch (e) {
       if (import.meta.env.DEV) { console.error(e); }
-      toast.error('Error al cargar Kardex');
+      notify.fromError(e, 'No se pudo cargar el Kardex de este producto.');
     } finally {
       setKardexLoading(false);
     }

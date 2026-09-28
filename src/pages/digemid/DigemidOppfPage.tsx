@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Search, Link2, Link2Off, FileArchive, X, History, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 import { digemidService, type ProductoDigemidDTO, type CatalogoDigemidDTO, type OppfExportacionDTO } from '../../services/digemid.service';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -65,8 +66,8 @@ function BuscarModal({ productoId, productoNombre, precioVenta, unidadMedida, re
       try {
         const res = await digemidService.buscarCatalogo(query.trim());
         setResultados(res);
-      } catch {
-        toast.error('Error al buscar en catálogo DIGEMID');
+      } catch (err) {
+        notify.fromError(err, 'No se pudo buscar en el catálogo DIGEMID.');
       } finally {
         setBuscando(false);
       }
@@ -249,8 +250,8 @@ export function DigemidOppfPage() {
     try {
       const data = await digemidService.listarProductos();
       setProductos(data);
-    } catch {
-      toast.error('Error al cargar productos');
+    } catch (err) {
+      notify.fromError(err, 'No se pudieron cargar los productos.');
     } finally {
       setCargando(false);
     }
@@ -351,8 +352,8 @@ export function DigemidOppfPage() {
       URL.revokeObjectURL(url);
       toast.success(`Archivo ZIP descargado con ${totalParaExportar} producto(s)`);
       cargarHistorial();
-    } catch {
-      toast.error('Error al generar el archivo ZIP');
+    } catch (err) {
+      notify.fromError(err, 'No se pudo generar el archivo OPPF-DIGEMID.');
     } finally {
       setExportando(false);
     }
@@ -397,8 +398,8 @@ export function DigemidOppfPage() {
         // Varios o ninguno → abrir modal con resultados pre-cargados
         setModalProducto({ ...p, _resultadosIniciales: resultados, _queryInicial: p.registroSanitario } as any);
       }
-    } catch {
-      toast.error('Error al buscar en catálogo DIGEMID');
+    } catch (err) {
+      notify.fromError(err, 'No se pudo buscar en el catálogo DIGEMID.');
       setModalProducto(p);
     } finally {
       setAutoVinculando(null);
@@ -417,8 +418,8 @@ export function DigemidOppfPage() {
       } else {
         toast('No se pudo vincular ningún producto automáticamente', { icon: 'ℹ️' });
       }
-    } catch {
-      toast.error('Error al vincular productos');
+    } catch (err) {
+      notify.fromError(err, 'No se pudieron vincular los productos con DIGEMID.');
     } finally {
       setVinculandoTodos(false);
     }
