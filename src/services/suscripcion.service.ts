@@ -122,4 +122,12 @@ export const suscripcionService = {
     await axiosInstance.patch(API_ENDPOINTS.SUSCRIPCIONES.CANCEL_MI_SUSCRIPCION);
   },
 
+  /**
+   * Obtiene los conteos de uso del tenant: sucursales activas, usuarios activos, productos activos
+   */
+  getUso: async (): Promise<{ sucursales: number; usuarios: number; productos: number }> => {
+    const { data } = await axiosInstance.get(API_ENDPOINTS.SUSCRIPCIONES.USO);
+    return data;
+  },
+
 };
