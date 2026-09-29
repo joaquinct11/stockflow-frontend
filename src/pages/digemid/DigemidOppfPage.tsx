@@ -1,26 +1,77 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Search, Link2, Link2Off, FileArchive, X, History, Eye } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { createPortal } from 'react-dom';
 import { notify } from '../../lib/notify';
-import { digemidService, type ProductoDigemidDTO, type CatalogoDigemidDTO, type OppfExportacionDTO } from '../../services/digemid.service';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
-import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
-import { EmptyState } from '../../components/shared/EmptyState';
-import { cn } from '../../lib/utils';
+import {
+  digemidService,
+  type ProductoDigemidDTO,
+  type CatalogoDigemidDTO,
+  type OppfExportacionDTO,
+} from '../../services/digemid.service';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 
 const COD_EST_KEY = 'digemid_cod_establecimiento';
 
-function formatPrice(n: number) {
-  return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(n);
+const T = {
+  bg: '#f7f8fa', surface: '#ffffff', surface2: '#f1f3f7', surface3: '#fafbfc',
+  line: '#e4e7ec', lineSoft: '#eef0f4',
+  text: '#0d1117', text2: '#525c6b', text3: '#6b7280',
+  primary: '#3b47ef', primarySoft: '#eef0ff', primaryLine: '#cfd4fd',
+  ok: '#0f9d6e', okSoft: '#e7f7f1',
+  warn: '#b7791f', warnSoft: '#fdf6e7', warnLine: '#f0dfb4',
+  bad: '#d63b3b', badSoft: '#fdeceb',
+  shadow: '0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06)',
+} as const;
+
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+const IC = {
+  link:    ['M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7','M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'],
+  unlink:  ['m18.8 13.4 1.7-1.7a5 5 0 0 0-7-7l-1.7 1.7','m5.2 10.6-1.7 1.7a5 5 0 0 0 7 7l1.7-1.7','m8 2 0 3','M2 8h3','M16 22v-3','M22 16h-3'],
+  dl:      ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4','m7 10 5 5 5-5','M12 15V3'],
+  bolt:    ['M13 2 3 14h9l-1 8 10-12h-9Z'],
+  x:       ['M18 6 6 18','m6 6 12 12'],
+  check:   ['m5 12 5 5L20 7'],
+  store:   ['m2 7 1.5-4h17L22 7','M4 7v13h16V7','M2 7h20','M9 20v-6h6v6'],
+  hist:    ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8','m0-5v5h5','m9 21H12V12'],
+  pkg:     ['M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z','M3.3 7 12 12l8.7-5','M12 22V12'],
+  tri:     ['M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z','M12 9v4','M12 17h.01'],
+  file:    ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z','M14 2v6h6'],
+  pencil:  ['M12 20h9','M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'],
+  chevD:   ['m6 9 6 6 6-6'],
+};
+
+function Svg({ d, size = 15, sw = 1.9 }: { d: string[]; size?: number; sw?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"
+      style={{ flexShrink: 0 }}>
+      {d.map((p, i) => <path key={i} d={p} />)}
+    </svg>
+  );
 }
 
-const UNIDADES_BASICAS = new Set(['UNIDAD', 'TABLETA', 'TABLETAS', 'CÁPSULA', 'CAPSULA', 'CÁPSULAS', 'CAPSULAS',
-  'AMPOLLA', 'AMPOLLAS', 'VIAL', 'VIALES', 'COMPRIMIDO', 'COMPRIMIDOS']);
+function SearchIco({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
 
-function calcularPreciosOppfLocal(precioVenta: number, fraccion: number, unidadMedida: string) {
+function money(n: number) {
+  const a = Math.abs(n).toFixed(2).split('.');
+  return 'S/ ' + a[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + a[1];
+}
+
+const UNIDADES_BASICAS = new Set([
+  'UNIDAD','TABLETA','TABLETAS','CÁPSULA','CAPSULA','CÁPSULAS','CAPSULAS',
+  'AMPOLLA','AMPOLLAS','VIAL','VIALES','COMPRIMIDO','COMPRIMIDOS',
+]);
+
+function calcPreciosOppf(precioVenta: number, fraccion: number, unidadMedida: string) {
   const esPorUnidad = UNIDADES_BASICAS.has((unidadMedida ?? '').trim().toUpperCase());
   if (esPorUnidad) {
     return { precio1: Math.round(precioVenta * fraccion * 100) / 100, precio2: precioVenta };
@@ -29,221 +80,220 @@ function calcularPreciosOppfLocal(precioVenta: number, fraccion: number, unidadM
   return { precio1: precioVenta, precio2: Math.max(0.01, p2) };
 }
 
-// ── Modal de búsqueda en catálogo DIGEMID ────────────────────────────────────
+const OVL: React.CSSProperties = {
+  position: 'fixed', inset: 0, zIndex: 80,
+  background: 'rgba(9,11,16,.55)', backdropFilter: 'blur(3px)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+};
 
-interface BuscarModalProps {
-  productoId: number;
-  productoNombre: string;
-  precioVenta: number;
-  unidadMedida: string;
-  registroSanitario?: string;
-  resultadosIniciales?: CatalogoDigemidDTO[];
-  queryInicial?: string;
-  onVincular: (codDigemid: string, item: CatalogoDigemidDTO) => void;
-  onClose: () => void;
+function mbox(maxW: number): React.CSSProperties {
+  return {
+    width: '100%', maxWidth: maxW, maxHeight: 'calc(100vh - 40px)',
+    display: 'flex', flexDirection: 'column',
+    background: T.surface, border: `1px solid ${T.line}`, borderRadius: 18,
+    boxShadow: '0 30px 80px -30px rgba(0,0,0,.55)', overflow: 'hidden',
+  };
 }
 
-function BuscarModal({ productoId, productoNombre, precioVenta, unidadMedida, registroSanitario, resultadosIniciales, queryInicial, onVincular, onClose }: BuscarModalProps) {
+const thStyle: React.CSSProperties = {
+  textAlign: 'left', padding: '10px 14px',
+  fontSize: '.72rem', fontWeight: 650, letterSpacing: '.04em',
+  textTransform: 'uppercase', color: T.text3, whiteSpace: 'nowrap',
+};
+
+// ── Buscar modal ─────────────────────────────────────────────────────────────
+
+interface BuscarModalProps {
+  producto: ProductoDigemidDTO;
+  onVincular: (codDigemid: string, item: CatalogoDigemidDTO) => void;
+  onClose: () => void;
+  resultadosIniciales?: CatalogoDigemidDTO[];
+  queryInicial?: string;
+}
+
+function BuscarModal({ producto, onVincular, onClose, resultadosIniciales, queryInicial }: BuscarModalProps) {
   const [query, setQuery] = useState(queryInicial ?? '');
   const [resultados, setResultados] = useState<CatalogoDigemidDTO[]>(resultadosIniciales ?? []);
   const [buscando, setBuscando] = useState(false);
-  const [vinculando, setVinculando] = useState<string | null>(null);
+  const [vinc, setVinc] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (query.trim().length < 2) {
-      setResultados([]);
-      return;
-    }
-    debounceRef.current = setTimeout(async () => {
+    if (debRef.current) clearTimeout(debRef.current);
+    if (query.trim().length < 2) { setResultados([]); return; }
+    debRef.current = setTimeout(async () => {
       setBuscando(true);
       try {
         const res = await digemidService.buscarCatalogo(query.trim());
         setResultados(res);
       } catch (err) {
         notify.fromError(err, 'No se pudo buscar en el catálogo DIGEMID.');
-      } finally {
-        setBuscando(false);
-      }
+      } finally { setBuscando(false); }
     }, 400);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => { if (debRef.current) clearTimeout(debRef.current); };
   }, [query]);
 
-  const handleVincular = async (item: CatalogoDigemidDTO) => {
-    setVinculando(item.codProd);
+  const doVincular = async (item: CatalogoDigemidDTO) => {
+    setVinc(item.codProd);
     try {
-      await digemidService.vincular(productoId, item.codProd);
+      await digemidService.vincular(producto.id, item.codProd);
       onVincular(item.codProd, item);
-      toast.success(`Vinculado: ${item.nomProd}`);
+      notify.success(`Vinculado: ${item.nomProd}`);
       onClose();
-    } catch {
-      toast.error('No se pudo vincular el producto');
-    } finally {
-      setVinculando(null);
-    }
+    } catch (err) {
+      notify.fromError(err, 'No se pudo vincular el producto.');
+    } finally { setVinc(null); }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-background border border-border rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+  const countLabel = buscando ? 'Buscando…'
+    : query.trim().length >= 2 && resultados.length === 0 ? '0 resultados'
+    : resultados.length > 0 ? `${resultados.length} resultado${resultados.length !== 1 ? 's' : ''}` : '';
+
+  return createPortal(
+    <div style={OVL} onClick={onClose}>
+      <div style={mbox(760)} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">Buscar en catálogo DIGEMID</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Producto: {productoNombre}
-              {' | '}
-              <span>Reg. Sanitario: </span>
-              <span className="font-mono font-medium text-amber-600 dark:text-amber-400">
-                {registroSanitario || '—'}
-              </span>
-            </p>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'20px 22px 16px', borderBottom:`1px solid ${T.lineSoft}`, flexShrink:0 }}>
+          <span style={{ width:38, height:38, flexShrink:0, display:'grid', placeItems:'center', borderRadius:11, background:T.primarySoft, color:T.primary }}>
+            <Svg d={IC.link} size={18} />
+          </span>
+          <div style={{ minWidth:0 }}>
+            <h2 style={{ fontSize:'1.08rem', fontWeight:700, letterSpacing:'-.02em', margin:0, color:T.text }}>Buscar en catálogo DIGEMID</h2>
+            <div style={{ fontSize:'.8rem', color:T.text3, marginTop:4 }}>
+              Producto: <strong style={{ color:T.text2, fontWeight:600 }}>{producto.nombre}</strong>
+              {producto.registroSanitario && <> · <span style={{ fontFamily:'IBM Plex Mono,monospace' }}>{producto.registroSanitario}</span></>}
+            </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground">
-            <X size={18} />
+          <button type="button" onClick={onClose} aria-label="Cerrar"
+            style={{ width:30, height:30, flexShrink:0, marginLeft:'auto', display:'grid', placeItems:'center', color:T.text3, background:'transparent', border:0, borderRadius:8, cursor:'pointer' }}>
+            <Svg d={IC.x} size={16} sw={2.2} />
           </button>
         </div>
-
-        {/* Buscador */}
-        <div className="p-4 border-b border-border flex-shrink-0">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre, registro sanitario o IFA..."
-              className="w-full pl-9 pr-4 py-2 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
+        {/* Search */}
+        <div style={{ padding:'14px 22px', borderBottom:`1px solid ${T.lineSoft}`, flexShrink:0 }}>
+          <div style={{ position:'relative' }}>
+            <span style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', display:'grid', pointerEvents:'none', color:T.text3 }}>
+              <SearchIco size={16} color={T.text3} />
+            </span>
+            <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por nombre, registro sanitario o IFA…"
+              style={{ width:'100%', height:44, padding:'0 13px 0 38px', fontFamily:'Inter,sans-serif', fontSize:'.9rem', color:T.text, background:T.surface, border:`1px solid ${T.line}`, borderRadius:10, outline:'none', boxSizing:'border-box' }} />
           </div>
-          {query.trim().length > 0 && query.trim().length < 2 && (
-            <p className="text-xs text-muted-foreground mt-1">Ingresa al menos 2 caracteres</p>
-          )}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:9, fontSize:'.74rem', color:T.text3 }}>
+            <span>Tu producto:</span>
+            <strong style={{ color:T.text2, fontWeight:600 }}>{producto.nombre}</strong>
+            {producto.registroSanitario && <><span>·</span><span style={{ fontFamily:'IBM Plex Mono,monospace' }}>{producto.registroSanitario}</span></>}
+          </div>
         </div>
-
-        {/* Resultados */}
-        <div className="flex-1 overflow-y-auto">
-          {buscando ? (
-            <div className="flex items-center justify-center py-10">
-              <LoadingSpinner />
-              <span className="ml-2 text-sm text-muted-foreground">Buscando...</span>
-            </div>
-          ) : resultados.length === 0 && query.trim().length >= 2 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              Sin resultados para &quot;{query}&quot;
-            </div>
-          ) : resultados.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              Escribe para buscar en el catálogo DIGEMID
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {resultados.map((item) => {
-                const fraccion = item.fraccion && item.fraccion > 0 ? item.fraccion : 1;
-                const { precio1, precio2 } = calcularPreciosOppfLocal(precioVenta, fraccion, unidadMedida);
-                return (
-                <div key={item.codProd} className="px-4 py-3 hover:bg-muted/40 transition-colors">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground leading-tight">{item.nomProd}</p>
-                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-                        <span className="text-xs text-muted-foreground">
-                          Cód: <span className="font-mono text-foreground/80">{item.codProd}</span>
-                        </span>
-                        {item.numRegSan && (
-                          <span className="text-xs text-muted-foreground">
-                            Reg.San: <span className="font-mono text-foreground/80">{item.numRegSan}</span>
-                          </span>
-                        )}
-                        {item.concent && (
-                          <span className="text-xs text-muted-foreground">{item.concent}</span>
-                        )}
-                        {item.nomFormFarm && (
-                          <span className="text-xs text-muted-foreground">{item.nomFormFarm}</span>
-                        )}
-                        {item.fraccion && item.fraccion > 1 && (
-                          <span className="text-xs text-blue-600 dark:text-blue-400">
-                            Fracción: {item.fraccion}
-                          </span>
-                        )}
-                      </div>
-                      {/* Preview de precios OPPF */}
-                      <div className="flex gap-3 mt-1.5">
-                        <span className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded border border-blue-500/20 font-mono">
-                          P1 Empaque: {formatPrice(precio1)}
-                        </span>
-                        <span className={cn(
-                          'text-xs px-2 py-0.5 rounded border font-mono',
-                          precio2 <= 0.01 && fraccion > 1
-                            ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                            : 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20'
-                        )}>
-                          P2 Unitario: {formatPrice(precio2)}
-                        </span>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => handleVincular(item)}
-                      disabled={vinculando === item.codProd}
-                      className="flex-shrink-0"
-                    >
-                      {vinculando === item.codProd ? (
-                        <LoadingSpinner />
-                      ) : (
-                        <>
-                          <Link2 size={14} className="mr-1" />
-                          Vincular
-                        </>
-                      )}
-                    </Button>
+        {/* Results */}
+        <div style={{ flex:1, minHeight:0, overflowY:'auto', padding:'14px 22px 20px', display:'grid', gap:8, alignContent:'start' }}>
+          {countLabel && (
+            <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.68rem', fontWeight:600, letterSpacing:'.09em', textTransform:'uppercase', color:T.text3 }}>{countLabel}</div>
+          )}
+          {resultados.map((r) => {
+            const isActual = r.codProd === producto.codDigemid;
+            const rsMatch = !!(r.numRegSan && producto.registroSanitario && r.numRegSan === producto.registroSanitario);
+            const sit = r.situacion ?? '';
+            const busy = vinc === r.codProd;
+            return (
+              <div key={r.codProd} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'11px 13px', borderRadius:11, background:T.surface2, border:`1px solid ${T.lineSoft}` }}>
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                    <span style={{ fontSize:'.9rem', fontWeight:650, color:T.text }}>{r.nomProd}</span>
+                    {r.concent && <span style={{ fontSize:'.82rem', color:T.text2 }}>{r.concent}</span>}
+                    {rsMatch && (
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:'.66rem', fontWeight:700, letterSpacing:'.03em', color:T.ok, background:T.okSoft, padding:'1px 7px', borderRadius:5 }}>
+                        <Svg d={IC.check} size={10} sw={3} />MISMO R.S.
+                      </span>
+                    )}
+                    {isActual && (
+                      <span style={{ fontSize:'.66rem', fontWeight:700, letterSpacing:'.03em', color:T.primary, background:T.primarySoft, padding:'1px 7px', borderRadius:5 }}>VINCULADO</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize:'.76rem', color:T.text3, marginTop:4 }}>
+                    {[r.nomFormFarm, r.presentac, r.fraccion != null ? `Fracción ${r.fraccion}` : null].filter(Boolean).join(' · ')}
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:12, marginTop:7, fontSize:'.74rem' }}>
+                    <span style={{ fontFamily:'IBM Plex Mono,monospace', color:T.text2 }}><span style={{ color:T.text3 }}>Cód</span> {r.codProd}</span>
+                    {r.numRegSan && <span style={{ fontFamily:'IBM Plex Mono,monospace', color:T.text2 }}><span style={{ color:T.text3 }}>R.S.</span> {r.numRegSan}</span>}
+                    {r.nomTitular && <span style={{ color:T.text3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:200 }}>{r.nomTitular}</span>}
+                    {sit && <span style={{ color: sit === 'ACT' ? T.ok : T.warn }}>{sit}</span>}
                   </div>
                 </div>
-                );
-              })}
+                <button type="button" onClick={() => !isActual && !busy && doVincular(r)}
+                  disabled={busy || isActual}
+                  style={{ height:30, padding:'0 11px', fontFamily:'Inter,sans-serif', fontSize:'.78rem', fontWeight:650,
+                    color: isActual ? T.ok : T.primary,
+                    background: isActual ? T.okSoft : T.primarySoft,
+                    border: `1px solid ${isActual ? T.ok + '44' : T.primaryLine}`,
+                    borderRadius:8, cursor: isActual ? 'default' : 'pointer', whiteSpace:'nowrap', flexShrink:0,
+                    opacity: busy ? 0.6 : 1 }}>
+                  {busy ? 'Vinculando…' : isActual ? 'Vinculado' : 'Vincular'}
+                </button>
+              </div>
+            );
+          })}
+          {!buscando && resultados.length === 0 && (
+            <div style={{ padding:'30px', textAlign:'center', fontSize:'.84rem', color:T.text3 }}>
+              {query.trim().length >= 2
+                ? 'Sin coincidencias en el catálogo. Prueba con el principio activo o el registro sanitario.'
+                : 'Escribe para buscar en el catálogo DIGEMID'}
             </div>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 // ── Página principal ─────────────────────────────────────────────────────────
 
+const now = new Date();
+
 export function DigemidOppfPage() {
   const [productos, setProductos] = useState<ProductoDigemidDTO[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  const [modalProducto, setModalProducto] = useState<ProductoDigemidDTO | null>(null);
-  const { config: negocioConfig } = useTenantConfigStore();
-  const [desvinculando, setDesvinculando] = useState<number | null>(null);
-  const [exportando, setExportando] = useState(false);
-  const [codEstablecimiento, setCodEstablecimiento] = useState(
-    () => localStorage.getItem(COD_EST_KEY) ?? ''
-  );
-  const [editandoCod, setEditandoCod] = useState(false);
-  const [codInput, setCodInput] = useState(codEstablecimiento);
-  const [filtroVinculado, setFiltroVinculado] = useState<'todos' | 'vinculados' | 'sinvincular'>('todos');
+  const [seg, setSeg] = useState<'TODOS' | 'VINCULADOS' | 'SIN_VINCULAR'>('TODOS');
+  const [tab, setTab] = useState<'prod' | 'hist'>('prod');
   const [pagina, setPagina] = useState(1);
   const PAGE_SIZE = 20;
-  const [autoVinculando, setAutoVinculando] = useState<number | null>(null);
+
+  const [codEst, setCodEst] = useState(() => {
+    try { return localStorage.getItem(COD_EST_KEY) ?? ''; } catch { return ''; }
+  });
+  const [codEdit, setCodEdit] = useState(false);
+  const [codVal, setCodVal] = useState(codEst);
+
   const [historial, setHistorial] = useState<OppfExportacionDTO[]>([]);
-  const [historialCargando, setHistorialCargando] = useState(false);
-  const [mostrarPrevia, setMostrarPrevia] = useState(false);
+  const [histCargando, setHistCargando] = useState(false);
+
+  const [autoVinculando, setAutoVinculando] = useState<number | null>(null);
   const [vinculandoTodos, setVinculandoTodos] = useState(false);
-  const [resultadoVincularTodos, setResultadoVincularTodos] = useState<{
+  const [autoResult, setAutoResult] = useState<{
     totalProcesados: number;
     vinculados: { productoId: number; nombre: string; codDigemid: string; nomDigemid: string; registroSanitario: string }[];
     noVinculados: { productoId: number; nombre: string; registroSanitario?: string; motivo: string }[];
   } | null>(null);
+
+  const [exportando, setExportando] = useState(false);
+  const [exMes, setExMes] = useState(now.getMonth() + 1);
+  const [exAno, setExAno] = useState(now.getFullYear());
+
+  const [desvinculando, setDesvinculando] = useState<number | null>(null);
+
+  // Modal states
+  const [modalVincular, setModalVincular] = useState<ProductoDigemidDTO | null>(null);
+  const [modalVincularResult, setModalVincularResult] = useState<{ inicial?: CatalogoDigemidDTO[]; query?: string } | null>(null);
+  const [modalExport, setModalExport] = useState(false);
+  const [modalAuto, setModalAuto] = useState(false);
+  const [modalDesv, setModalDesv] = useState<ProductoDigemidDTO | null>(null);
+
+  const { config: negocioConfig } = useTenantConfigStore();
 
   const cargarProductos = useCallback(async () => {
     setCargando(true);
@@ -252,21 +302,15 @@ export function DigemidOppfPage() {
       setProductos(data);
     } catch (err) {
       notify.fromError(err, 'No se pudieron cargar los productos.');
-    } finally {
-      setCargando(false);
-    }
+    } finally { setCargando(false); }
   }, []);
 
   const cargarHistorial = useCallback(async () => {
-    setHistorialCargando(true);
+    setHistCargando(true);
     try {
       const data = await digemidService.getHistorialOppf();
       setHistorial(data);
-    } catch {
-      // historial no crítico
-    } finally {
-      setHistorialCargando(false);
-    }
+    } catch { /* historial no crítico */ } finally { setHistCargando(false); }
   }, []);
 
   useEffect(() => {
@@ -274,752 +318,819 @@ export function DigemidOppfPage() {
     cargarHistorial();
   }, [cargarProductos, cargarHistorial]);
 
-  const guardarCodEst = () => {
-    const val = codInput.trim();
-    setCodEstablecimiento(val);
-    localStorage.setItem(COD_EST_KEY, val);
-    setEditandoCod(false);
-    toast.success('Código de establecimiento guardado');
-  };
-
-  const handleDesvincular = async (productoId: number) => {
-    setDesvinculando(productoId);
-    try {
-      await digemidService.desvincular(productoId);
-      setProductos((prev) =>
-        prev.map((p) =>
-          p.id === productoId
-            ? { ...p, codDigemid: '', nomDigemid: '', fraccion: 1, vinculado: false }
-            : p
-        )
-      );
-      toast.success('Producto desvinculado');
-    } catch {
-      toast.error('No se pudo desvincular');
-    } finally {
-      setDesvinculando(null);
-    }
+  const guardarCod = () => {
+    const val = codVal.trim();
+    setCodEst(val);
+    try { localStorage.setItem(COD_EST_KEY, val); } catch { /* ignore */ }
+    setCodEdit(false);
+    notify.success('Código de establecimiento guardado');
   };
 
   const handleVincularExitoso = (productoId: number, codDigemid: string, item: CatalogoDigemidDTO) => {
-    setProductos((prev) =>
-      prev.map((p) => {
-        if (p.id !== productoId) return p;
-        const fraccion = item.fraccion ?? 1;
-        const { precio1, precio2 } = calcularPreciosOppfLocal(p.precioVenta, fraccion, p.unidadMedida);
-        return {
-          ...p,
-          codDigemid,
-          nomDigemid: item.nomProd,
-          fraccion,
-          registroSanitario: item.numRegSan ?? p.registroSanitario,
-          vinculado: true,
-          precio1Oppf: precio1,
-          precio2Oppf: precio2,
-        };
-      })
-    );
+    setProductos((prev) => prev.map((p) => {
+      if (p.id !== productoId) return p;
+      const fraccion = item.fraccion ?? 1;
+      const { precio1, precio2 } = calcPreciosOppf(p.precioVenta, fraccion, p.unidadMedida);
+      return { ...p, codDigemid, nomDigemid: item.nomProd, fraccion, registroSanitario: item.numRegSan ?? p.registroSanitario, vinculado: true, precio1Oppf: precio1, precio2Oppf: precio2 };
+    }));
   };
-
-  const handleExportar = async () => {
-    if (!codEstablecimiento) {
-      toast.error('Ingresa el código de establecimiento antes de exportar');
-      setEditandoCod(true);
-      return;
-    }
-    const ruc = negocioConfig?.ruc ?? '';
-    if (!ruc) {
-      toast.error('Configura el RUC del negocio en Configuración antes de exportar');
-      return;
-    }
-    const vinculados = productos.filter((p) => p.vinculado);
-    if (vinculados.length === 0) {
-      toast.error('No hay productos vinculados a códigos DIGEMID');
-      return;
-    }
-    const hoy = new Date();
-    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-    const ano = String(hoy.getFullYear()).slice(-2);
-    setExportando(true);
-    try {
-      const blob = await digemidService.exportarOppf(codEstablecimiento, ruc, mes, ano, 'CARGA ARCHIVO');
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      // El backend ya nombra el ZIP con el formato OPPF correcto
-      a.download = `${ruc}_${mes}_${ano}_CARGA ARCHIVO.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(`Archivo ZIP descargado con ${totalParaExportar} producto(s)`);
-      cargarHistorial();
-    } catch (err) {
-      notify.fromError(err, 'No se pudo generar el archivo OPPF-DIGEMID.');
-    } finally {
-      setExportando(false);
-    }
-  };
-
-  const productosFiltrados = productos.filter((p) => {
-    const matchBusqueda =
-      !busqueda ||
-      p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      p.codDigemid.toLowerCase().includes(busqueda.toLowerCase()) ||
-      p.registroSanitario.toLowerCase().includes(busqueda.toLowerCase());
-
-    const matchFiltro =
-      filtroVinculado === 'todos' ||
-      (filtroVinculado === 'vinculados' && p.vinculado) ||
-      (filtroVinculado === 'sinvincular' && !p.vinculado);
-
-    return matchBusqueda && matchFiltro;
-  });
-
-  const totalPaginas = Math.max(1, Math.ceil(productosFiltrados.length / PAGE_SIZE));
-  const productosPagina = productosFiltrados.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE);
-
-  const totalVinculados = productos.filter((p) => p.vinculado).length;
-  const totalParaExportar = productos.filter((p) => p.vinculado && p.stockActual > 0).length;
 
   const handleVincularClick = async (p: ProductoDigemidDTO) => {
     if (!p.registroSanitario) {
-      setModalProducto(p);
+      setModalVincular(p);
+      setModalVincularResult(null);
       return;
     }
     setAutoVinculando(p.id);
     try {
       const resultados = await digemidService.buscarCatalogo(p.registroSanitario);
       if (resultados.length === 1) {
-        // Único resultado → vincular automáticamente
         const item = resultados[0];
         await digemidService.vincular(p.id, item.codProd);
         handleVincularExitoso(p.id, item.codProd, item);
-        toast.success(`Vinculado automáticamente: ${item.nomProd}`);
+        notify.success(`Vinculado automáticamente: ${item.nomProd}`);
       } else {
-        // Varios o ninguno → abrir modal con resultados pre-cargados
-        setModalProducto({ ...p, _resultadosIniciales: resultados, _queryInicial: p.registroSanitario } as any);
+        setModalVincular(p);
+        setModalVincularResult({ inicial: resultados, query: p.registroSanitario });
       }
     } catch (err) {
       notify.fromError(err, 'No se pudo buscar en el catálogo DIGEMID.');
-      setModalProducto(p);
-    } finally {
-      setAutoVinculando(null);
-    }
+      setModalVincular(p);
+      setModalVincularResult(null);
+    } finally { setAutoVinculando(null); }
   };
-  const totalSinVincular = productos.filter((p) => !p.vinculado).length;
 
   const handleVincularTodos = async () => {
     setVinculandoTodos(true);
     try {
       const resultado = await digemidService.vincularTodos();
-      setResultadoVincularTodos(resultado);
+      setAutoResult(resultado);
+      setModalAuto(true);
       if (resultado.vinculados.length > 0) {
         await cargarProductos();
-        toast.success(`${resultado.vinculados.length} producto(s) vinculados automáticamente`);
-      } else {
-        toast('No se pudo vincular ningún producto automáticamente', { icon: 'ℹ️' });
       }
     } catch (err) {
       notify.fromError(err, 'No se pudieron vincular los productos con DIGEMID.');
-    } finally {
-      setVinculandoTodos(false);
-    }
+    } finally { setVinculandoTodos(false); }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Título */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">DIGEMID / OPPF</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Vincula tus productos al catálogo DIGEMID y genera el archivo ZIP para reportar precios al OPPF.
-        </p>
-      </div>
+  const handleDesvincularConfirm = async () => {
+    if (!modalDesv) return;
+    const productoId = modalDesv.id;
+    setDesvinculando(productoId);
+    setModalDesv(null);
+    try {
+      await digemidService.desvincular(productoId);
+      setProductos((prev) => prev.map((p) =>
+        p.id === productoId ? { ...p, codDigemid: '', nomDigemid: '', fraccion: 1, vinculado: false } : p
+      ));
+      notify.success('Producto desvinculado');
+    } catch (err) {
+      notify.fromError(err, 'No se pudo desvincular el producto.');
+    } finally { setDesvinculando(null); }
+  };
 
-      {/* Código de establecimiento + exportar */}
-      <Card>
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            {/* Código establecimiento */}
-            <div className="flex-1">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
-                Código de Establecimiento (OPPF)
-              </label>
-              {editandoCod ? (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={codInput}
-                    onChange={(e) => setCodInput(e.target.value)}
-                    placeholder="Ej: 00012345"
-                    className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    onKeyDown={(e) => { if (e.key === 'Enter') guardarCodEst(); if (e.key === 'Escape') setEditandoCod(false); }}
-                    autoFocus
-                  />
-                  <Button size="sm" onClick={guardarCodEst}>Guardar</Button>
-                  <Button size="sm" variant="outline" onClick={() => { setEditandoCod(false); setCodInput(codEstablecimiento); }}>
-                    Cancelar
-                  </Button>
+  const handleExportar = async () => {
+    const ruc = negocioConfig?.ruc ?? '';
+    if (!codEst) { notify.fromError(null, 'Ingresa el código de establecimiento antes de exportar.'); return; }
+    if (!ruc) { notify.fromError(null, 'Configura el RUC del negocio en Configuración.'); return; }
+    const mesStr = String(exMes).padStart(2, '0');
+    const anoStr = String(exAno).slice(-2);
+    setExportando(true);
+    try {
+      const blob = await digemidService.exportarOppf(codEst, ruc, mesStr, anoStr, 'CARGA ARCHIVO');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${ruc}_${mesStr}_${anoStr}_CARGA ARCHIVO.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      notify.success(`Archivo ZIP descargado con ${productosParaExportar.length} producto(s)`);
+      setModalExport(false);
+      cargarHistorial();
+    } catch (err) {
+      notify.fromError(err, 'No se pudo generar el archivo OPPF-DIGEMID.');
+    } finally { setExportando(false); }
+  };
+
+  // ── Derivados ────────────────────────────────────────────────────────────────
+
+  const totalVinculados = productos.filter((p) => p.vinculado).length;
+  const totalSinVincular = productos.filter((p) => !p.vinculado).length;
+  const productosParaExportar = productos.filter((p) => p.vinculado && p.stockActual > 0);
+  const ruc = negocioConfig?.ruc ?? '';
+
+  const productosFiltrados = productos.filter((p) => {
+    const q = busqueda.toLowerCase();
+    const matchQ = !busqueda ||
+      p.nombre.toLowerCase().includes(q) ||
+      p.codDigemid.toLowerCase().includes(q) ||
+      p.registroSanitario.toLowerCase().includes(q);
+    const matchSeg = seg === 'TODOS' || (seg === 'VINCULADOS' && p.vinculado) || (seg === 'SIN_VINCULAR' && !p.vinculado);
+    return matchQ && matchSeg;
+  });
+
+  const totalPaginas = Math.max(1, Math.ceil(productosFiltrados.length / PAGE_SIZE));
+  const productosPagina = productosFiltrados.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE);
+
+  const anoOpts = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
+
+  // Export stats
+  const exN = productosParaExportar.length;
+  const exConMin = productosParaExportar.filter((p) => p.precio2Oppf <= 0.01).length;
+  const exExcl = totalVinculados - exN;
+  const exFaltaCod = !codEst;
+
+  // ── Styles ────────────────────────────────────────────────────────────────────
+
+  const tabBtn = (active: boolean): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', gap: 7,
+    padding: '8px 14px', marginBottom: -1,
+    fontFamily: 'Inter,sans-serif', fontSize: '.875rem',
+    fontWeight: active ? 650 : 500,
+    color: active ? T.primary : T.text2,
+    background: 'transparent', border: 0,
+    borderBottom: active ? `2px solid ${T.primary}` : '2px solid transparent',
+    cursor: 'pointer',
+  });
+
+  const segBtn = (active: boolean): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    padding: '5px 12px', borderRadius: 8, border: 0,
+    fontFamily: 'Inter,sans-serif', fontSize: '.82rem',
+    fontWeight: active ? 650 : 500,
+    color: active ? T.text : T.text2,
+    background: active ? T.surface : 'transparent',
+    boxShadow: active ? T.shadow : 'none',
+    cursor: 'pointer',
+  });
+
+  const dot = (color: string): React.CSSProperties => ({
+    display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0,
+  });
+
+  const badge = (vinc: boolean): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    fontSize: '.74rem', fontWeight: 650, padding: '2px 9px', borderRadius: 20,
+    color: vinc ? T.ok : T.warn,
+    background: vinc ? T.okSoft : T.warnSoft,
+    border: `1px solid ${vinc ? T.ok + '44' : T.warnLine}`,
+  });
+
+  const actionBtnPrimary: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px',
+    fontFamily: 'Inter,sans-serif', fontSize: '.855rem', fontWeight: 650,
+    color: '#fff', background: T.primary, border: 0, borderRadius: 10, cursor: 'pointer',
+    whiteSpace: 'nowrap', boxShadow: `0 6px 16px -8px ${T.primary}`,
+  };
+
+  const actionBtnSecondary: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px',
+    fontFamily: 'Inter,sans-serif', fontSize: '.855rem', fontWeight: 650,
+    color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10,
+    cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: T.shadow,
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────────
+
+  return (
+    <div style={{ fontFamily: 'Inter,sans-serif', color: T.text }}>
+      <style>{`@keyframes fx-in{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}`}</style>
+      <div>
+
+        {/* Title + Actions */}
+        <div style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-end', justifyContent:'space-between', gap:16 }}>
+          <div style={{ minWidth:0 }}>
+            <h1 style={{ fontSize:'1.6rem', fontWeight:700, letterSpacing:'-.028em', margin:0, color:T.text }}>DIGEMID / OPPF</h1>
+            <p style={{ fontSize:'.865rem', color:T.text3, margin:'7px 0 0' }}>Vincula tus productos al catálogo DIGEMID y reporta precios al Observatorio (OPPF)</p>
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:9 }}>
+            <button type="button" onClick={handleVincularTodos}
+              disabled={vinculandoTodos || totalSinVincular === 0}
+              style={{ ...actionBtnSecondary, opacity: (vinculandoTodos || totalSinVincular === 0) ? 0.55 : 1, cursor: (vinculandoTodos || totalSinVincular === 0) ? 'not-allowed' : 'pointer' }}>
+              <Svg d={IC.bolt} size={15} />
+              {vinculandoTodos ? 'Vinculando…' : 'Vincular automáticamente'}
+            </button>
+            <button type="button" onClick={() => setModalExport(true)} style={actionBtnPrimary}>
+              <Svg d={IC.dl} size={15} />
+              Exportar OPPF
+            </button>
+          </div>
+        </div>
+
+        {/* KPI row */}
+        <div style={{ display:'flex', flexWrap:'wrap', gap:12, marginTop:20 }}>
+          {/* Establishment code + RUC */}
+          <div style={{ flex:'1 1 380px', minWidth:0, display:'flex', alignItems:'center', gap:14, padding:'14px 18px', background:T.surface, border:`1px solid ${T.line}`, borderRadius:14, boxShadow:T.shadow }}>
+            <span style={{ width:40, height:40, flexShrink:0, display:'grid', placeItems:'center', borderRadius:11, background:T.primarySoft, color:T.primary }}>
+              <Svg d={IC.store} size={19} />
+            </span>
+            <div style={{ minWidth:0, flex:1 }}>
+              <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.68rem', fontWeight:600, letterSpacing:'.09em', textTransform:'uppercase', color:T.text3 }}>Código de establecimiento</div>
+              {codEdit ? (
+                <div style={{ display:'flex', gap:7, marginTop:6 }}>
+                  <input type="text" inputMode="numeric" value={codVal} onChange={(e) => setCodVal(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') guardarCod(); if (e.key === 'Escape') { setCodEdit(false); setCodVal(codEst); }}}
+                    placeholder="Ej: 00012345" autoFocus
+                    style={{ width:160, height:36, padding:'0 11px', fontFamily:'IBM Plex Mono,monospace', fontSize:'.88rem', letterSpacing:'.04em', color:T.text, background:T.surface, border:`1px solid ${T.line}`, borderRadius:9, outline:'none' }} />
+                  <button type="button" onClick={guardarCod}
+                    style={{ height:36, padding:'0 13px', fontFamily:'Inter,sans-serif', fontSize:'.8rem', fontWeight:650, color:'#fff', background:T.primary, border:0, borderRadius:9, cursor:'pointer' }}>
+                    Guardar
+                  </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
-                  <span className={cn(
-                    'font-mono text-sm px-2.5 py-1 rounded-md border',
-                    codEstablecimiento
-                      ? 'bg-primary/10 border-primary/30 text-primary'
-                      : 'bg-muted border-border text-muted-foreground'
-                  )}>
-                    {codEstablecimiento || 'No configurado'}
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:5 }}>
+                  <span style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'1.02rem', fontWeight:600, color: codEst ? T.primary : T.text3 }}>
+                    {codEst || 'No configurado'}
                   </span>
-                  <button
-                    onClick={() => { setCodInput(codEstablecimiento); setEditandoCod(true); }}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Editar
+                  <button type="button" onClick={() => { setCodVal(codEst); setCodEdit(true); }} title="Editar"
+                    style={{ width:28, height:28, display:'grid', placeItems:'center', color:T.text3, background:'transparent', border:0, borderRadius:7, cursor:'pointer' }}>
+                    <Svg d={IC.pencil} size={14} />
                   </button>
                 </div>
               )}
             </div>
-
-            {/* Estadísticas rápidas */}
-            <div className="flex gap-4 text-center">
-              <div>
-                <p className="text-lg font-bold text-green-600 dark:text-green-400">{totalVinculados}</p>
-                <p className="text-xs text-muted-foreground">Vinculados</p>
-              </div>
-              <div>
-                <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{totalSinVincular}</p>
-                <p className="text-xs text-muted-foreground">Sin vincular</p>
-              </div>
-              <div>
-                <p className="text-lg font-bold text-foreground">{productos.length}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-            </div>
-
-            {/* Botón vincular todos */}
-            {totalSinVincular > 0 && (
-              <Button
-                variant="outline"
-                onClick={handleVincularTodos}
-                disabled={vinculandoTodos}
-                className="gap-2 border-amber-400 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"
-              >
-                {vinculandoTodos ? <LoadingSpinner /> : <Link2 size={16} />}
-                Vincular todos ({totalSinVincular})
-              </Button>
-            )}
-
-            {/* Botón vista previa + exportar */}
-            <div className="flex gap-2 flex-shrink-0">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (!codEstablecimiento) { toast.error('Ingresa el código de establecimiento'); setEditandoCod(true); return; }
-                  if (!(negocioConfig?.ruc)) { toast.error('Configura el RUC en Configuración'); return; }
-                  if (totalParaExportar === 0) { toast.error('No hay productos vinculados con stock para exportar'); return; }
-                  setMostrarPrevia(true);
-                }}
-                disabled={totalParaExportar === 0}
-                className="gap-2"
-              >
-                <Eye size={16} />
-                Vista previa
-              </Button>
-              <Button
-                onClick={handleExportar}
-                disabled={exportando || totalParaExportar === 0}
-                className="gap-2"
-              >
-                {exportando ? <LoadingSpinner /> : <FileArchive size={16} />}
-                Descargar ZIP
-              </Button>
+            <div style={{ width:1, alignSelf:'stretch', background:T.lineSoft }} />
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.68rem', fontWeight:600, letterSpacing:'.09em', textTransform:'uppercase', color:T.text3 }}>RUC del negocio</div>
+              <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'1.02rem', fontWeight:600, marginTop:5, color:T.text }}>{ruc || '—'}</div>
             </div>
           </div>
 
-          {totalVinculados === 0 && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-3 bg-amber-500/10 rounded-lg px-3 py-2 border border-amber-500/20">
-              Debes vincular al menos un producto a un código DIGEMID antes de exportar.
-            </p>
-          )}
-          {totalVinculados > 0 && totalParaExportar === 0 && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-3 bg-amber-500/10 rounded-lg px-3 py-2 border border-amber-500/20">
-              Tienes {totalVinculados} producto(s) vinculado(s) pero todos tienen stock 0. Ingresa stock antes de exportar.
-            </p>
-          )}
-          {totalVinculados > 0 && totalParaExportar > 0 && totalVinculados !== totalParaExportar && (
-            <p className="text-xs text-muted-foreground mt-3 bg-muted/50 rounded-lg px-3 py-2 border border-border">
-              Se exportarán <span className="font-semibold text-foreground">{totalParaExportar}</span> de {totalVinculados} productos vinculados (los demás tienen stock 0).
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Tabla de productos */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <CardTitle className="flex-1">Mis Productos</CardTitle>
-
-            {/* Filtros */}
-            <div className="flex gap-2 flex-wrap">
-              {(['todos', 'vinculados', 'sinvincular'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => { setFiltroVinculado(f); setPagina(1); }}
-                  className={cn(
-                    'px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                    filtroVinculado === f
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  )}
-                >
-                  {f === 'todos' ? 'Todos' : f === 'vinculados' ? 'Vinculados' : 'Sin vincular'}
-                </button>
-              ))}
+          {/* 3 KPI cards */}
+          <div style={{ flex:'2 1 520px', minWidth:0, display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:12 }}>
+            <div style={{ padding:'16px 18px', background:T.surface, border:`1px solid ${T.line}`, borderRadius:14, boxShadow:T.shadow }}>
+              <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.68rem', fontWeight:600, letterSpacing:'.09em', textTransform:'uppercase', color:T.text3 }}>Vinculados</div>
+              <div style={{ fontSize:'1.72rem', fontWeight:700, letterSpacing:'-.032em', marginTop:9, fontVariantNumeric:'tabular-nums', color:T.ok }}>{totalVinculados}</div>
+              <div style={{ fontSize:'.79rem', color:T.text3, marginTop:5 }}>de {productos.length} productos</div>
             </div>
-
-            {/* Búsqueda */}
-            <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                value={busqueda}
-                onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
-                placeholder="Buscar producto..."
-                className="pl-8 pr-3 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 w-48"
-              />
+            <div style={{ padding:'16px 18px', background:T.surface, border:`1px solid ${T.line}`, borderRadius:14, boxShadow:T.shadow }}>
+              <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.68rem', fontWeight:600, letterSpacing:'.09em', textTransform:'uppercase', color:T.text3 }}>Sin vincular</div>
+              <div style={{ fontSize:'1.72rem', fontWeight:700, letterSpacing:'-.032em', marginTop:9, fontVariantNumeric:'tabular-nums', color: totalSinVincular > 0 ? T.warn : T.text }}>{totalSinVincular}</div>
+              <div style={{ fontSize:'.79rem', color:T.text3, marginTop:5 }}>No se exportan</div>
+            </div>
+            <div style={{ padding:'16px 18px', background:T.surface, border:`1px solid ${T.line}`, borderRadius:14, boxShadow:T.shadow }}>
+              <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.68rem', fontWeight:600, letterSpacing:'.09em', textTransform:'uppercase', color:T.text3 }}>Listos para OPPF</div>
+              <div style={{ fontSize:'1.72rem', fontWeight:700, letterSpacing:'-.032em', marginTop:9, fontVariantNumeric:'tabular-nums', color:T.text }}>{exN}</div>
+              <div style={{ fontSize:'.79rem', color:T.text3, marginTop:5 }}>Vinculados con stock</div>
             </div>
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="p-0">
-          {cargando ? (
-            <div className="flex items-center justify-center py-16">
-              <LoadingSpinner />
-            </div>
-          ) : productosFiltrados.length === 0 ? (
-            <EmptyState
-              title="Sin productos"
-              description={busqueda ? 'No se encontraron productos con ese filtro' : 'No tienes productos activos'}
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <Table className="table-fixed w-full">
-                <colgroup>
-                  <col style={{width:'18%'}} />
-                  <col style={{width:'8%'}} />
-                  <col style={{width:'6%'}} />
-                  <col style={{width:'9%'}} />
-                  <col style={{width:'17%'}} />
-                  <col style={{width:'9%'}} />
-                  <col style={{width:'9%'}} />
-                  <col style={{width:'13%'}} />
-                  <col style={{width:'11%'}} />
-                </colgroup>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Producto</TableHead>
-                    <TableHead className="text-right">Precio</TableHead>
-                    <TableHead className="text-right">Stock</TableHead>
-                    <TableHead>Cód. DIGEMID</TableHead>
-                    <TableHead>Nombre DIGEMID</TableHead>
-                    <TableHead className="text-right text-blue-600 dark:text-blue-400">P1 Empaque</TableHead>
-                    <TableHead className="text-right text-blue-600 dark:text-blue-400">P2 Unitario</TableHead>
-                    <TableHead className="text-center">Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {productosPagina.map((p) => (
-                    <TableRow key={p.id}>
-                      {/* Producto */}
-                      <TableCell>
-                        <span className="block text-sm font-medium leading-snug">{p.nombre}</span>
-                        <div className="flex flex-wrap gap-x-2 mt-0.5">
-                          {p.unidadMedida && (
-                            <span className="text-xs text-muted-foreground">({p.unidadMedida})</span>
-                          )}
-                          {p.registroSanitario && (
-                            <span className="text-xs font-mono text-muted-foreground/70">{p.registroSanitario}</span>
-                          )}
-                        </div>
-                      </TableCell>
+        {/* Main card with tabs */}
+        <div style={{ marginTop:14, background:T.surface, border:`1px solid ${T.line}`, borderRadius:14, boxShadow:T.shadow }}>
+          {/* Tabs */}
+          <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:10, padding:'12px 18px 0', borderBottom:`1px solid ${T.lineSoft}` }}>
+            <button type="button" onClick={() => setTab('prod')} style={tabBtn(tab === 'prod')}>
+              <Svg d={IC.pkg} size={15} />
+              Mis productos
+              <span style={{ fontSize:'.72rem', fontWeight:700, color:T.text3 }}>{productos.length}</span>
+            </button>
+            <button type="button" onClick={() => setTab('hist')} style={tabBtn(tab === 'hist')}>
+              <Svg d={IC.hist} size={15} />
+              Historial de exportaciones
+              <span style={{ fontSize:'.72rem', fontWeight:700, color:T.text3 }}>{historial.length}</span>
+            </button>
+          </div>
 
-                      {/* Precio */}
-                      <TableCell className="text-right font-mono text-sm">
-                        {formatPrice(p.precioVenta)}
-                      </TableCell>
-
-                      {/* Stock */}
-                      <TableCell className="text-right">
-                        <span className={cn('text-sm font-medium', p.stockActual === 0 ? 'text-rose-500' : 'text-foreground')}>
-                          {p.stockActual}
-                        </span>
-                      </TableCell>
-
-                      {/* Cód. DIGEMID */}
-                      <TableCell className="font-mono text-xs text-foreground/80">
-                        {p.vinculado ? p.codDigemid : <span className="text-muted-foreground/40">—</span>}
-                      </TableCell>
-
-                      {/* Nombre DIGEMID */}
-                      <TableCell className="text-xs text-muted-foreground">
-                        {p.vinculado
-                          ? <span className="line-clamp-2 leading-snug">{p.nomDigemid}</span>
-                          : <span className="text-muted-foreground/40">—</span>}
-                      </TableCell>
-
-                      {/* P1 Empaque */}
-                      <TableCell className="text-right font-mono text-xs">
-                        {p.vinculado && p.stockActual > 0
-                          ? <span className="text-blue-600 dark:text-blue-400">{formatPrice(p.precio1Oppf)}</span>
-                          : <span className="text-muted-foreground/40">—</span>}
-                      </TableCell>
-
-                      {/* P2 Unitario */}
-                      <TableCell className="text-right font-mono text-xs">
-                        {p.vinculado && p.stockActual > 0 ? (
-                          <span className={p.precio2Oppf <= 0.01 ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'}>
-                            {formatPrice(p.precio2Oppf)}
-                          </span>
-                        ) : <span className="text-muted-foreground/40">—</span>}
-                      </TableCell>
-
-                      {/* Estado */}
-                      <TableCell className="text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <span className={cn(
-                            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
-                            p.vinculado
-                              ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
-                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                          )}>
-                            {p.vinculado ? <><Link2 size={10} />Vinculado</> : <><Link2Off size={10} />Sin vincular</>}
-                          </span>
-                          {p.vinculado && p.stockActual === 0 && (
-                            <span className="text-xs text-muted-foreground/60 italic">no se exportará</span>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      {/* Acciones */}
-                      <TableCell className="text-right">
-                        {p.vinculado ? (
-                          <Button size="sm" variant="outline" onClick={() => handleDesvincular(p.id)} disabled={desvinculando === p.id}
-                            className="text-xs h-7 px-2 text-rose-600 border-rose-300 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-700 dark:hover:bg-rose-900/20">
-                            {desvinculando === p.id ? <LoadingSpinner /> : <><Link2Off size={12} className="mr-1" />Desvincular</>}
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => handleVincularClick(p)} disabled={autoVinculando === p.id}
-                            className="text-xs h-7 px-2">
-                            {autoVinculando === p.id ? <LoadingSpinner /> : <><Link2 size={12} className="mr-1" />Vincular</>}
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-          {!cargando && productosFiltrados.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border text-sm text-muted-foreground">
-              <span>
-                {(pagina - 1) * PAGE_SIZE + 1}–{Math.min(pagina * PAGE_SIZE, productosFiltrados.length)} de {productosFiltrados.length} productos
-              </span>
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-xs"
-                  disabled={pagina === 1}
-                  onClick={() => setPagina((p) => p - 1)}
-                >
-                  ← Anterior
-                </Button>
-                <span className="px-2 font-medium text-foreground">{pagina} / {totalPaginas}</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-xs"
-                  disabled={pagina === totalPaginas}
-                  onClick={() => setPagina((p) => p + 1)}
-                >
-                  Siguiente →
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Historial de exportaciones */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <History size={16} />
-            Historial de exportaciones OPPF
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {historialCargando ? (
-            <div className="flex items-center justify-center py-8"><LoadingSpinner /></div>
-          ) : historial.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-8">
-              Aún no hay exportaciones registradas. El historial aparecerá aquí después de tu primera descarga.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table className="table-fixed w-full">
-                <colgroup>
-                  <col style={{width:'20%'}} />
-                  <col style={{width:'12%'}} />
-                  <col style={{width:'12%'}} />
-                  <col style={{width:'10%'}} />
-                  <col style={{width:'10%'}} />
-                  <col style={{width:'10%'}} />
-                  <col style={{width:'26%'}} />
-                </colgroup>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>RUC</TableHead>
-                    <TableHead>Cód. Est.</TableHead>
-                    <TableHead className="text-center">Mes</TableHead>
-                    <TableHead className="text-center">Año</TableHead>
-                    <TableHead className="text-center">Productos</TableHead>
-                    <TableHead>Archivo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {historial.map((h) => {
-                    const fecha = new Date(h.fechaExportacion);
-                    const fechaStr = fecha.toLocaleDateString('es-PE', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
-                    return (
-                      <TableRow key={h.id}>
-                        <TableCell className="text-xs text-muted-foreground">{fechaStr}</TableCell>
-                        <TableCell className="font-mono text-xs">{h.ruc}</TableCell>
-                        <TableCell className="font-mono text-xs">{h.codEstablecimiento}</TableCell>
-                        <TableCell className="text-center text-sm">{h.mes}</TableCell>
-                        <TableCell className="text-center text-sm">{h.ano}</TableCell>
-                        <TableCell className="text-center">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">{h.totalProductos}</span>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground truncate" title={h.nombreArchivo}>{h.nombreArchivo}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Modal: vista previa del ZIP */}
-      {mostrarPrevia && (() => {
-        const productosAExportar = productos.filter((p) => p.vinculado && p.stockActual > 0);
-        const ruc = negocioConfig?.ruc ?? '';
-        const hoy = new Date();
-        const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-        const ano = String(hoy.getFullYear()).slice(-2);
-        const nombreZip = `${ruc}_${mes}_${ano}_CARGA ARCHIVO.zip`;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-background border border-border rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <div>
-                  <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-                    <Eye size={16} className="text-primary" />
-                    Vista previa — archivo OPPF
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">{nombreZip}</p>
+          {/* Products tab */}
+          {tab === 'prod' && (
+            <>
+              {/* Filters */}
+              <div style={{ display:'flex', flexWrap:'wrap', gap:10, padding:'14px 18px', borderBottom:`1px solid ${T.lineSoft}` }}>
+                <div style={{ position:'relative', flex:'1 1 280px', minWidth:0 }}>
+                  <span style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', display:'grid', pointerEvents:'none', color:T.text3 }}>
+                    <SearchIco size={16} color={T.text3} />
+                  </span>
+                  <input type="text" value={busqueda}
+                    onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
+                    placeholder="Buscar producto, registro sanitario o código DIGEMID…"
+                    style={{ width:'100%', height:40, padding:'0 13px 0 38px', fontFamily:'Inter,sans-serif', fontSize:'.875rem', color:T.text, background:T.surface2, border:'1px solid transparent', borderRadius:10, outline:'none', boxSizing:'border-box' }} />
                 </div>
-                <button onClick={() => setMostrarPrevia(false)} className="p-1.5 rounded-lg hover:bg-muted transition">
-                  <X size={16} />
-                </button>
+                <div style={{ display:'flex', gap:3, padding:3, background:T.surface2, borderRadius:10 }}>
+                  {(['TODOS','VINCULADOS','SIN_VINCULAR'] as const).map((s) => (
+                    <button key={s} type="button" onClick={() => { setSeg(s); setPagina(1); }} style={segBtn(seg === s)}>
+                      <span style={dot(s === 'VINCULADOS' ? T.ok : s === 'SIN_VINCULAR' ? T.warn : T.text3)} />
+                      {s === 'TODOS' ? 'Todos' : s === 'VINCULADOS' ? 'Vinculados' : 'Sin vincular'}
+                      <span style={{ fontSize:'.7rem', fontWeight:700, color:T.text3 }}>
+                        {s === 'TODOS' ? productos.length : s === 'VINCULADOS' ? totalVinculados : totalSinVincular}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Info rápida */}
-              <div className="px-5 py-3 bg-primary/5 border-b border-border flex gap-6 text-sm">
-                <div><span className="text-muted-foreground">RUC:</span> <span className="font-mono font-medium">{ruc}</span></div>
-                <div><span className="text-muted-foreground">Cód. Est.:</span> <span className="font-mono font-medium">{codEstablecimiento}</span></div>
-                <div><span className="text-muted-foreground">Período:</span> <span className="font-medium">{mes}/{ano}</span></div>
-                <div><span className="text-muted-foreground">Productos:</span> <span className="font-semibold text-primary">{productosAExportar.length}</span></div>
-              </div>
-
-              {/* Tabla */}
-              <div className="overflow-y-auto flex-1 px-5 py-3">
-                <p className="text-xs text-muted-foreground mb-2">
-                  El archivo CSV dentro del ZIP contendrá estas {productosAExportar.length} filas:
-                </p>
-                <div className="overflow-x-auto rounded-lg border border-border">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">#</th>
-                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Producto</th>
-                        <th className="text-left px-3 py-2 font-mono font-semibold text-muted-foreground">CodProd</th>
-                        <th className="text-right px-3 py-2 font-semibold text-blue-600 dark:text-blue-400">P1 Empaque</th>
-                        <th className="text-right px-3 py-2 font-semibold text-blue-600 dark:text-blue-400">P2 Unitario</th>
-                        <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Stock</th>
+              {/* Table */}
+              {cargando ? (
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'56px 24px' }}>
+                  <div style={{ width:24, height:24, borderRadius:'50%', border:`3px solid ${T.primaryLine}`, borderTopColor:T.primary, animation:'spin 0.7s linear infinite' }} />
+                  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                </div>
+              ) : productosFiltrados.length === 0 ? (
+                <div style={{ padding:'56px 24px', textAlign:'center' }}>
+                  <div style={{ width:52, height:52, margin:'0 auto', display:'grid', placeItems:'center', borderRadius:14, background:T.surface2, color:T.text3 }}>
+                    <Svg d={IC.pkg} size={24} sw={1.7} />
+                  </div>
+                  <div style={{ fontSize:'1rem', fontWeight:650, marginTop:14, color:T.text }}>Sin productos</div>
+                  <p style={{ fontSize:'.865rem', color:T.text3, margin:'7px 0 0' }}>Ningún producto coincide con la búsqueda.</p>
+                </div>
+              ) : (
+                <div style={{ overflowX:'auto' }}>
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'.84rem', minWidth:1160 }}>
+                    <thead>
+                      <tr style={{ background:T.surface3 }}>
+                        <th style={{ ...thStyle, padding:'10px 18px' }}>Producto</th>
+                        <th style={{ ...thStyle, textAlign:'right' }}>Precio</th>
+                        <th style={{ ...thStyle, textAlign:'right' }}>Stock</th>
+                        <th style={thStyle}>Cód. DIGEMID</th>
+                        <th style={thStyle}>Nombre DIGEMID</th>
+                        <th style={{ ...thStyle, textAlign:'right', color:T.primary }}>P1 Empaque</th>
+                        <th style={{ ...thStyle, textAlign:'right', color:T.primary }}>P2 Unitario</th>
+                        <th style={thStyle}>Estado</th>
+                        <th style={{ ...thStyle, textAlign:'right', padding:'10px 18px' }}>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {productosAExportar.map((p, i) => (
-                        <tr key={p.id} className={i % 2 === 0 ? '' : 'bg-muted/20'}>
-                          <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
-                          <td className="px-3 py-1.5">
-                            <span className="font-medium text-foreground">{p.nombre}</span>
-                            {p.unidadMedida && <span className="text-muted-foreground ml-1">({p.unidadMedida})</span>}
+                      {productosPagina.map((p, i) => (
+                        <tr key={p.id} style={{ borderTop:`1px solid ${T.lineSoft}`, background: i % 2 === 0 ? 'transparent' : T.surface3 }}>
+                          <td style={{ padding:'11px 18px', maxWidth:280 }}>
+                            <div style={{ fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', color:T.text }}>{p.nombre}</div>
+                            <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.72rem', color:T.text3, marginTop:2 }}>
+                              {p.registroSanitario || '—'} · {p.unidadMedida}
+                            </div>
                           </td>
-                          <td className="px-3 py-1.5 font-mono text-foreground/80">{p.codDigemid}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-blue-600 dark:text-blue-400">
-                            {formatPrice(p.precio1Oppf)}
+                          <td style={{ padding:'11px 14px', textAlign:'right', whiteSpace:'nowrap', fontWeight:650, fontVariantNumeric:'tabular-nums', fontFamily:'IBM Plex Mono,monospace', fontSize:'.82rem', color:T.text }}>
+                            {money(p.precioVenta)}
                           </td>
-                          <td className={cn(
-                            'px-3 py-1.5 text-right font-mono',
-                            p.precio2Oppf <= 0.01 ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'
-                          )}>
-                            {formatPrice(p.precio2Oppf)}
-                            {p.precio2Oppf <= 0.01 && <span className="ml-1 text-amber-500" title="Precio mínimo OPPF">⚠</span>}
+                          <td style={{ padding:'11px 14px', textAlign:'right', whiteSpace:'nowrap' }}>
+                            <span style={{ fontWeight:650, color: p.stockActual === 0 ? T.bad : T.text, fontVariantNumeric:'tabular-nums' }}>{p.stockActual}</span>
                           </td>
-                          <td className="px-3 py-1.5 text-right text-foreground/70">{p.stockActual}</td>
+                          <td style={{ padding:'11px 14px', whiteSpace:'nowrap' }}>
+                            {p.vinculado
+                              ? <span style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.78rem', fontWeight:600, color:T.text2 }}>{p.codDigemid}</span>
+                              : <span style={{ color:T.text3 }}>—</span>}
+                          </td>
+                          <td style={{ padding:'11px 14px', maxWidth:240 }}>
+                            {p.vinculado
+                              ? <div style={{ fontSize:'.82rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:T.text2 }}>{p.nomDigemid}</div>
+                              : <span style={{ color:T.text3 }}>—</span>}
+                          </td>
+                          <td style={{ padding:'11px 14px', textAlign:'right', whiteSpace:'nowrap', fontVariantNumeric:'tabular-nums', color:T.text2, fontFamily:'IBM Plex Mono,monospace', fontSize:'.82rem' }}>
+                            {p.vinculado ? money(p.precio1Oppf) : '—'}
+                          </td>
+                          <td style={{ padding:'11px 14px', textAlign:'right', whiteSpace:'nowrap', fontVariantNumeric:'tabular-nums', fontFamily:'IBM Plex Mono,monospace', fontSize:'.82rem' }}>
+                            {p.vinculado ? (
+                              <span style={{ color: p.precio2Oppf <= 0.01 ? T.warn : T.text2 }}>
+                                {money(p.precio2Oppf)}
+                                {p.precio2Oppf <= 0.01 && (
+                                  <span title="Precio mínimo OPPF" style={{ display:'inline-grid', verticalAlign:'-2px', marginLeft:5, color:T.warn }}>
+                                    <Svg d={IC.tri} size={13} sw={2} />
+                                  </span>
+                                )}
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td style={{ padding:'11px 14px', whiteSpace:'nowrap' }}>
+                            <span style={badge(p.vinculado)}>
+                              <Svg d={p.vinculado ? IC.link : IC.unlink} size={11} sw={2.2} />
+                              {p.vinculado ? 'Vinculado' : 'Sin vincular'}
+                            </span>
+                            {p.vinculado && p.stockActual === 0 && (
+                              <div style={{ fontSize:'.7rem', color:T.text3, marginTop:4 }}>No se exportará</div>
+                            )}
+                          </td>
+                          <td style={{ padding:'11px 18px', textAlign:'right', whiteSpace:'nowrap' }}>
+                            {p.vinculado ? (
+                              <div style={{ display:'inline-flex', gap:6 }}>
+                                <button type="button" onClick={() => handleVincularClick(p)} title="Cambiar vínculo"
+                                  style={{ width:30, height:30, display:'grid', placeItems:'center', color:T.text3, background:'transparent', border:0, borderRadius:8, cursor:'pointer' }}>
+                                  <Svg d={IC.pencil} size={15} />
+                                </button>
+                                <button type="button" onClick={() => setModalDesv(p)}
+                                  disabled={desvinculando === p.id}
+                                  style={{ display:'inline-flex', alignItems:'center', gap:6, height:30, padding:'0 11px', fontFamily:'Inter,sans-serif', fontSize:'.78rem', fontWeight:600, color:T.text2, background:T.surface, border:`1px solid ${T.line}`, borderRadius:8, cursor:'pointer' }}>
+                                  <Svg d={IC.unlink} size={13} />
+                                  Desvincular
+                                </button>
+                              </div>
+                            ) : (
+                              <button type="button" onClick={() => handleVincularClick(p)}
+                                disabled={autoVinculando === p.id}
+                                style={{ display:'inline-flex', alignItems:'center', gap:6, height:30, padding:'0 12px', fontFamily:'Inter,sans-serif', fontSize:'.78rem', fontWeight:650, color:T.primary, background:T.primarySoft, border:`1px solid ${T.primaryLine}`, borderRadius:8, cursor:'pointer', opacity: autoVinculando === p.id ? 0.6 : 1 }}>
+                                <Svg d={IC.link} size={13} />
+                                {autoVinculando === p.id ? 'Buscando…' : 'Vincular'}
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              )}
 
               {/* Footer */}
-              <div className="flex items-center justify-between px-5 py-4 border-t border-border bg-muted/30">
-                <p className="text-xs text-muted-foreground">
-                  El archivo se llamará <span className="font-mono">{nombreZip}</span>
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setMostrarPrevia(false)}>
-                    Cancelar
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="gap-2"
-                    disabled={exportando}
-                    onClick={() => { setMostrarPrevia(false); handleExportar(); }}
-                  >
-                    {exportando ? <LoadingSpinner /> : <FileArchive size={14} />}
-                    Confirmar y descargar ZIP
-                  </Button>
+              {!cargando && productosFiltrados.length > 0 && (
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'13px 18px', borderTop:`1px solid ${T.lineSoft}`, fontSize:'.8rem', color:T.text3 }}>
+                  <span>
+                    {productosFiltrados.length > PAGE_SIZE
+                      ? `${(pagina - 1) * PAGE_SIZE + 1}–${Math.min(pagina * PAGE_SIZE, productosFiltrados.length)} de ${productosFiltrados.length} productos`
+                      : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}`}
+                  </span>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ display:'flex', alignItems:'center', gap:6, color:T.warn }}>
+                      <Svg d={IC.tri} size={13} sw={2} />
+                      P2 de S/ 0,01 es el precio mínimo que acepta OPPF
+                    </span>
+                    {productosFiltrados.length > PAGE_SIZE && (
+                      <div style={{ display:'flex', gap:4, marginLeft:12 }}>
+                        <button onClick={() => setPagina((p) => p - 1)} disabled={pagina === 1}
+                          style={{ height:30, padding:'0 10px', fontFamily:'Inter,sans-serif', fontSize:'.78rem', fontWeight:600, color:pagina === 1 ? T.text3 : T.text2, background:T.surface, border:`1px solid ${T.line}`, borderRadius:8, cursor: pagina === 1 ? 'not-allowed' : 'pointer' }}>
+                          ← Anterior
+                        </button>
+                        <span style={{ padding:'0 8px', display:'grid', placeItems:'center', fontWeight:600, color:T.text }}>{pagina} / {totalPaginas}</span>
+                        <button onClick={() => setPagina((p) => p + 1)} disabled={pagina === totalPaginas}
+                          style={{ height:30, padding:'0 10px', fontFamily:'Inter,sans-serif', fontSize:'.78rem', fontWeight:600, color:pagina === totalPaginas ? T.text3 : T.text2, background:T.surface, border:`1px solid ${T.line}`, borderRadius:8, cursor: pagina === totalPaginas ? 'not-allowed' : 'pointer' }}>
+                          Siguiente →
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+              )}
+            </>
+          )}
 
-      {/* Modal de búsqueda */}
-      {modalProducto && (
+          {/* Historial tab */}
+          {tab === 'hist' && (
+            histCargando ? (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'56px 24px' }}>
+                <div style={{ width:24, height:24, borderRadius:'50%', border:`3px solid ${T.primaryLine}`, borderTopColor:T.primary, animation:'spin 0.7s linear infinite' }} />
+              </div>
+            ) : historial.length === 0 ? (
+              <div style={{ padding:'56px 24px', textAlign:'center', fontSize:'.865rem', color:T.text3 }}>
+                Aún no hay exportaciones registradas. El historial aparecerá aquí después de tu primera descarga.
+              </div>
+            ) : (
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'.84rem', minWidth:860 }}>
+                  <thead>
+                    <tr style={{ background:T.surface3 }}>
+                      <th style={{ ...thStyle, padding:'10px 18px' }}>Fecha</th>
+                      <th style={thStyle}>RUC</th>
+                      <th style={thStyle}>Cód. Est.</th>
+                      <th style={thStyle}>Periodo</th>
+                      <th style={{ ...thStyle, textAlign:'right' }}>Productos</th>
+                      <th style={thStyle}>Archivo</th>
+                      <th style={{ ...thStyle, padding:'10px 18px', textAlign:'right' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historial.map((h) => {
+                      const fecha = new Date(h.fechaExportacion);
+                      const fechaStr = fecha.toLocaleDateString('es-PE', { day:'2-digit', month:'short', year:'numeric' });
+                      const horaStr = fecha.toLocaleTimeString('es-PE', { hour:'2-digit', minute:'2-digit' });
+                      return (
+                        <tr key={h.id} style={{ borderTop:`1px solid ${T.lineSoft}` }}>
+                          <td style={{ padding:'11px 18px', whiteSpace:'nowrap' }}>
+                            <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.82rem', fontWeight:600, color:T.text }}>{fechaStr}</div>
+                            <div style={{ fontSize:'.72rem', color:T.text3, marginTop:2 }}>{horaStr}</div>
+                          </td>
+                          <td style={{ padding:'11px 14px', whiteSpace:'nowrap', fontFamily:'IBM Plex Mono,monospace', fontSize:'.8rem', color:T.text2 }}>{h.ruc}</td>
+                          <td style={{ padding:'11px 14px', whiteSpace:'nowrap', fontFamily:'IBM Plex Mono,monospace', fontSize:'.8rem', color:T.text2 }}>{h.codEstablecimiento}</td>
+                          <td style={{ padding:'11px 14px', whiteSpace:'nowrap' }}>
+                            <span style={{ display:'inline-flex', alignItems:'center', fontSize:'.78rem', fontWeight:650, padding:'3px 10px', borderRadius:20, color:T.primary, background:T.primarySoft }}>
+                              {MESES[(Number(h.mes) - 1)] ?? h.mes} {h.ano}
+                            </span>
+                          </td>
+                          <td style={{ padding:'11px 14px', textAlign:'right', whiteSpace:'nowrap', fontWeight:700, fontVariantNumeric:'tabular-nums', color:T.text }}>{h.totalProductos}</td>
+                          <td style={{ padding:'11px 14px', maxWidth:300 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
+                              <span style={{ display:'grid', color:T.ok }}><Svg d={IC.file} size={14} /></span>
+                              <span title={h.nombreArchivo} style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.76rem', color:T.text2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                                {h.nombreArchivo}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ padding:'11px 18px', textAlign:'right' }}>
+                            <button type="button" title="Descargar de nuevo"
+                              style={{ width:30, height:30, display:'inline-grid', placeItems:'center', color:T.text3, background:'transparent', border:0, borderRadius:8, cursor:'pointer' }}>
+                              <Svg d={IC.dl} size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+
+      {/* ── Modal: Buscar en catálogo ───────────────────────────────────────────── */}
+      {modalVincular && (
         <BuscarModal
-          productoId={modalProducto.id}
-          productoNombre={modalProducto.nombre}
-          precioVenta={modalProducto.precioVenta}
-          unidadMedida={modalProducto.unidadMedida}
-          registroSanitario={modalProducto.registroSanitario || undefined}
-          resultadosIniciales={(modalProducto as any)._resultadosIniciales}
-          queryInicial={(modalProducto as any)._queryInicial}
-          onVincular={(codDigemid, item) => handleVincularExitoso(modalProducto.id, codDigemid, item)}
-          onClose={() => setModalProducto(null)}
+          producto={modalVincular}
+          resultadosIniciales={modalVincularResult?.inicial}
+          queryInicial={modalVincularResult?.query}
+          onVincular={(codDigemid, item) => handleVincularExitoso(modalVincular.id, codDigemid, item)}
+          onClose={() => { setModalVincular(null); setModalVincularResult(null); }}
         />
       )}
 
-      {/* Modal resultado "Vincular todos" */}
-      {resultadoVincularTodos && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-background rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b">
-              <h2 className="text-lg font-bold">Resultado — Vincular todos</h2>
-              <button onClick={() => setResultadoVincularTodos(null)} className="rounded-lg p-1.5 hover:bg-muted transition-colors">
-                <X size={18} />
+      {/* ── Modal: Exportar OPPF ────────────────────────────────────────────────── */}
+      {modalExport && createPortal(
+        <div style={OVL} onClick={() => setModalExport(false)}>
+          <div style={mbox(820)} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'20px 22px 16px', borderBottom:`1px solid ${T.lineSoft}`, flexShrink:0 }}>
+              <span style={{ width:38, height:38, flexShrink:0, display:'grid', placeItems:'center', borderRadius:11, background:T.primarySoft, color:T.primary }}>
+                <Svg d={IC.dl} size={18} />
+              </span>
+              <div style={{ minWidth:0 }}>
+                <h2 style={{ fontSize:'1.08rem', fontWeight:700, letterSpacing:'-.02em', margin:0, color:T.text }}>Exportar a OPPF</h2>
+                <div style={{ fontSize:'.8rem', color:T.text3, marginTop:4 }}>Archivo ZIP para cargar en el Observatorio de Productos Farmacéuticos</div>
+              </div>
+              <button type="button" onClick={() => setModalExport(false)} aria-label="Cerrar"
+                style={{ width:30, height:30, flexShrink:0, marginLeft:'auto', display:'grid', placeItems:'center', color:T.text3, background:'transparent', border:0, borderRadius:8, cursor:'pointer' }}>
+                <Svg d={IC.x} size={16} sw={2.2} />
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 p-5 space-y-5">
-              {/* Resumen */}
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-lg border p-3">
-                  <p className="text-2xl font-bold">{resultadoVincularTodos.totalProcesados}</p>
-                  <p className="text-xs text-muted-foreground">Procesados</p>
+            {/* Body */}
+            <div style={{ flex:1, minHeight:0, overflowY:'auto', padding:'18px 22px 20px' }}>
+              {/* Mes/Año + RUC/Cód */}
+              <div style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-end', gap:12 }}>
+                <div>
+                  <label style={{ display:'block', fontSize:'.8rem', fontWeight:600, color:T.text2, marginBottom:6 }}>Mes</label>
+                  <div style={{ position:'relative', width:150 }}>
+                    <select value={exMes} onChange={(e) => setExMes(Number(e.target.value))}
+                      style={{ width:'100%', height:40, padding:'0 30px 0 12px', fontFamily:'Inter,sans-serif', fontSize:'.86rem', fontWeight:600, color:T.text, background:T.surface, border:`1px solid ${T.line}`, borderRadius:10, outline:'none', appearance:'none', WebkitAppearance:'none', cursor:'pointer' }}>
+                      {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                    </select>
+                    <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', display:'grid', pointerEvents:'none', color:T.text3 }}>
+                      <Svg d={IC.chevD} size={13} sw={2} />
+                    </span>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-green-200 dark:border-green-800 p-3">
-                  <p className="text-2xl font-bold text-green-600">{resultadoVincularTodos.vinculados.length}</p>
-                  <p className="text-xs text-muted-foreground">Vinculados</p>
+                <div>
+                  <label style={{ display:'block', fontSize:'.8rem', fontWeight:600, color:T.text2, marginBottom:6 }}>Año</label>
+                  <div style={{ position:'relative', width:100 }}>
+                    <select value={exAno} onChange={(e) => setExAno(Number(e.target.value))}
+                      style={{ width:'100%', height:40, padding:'0 30px 0 12px', fontFamily:'Inter,sans-serif', fontSize:'.86rem', fontWeight:600, color:T.text, background:T.surface, border:`1px solid ${T.line}`, borderRadius:10, outline:'none', appearance:'none', WebkitAppearance:'none', cursor:'pointer' }}>
+                      {anoOpts.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                    <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', display:'grid', pointerEvents:'none', color:T.text3 }}>
+                      <Svg d={IC.chevD} size={13} sw={2} />
+                    </span>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-amber-200 dark:border-amber-800 p-3">
-                  <p className="text-2xl font-bold text-amber-600">{resultadoVincularTodos.noVinculados.length}</p>
-                  <p className="text-xs text-muted-foreground">Sin vincular</p>
+                <div style={{ flex:1, minWidth:220, display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8 }}>
+                  <div style={{ padding:'11px 13px', borderRadius:11, background:T.surface3, border:`1px solid ${T.lineSoft}` }}>
+                    <div style={{ fontSize:'.72rem', color:T.text3 }}>RUC</div>
+                    <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.9rem', fontWeight:600, marginTop:3, color:T.text }}>{ruc || '—'}</div>
+                  </div>
+                  <div style={{ padding:'11px 13px', borderRadius:11, background:T.surface3, border:`1px solid ${T.lineSoft}` }}>
+                    <div style={{ fontSize:'.72rem', color:T.text3 }}>Cód. establecimiento</div>
+                    <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.9rem', fontWeight:600, marginTop:3, color:T.text }}>{codEst || '—'}</div>
+                  </div>
                 </div>
               </div>
 
-              {/* Vinculados */}
-              {resultadoVincularTodos.vinculados.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-green-600 mb-2 flex items-center gap-1.5">
-                    <Link2 size={14} /> Vinculados exitosamente
-                  </h3>
-                  <div className="rounded-lg border divide-y max-h-48 overflow-y-auto">
-                    {resultadoVincularTodos.vinculados.map((v) => (
-                      <div key={v.productoId} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
-                        <span className="font-medium truncate">{v.nombre}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">{v.codDigemid}</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Warning: falta cod */}
+              {exFaltaCod && (
+                <div style={{ display:'flex', alignItems:'center', gap:9, marginTop:12, padding:'10px 13px', borderRadius:10, background:T.badSoft, fontSize:'.8rem', fontWeight:600, color:T.bad }}>
+                  <Svg d={IC.tri} size={15} />
+                  Ingresa el código de establecimiento antes de exportar.
                 </div>
               )}
 
-              {/* No vinculados */}
-              {resultadoVincularTodos.noVinculados.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-1.5">
-                    <Link2Off size={14} /> Requieren vinculación manual
-                  </h3>
-                  <div className="rounded-lg border divide-y max-h-48 overflow-y-auto">
-                    {resultadoVincularTodos.noVinculados.map((nv) => (
-                      <div key={nv.productoId} className="px-3 py-2 text-sm flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{nv.nombre}</p>
-                          {nv.registroSanitario && (
-                            <p className="text-xs text-muted-foreground">{nv.registroSanitario}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-full">
-                            {nv.motivo}
-                          </span>
-                          <button
-                            onClick={() => {
-                              setResultadoVincularTodos(null);
-                              const prod = productos.find((p) => p.id === nv.productoId);
-                              if (prod) setModalProducto(prod);
-                            }}
-                            className="text-xs text-primary underline hover:no-underline"
-                          >
-                            Vincular
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              {/* Stats */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8, marginTop:16 }}>
+                <div style={{ padding:'11px 13px', borderRadius:11, background:T.surface3, border:`1px solid ${T.lineSoft}` }}>
+                  <div style={{ fontSize:'.72rem', color:T.text3 }}>Se exportan</div>
+                  <div style={{ fontSize:'1.2rem', fontWeight:700, marginTop:3, color:T.ok, fontVariantNumeric:'tabular-nums' }}>{exN}</div>
                 </div>
-              )}
+                <div style={{ padding:'11px 13px', borderRadius:11, background:T.surface3, border:`1px solid ${T.lineSoft}` }}>
+                  <div style={{ fontSize:'.72rem', color:T.text3 }}>Con precio mínimo</div>
+                  <div style={{ fontSize:'1.2rem', fontWeight:700, marginTop:3, fontVariantNumeric:'tabular-nums', color: exConMin > 0 ? T.warn : T.text3 }}>{exConMin}</div>
+                </div>
+                <div style={{ padding:'11px 13px', borderRadius:11, background:T.surface3, border:`1px solid ${T.lineSoft}` }}>
+                  <div style={{ fontSize:'.72rem', color:T.text3 }}>Sin stock (excluidos)</div>
+                  <div style={{ fontSize:'1.2rem', fontWeight:700, marginTop:3, color: exExcl > 0 ? T.warn : T.text3, fontVariantNumeric:'tabular-nums' }}>{exExcl}</div>
+                </div>
+              </div>
+
+              {/* Excluded products explanation */}
+              {exExcl > 0 && (() => {
+                const excluidos = productos.filter((p) => p.vinculado && p.stockActual === 0);
+                return (
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:9, marginTop:10, padding:'10px 13px', borderRadius:10, background:T.warnSoft, border:`1px solid ${T.warnLine}`, fontSize:'.8rem' }}>
+                    <span style={{ color:T.warn, marginTop:1, flexShrink:0 }}><Svg d={IC.tri} size={14} /></span>
+                    <div>
+                      <span style={{ fontWeight:650, color:T.warn }}>
+                        {exExcl === 1 ? '1 producto vinculado no se exportará' : `${exExcl} productos vinculados no se exportarán`}
+                        {' '}porque tiene{exExcl !== 1 ? 'n' : ''} stock 0:
+                      </span>
+                      <span style={{ color:T.text2, marginLeft:6 }}>
+                        {excluidos.map((p) => p.nombre).join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Preview table */}
+              <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.68rem', fontWeight:600, letterSpacing:'.09em', textTransform:'uppercase', color:T.text3, margin:'18px 0 10px' }}>Vista previa</div>
+              <div style={{ border:`1px solid ${T.line}`, borderRadius:12, overflow:'auto', maxHeight:300 }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'.8rem', minWidth:640 }}>
+                  <thead>
+                    <tr style={{ position:'sticky', top:0, background:T.surface3 }}>
+                      <th style={{ ...thStyle, padding:'9px 12px' }}>Producto</th>
+                      <th style={{ ...thStyle, padding:'9px 12px' }}>CodProd</th>
+                      <th style={{ ...thStyle, padding:'9px 12px', textAlign:'right', color:T.primary }}>P1</th>
+                      <th style={{ ...thStyle, padding:'9px 12px', textAlign:'right', color:T.primary }}>P2</th>
+                      <th style={{ ...thStyle, padding:'9px 12px', textAlign:'right' }}>Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productosParaExportar.map((p) => (
+                      <tr key={p.id} style={{ borderTop:`1px solid ${T.lineSoft}` }}>
+                        <td style={{ padding:'9px 12px', maxWidth:260, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight:600, color:T.text }}>{p.nombre}</td>
+                        <td style={{ padding:'9px 12px', fontFamily:'IBM Plex Mono,monospace', fontSize:'.74rem', color:T.text2 }}>{p.codDigemid}</td>
+                        <td style={{ padding:'9px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums', color:T.text2, fontFamily:'IBM Plex Mono,monospace', fontSize:'.78rem' }}>{money(p.precio1Oppf)}</td>
+                        <td style={{ padding:'9px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums', fontFamily:'IBM Plex Mono,monospace', fontSize:'.78rem' }}>
+                          <span style={{ color: p.precio2Oppf <= 0.01 ? T.warn : T.text2 }}>{money(p.precio2Oppf)}</span>
+                        </td>
+                        <td style={{ padding:'9px 12px', textAlign:'right', fontWeight:650, fontVariantNumeric:'tabular-nums', color:T.text }}>{p.stockActual}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ fontSize:'.76rem', color:T.text3, marginTop:10 }}>Solo se exportan productos vinculados con stock mayor a 0.</div>
             </div>
 
-            <div className="px-5 py-4 border-t flex justify-end">
-              <Button onClick={() => setResultadoVincularTodos(null)}>Cerrar</Button>
+            {/* Footer */}
+            <div style={{ display:'flex', gap:9, padding:'14px 22px', borderTop:`1px solid ${T.lineSoft}`, flexShrink:0 }}>
+              <button type="button" onClick={() => setModalExport(false)}
+                style={{ minWidth:104, height:44, padding:'0 18px', fontFamily:'Inter,sans-serif', fontSize:'.9rem', fontWeight:600, color:T.text2, background:T.surface, border:`1px solid ${T.line}`, borderRadius:11, cursor:'pointer', whiteSpace:'nowrap' }}>
+                Cancelar
+              </button>
+              <button type="button" onClick={handleExportar}
+                disabled={exportando || exN === 0 || exFaltaCod}
+                style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:8, height:44, fontFamily:'Inter,sans-serif', fontSize:'.9rem', fontWeight:650, color:'#fff', background: (exN === 0 || exFaltaCod) ? T.text3 : T.primary, border:0, borderRadius:11, cursor: (exportando || exN === 0 || exFaltaCod) ? 'not-allowed' : 'pointer', boxShadow: exN > 0 && !exFaltaCod ? `0 8px 20px -10px ${T.primary}` : 'none', opacity: exportando ? 0.7 : 1 }}>
+                <Svg d={IC.dl} size={15} />
+                {exportando ? 'Generando ZIP…' : `Descargar ZIP · ${exN} producto${exN !== 1 ? 's' : ''}`}
+              </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Modal: Vinculación automática ──────────────────────────────────────── */}
+      {modalAuto && autoResult && createPortal(
+        <div style={OVL} onClick={() => setModalAuto(false)}>
+          <div style={mbox(640)} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'20px 22px 16px', borderBottom:`1px solid ${T.lineSoft}`, flexShrink:0 }}>
+              <span style={{ width:38, height:38, flexShrink:0, display:'grid', placeItems:'center', borderRadius:11, background:T.okSoft, color:T.ok }}>
+                <Svg d={IC.bolt} size={18} />
+              </span>
+              <div style={{ minWidth:0 }}>
+                <h2 style={{ fontSize:'1.08rem', fontWeight:700, letterSpacing:'-.02em', margin:0, color:T.text }}>Vinculación automática</h2>
+                <div style={{ fontSize:'.8rem', color:T.text3, marginTop:4 }}>Se buscó cada producto por su registro sanitario</div>
+              </div>
+              <button type="button" onClick={() => setModalAuto(false)} aria-label="Cerrar"
+                style={{ width:30, height:30, flexShrink:0, marginLeft:'auto', display:'grid', placeItems:'center', color:T.text3, background:'transparent', border:0, borderRadius:8, cursor:'pointer' }}>
+                <Svg d={IC.x} size={16} sw={2.2} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex:1, minHeight:0, overflowY:'auto', padding:'18px 22px 20px' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8 }}>
+                <div style={{ padding:'11px 13px', borderRadius:11, background:T.surface3, border:`1px solid ${T.lineSoft}` }}>
+                  <div style={{ fontSize:'.72rem', color:T.text3 }}>Procesados</div>
+                  <div style={{ fontSize:'1.2rem', fontWeight:700, marginTop:3, fontVariantNumeric:'tabular-nums', color:T.text }}>{autoResult.totalProcesados}</div>
+                </div>
+                <div style={{ padding:'11px 13px', borderRadius:11, background:T.surface3, border:`1px solid ${T.lineSoft}` }}>
+                  <div style={{ fontSize:'.72rem', color:T.text3 }}>Vinculados</div>
+                  <div style={{ fontSize:'1.2rem', fontWeight:700, marginTop:3, color:T.ok, fontVariantNumeric:'tabular-nums' }}>{autoResult.vinculados.length}</div>
+                </div>
+                <div style={{ padding:'11px 13px', borderRadius:11, background:T.surface3, border:`1px solid ${T.lineSoft}` }}>
+                  <div style={{ fontSize:'.72rem', color:T.text3 }}>Sin vincular</div>
+                  <div style={{ fontSize:'1.2rem', fontWeight:700, marginTop:3, color:T.warn, fontVariantNumeric:'tabular-nums' }}>{autoResult.noVinculados.length}</div>
+                </div>
+              </div>
+
+              {autoResult.vinculados.length > 0 && (
+                <>
+                  <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.68rem', fontWeight:600, letterSpacing:'.09em', textTransform:'uppercase', color:T.text3, margin:'18px 0 8px' }}>Vinculados</div>
+                  <div style={{ display:'grid', gap:6 }}>
+                    {autoResult.vinculados.map((v) => (
+                      <div key={v.productoId} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:10, background:T.okSoft }}>
+                        <span style={{ display:'grid', color:T.ok }}><Svg d={IC.check} size={14} sw={2.6} /></span>
+                        <span style={{ flex:1, minWidth:0 }}>
+                          <span style={{ display:'block', fontSize:'.84rem', fontWeight:600, color:T.text }}>{v.nombre}</span>
+                          <span style={{ display:'block', fontSize:'.74rem', color:T.text2, marginTop:1 }}>{v.nomDigemid}</span>
+                        </span>
+                        <span style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.74rem', color:T.text2 }}>{v.codDigemid}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {autoResult.noVinculados.length > 0 && (
+                <>
+                  <div style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.68rem', fontWeight:600, letterSpacing:'.09em', textTransform:'uppercase', color:T.text3, margin:'18px 0 8px' }}>Requieren vinculación manual</div>
+                  <div style={{ display:'grid', gap:6 }}>
+                    {autoResult.noVinculados.map((nv) => (
+                      <div key={nv.productoId} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:10, background:T.surface2 }}>
+                        <span style={{ flex:1, minWidth:0 }}>
+                          <span style={{ display:'block', fontSize:'.84rem', fontWeight:600, color:T.text }}>{nv.nombre}</span>
+                          <span style={{ display:'block', fontSize:'.74rem', color:T.warn, marginTop:1 }}>{nv.motivo}</span>
+                        </span>
+                        <button type="button" onClick={() => {
+                          setModalAuto(false);
+                          const prod = productos.find((p) => p.id === nv.productoId);
+                          if (prod) { setModalVincular(prod); setModalVincularResult(null); }
+                        }} style={{ height:30, padding:'0 11px', fontFamily:'Inter,sans-serif', fontSize:'.76rem', fontWeight:650, color:T.primary, background:T.primarySoft, border:`1px solid ${T.primaryLine}`, borderRadius:8, cursor:'pointer', whiteSpace:'nowrap' }}>
+                          Vincular
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{ display:'flex', gap:9, padding:'14px 22px', borderTop:`1px solid ${T.lineSoft}`, flexShrink:0 }}>
+              <span style={{ flex:1 }} />
+              <button type="button" onClick={() => setModalAuto(false)}
+                style={{ minWidth:120, height:44, fontFamily:'Inter,sans-serif', fontSize:'.9rem', fontWeight:650, color:'#fff', background:T.primary, border:0, borderRadius:11, cursor:'pointer' }}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Modal: Desvincular confirmación ────────────────────────────────────── */}
+      {modalDesv && createPortal(
+        <div style={OVL} onClick={() => setModalDesv(null)}>
+          <div style={mbox(480)} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'20px 22px 16px', borderBottom:`1px solid ${T.lineSoft}`, flexShrink:0 }}>
+              <span style={{ width:38, height:38, flexShrink:0, display:'grid', placeItems:'center', borderRadius:11, background:T.badSoft, color:T.bad }}>
+                <Svg d={IC.unlink} size={18} />
+              </span>
+              <div style={{ minWidth:0 }}>
+                <h2 style={{ fontSize:'1.08rem', fontWeight:700, letterSpacing:'-.02em', margin:0, color:T.text }}>Desvincular producto</h2>
+                <div style={{ fontSize:'.8rem', color:T.text3, marginTop:4 }}>Dejará de incluirse en el reporte OPPF</div>
+              </div>
+              <button type="button" onClick={() => setModalDesv(null)} aria-label="Cerrar"
+                style={{ width:30, height:30, flexShrink:0, marginLeft:'auto', display:'grid', placeItems:'center', color:T.text3, background:'transparent', border:0, borderRadius:8, cursor:'pointer' }}>
+                <Svg d={IC.x} size={16} sw={2.2} />
+              </button>
+            </div>
+
+            <div style={{ padding:'18px 22px 20px' }}>
+              <div style={{ display:'grid', gap:8, padding:'13px 15px', borderRadius:12, background:T.surface2, fontSize:'.84rem' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
+                  <span style={{ flexShrink:0, color:T.text3 }}>Tu producto</span>
+                  <span style={{ fontWeight:600, textAlign:'right', color:T.text }}>{modalDesv.nombre}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
+                  <span style={{ flexShrink:0, color:T.text3 }}>DIGEMID</span>
+                  <span style={{ textAlign:'right', color:T.text2 }}>{modalDesv.nomDigemid}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
+                  <span style={{ color:T.text3 }}>Código</span>
+                  <span style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:'.8rem', fontWeight:600, color:T.text }}>{modalDesv.codDigemid}</span>
+                </div>
+              </div>
+              <p style={{ fontSize:'.84rem', lineHeight:1.55, color:T.text2, margin:'14px 0 0' }}>Puedes volver a vincularlo en cualquier momento.</p>
+            </div>
+
+            <div style={{ display:'flex', gap:9, padding:'14px 22px', borderTop:`1px solid ${T.lineSoft}` }}>
+              <button type="button" onClick={() => setModalDesv(null)}
+                style={{ minWidth:104, height:44, padding:'0 18px', fontFamily:'Inter,sans-serif', fontSize:'.9rem', fontWeight:600, color:T.text2, background:T.surface, border:`1px solid ${T.line}`, borderRadius:11, cursor:'pointer', whiteSpace:'nowrap' }}>
+                Cancelar
+              </button>
+              <button type="button" onClick={handleDesvincularConfirm}
+                style={{ flex:1, height:44, fontFamily:'Inter,sans-serif', fontSize:'.9rem', fontWeight:650, color:'#fff', background:T.bad, border:0, borderRadius:11, cursor:'pointer', boxShadow:`0 8px 20px -10px ${T.bad}` }}>
+                Desvincular
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
