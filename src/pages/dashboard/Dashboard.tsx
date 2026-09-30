@@ -120,6 +120,71 @@ function formatRelativo(fecha: Date): string {
   return fecha.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
 }
 
+function UtilidadCard({ ingresos, cogs, gastos }: { ingresos: number; cogs: number; gastos: number }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const utilidadBruta = ingresos - cogs;
+  const utilidadNeta = utilidadBruta - gastos;
+  const positiva = utilidadBruta >= 0;
+  const margenPct = ingresos > 0 ? ((utilidadBruta / ingresos) * 100).toFixed(0) : '0';
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  const rows: [string, number, boolean, boolean][] = [
+    ['Ingresos',    ingresos,      false, false],
+    ['− C. ventas', cogs,          true,  false],
+    ['= Bruta',     utilidadBruta, false, true ],
+    ['− Gastos',    gastos,        true,  false],
+    ['= Neta',      utilidadNeta,  false, true ],
+  ];
+
+  return (
+    <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-[6px]">
+          <span className="text-[.78rem] font-semibold text-muted-foreground">Utilidad bruta</span>
+          <div className="relative" ref={ref}>
+            <button
+              onClick={() => setOpen(o => !o)}
+              className="w-[15px] h-[15px] rounded-full border border-muted-foreground/40 text-muted-foreground/60 text-[.58rem] font-bold flex items-center justify-center hover:border-primary/60 hover:text-primary transition-colors leading-none"
+              style={{ lineHeight: 1 }}
+            >i</button>
+            {open && (
+              <div className="absolute left-0 top-[calc(100%+6px)] z-50 bg-card border border-border rounded-[10px] shadow-lg p-[10px_12px] min-w-[210px]" style={{ fontSize: '.75rem' }}>
+                {rows.map(([lbl, val, isDed, isTot]) => (
+                  <div key={lbl} className="flex justify-between items-baseline gap-4 py-[2px]">
+                    <span className={`font-mono text-[.63rem] tracking-wide ${isDed ? 'text-muted-foreground/60' : isTot ? 'font-semibold text-foreground/80' : 'text-muted-foreground'}`}>{lbl}</span>
+                    <span className={`tabular-nums text-[.72rem] font-semibold ${isTot ? (val >= 0 ? 'text-foreground/90' : 'text-red-500') : 'text-muted-foreground/70'}`}>
+                      S/ {val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <span className={`inline-flex items-center gap-[3px] text-[.72rem] font-bold rounded-full px-[7px] py-[2px] flex-shrink-0 ${positiva ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30'}`}>
+          {positiva ? '↑' : '↓'} {cogs > 0 ? `${margenPct}% margen` : 'positiva'}
+        </span>
+      </div>
+      <div className={`text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums ${positiva ? '' : 'text-red-600 dark:text-red-400'}`}>
+        S/ {utilidadBruta.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </div>
+      <p className="text-[.78rem] text-muted-foreground mt-3">
+        Neta{' '}
+        <strong className={`font-semibold ${utilidadNeta >= 0 ? 'text-foreground/80' : 'text-red-600 dark:text-red-400'}`}>
+          S/ {utilidadNeta.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </strong>
+      </p>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const { user, suscripcionEstado } = useAuthStore();
   const { userId } = useCurrentUser();
@@ -414,23 +479,29 @@ export function Dashboard() {
 
     if (import.meta.env.DEV) { console.log('🎯 Productos próximos a vencer (FINAL):', productosProximosAVencer);}
 
-    // ventas filtradas
-    const ingresoFiltrado = filteredVentas.reduce((acc, v) => acc + (v.total || 0), 0);
+    // ventas filtradas (excluye anuladas — dinero retenido como NC no es ingreso realizado)
+    const ventasNoAnuladas = filteredVentas.filter(v => v.estado !== 'ANULADA');
+    const ingresoFiltrado = ventasNoAnuladas.reduce((acc, v) => acc + (v.total || 0), 0);
+
+    // COGS: solo ventas no anuladas
+    const cogsTotal = ventasNoAnuladas.reduce(
+      (acc, v) => acc + (v.detalles?.reduce((s, d) => s + (d.costoUnitario ?? 0) * (d.cantidad ?? 0), 0) ?? 0), 0
+    );
 
     // solo para el label "+X hoy"
     const hoyStart = getRangeStart('HOY', new Date());
     const ventasHoy = ventas.filter((v) => {
       const d = getVentaDate(v);
       if (!d) return false;
-      return d >= hoyStart;
+      return d >= hoyStart && v.estado !== 'ANULADA';
     }).length;
 
-    // Unidades totales despachadas en el período (suma de cantidades de detalles)
-    const unidadesVendidas = filteredVentas.reduce(
+    // Unidades totales despachadas en el período (solo ventas no anuladas)
+    const unidadesVendidas = ventasNoAnuladas.reduce(
       (acc, v) => acc + (v.detalles?.reduce((s, d) => s + (d.cantidad ?? 0), 0) ?? 0), 0
     );
     const unidadesHoy = ventas
-      .filter((v) => { const d = getVentaDate(v); return d ? d >= hoyStart : false; })
+      .filter((v) => { const d = getVentaDate(v); return d ? d >= hoyStart && v.estado !== 'ANULADA' : false; })
       .reduce((acc, v) => acc + (v.detalles?.reduce((s, d) => s + (d.cantidad ?? 0), 0) ?? 0), 0);
 
     return {
@@ -438,8 +509,9 @@ export function Dashboard() {
       bajoStockCount: bajoStock.length,
       bajoStockItems: bajoStock.slice(0, 5),
       productosProximosAVencer,
-      totalVentasFiltradas: filteredVentas.length,
+      totalVentasFiltradas: ventasNoAnuladas.length,
       ingresoFiltrado,
+      cogsTotal,
       ventasHoy,
       unidadesVendidas,
       unidadesHoy,
@@ -953,26 +1025,11 @@ export function Dashboard() {
 
             {/* Card 4: Utilidad / Productos */}
             {rol === 'ADMIN' ? (
-              (() => {
-                const utilidad = stats.ingresoFiltrado - totalGastosPeriodo;
-                const positiva = utilidad >= 0;
-                return (
-                  <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[.78rem] font-semibold text-muted-foreground">Utilidad neta</span>
-                      <span className={`inline-flex items-center gap-[3px] text-[.72rem] font-bold rounded-full px-[7px] py-[2px] flex-shrink-0 ${positiva ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30'}`}>
-                        {positiva ? '↑' : '↓'} {positiva ? 'positiva' : 'negativa'}
-                      </span>
-                    </div>
-                    <div className={`text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums ${positiva ? '' : 'text-red-600 dark:text-red-400'}`}>
-                      S/ {utilidad.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                    <p className="text-[.78rem] text-muted-foreground mt-3 leading-relaxed">
-                      Gastos <strong className="text-foreground/80 font-semibold">S/ {totalGastosPeriodo.toFixed(2)}</strong>
-                    </p>
-                  </div>
-                );
-              })()
+              <UtilidadCard
+                ingresos={stats.ingresoFiltrado}
+                cogs={stats.cogsTotal}
+                gastos={totalGastosPeriodo}
+              />
             ) : (
               <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between gap-2">
