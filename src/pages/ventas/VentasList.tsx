@@ -477,7 +477,6 @@ export function VentasList() {
   const endIndex = startIndex + itemsPerPage;
   const currentVentas = filteredVentas.slice(startIndex, endIndex);
 
-  // Solo ventas activas (excluye ANULADAS) para el resumen financiero
   const ventasActivas = filteredVentas.filter(v => v.estado !== 'ANULADA');
   const ingresosFiltrads = ventasActivas.reduce((s, v) => s + v.total, 0);
 
@@ -517,10 +516,9 @@ export function VentasList() {
     finally { setExporting(false); }
   };
 
-  const completadasFiltradas = filteredVentas.filter(v => v.estado === 'COMPLETADA');
   const incidenciasFiltradas = filteredVentas.filter(v => v.estado !== 'COMPLETADA');
-  const ticketPromedioCompletadas = completadasFiltradas.length > 0
-    ? completadasFiltradas.reduce((s, v) => s + v.total, 0) / completadasFiltradas.length : 0;
+  const ticketPromedioCompletadas = ventasActivas.length > 0
+    ? ingresosFiltrads / ventasActivas.length : 0;
 
   const aplicarPreset = (preset: 'hoy'|'ayer'|'7d'|'mes') => {
     const h = new Date();
@@ -627,7 +625,7 @@ export function VentasList() {
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Ingresos</p>
           <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">S/ {ingresosFiltrads.toFixed(2)}</p>
-          <p className="text-[.79rem] text-muted-foreground mt-1">Solo ventas no anuladas</p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">{ventasActivas.length} ventas no anuladas</p>
         </div>
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Ventas</p>
@@ -637,7 +635,7 @@ export function VentasList() {
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Ticket promedio</p>
           <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">S/ {ticketPromedioCompletadas.toFixed(2)}</p>
-          <p className="text-[.79rem] text-muted-foreground mt-1">Por venta completada</p>
+          <p className="text-[.79rem] text-muted-foreground mt-1">Por venta no anulada</p>
         </div>
         <div className={`p-[16px_18px] rounded-[14px] shadow-sm border ${incidenciasFiltradas.length > 0 ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-700/40' : 'bg-card border-border'}`}>
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Anuladas y devueltas</p>

@@ -186,6 +186,8 @@ export interface DetalleVentaDTO {
   presentacionId?: number;
   /** Multiplicador de unidades base. Ej: CAJA=20 → descuenta 20 tabletas. Default 1. */
   factor?: number;
+  /** Costo unitario del producto (para calcular COGS). */
+  costoUnitario?: number;
 }
 
 // ========================================
@@ -706,8 +708,10 @@ export interface VentasPorVendedorDTO {
   vendedorId: number;
   vendedorNombre: string;
   ventasCount: number;
-  ingresosTotal: number;   // ← campo real del backend
+  ingresosTotal: number;
   ticketPromedio: number | null;
+  unidades: number;
+  anuladas: number;
 }
 
 // ── Ventas por categoría ───────────────────────────────────────────────────────
@@ -730,8 +734,11 @@ export interface VentasPorMetodoPagoDTO {
 export interface VentasProductoDTO {
   productoId: number;
   nombre: string;
-  cantidad: number;        // ← campo real del backend (era cantidadVendida)
+  cantidad: number;
   ingresos: number;
+  utilidad?: number;
+  margenPct?: number | null;
+  rotacion?: number | null;
 }
 
 // ── Inventario ABC ─────────────────────────────────────────────────────────────
@@ -911,6 +918,20 @@ export interface ClienteReporteDTO {
   totalComprado: number;
   ticketPromedio: number;
   ultimaCompra: string | null; // ISO datetime
+}
+
+export interface HorasPicoItemDTO {
+  /** 0=Domingo, 1=Lunes, ..., 6=Sábado (PostgreSQL DOW) */
+  diaSemana: number;
+  hora: number;
+  cantidad: number;
+  total: number;
+}
+
+export interface ComprobanteTipoResumenDTO {
+  tipo: string; // BOLETA | FACTURA
+  cantidad: number;
+  total: number;
 }
 
 // ========================================

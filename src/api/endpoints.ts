@@ -298,5 +298,13 @@ export const API_ENDPOINTS = {
     // Clientes
     CLIENTES: (desde: string, hasta: string, limit = 20) =>
       `/reportes/clientes?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&limit=${limit}`,
+
+    // Horas pico
+    VENTAS_HORAS_PICO: (desde: string, hasta: string) =>
+      `/reportes/ventas/horas-pico?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+
+    // Comprobantes por tipo
+    VENTAS_COMPROBANTES: (desde: string, hasta: string) =>
+      `/reportes/ventas/comprobantes?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
   },
 };
