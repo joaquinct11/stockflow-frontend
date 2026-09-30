@@ -15,6 +15,8 @@ import type {
   VencimientosRiesgoDTO,
   ClienteReporteDTO,
   MermaReporteDTO,
+  HorasPicoItemDTO,
+  ComprobanteTipoResumenDTO,
 } from '../types';
 
 export type AgrupacionTendencia = 'DIA' | 'SEMANA' | 'MES';
@@ -191,6 +193,24 @@ export const reportesService = {
   ): Promise<ClienteReporteDTO[]> => {
     const { data } = await axiosInstance.get<ClienteReporteDTO[]>(
       API_ENDPOINTS.REPORTES.CLIENTES(desde, hasta, limit),
+      { params: sid(sucursalId) }
+    );
+    return data ?? [];
+  },
+
+  // ── Horas pico ────────────────────────────────────────────────────────────
+  getHorasPico: async (desde: string, hasta: string, sucursalId?: number): Promise<HorasPicoItemDTO[]> => {
+    const { data } = await axiosInstance.get<HorasPicoItemDTO[]>(
+      API_ENDPOINTS.REPORTES.VENTAS_HORAS_PICO(desde, hasta),
+      { params: sid(sucursalId) }
+    );
+    return data ?? [];
+  },
+
+  // ── Comprobantes por tipo ─────────────────────────────────────────────────
+  getComprobantesPorTipo: async (desde: string, hasta: string, sucursalId?: number): Promise<ComprobanteTipoResumenDTO[]> => {
+    const { data } = await axiosInstance.get<ComprobanteTipoResumenDTO[]>(
+      API_ENDPOINTS.REPORTES.VENTAS_COMPROBANTES(desde, hasta),
       { params: sid(sucursalId) }
     );
     return data ?? [];
