@@ -457,6 +457,7 @@ export function POSPage() {
     }
     // Sin lotes (o producto sin stockVigente): agregar directo al carrito
     if (getStockDisponible(producto) <= 0) { toast.error(`Sin stock disponible: ${producto.nombre}`); return; }
+    if (producto.stockVigente != null) toast('Sin lotes activos · FEFO automático', { icon: '📦', duration: 2500 });
     agregarItemAlCarrito(producto, undefined, pp?.label, true, pp?.precio ?? producto.precioVenta, undefined, undefined, pp?.id, pp?.factor ?? 1);
   };
 
@@ -1037,6 +1038,15 @@ export function POSPage() {
               <div className="text-xs text-muted-foreground mt-1">
                 {cart.reduce((s, i) => s + i.cantidad, 0)} unidades · {cart.length} líneas · {tipoComprobante.toLowerCase()}
               </div>
+              {cart.some(i => i.precioUnitario === 0) && (
+                <div className="mt-3 flex items-start gap-2 p-2.5 rounded-[10px] bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+                  <span className="shrink-0">⚠️</span>
+                  <span>
+                    {cart.filter(i => i.precioUnitario === 0).map(i => i.producto.nombre).join(', ')}
+                    {' '}{cart.filter(i => i.precioUnitario === 0).length === 1 ? 'tiene' : 'tienen'} precio S/&nbsp;0.00. Verifica antes de confirmar.
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Métodos de pago */}
@@ -1740,41 +1750,84 @@ export function POSPage() {
             {loadingLotes ? (
               <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-primary" /></div>
             ) : (
-              <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-                {lotesDisponibles.map(lote => {
-                  const label = [lote.lote ? `Lote ${lote.lote}` : null, lote.proveedorNombre ? `· ${lote.proveedorNombre}` : null].filter(Boolean).join(' ') || `Lote #${lote.id}`;
-                  const proximo = lote.diasParaVencer <= 30;
-                  const precio = lote.precioVenta ?? lotePickerProducto.precioVenta ?? 0;
+              <>
+                <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                  {lotesDisponibles.map(lote => {
+                    const label = [lote.lote ? `Lote ${lote.lote}` : null, lote.proveedorNombre ? `· ${lote.proveedorNombre}` : null].filter(Boolean).join(' ') || `Lote #${lote.id}`;
+                    const vencido = lote.diasParaVencer < 0;
+                    const proximo = !vencido && lote.diasParaVencer <= 30;
+                    const precio = lote.precioVenta ?? lotePickerProducto.precioVenta ?? 0;
+                    const pFactor = pendingPresentacion?.factor ?? 1;
+                    const stockEnPresentacion = Math.floor((lote.stockActual ?? 0) / pFactor);
+                    const sinStock = stockEnPresentacion < 1 || vencido;
+                    const stockLabel = pFactor > 1 ? `${stockEnPresentacion} ${pendingPresentacion?.label ?? 'uds'}` : `${lote.stockActual} uds`;
+                    return (
+                      <button key={lote.id}
+                        disabled={sinStock}
+                        onClick={() => {
+                          const pp = pendingPresentacion;
+                          setPendingPresentacion(null);
+                          agregarItemAlCarrito(lotePickerProducto, undefined, pp?.label, false,
+                            pp?.precio ?? lote.precioVenta ?? undefined, lote.id, label, pp?.id, pp?.factor ?? 1);
+                          setLotePickerOpen(false);
+                        }}
+                        className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{label}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Vence: {lote.fechaVencimiento}
+                            {vencido && <span className="ml-1.5 text-red-600 dark:text-red-400">⛔ Vencido</span>}
+                            {proximo && <span className="ml-1.5 text-amber-600 dark:text-amber-400">⚠ Próximo</span>}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-bold font-mono">{fmt(precio)}</p>
+                          <span className="text-xs text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-lg">{stockLabel}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Mensajes explicativos: stock distribuido o insuficiente */}
+                {(() => {
                   const pFactor = pendingPresentacion?.factor ?? 1;
-                  const stockEnPresentacion = Math.floor((lote.stockActual ?? 0) / pFactor);
-                  const sinStock = stockEnPresentacion < 1;
-                  const stockLabel = pFactor > 1 ? `${stockEnPresentacion} ${pendingPresentacion?.label ?? 'uds'}` : `${lote.stockActual} uds`;
+                  if (pFactor <= 1 || lotesDisponibles.length === 0) return null;
+                  const totalStock = lotesDisponibles.reduce((s, l) => s + (l.stockActual ?? 0), 0);
+                  const todosInsuficientes = lotesDisponibles.every(l => Math.floor((l.stockActual ?? 0) / pFactor) < 1);
+                  if (!todosInsuficientes) return null;
+                  const pLabel = pendingPresentacion?.label ?? 'esta presentación';
+                  if (totalStock < pFactor) {
+                    return (
+                      <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-300">
+                        <span className="shrink-0 mt-0.5">⛔</span>
+                        <span>
+                          Stock insuficiente incluso con FEFO: {totalStock}&nbsp;uds en total, se necesitan {pFactor}&nbsp;uds para 1&nbsp;<strong>{pLabel}</strong>.
+                          Selecciona una presentación menor o registra más stock.
+                        </span>
+                      </div>
+                    );
+                  }
                   return (
-                    <button key={lote.id}
-                      disabled={sinStock}
-                      onClick={() => {
-                        const pp = pendingPresentacion;
-                        setPendingPresentacion(null);
-                        agregarItemAlCarrito(lotePickerProducto, undefined, pp?.label, false,
-                          pp?.precio ?? lote.precioVenta ?? undefined, lote.id, label, pp?.id, pp?.factor ?? 1);
-                        setLotePickerOpen(false);
-                      }}
-                      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Vence: {lote.fechaVencimiento}
-                          {proximo && <span className="ml-1.5 text-amber-600 dark:text-amber-400">⚠ Próximo</span>}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-bold font-mono">{fmt(precio)}</p>
-                        <span className="text-xs text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-lg">{stockLabel}</span>
-                      </div>
-                    </button>
+                    <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+                      <span className="shrink-0 mt-0.5">ℹ️</span>
+                      <span>
+                        Ningún lote tiene suficiente stock individual para vender 1&nbsp;<strong>{pLabel}</strong>&nbsp;
+                        ({pFactor}&nbsp;uds). El stock está distribuido en {lotesDisponibles.length} lotes
+                        ({totalStock}&nbsp;uds en total). Usa <strong>FEFO automático</strong> para que el sistema
+                        descuente de varios lotes a la vez.
+                      </span>
+                    </div>
                   );
-                })}
-              </div>
+                })()}
+                {/* Todos los lotes próximos a vencer */}
+                {lotesDisponibles.length > 0 &&
+                  lotesDisponibles.every(l => l.diasParaVencer >= 0 && l.diasParaVencer <= 30) && (
+                  <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+                    <span className="shrink-0 mt-0.5">⚠️</span>
+                    <span>Todos los lotes vencen en menos de 30 días. Considera reabastecer antes de que el stock expire.</span>
+                  </div>
+                )}
+              </>
             )}
             <button onClick={() => {
               if (getStockDisponible(lotePickerProducto) <= 0) { toast.error(`Sin stock disponible: ${lotePickerProducto.nombre}`); return; }
@@ -1783,7 +1836,13 @@ export function POSPage() {
               agregarItemAlCarrito(lotePickerProducto, undefined, pp?.label, false, pp?.precio ?? undefined, undefined, undefined, pp?.id, pp?.factor ?? 1);
               setLotePickerOpen(false);
             }}
-              className="w-full py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground text-sm transition-colors cursor-pointer bg-transparent">
+              disabled={(() => {
+                const pFactor = pendingPresentacion?.factor ?? 1;
+                if (pFactor <= 1) return false;
+                const totalStock = lotesDisponibles.reduce((s, l) => s + (l.stockActual ?? 0), 0);
+                return totalStock < pFactor;
+              })()}
+              className="w-full py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground text-sm transition-colors cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed">
               Agregar sin seleccionar lote (FEFO automático)
             </button>
             <button onClick={() => { setPendingPresentacion(null); setLotePickerOpen(false); }}
