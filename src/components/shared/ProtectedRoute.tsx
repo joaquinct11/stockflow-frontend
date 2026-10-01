@@ -12,15 +12,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Dar tiempo para que se inicialice el store
-    const checkAuth = async () => {
-      initialize();
-      // Pequeño delay para asegurar que el localStorage se leyó
-      await new Promise(resolve => setTimeout(resolve, 100));
-      setIsLoading(false);
-    };
-    
-    checkAuth();
+    initialize().finally(() => setIsLoading(false));
   }, [initialize]);
 
   if (isLoading) {
@@ -28,7 +20,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!isAuthenticated) {
-    if (import.meta.env.DEV) { console.log('🔒 No autenticado, redirigiendo a login');} // ← Log para debug
+    if (import.meta.env.DEV) { console.log('🔒 No autenticado, redirigiendo a login');}
     return <Navigate to="/login" replace />;
   }
 
