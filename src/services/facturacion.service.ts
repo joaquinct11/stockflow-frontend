@@ -26,7 +26,7 @@ function mapApiToComprobanteDTO(api: ComprobanteApiDTO): ComprobanteDTO {
   const receptor: ReceptorDTO | undefined =
     api.receptorDocTipo || api.receptorDocNumero || api.receptorNombre || api.receptorDireccion
       ? {
-          tipoDocumento: (api.receptorDocTipo as any) ?? undefined,
+          tipoDocumento: api.receptorDocTipo as ReceptorDTO['tipoDocumento'] ?? undefined,
           numeroDocumento: api.receptorDocNumero ?? undefined,
           razonSocial: api.receptorNombre ?? undefined,
           direccion: api.receptorDireccion ?? undefined,
@@ -34,7 +34,8 @@ function mapApiToComprobanteDTO(api: ComprobanteApiDTO): ComprobanteDTO {
       : undefined;
 
   // Quitamos los campos planos para que no “ensucien” el objeto final
-  const { receptorDocTipo, receptorDocNumero, receptorNombre, receptorDireccion, ...rest } = api;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { receptorDocTipo: _rdt, receptorDocNumero: _rdn, receptorNombre: _rn, receptorDireccion: _rd, ...rest } = api;
 
   return {
     ...rest,

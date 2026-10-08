@@ -559,10 +559,10 @@ export function ComprobantesPage() {
       </div>
 
       {/* ── Table card ── */}
-      <div className="bg-card border rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-card border rounded-2xl shadow-sm">
 
         {/* Filter toolbar */}
-        <div className="grid grid-cols-[1fr_auto_auto] gap-2.5 p-3.5 border-b border-border/60">
+        <div className="grid grid-cols-[1fr_auto_auto] gap-2.5 p-3.5 border-b border-border/60 rounded-t-2xl">
           <div className="relative min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <input
@@ -721,6 +721,7 @@ export function ComprobantesPage() {
         )}
 
         {/* Table content */}
+        <div className="overflow-hidden rounded-b-2xl">
         {loading ? (
           <div className="py-16 flex justify-center"><LoadingSpinner /></div>
         ) : sortedComprobantes.length === 0 ? (
@@ -850,6 +851,7 @@ export function ComprobantesPage() {
             )}
           </>
         )}
+        </div>{/* end overflow-hidden rounded-b-2xl */}
       </div>
 
       {/* ── Detail slide-in panel ── */}

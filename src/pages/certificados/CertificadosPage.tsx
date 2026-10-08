@@ -199,7 +199,7 @@ function FormModal({ form, tipos, usuarios, onClose, onSave, saving }: {
                     <span style={avatarStyle(nombre, 32)}>{initials(u.nombre, u.apellido)}</span>
                     <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
                       <span style={{ display: 'block', fontSize: '.85rem', fontWeight: 600, color: T.text }}>{nombre}</span>
-                      <span style={{ display: 'block', fontSize: '.72rem', color: T.text3, marginTop: 1 }}>{(u as any).rol ?? 'Trabajador'}</span>
+                      <span style={{ display: 'block', fontSize: '.72rem', color: T.text3, marginTop: 1 }}>{u.rol ?? 'Trabajador'}</span>
                     </span>
                     <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: '50%', boxSizing: 'border-box', background: T.surface, ...(on ? { border: `5px solid ${T.primary}` } : { border: `1.5px solid ${T.line}` }) }} />
                   </button>

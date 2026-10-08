@@ -727,7 +727,7 @@ export function OrdenComprasList() {
                 {[['Desde', fechaDesde, setFechaDesde], ['Hasta', fechaHasta, setFechaHasta]].map(([lbl, val, setter]) => (
                   <div key={lbl as string}>
                     <label style={{ fontSize: '.75rem', color: '#555', display: 'block', marginBottom: 4 }}>{lbl as string}</label>
-                    <input type="date" value={val as string} onChange={(e) => (setter as any)(e.target.value)}
+                    <input type="date" value={val as string} onChange={(e) => (setter as React.Dispatch<React.SetStateAction<string>>)(e.target.value)}
                       style={{ width: '100%', height: 36, borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.06)', color: '#ddd', fontSize: '.85rem', padding: '0 10px', outline: 'none', boxSizing: 'border-box', fontFamily: 'Inter,sans-serif' }} />
                   </div>
                 ))}

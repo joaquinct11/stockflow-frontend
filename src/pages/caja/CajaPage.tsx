@@ -220,8 +220,8 @@ export function CajaPage() {
       setConteo({});
       setCerrarObs('');
       await fetchCajas();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.mensaje || 'Error al cerrar la caja');
+    } catch (err) {
+      toast.error((err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje || 'Error al cerrar la caja');
     } finally {
       setCerrando(false);
     }
@@ -244,8 +244,8 @@ export function CajaPage() {
       toast.success(`Retiro de ${formatCurrency(retiroForm.monto)} registrado`);
       setIsRetiroOpen(false);
       await fetchCajas();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.mensaje || 'Error al registrar el retiro');
+    } catch (err) {
+      toast.error((err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje || 'Error al registrar el retiro');
     } finally {
       setRetirando(false);
     }
@@ -260,8 +260,8 @@ export function CajaPage() {
       toast.success('Cierre corregido correctamente');
       setIsCorregirOpen(false);
       await fetchCajas();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.mensaje || 'Error al corregir el cierre');
+    } catch (err) {
+      toast.error((err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje || 'Error al corregir el cierre');
     } finally {
       setCorrigiendo(false);
     }
@@ -277,8 +277,8 @@ export function CajaPage() {
       setIsAbrirOpen(false);
       setMontoApertura('');
       fetchCajas();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.mensaje || 'Error al abrir caja');
+    } catch (err) {
+      toast.error((err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje || 'Error al abrir caja');
     } finally {
       setAbriendo(false);
     }

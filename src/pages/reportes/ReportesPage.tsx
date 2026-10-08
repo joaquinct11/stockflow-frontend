@@ -71,19 +71,19 @@ function formatMoney(v: number|null|undefined, dec=0): string {
   if (v==null) return '—';
   const abs=Math.abs(v); const sign=v<0?'-':'';
   if (dec===0) {
-    const int=Math.round(abs).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');
-    return `${sign}S/ ${int}`;
+    const int=Math.round(abs).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'\u202F');
+    return `${sign}S/\u00A0${int}`;
   }
   const [int, decimal]=abs.toFixed(dec).split('.');
-  const intFmt=int.replace(/\B(?=(\d{3})+(?!\d))/g,' ');
-  return `${sign}S/ ${intFmt},${decimal}`;
+  const intFmt=int.replace(/\B(?=(\d{3})+(?!\d))/g,'\u202F');
+  return `${sign}S/\u00A0${intFmt},${decimal}`;
 }
 // compatibilidad con otras tabs
 function formatSoles(v: number|null|undefined): string { return formatMoney(v,2); }
 function formatSolesRound(v: number|null|undefined): string { return formatMoney(v,0); }
 function formatNum(v: number|null|undefined): string {
   if (v==null) return '—';
-  return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+  return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'\u202F');
 }
 function formatPct(v: number|null|undefined, dec=1): string { if(v==null)return'—'; return `${v.toFixed(dec).replace('.',',')}%`; }
 function pluralUds(n: number|null|undefined): string { const x=Math.round(n??0); return x===1?'1 ud':`${formatNum(x)} uds`; }
@@ -370,8 +370,8 @@ function ResumenTab({ loading, error, data, onRetry, esServicios=false, ventasDa
   const diasConVentas = tendencia.filter(p => (p.ingresosTotal ?? 0) > 0).length;
   const diasSinVentas = diasTotales - diasConVentas;
   const pctDiasSinVentas = diasTotales > 0 ? (diasSinVentas / diasTotales) * 100 : 0;
-  const sinStock = bajoStockList.filter(p => (p as any).stockActual === 0);
-  const bajoMin = bajoStockList.filter(p => (p as any).stockActual > 0);
+  const sinStock = bajoStockList.filter(p => p.stockActual === 0);
+  const bajoMin = bajoStockList.filter(p => (p.stockActual ?? 0) > 0);
   const totalIngresos = v?.ingresosTotal ?? 0;
   const topProd = topProductos[0];
   const concProd = topProd && totalIngresos > 0 ? (topProd.ingresos / totalIngresos) * 100 : 0;
@@ -859,7 +859,7 @@ function VentasTab({ loading, error, data, onRetry, esServicios=false, agrupacio
                           const val = heat[di][hi];
                           const count = mapaCount.get(`${dow}-${h}`) ?? 0;
                           const pct = hayDatos ? Math.round((val/maxHeat)*100) : 0;
-                          const fmtTotal = val>0 ? `S/ ${val.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
+                          const fmtTotal = val>0 ? `S/\u00A0${val.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
                           return (
                             <span
                               key={`${label}-${h}`}
@@ -1023,11 +1023,11 @@ function ProductosTab({ loading, error, data, onRetry, esServicios=false, metric
   })();
 
   const getMarginPct = (p: ProductoAnalisis): number|null => {
-    const raw = p as any;
-    const utilidad = Number(raw.utilidad ?? raw.utilidadBruta ?? raw.ganancia ?? NaN);
+    const raw = p as unknown as Record<string, unknown>;
+    const utilidad = Number(raw['utilidad'] ?? raw['utilidadBruta'] ?? raw['ganancia'] ?? NaN);
     const ingresos = Number(p.ingresos ?? 0);
 
-    const candidate = raw.margenPct ?? raw.margenPorcentaje ?? raw.marginPct ?? raw.margen ?? raw.margin;
+    const candidate = raw['margenPct'] ?? raw['margenPorcentaje'] ?? raw['marginPct'] ?? raw['margen'] ?? raw['margin'];
     if (candidate != null && Number.isFinite(Number(candidate))) {
       const n = Number(candidate);
       return Math.abs(n) <= 1 ? n * 100 : n;
@@ -1124,17 +1124,17 @@ function ProductosTab({ loading, error, data, onRetry, esServicios=false, metric
     p.margenPct == null ? '—' : `${p.margenPct.toFixed(0)}%`;
 
   const getUtility = (p:ProductoAnalisis):number|null => {
-    const raw=p as any;
-    const u=raw.utilidad ?? raw.utilidadBruta ?? raw.ganancia;
+    const raw=p as unknown as Record<string, unknown>;
+    const u=raw['utilidad'] ?? raw['utilidadBruta'] ?? raw['ganancia'];
     return u != null && Number.isFinite(Number(u)) ? Number(u) : null;
   };
 
   const getRotation = (p:ProductoAnalisis):string => {
-    const raw=p as any;
-    if (raw.rotacion != null) return String(raw.rotacion);
+    const raw=p as unknown as Record<string, unknown>;
+    if (raw['rotacion'] != null) return String(raw['rotacion']);
 
-    const stock=Number(raw.stockActual ?? raw.stock ?? NaN);
-    const vpd=Number(raw.vpd ?? NaN);
+    const stock=Number(raw['stockActual'] ?? raw['stock'] ?? NaN);
+    const vpd=Number(raw['vpd'] ?? NaN);
     if (Number.isFinite(stock) && Number.isFinite(vpd) && vpd>0) {
       const days=stock/vpd;
       return days < 15 ? 'Alta' : days < 45 ? 'Media' : 'Baja';
@@ -1349,12 +1349,12 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
 
   // Estos campos son opcionales porque el endpoint actual puede no exponerlos.
   // Si el backend los devuelve, el rediseño los muestra automáticamente.
-  const getUnidades=(v:any):number|null=>{
-    const raw=v?.unidades ?? v?.unidadesCount ?? v?.cantidadUnidades ?? v?.totalUnidades;
+  const getUnidades=(v: Record<string, unknown>):number|null=>{
+    const raw=v?.['unidades'] ?? v?.['unidadesCount'] ?? v?.['cantidadUnidades'] ?? v?.['totalUnidades'];
     return raw==null || !Number.isFinite(Number(raw)) ? null : Number(raw);
   };
-  const getAnuladas=(v:any):number|null=>{
-    const raw=v?.anuladas ?? v?.ventasAnuladas ?? v?.canceladas ?? v?.anuladasCount;
+  const getAnuladas=(v: Record<string, unknown>):number|null=>{
+    const raw=v?.['anuladas'] ?? v?.['ventasAnuladas'] ?? v?.['canceladas'] ?? v?.['anuladasCount'];
     return raw==null || !Number.isFinite(Number(raw)) ? null : Number(raw);
   };
 
@@ -1364,15 +1364,16 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
    * ese endpoint, pero no inventamos ventas por hora con datos diarios.
    */
   const ventasPorHora = (() => {
-    if (Array.isArray((data as any).ventasPorHora) && (data as any).ventasPorHora.length > 0) {
-      return (data as any).ventasPorHora
-        .map((x:any)=>({
-          hora:Number(x.hora ?? x.hour ?? x.periodo),
-          ventas:Number(x.ventas ?? x.ventasCount ?? x.cantidad ?? 0),
-          ingresos:Number(x.ingresos ?? x.ingresosTotal ?? 0),
+    const dataR = data as unknown as Record<string, unknown>;
+    if (Array.isArray(dataR['ventasPorHora']) && (dataR['ventasPorHora'] as unknown[]).length > 0) {
+      return (dataR['ventasPorHora'] as Record<string, unknown>[])
+        .map(x=>({
+          hora:Number(x['hora'] ?? x['hour'] ?? x['periodo']),
+          ventas:Number(x['ventas'] ?? x['ventasCount'] ?? x['cantidad'] ?? 0),
+          ingresos:Number(x['ingresos'] ?? x['ingresosTotal'] ?? 0),
         }))
-        .filter((x:any)=>Number.isFinite(x.hora) && x.hora>=0 && x.hora<=23)
-        .sort((a:any,b:any)=>a.hora-b.hora);
+        .filter(x=>Number.isFinite(x.hora) && x.hora>=0 && x.hora<=23)
+        .sort((a,b)=>a.hora-b.hora);
     }
     if (horasPicoData.length > 0) {
       const byHora = new Map<number, {ventas:number; ingresos:number}>();
@@ -1393,8 +1394,8 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
   const horas=ventasPorHora.length>0
     ? ventasPorHora
     : Array.from({length:14},(_,i)=>({hora:i+8,ventas:0,ingresos:0}));
-  const maxHora=Math.max(...horas.map((h:any)=>h.ventas),1);
-  const hayDatosHora=ventasPorHora.some((h:any)=>h.ventas>0 || h.ingresos>0);
+  const maxHora=Math.max(...horas.map(h=>h.ventas),1);
+  const hayDatosHora=ventasPorHora.some(h=>h.ventas>0 || h.ingresos>0);
 
   const initials=(name:string)=>name
     .trim()
@@ -1433,7 +1434,7 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
         {vendedores.slice(0,4).map((v,i)=>{
           const pct=totalIng>0?((v.ingresosTotal??0)/totalIng)*100:0;
           const bg=avatarColors[i%avatarColors.length];
-          const anuladas=getAnuladas(v);
+          const anuladas=getAnuladas(v as unknown as Record<string, unknown>);
           return (
             <div key={v.vendedorId} style={{
               ...card,
@@ -1590,7 +1591,7 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
               <tbody>
                 {vendedores.map((v,i)=>{
                   const bg=avatarColors[i%avatarColors.length];
-                  const unidades=getUnidades(v);
+                  const unidades=getUnidades(v as unknown as Record<string, unknown>);
                   const udsVenta=unidades!=null && (v.ventasCount??0)>0 ? unidades/(v.ventasCount??1) : null;
                   return (
                     <tr key={v.vendedorId} style={{ borderTop:'1px solid var(--line-soft)' }}>
@@ -1626,9 +1627,9 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
           </div>
 
           <div style={{ display:'flex', alignItems:'flex-end', gap:5, height:170, padding:'16px 18px 0' }}>
-            {horas.map((h:any,i:number)=>{
+            {horas.map((h,i)=>{
               const pct=(h.ventas/maxHora)*100;
-              const isPeak=hayDatosHora && h.ventas===Math.max(...ventasPorHora.map((x:any)=>x.ventas));
+              const isPeak=hayDatosHora && h.ventas===Math.max(...ventasPorHora.map(x=>x.ventas));
               return (
                 <div key={`${h.hora}-${i}`} title={hayDatosHora ? `${h.hora}:00 · ${formatNum(h.ventas)} ${esServicios?'servicios':'ventas'}` : 'Datos horarios no disponibles'} style={{ flex:1, height:'100%', display:'flex', alignItems:'flex-end' }}>
                   <div style={{
@@ -1644,7 +1645,7 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
           </div>
 
           <div style={{ display:'flex', gap:5, padding:'6px 18px 16px' }}>
-            {horas.map((h:any,i:number)=>(
+            {horas.map((h,i)=>(
               <span key={`eje-${h.hora}-${i}`} style={{ flex:1, textAlign:'center', fontFamily:"'IBM Plex Mono',monospace", fontSize:'.6rem', color:'var(--text-3)' }}>
                 {h.hora}
               </span>
@@ -1668,6 +1669,7 @@ function ClientesTab({ loading, error, data, onRetry, esServicios=false }: {
   loading:boolean; error:string|null; data:ClienteReporteDTO[]|null; onRetry:()=>void; esServicios?:boolean;
 }) {
   const [segmento, setSegmento] = useState<'todos'|'frecuentes'|'nuevos'|'ocasionales'|'riesgo'>('todos');
+  const [nowMs] = useState(() => Date.now());
 
   if (loading) return <TabLoading />;
   if (error) return <TabError message={error} onRetry={onRetry} />;
@@ -1681,7 +1683,7 @@ function ClientesTab({ loading, error, data, onRetry, esServicios=false }: {
     if (!c.ultimaCompra) return Number.POSITIVE_INFINITY;
     const fecha = new Date(c.ultimaCompra);
     if (Number.isNaN(fecha.getTime())) return Number.POSITIVE_INFINITY;
-    return Math.max(0, Math.floor((Date.now() - fecha.getTime()) / 86400000));
+    return Math.max(0, Math.floor((nowMs - fecha.getTime()) / 86400000));
   };
 
   const esRiesgo = (c: ClienteReporteDTO) => diasDesdeUltimaCompra(c) > 30;
@@ -1708,9 +1710,9 @@ function ClientesTab({ loading, error, data, onRetry, esServicios=false }: {
     : 0;
 
   const initials = (name:string) => name.split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]?.toUpperCase()).join('') || 'CL';
-  const getDocumento = (c: ClienteReporteDTO) => {
-    const raw = c as any;
-    return raw.ruc ?? raw.dni ?? raw.documento ?? raw.numeroDocumento ?? '';
+  const getDocumento = (c: ClienteReporteDTO): string => {
+    const raw = c as unknown as Record<string, unknown>;
+    return String(raw['ruc'] ?? raw['dni'] ?? raw['documento'] ?? raw['numeroDocumento'] ?? '');
   };
   const getUltimaCompraLabel = (c: ClienteReporteDTO) => {
     if (!c.ultimaCompra) return '—';
@@ -2557,10 +2559,11 @@ function ComprasTab({ loading, error, data, onRetry }: {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function ReportesPage() {
-  const { canView } = usePermissions();
+  const { canView, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
   const esServicios = negocioConfig?.rubro==='EMPRESA_SERVICIOS';
   const hasAccess = canView('REPORTES');
+  const puedeVerComisiones = puede('VER_COMISION');
 
   const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
   const isMultiLocal = sucursales.length>1;
@@ -2735,7 +2738,8 @@ export function ReportesPage() {
     } finally { setClientesLoading(false); }
   };
 
-  const fetchComisiones = async (_d=desde, _h=hasta) => {
+  const fetchComisiones = async () => {
+    if (!puedeVerComisiones) return;
     try { setComisionesData(await comisionService.listar(sucursalId)); }
     catch { /* silencioso */ }
   };
@@ -2756,7 +2760,7 @@ export function ReportesPage() {
     if (!d||!h) { notify.fromError(null,'Selecciona un rango de fechas'); return; }
     if (d>h) { notify.fromError(null,'La fecha "Desde" no puede ser mayor a "Hasta"'); return; }
     fetchResumen(d,h); fetchVentas(d,h,agrupacion); fetchInventario(d,h);
-    fetchCompras(d,h); fetchFinanciero(d,h); fetchClientes(d,h); fetchComisiones(d,h);
+    fetchCompras(d,h); fetchFinanciero(d,h); fetchClientes(d,h); fetchComisiones();
     fetchHorasPico(d,h);
     fetchComprobantes(d,h);
   };
@@ -2821,7 +2825,7 @@ export function ReportesPage() {
 
   return (
     <div style={{ fontFamily:"'Inter',system-ui,sans-serif", WebkitFontSmoothing:'antialiased', ...(tokens as unknown as React.CSSProperties) }}>
-      <div style={{ maxWidth:1400, margin:'0 auto' }}>
+      <div style={{ maxWidth:1400 }}>
 
           {/* Page header */}
           <div style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-end', justifyContent:'space-between', gap:16 }}>

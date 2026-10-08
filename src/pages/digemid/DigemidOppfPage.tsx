@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+﻿import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { notify } from '../../lib/notify';
 import {
@@ -63,7 +63,7 @@ function SearchIco({ size = 16, color = 'currentColor' }: { size?: number; color
 
 function money(n: number) {
   const a = Math.abs(n).toFixed(2).split('.');
-  return 'S/ ' + a[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + a[1];
+  return 'S/\u00A0' + a[0].replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0') + ',' + a[1];
 }
 
 const UNIDADES_BASICAS = new Set([
@@ -740,7 +740,7 @@ export function DigemidOppfPage() {
                   <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                     <span style={{ display:'flex', alignItems:'center', gap:6, color:T.warn }}>
                       <Svg d={IC.tri} size={13} sw={2} />
-                      P2 de S/ 0,01 es el precio mínimo que acepta OPPF
+                      P2 de S/ 0,01 es el precio mínimo que acepta OPPF
                     </span>
                     {productosFiltrados.length > PAGE_SIZE && (
                       <div style={{ display:'flex', gap:4, marginLeft:12 }}>

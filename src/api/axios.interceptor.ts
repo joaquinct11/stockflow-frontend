@@ -44,7 +44,7 @@ export function setupAxiosInterceptors() {
 
       // Handle 403 Forbidden — show toast, do NOT logout
       if (error.response?.status === 403) {
-        if (!(error.config as any)?.skipForbiddenToast) {
+        if (!error.config?.skipForbiddenToast) {
           const mensaje =
             error.response?.data?.mensaje ||
             'No tienes permisos para realizar esta acción';
@@ -55,6 +55,16 @@ export function setupAxiosInterceptors() {
 
       // Si obtenemos 401, probablemente el accessToken expiró
       if (error.response?.status === 401 && !originalRequest._retry) {
+        const store = useAuthStore.getState();
+
+        // Si estamos en selección pendiente de tenant, NO intentar refresh
+        if (store.pendingTenantSelection) {
+          store.resetPendingSelection();
+          toast.error('La sesión de selección expiró. Inicia sesión nuevamente.');
+          window.location.href = '/login';
+          return Promise.reject(error);
+        }
+
         if (isRefreshing) {
           // Si ya estamos refrescando, esperar a que termine
           return new Promise((resolve) => {
@@ -69,39 +79,26 @@ export function setupAxiosInterceptors() {
         isRefreshing = true;
 
         try {
-          // Intentar refrescar el token
           const refreshedData = await authService.refresh();
-          
-          // Actualizar el store
-          const store = useAuthStore.getState();
-          if (store.user) {
-            const updatedUser = {
-              ...store.user,
-              ...refreshedData,
-            };
+
+          if (store.user && refreshedData.accessToken) {
+            const updatedUser = { ...store.user, ...refreshedData };
             store.setUser(updatedUser);
           }
 
-          // Actualizar el header de la petición original
-          originalRequest.headers.Authorization = `Bearer ${refreshedData.accessToken}`;
-          
-          // Notificar a otros subscribers
-          onRefreshed(refreshedData.accessToken);
-          
+          const newToken = refreshedData.accessToken ?? '';
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          onRefreshed(newToken);
           isRefreshing = false;
-          
-          // Reintentar la petición original con el nuevo token
+
           return axiosInstance(originalRequest);
         } catch (refreshError) {
           isRefreshing = false;
-          
-          // Si el refresh falla, hacer logout
-          const store = useAuthStore.getState();
+
           store.logout();
-          
           toast.error('Tu sesión ha expirado. Por favor inicia sesión nuevamente.');
           window.location.href = '/login';
-          
+
           return Promise.reject(refreshError);
         }
       }

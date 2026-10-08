@@ -9,6 +9,8 @@ export interface Usuario {
   apellido?: string;
   contraseña?: string;
   rolNombre: string;
+  /** Alias de rolNombre que algunas respuestas del backend incluyen */
+  rol?: string;
   activo?: boolean;
   tenantId: string;
   ultimoLogin?: string;
@@ -19,21 +21,46 @@ export interface Usuario {
   sucursalId?: number | null;
 }
 
+/** Forma de error que devuelve el backend en los bloques catch */
+export type ApiError = {
+  response?: {
+    data?: { mensaje?: string; message?: string; mensajes?: Record<string, string> };
+    status?: number;
+  };
+  message?: string;
+};
+
+/** Tenant disponible para selección en flujo multi-tenant (Case B). */
+export interface TenantInfo {
+  tenantId: string;
+  nombre: string;
+  rubro: string;
+  logoUrl?: string | null;
+  rol: string;
+}
+
 export interface JwtResponse {
-  // id?: number;
-  accessToken: string;      // ✅ Token corto (15 min)
-  refreshToken: string;     // ✅ Token largo (7 días)
+  // Campos presentes en AMBOS casos
   tipo: string;
   usuarioId: number;
   email: string;
   nombre: string;
-  rol: string;
-  tenantId: string;  // ✅ AGREGADO
-  expiresIn: number;        // Segundos (ej: 900 para 15 min)
-  suscripcion?: SuscripcionDTO;  // ✅ AGREGADO
-  permisos?: string[];      // Códigos de permisos del usuario (e.g. PRODUCTOS_VER)
+  expiresIn: number;
+
+  // Case A (single-tenant): todos presentes
+  // Case B (multi-tenant): null/undefined hasta que se llame select-tenant
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  rol?: string | null;
+  tenantId?: string | null;
+  suscripcion?: SuscripcionDTO;
+  permisos?: string[];
   /** Sucursal fija asignada. null/undefined = ADMIN (ve todas). */
   sucursalId?: number | null;
+
+  // Case B solamente
+  selectionToken?: string | null;
+  tenants?: TenantInfo[] | null;
 }
 
 // ========================================
@@ -318,6 +345,7 @@ export interface SuscripcionDTO {
   fechaCancelacion?: string;
   deletedAt?: string;
   trialEndDate?: string;
+  currentPeriodEnd?: string;
 }
 
 export interface SuscripcionEstadoResponseDTO {

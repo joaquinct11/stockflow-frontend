@@ -448,7 +448,7 @@ export function SuscripcionesList() {
         fechaProximoCobro: e.fechaProximoCobro,
         currentPeriodEnd: e.currentPeriodEnd,
         usuarioPrincipalId: user?.usuarioId ?? 0,
-        tenantId: user?.tenantId,
+        tenantId: user?.tenantId ?? undefined,
         metodoPago: d?.metodoPago,
         ultimos4Digitos: d?.ultimos4Digitos,
       });
@@ -496,7 +496,7 @@ export function SuscripcionesList() {
   // ── Sin suscripción ──
   if (!suscripcion) {
     return (
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200 }}>
         <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-.028em', margin: 0 }}>Mi suscripción</h1>
           <p style={{ fontSize: '.865rem', color: T.text3, margin: '7px 0 0' }}>Gestiona tu plan y facturación</p>
@@ -593,7 +593,7 @@ export function SuscripcionesList() {
         @media (max-width: 620px) { .sus-planes { grid-template-columns: 1fr !important; } }
       `}</style>
 
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200 }}>
         {/* Header */}
         <div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-.028em', margin: 0 }}>Mi suscripción</h1>

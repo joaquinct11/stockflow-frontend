@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+﻿import { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   gastoService,
@@ -111,7 +111,7 @@ const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov'
 
 function money(n: number): string {
   const [int, dec] = Math.abs(n).toFixed(2).split('.');
-  return int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + dec;
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0') + ',' + dec;
 }
 
 function fechaCorta(iso: string): string {
@@ -306,7 +306,7 @@ export function GastosList() {
   };
   const openEdit = (g: GastoDTO) => {
     setEditingId(g.id ?? null);
-    setForm({ ...g, montoStr: money(Number(g.monto)).replace(/ /g,'') });
+    setForm({ ...g, montoStr: money(Number(g.monto)).replace(/\u00A0/g,'') });
     setIntento(false); setModalForm(true);
   };
   const openDelete = (g: GastoDTO) => { setDeletingGasto(g); setModalDel(true); };

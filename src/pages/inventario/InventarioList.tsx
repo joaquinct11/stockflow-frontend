@@ -90,8 +90,8 @@ export function InventarioList() {
   }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [selectedProducto, setSelectedProducto] = useState<any>(null);
-  const [, setSelectedProveedorMov] = useState<any>(null);
+  const [selectedProducto, setSelectedProducto] = useState<{ id: number | string; label: string } | null>(null);
+  const [, setSelectedProveedorMov] = useState<{ id: number | string; label: string } | null>(null);
 
   // Variantes (TIENDA_ROPA)
   const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
@@ -451,8 +451,8 @@ export function InventarioList() {
       refreshOnboarding();
       resetForm();
       await fetchData();
-    } catch (error: any) {
-      if (import.meta.env.DEV) console.error('Error:', error.response?.data);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Error:', (error as { response?: { data?: unknown } })?.response?.data);
       notify.fromError(error, 'No se pudo registrar el movimiento. Revisa los datos e intenta de nuevo.');
     }
   };
@@ -1019,9 +1019,9 @@ export function InventarioList() {
                           setAjustePrecioStr(precio != null ? String(precio) : '');
                           const regSan = producto.registroSanitario ?? '';
                           setFormData(prev => ({ ...prev, productoId: producto.id!, costoUnitario: costo, precioVenta: precio, ...(esFarmacia && prev.tipo === 'ENTRADA' && regSan ? { registroSanitario: regSan } : {}) }));
-                          if (esRopa) { setLoadingVariantes(true); try { const vs = await productoVarianteService.getByProducto(producto.id!, sucursalId); setVariantesProducto(vs.filter(v => v.activo !== false)); } catch {} finally { setLoadingVariantes(false); } }
+                          if (esRopa) { setLoadingVariantes(true); try { const vs = await productoVarianteService.getByProducto(producto.id!, sucursalId); setVariantesProducto(vs.filter(v => v.activo !== false)); } catch { /* silent */ } finally { setLoadingVariantes(false); } }
                           if (esFarmacia) { productoPresentacionService.listar(producto.id!).then(pres => { setPresentacionesProducto(pres); const init: Record<number, string> = {}; pres.forEach(p => { if (p.id) init[p.id] = String(p.precioVenta ?? ''); }); setPreciosPresent(init); }).catch(() => setPresentacionesProducto([])); }
-                          if (esFarmacia && producto.stockVigente != null) { setLoadingLotesProducto(true); try { const ld = await movimientoService.getLotesPorProducto(producto.id!); setLotesDelProducto(ld.filter(l => l.diasRestantes != null)); } catch {} finally { setLoadingLotesProducto(false); } }
+                          if (esFarmacia && producto.stockVigente != null) { setLoadingLotesProducto(true); try { const ld = await movimientoService.getLotesPorProducto(producto.id!); setLotesDelProducto(ld.filter(l => l.diasRestantes != null)); } catch { /* silent */ } finally { setLoadingLotesProducto(false); } }
                         }
                       } else {
                         setSelectedProducto(null);
@@ -1138,7 +1138,7 @@ export function InventarioList() {
                           const prod = productos.find(p => p.id === selectedProducto.id) ?? productosForm.find(p => p.id === selectedProducto.id);
                           const disp = esFarmacia && (prod?.stockVigente != null)
                             ? prod.stockVigente
-                            : (stockEnSucursal.get(selectedProducto.id) ?? prod?.stockActual ?? 0);
+                            : (stockEnSucursal.get(selectedProducto.id as number) ?? prod?.stockActual ?? 0);
                           const after = disp - formData.cantidad;
                           const insuf = formData.cantidad > 0 && after < 0;
                           return <span style={{ fontSize: '.86rem', fontWeight: 600, color: insuf ? T.bad : T.text2 }}>
@@ -1350,7 +1350,7 @@ export function InventarioList() {
                   Siguiente →
                 </button>
               ) : (
-                <button type="button" style={BTN_PRI} onClick={handleSubmit as any}>
+                <button type="button" style={BTN_PRI} onClick={(e) => void handleSubmit(e as unknown as React.FormEvent)}>
                   Registrar movimiento
                 </button>
               )}

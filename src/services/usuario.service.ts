@@ -9,7 +9,7 @@ export const usuarioService = {
   getAll: async (silent = false): Promise<Usuario[]> => {
     const { data } = await axiosInstance.get<Usuario[]>(
       API_ENDPOINTS.USUARIOS.LIST,
-      silent ? { skipForbiddenToast: true } as any : undefined
+      silent ? { skipForbiddenToast: true } : undefined
     );
     return data;
   },
@@ -50,7 +50,7 @@ export const usuarioService = {
    * Desactivar usuario
    */
   deactivate: async (id: number): Promise<void> => {
-    await axiosInstance.patch(API_ENDPOINTS.USUARIOS.DEACTIVATE(id), null, { skipForbiddenToast: true } as any);
+    await axiosInstance.patch(API_ENDPOINTS.USUARIOS.DEACTIVATE(id), null, { skipForbiddenToast: true });
   },
 
   /**
@@ -73,7 +73,7 @@ export const usuarioService = {
   validarEliminacion: async (id: number): Promise<DeleteAccountValidationDTO> => {
     const { data } = await axiosInstance.get<DeleteAccountValidationDTO>(
       API_ENDPOINTS.USUARIOS.VALIDAR_ELIMINACION(id),
-      { skipForbiddenToast: true } as any
+      { skipForbiddenToast: true }
     );
     return data;
   },

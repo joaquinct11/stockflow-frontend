@@ -7,7 +7,7 @@ export function useOseConfigured() {
   const [oseConfigured, setOseConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (user?.rol !== 'ADMIN') { setOseConfigured(true); return; }
+    if (user?.rol !== 'ADMIN') { queueMicrotask(() => setOseConfigured(true)); return; }
     onboardingService.getProgreso()
       .then(data => {
         const paso = data.pasos.find(p => p.id === 'facturacion');

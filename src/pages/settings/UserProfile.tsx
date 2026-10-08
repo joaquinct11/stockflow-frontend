@@ -181,12 +181,12 @@ export function UserProfile() {
         tipoDocumento: editTipo || undefined,
         numeroDocumento: editNum || undefined,
         numeroCelular: editCel || undefined,
-      } as any);
+      } as Partial<import('../../types').Usuario>);
       notify.success('Perfil actualizado', { detail: 'Tus datos fueron guardados correctamente.' });
       setMEditar(false);
       await fetchProfile();
-    } catch (err: any) {
-      const b = err.response?.data;
+    } catch (err) {
+      const b = (err as { response?: { data?: { mensaje?: string; message?: string; mensajes?: Record<string, string> } } })?.response?.data;
       const msg = b?.mensaje || b?.message || (b?.mensajes ? Object.values(b.mensajes).join(' • ') : null) || 'Error al actualizar perfil';
       notify.fromError(err, msg);
     } finally {

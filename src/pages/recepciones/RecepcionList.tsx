@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { recepcionService } from '../../services/recepcion.service';
 import { ordenCompraService } from '../../services/ordenCompra.service';
 import { proveedorService } from '../../services/proveedor.service';
@@ -42,47 +42,48 @@ const ESTADO_BADGE: Record<string, string> = {
   ANULADA:    'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
 };
 
-function normalizeRecepcion(raw: any): RecepcionDTO {
-  const detalles: any[] = Array.isArray(raw?.detalles)
-    ? raw.detalles
-    : Array.isArray(raw?.items)
-    ? raw.items
+function normalizeRecepcion(raw: unknown): RecepcionDTO {
+  const r = raw as Record<string, unknown>;
+  const rawDetalles = Array.isArray(r?.['detalles'])
+    ? (r['detalles'] as Record<string, unknown>[])
+    : Array.isArray(r?.['items'])
+    ? (r['items'] as Record<string, unknown>[])
     : [];
 
-  const items: RecepcionItemDTO[] = detalles.map((d) => ({
-    id: d.id,
-    productoId: d.productoId,
-    productoNombre: d.productoNombre,
-    codigoBarras: d.codigoBarras,
-    cantidadEsperada: d.cantidadEsperada,
-    cantidadRecibida: d.cantidadRecibida,
-    precioUnitario: d.precioUnitario,
-    precioVenta: d.precioVenta,
-    fechaVencimiento: d.fechaVencimiento,
-    lote: d.lote,
-    registroSanitario: d.registroSanitario,
+  const items: RecepcionItemDTO[] = rawDetalles.map((d) => ({
+    id: d['id'] as number | undefined,
+    productoId: d['productoId'] as number,
+    productoNombre: d['productoNombre'] as string | undefined,
+    codigoBarras: d['codigoBarras'] as string | undefined,
+    cantidadEsperada: d['cantidadEsperada'] as number | undefined,
+    cantidadRecibida: (d['cantidadRecibida'] as number | undefined) ?? 0,
+    precioUnitario: d['precioUnitario'] as number | undefined,
+    precioVenta: d['precioVenta'] as number | undefined,
+    fechaVencimiento: d['fechaVencimiento'] as string | undefined,
+    lote: d['lote'] as string | undefined,
+    registroSanitario: d['registroSanitario'] as string | undefined,
   }));
 
-  const hasComp = !!raw?.tipoComprobante && !!raw?.serie && !!raw?.numero;
+  const hasComp = !!r?.['tipoComprobante'] && !!r?.['serie'] && !!r?.['numero'];
   return {
-    id: raw?.id,
-    tenantId: raw?.tenantId,
-    ordenCompraId: raw?.ocId ?? raw?.ordenCompraId,
-    proveedorId: raw?.proveedorId,
-    proveedorNombre: raw?.proveedorNombre,
-    estado: raw?.estado,
+    id: r?.['id'] as number | undefined,
+    tenantId: r?.['tenantId'] as string | undefined,
+    ordenCompraId: (r?.['ocId'] ?? r?.['ordenCompraId']) as number | undefined,
+    proveedorId: r?.['proveedorId'] as number,
+    proveedorNombre: r?.['proveedorNombre'] as string | undefined,
+    estado: r?.['estado'] as import('../../types').EstadoRecepcion,
     comprobante: hasComp
-      ? { tipoComprobante: raw.tipoComprobante, serie: raw.serie, numero: raw.numero, urlAdjunto: raw.urlAdjunto ?? undefined }
+      ? { tipoComprobante: r['tipoComprobante'] as import('../../types').TipoComprobanteProveedor, serie: r['serie'] as string, numero: r['numero'] as string, urlAdjunto: r['urlAdjunto'] as string | undefined ?? undefined }
       : undefined,
-    observaciones: raw?.observaciones,
-    createdAt: raw?.createdAt,
-    updatedAt: raw?.updatedAt,
+    observaciones: r?.['observaciones'] as string | undefined,
+    createdAt: r?.['createdAt'] as string | undefined,
+    updatedAt: r?.['updatedAt'] as string | undefined,
     items,
-  } as any;
+  };
 }
 
 // ── Stepper visual ───────────────────────────────────────────────────────────
-function Stepper({ items, comprobante }: { items: RecepcionItemDTO[]; comprobante: any }) {
+function Stepper({ items, comprobante }: { items: RecepcionItemDTO[]; comprobante: import('../../types').ComprobanteProveedorDTO | undefined }) {
   const hasItems = items.length > 0 && items.some((i) => (i.cantidadRecibida ?? 0) > 0);
   const hasComp = !!comprobante?.tipoComprobante;
 
@@ -236,7 +237,7 @@ export function RecepcionList() {
         recepcionService.getAll(sucursalId),
         productoService.getAll().catch(() => []),
       ]);
-      setRecepciones((recDataRaw as any[]).map(normalizeRecepcion));
+      setRecepciones((recDataRaw as unknown[]).map(normalizeRecepcion));
       setProductos(prodData);
       if (puede('VER_OC') || puede('CREAR_RECEPCION')) {
         const ocData = await ordenCompraService.getAll(sucursalId).catch(() => []);
@@ -370,14 +371,14 @@ export function RecepcionList() {
         ocId: createMode === 'OC' ? createOcId! : undefined,
         proveedorId: createMode === 'MANUAL' ? proveedorId! : undefined,
         observaciones: createObs || undefined,
-      } as any);
+      } as unknown as Omit<RecepcionDTO, 'id' | 'tenantId'>);
 
       toast.success('Recepción creada — completa los datos a continuación');
       setIsCreateOpen(false);
       await fetchData();
-      await openDetail((createdRaw as any).id!);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.mensaje ?? 'Error al crear la recepción');
+      await openDetail((createdRaw as { id?: number }).id!);
+    } catch (e) {
+      toast.error((e as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ?? 'Error al crear la recepción');
     } finally { setCreating(false); }
   };
 
@@ -389,7 +390,7 @@ export function RecepcionList() {
     try {
       const rec = normalizeRecepcion(await recepcionService.getById(id));
       setSelectedRecep(rec);
-      const comp = rec.comprobante as any;
+      const comp = rec.comprobante;
       if (comp) {
         setCompTipo(comp.tipoComprobante); setCompSerie(comp.serie);
         setCompNumero(comp.numero); setCompUrl(comp.urlAdjunto ?? '');
@@ -457,8 +458,8 @@ export function RecepcionList() {
       });
       await refreshDetail();
       toast.success('Producto actualizado');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.mensaje ?? 'Error al actualizar');
+    } catch (e) {
+      toast.error((e as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ?? 'Error al actualizar');
     } finally { setSavingItemId(null); }
   };
 
@@ -489,8 +490,8 @@ export function RecepcionList() {
       ));
       await refreshDetail();
       toast.success('✅ Todas las cantidades actualizadas al total esperado');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.mensaje ?? 'Error');
+    } catch (e) {
+      toast.error((e as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ?? 'Error');
     } finally { setDetailActionLoading(false); }
   };
 
@@ -517,8 +518,8 @@ export function RecepcionList() {
       await refreshDetail();
       setSelectedProductoId(null); setItemQty(1); setItemExpiry(''); setItemLote(''); setItemRegSan(''); setItemPrecioVenta('');
       toast.success('Producto guardado');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.mensaje ?? 'Error al guardar producto');
+    } catch (e) {
+      toast.error((e as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ?? 'Error al guardar producto');
     } finally { setDetailActionLoading(false); }
   };
 
@@ -536,7 +537,7 @@ export function RecepcionList() {
           await refreshDetail();
           toast.success('Producto quitado');
           setConfirmDialog((p) => ({ ...p, isOpen: false }));
-        } catch (e: any) { toast.error(e?.response?.data?.mensaje ?? 'Error'); }
+        } catch (e) { toast.error((e as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ?? 'Error'); }
         finally { setDetailActionLoading(false); }
       },
     });
@@ -550,17 +551,17 @@ export function RecepcionList() {
       await recepcionService.setComprobante(selectedRecep.id, {
         tipoComprobante: compTipo, serie: compSerie.trim(),
         numero: compNumero.trim(), urlAdjunto: compUrl.trim() || undefined,
-      } as any);
+      });
       await refreshDetail();
       toast.success('Comprobante registrado');
-    } catch (e: any) { toast.error(e?.response?.data?.mensaje ?? 'Error al guardar comprobante'); }
+    } catch (e) { toast.error((e as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ?? 'Error al guardar comprobante'); }
     finally { setSavingComp(false); }
   };
 
   const handleConfirmar = async () => {
     if (!selectedRecep?.id || !isEditable) return;
     if (!canConfirmRecep) { toast.error('Sin permiso para confirmar'); return; }
-    const comp = selectedRecep.comprobante as any;
+    const comp = selectedRecep.comprobante;
     if (!comp?.tipoComprobante || !comp?.serie || !comp?.numero) {
       toast.error('Registra el comprobante antes de confirmar'); return;
     }
@@ -582,7 +583,7 @@ export function RecepcionList() {
       setSelectedRecep(updated);
       toast.success('✅ Recepción confirmada — stock actualizado');
       await fetchData();
-    } catch (e: any) { toast.error(e?.response?.data?.mensaje ?? 'Error al confirmar'); }
+    } catch (e) { toast.error((e as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ?? 'Error al confirmar'); }
     finally { setDetailActionLoading(false); }
   };
 
@@ -600,7 +601,7 @@ export function RecepcionList() {
           toast.success('Recepción anulada');
           closeDetail(); await fetchData();
           setConfirmDialog((p) => ({ ...p, isOpen: false }));
-        } catch (e: any) { toast.error(e?.response?.data?.mensaje ?? 'Error al anular'); }
+        } catch (e) { toast.error((e as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ?? 'Error al anular'); }
         finally { setDetailActionLoading(false); }
       },
     });
@@ -634,8 +635,8 @@ export function RecepcionList() {
         const updated = normalizeRecepcion(await recepcionService.getById(selectedRecep.id));
         setSelectedRecep(updated);
         toast.success(`+1 ${itemEnRecep.productoNombre} → ${nuevaQty} recibidos`);
-      } catch (e: any) {
-        toast.error(e?.response?.data?.mensaje ?? 'Error al actualizar');
+      } catch (e) {
+        toast.error((e as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ?? 'Error al actualizar');
       } finally { setSavingItemId(null); }
       return;
     }
@@ -1007,7 +1008,7 @@ export function RecepcionList() {
                         </TableCell>
                         <TableCell className="text-xs">
                           {rec.comprobante
-                            ? <span className="text-green-600 font-medium">✓ {(rec.comprobante as any).tipoComprobante} {(rec.comprobante as any).serie}-{(rec.comprobante as any).numero}</span>
+                            ? <span className="text-green-600 font-medium">✓ {rec.comprobante.tipoComprobante} {rec.comprobante.serie}-{rec.comprobante.numero}</span>
                             : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
@@ -1518,8 +1519,8 @@ export function RecepcionList() {
                 </p>
                 {selectedRecep.comprobante ? (
                   <span className="text-xs text-green-600 font-semibold">
-                    ✓ {(selectedRecep.comprobante as any).tipoComprobante}{' '}
-                    {(selectedRecep.comprobante as any).serie}-{(selectedRecep.comprobante as any).numero}
+                    ✓ {selectedRecep.comprobante.tipoComprobante}{' '}
+                    {selectedRecep.comprobante.serie}-{selectedRecep.comprobante.numero}
                   </span>
                 ) : (
                   <span className="text-xs text-amber-600 font-medium flex items-center gap-1">

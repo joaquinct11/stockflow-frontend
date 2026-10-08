@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Moon, Sun, LogOut, User, Menu, ChevronDown, Settings, AlertTriangle, Info, CheckCircle, X, BellOff, Building2, MapPin } from 'lucide-react';
+import { Bell, Moon, Sun, LogOut, User, Menu, ChevronDown, Settings, AlertTriangle, Info, CheckCircle, X, BellOff, Building2, MapPin, ArrowLeftRight } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useThemeStore } from '../../store/themeStore';
 import { useAuthStore } from '../../store/authStore';
@@ -59,7 +59,7 @@ function formatRelativo(fecha: string): string {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { isDark, toggleTheme } = useThemeStore();
-  const { user, logout } = useAuthStore();
+  const { user, logout, startTenantSwitch } = useAuthStore();
   const { sucursales, sucursalActual, setSucursalActual } = useSucursalStore();
   const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -184,6 +184,21 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const handleProfileClick = () => { setIsDropdownOpen(false); navigate('/dashboard/perfil'); };
   const handleSettingsClick = () => { setIsDropdownOpen(false); navigate('/dashboard/configuracion'); };
+
+  const handleSwitchTenant = async () => {
+    setIsDropdownOpen(false);
+    try {
+      const tenants = await authService.getMisTenants();
+      if (tenants.length <= 1) {
+        toast('Solo tienes acceso a un negocio.');
+        return;
+      }
+      startTenantSwitch(tenants);
+      navigate('/select-tenant');
+    } catch {
+      toast.error('No se pudo cargar los negocios disponibles.');
+    }
+  };
 
   // ── Helpers de UI ───────────────────────────────────────────────────────────
   const colorForTipo = (tipo: string) => {
@@ -489,6 +504,13 @@ export function Header({ onMenuClick }: HeaderProps) {
                 >
                   <Settings size={15} className="text-muted-foreground" />
                   Configuración
+                </button>
+                <button
+                  onClick={handleSwitchTenant}
+                  className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-2.5 text-sm font-medium transition-colors"
+                >
+                  <ArrowLeftRight size={15} className="text-muted-foreground" />
+                  Cambiar negocio
                 </button>
               </div>
 

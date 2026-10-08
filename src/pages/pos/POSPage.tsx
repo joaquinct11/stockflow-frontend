@@ -564,7 +564,7 @@ export function POSPage() {
       const caja = await cajaService.abrir({ montoApertura: monto, sucursalId });
       setCajaActiva(caja); setShowAbrirCaja(false);
       toast.success('Caja abierta. ¡Listo para vender!'); refreshOnboarding();
-    } catch (err: any) { toast.error(err?.response?.data?.mensaje || 'Error al abrir caja'); }
+    } catch (err) { toast.error((err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje || 'Error al abrir caja'); }
     finally { setAbriendoCaja(false); }
   };
 
@@ -575,7 +575,7 @@ export function POSPage() {
       const monto = parseFloat(montoCierre) || 0;
       await cajaService.cerrar(cajaActiva.id, { montoContado: monto });
       toast.success('Caja cerrada correctamente'); navigate('/dashboard');
-    } catch (err: any) { toast.error(err?.response?.data?.mensaje || 'Error al cerrar caja'); }
+    } catch (err) { toast.error((err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje || 'Error al cerrar caja'); }
     finally { setCerrando(false); }
   };
 
@@ -699,13 +699,14 @@ export function POSPage() {
           }
           const { data: comp } = await axiosInstance.post('/facturacion/comprobantes', body);
           setUltimoComprobanteId(comp.id ?? null);
-        } catch (err: any) {
-          const backendMsg = err?.response?.data?.mensaje || err?.response?.data?.message || err?.message || '';
+        } catch (err) {
+          const e = err as { response?: { data?: { mensaje?: string; message?: string }; status?: number }; message?: string };
+          const backendMsg = e?.response?.data?.mensaje || e?.response?.data?.message || e?.message || '';
           notify.error(
             backendMsg ? `No se pudo emitir el comprobante: ${backendMsg}` : 'Venta registrada, pero no se pudo emitir el comprobante.',
             { detail: 'Puedes emitirlo manualmente desde el módulo de Facturación.', action: { label: 'Ir a Facturación', fn: () => window.location.href = '/facturacion' } }
           );
-          if (import.meta.env.DEV) console.error('[comprobante]', err?.response?.status, err?.response?.data);
+          if (import.meta.env.DEV) console.error('[comprobante]', e?.response?.status, e?.response?.data);
         }
       }
       setNcCodigo(''); setNcInfo(null); setStep('exito');

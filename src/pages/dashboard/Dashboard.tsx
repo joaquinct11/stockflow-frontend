@@ -68,18 +68,18 @@ function getRangeStart(filter: TimeFilter, now = new Date()) {
 }
 
 function getVentaDate(v: VentaDTO): Date | null {
-  const anyV = v as any;
+  const anyV = v as unknown as Record<string, unknown>;
   const raw =
-    anyV?.createdAt ??
-    anyV?.fecha ??
-    anyV?.fechaVenta ??
-    anyV?.fechaCreacion ??
-    anyV?.created_at ??
+    anyV?.['createdAt'] ??
+    anyV?.['fecha'] ??
+    anyV?.['fechaVenta'] ??
+    anyV?.['fechaCreacion'] ??
+    anyV?.['created_at'] ??
     null;
 
   if (!raw) return null;
 
-  const d = raw instanceof Date ? raw : new Date(raw);
+  const d = raw instanceof Date ? raw : new Date(raw as string | number);
   if (Number.isNaN(d.getTime())) return null;
   return d;
 }
@@ -189,7 +189,7 @@ export function Dashboard() {
   const { user, suscripcionEstado } = useAuthStore();
   const { userId } = useCurrentUser();
   const navigate = useNavigate();
-  const rol = safeRol(user?.rol);
+  const rol = safeRol(user?.rol ?? undefined);
   const { config: negocioConfig } = useTenantConfigStore();
   const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
   const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
@@ -240,7 +240,7 @@ export function Dashboard() {
 
 
   // Fecha de corte para cancelación pendiente
-  const currentPeriodEndRaw = (suscripcion as any)?.currentPeriodEnd as string | undefined;
+  const currentPeriodEndRaw = suscripcion?.currentPeriodEnd;
   const fechaCorte = currentPeriodEndRaw
     ? new Date(currentPeriodEndRaw).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })
     : null;
@@ -368,8 +368,8 @@ export function Dashboard() {
       const movimientosIds = new Set((movimientosData ?? []).map(m => m.id));
       const extra = (proximosVencerData ?? []).filter(m => !movimientosIds.has(m.id));
       setMovimientos([...(movimientosData ?? []), ...extra]);
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error) {
+      if ((error as { response?: { status?: number } })?.response?.status === 403) {
         setVentas([]);
         setCanLoadVentas(false);
         notify.error('Sin acceso a ventas', { detail: 'Tu rol no tiene permiso para ver el historial de ventas.' });

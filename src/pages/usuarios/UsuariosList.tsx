@@ -248,7 +248,7 @@ export function UsuariosList() {
         notify.success('Usuario creado. Se enviará un email de bienvenida.');
       }
       resetForm(); await fetchUsuarios();
-    } catch (err: any) {
+    } catch (err) {
       notify.fromError(err, editingId ? 'No se pudo actualizar el usuario.' : 'No se pudo crear el usuario.');
     }
   };

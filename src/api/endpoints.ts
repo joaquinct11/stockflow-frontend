@@ -11,7 +11,10 @@ export const API_ENDPOINTS = {
     CHANGE_PASSWORD: '/auth/cambiar-contraseña',  // ✅ NUEVO
     FORGOT_PASSWORD: '/auth/forgot-password',      // ✅ NUEVO
     RESET_PASSWORD: '/auth/reset-password',        // ✅ NUEVO
-    ACTIVATE_ACCOUNT: '/auth/activate-account',   // ✅ Activación cuenta nueva
+    ACTIVATE_ACCOUNT: '/auth/activate-account',
+    SELECT_TENANT: '/auth/select-tenant',
+    TENANTS: '/auth/tenants',
+    CREATE_TENANT: '/auth/create-tenant',
   },
   
   USUARIOS: {

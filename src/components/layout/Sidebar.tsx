@@ -45,14 +45,14 @@ type LeafItem = {
   type: 'item';
   title: string;
   href: string;
-  icon: any;
+  icon: React.ElementType;
   show: boolean;
 };
 
 type GroupItem = {
   type: 'group';
   title: string;
-  icon: any;
+  icon: React.ElementType;
   show: boolean;
   key: 'ventas' | 'gastos' | 'contactos' | 'inventario' | 'usuarios';
   items: Omit<LeafItem, 'type'>[];
@@ -325,7 +325,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
           <div className="flex items-center justify-between gap-2 px-[18px] py-[10px] border-b border-sidebar-line flex-shrink-0">
             <span className="font-mono text-[.62rem] font-semibold tracking-[.1em] uppercase text-muted-foreground">Rol</span>
             <span className="text-[.66rem] font-bold tracking-[.05em] uppercase text-destructive bg-destructive/10 rounded-full px-[9px] py-[2px]">
-              {ROL_LABEL[user.rol] ?? user.rol}
+              {(user.rol ? ROL_LABEL[user.rol] : null) ?? user.rol}
             </span>
           </div>
         )}

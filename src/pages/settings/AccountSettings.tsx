@@ -569,7 +569,7 @@ export function AccountSettings() {
         @keyframes fx-spin { to { transform: rotate(360deg); } }
       `}</style>
 
-      <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1240px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: '12px' }}>
           <div>
             <h1 style={{ fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-.028em', margin: 0, color: C.text }}>Configuración</h1>

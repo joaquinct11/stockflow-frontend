@@ -393,10 +393,11 @@ export function ProductosList() {
 
       resetForm();
       await fetchData();
-    } catch (error: any) {
+    } catch (error) {
       if (import.meta.env.DEV) console.log('❌ Error completo:', error);
-      if (import.meta.env.DEV) console.log('❌ Response data:', error.response?.data);
-      const message = error.response?.data?.mensaje || error.response?.data?.error || 'Error al guardar producto';
+      const e = error as { response?: { data?: { mensaje?: string; error?: string } } };
+      if (import.meta.env.DEV) console.log('❌ Response data:', e.response?.data);
+      const message = e.response?.data?.mensaje || e.response?.data?.error || 'Error al guardar producto';
       toast.error(message);
     }
   };
@@ -545,8 +546,8 @@ export function ProductosList() {
       setEditingVarianteId(null);
       setVarianteForm({ productoId: selectedProductoVariantes.id!, talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '', activo: true });
       await fetchData();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.mensaje || 'Error al guardar variante');
+    } catch (err) {
+      toast.error((err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje || 'Error al guardar variante');
     } finally { setSavingVariante(false); }
   };
 
@@ -910,7 +911,7 @@ export function ProductosList() {
                     ? ((producto.precioVenta - producto.costoUnitario) / producto.precioVenta * 100) : null;
                   const margenColor = margen === null ? T.text3 : margen < 0 ? T.bad : margen < 15 ? T.warn : T.ok;
                   const av = avatarStyle(producto.nombre);
-                  const unidadLabel = (producto as any).unidadMedidaNombre ?? unidadById.get(producto.unidadMedidaId)?.nombre ?? '';
+                  const unidadLabel = producto.unidadMedidaNombre ?? unidadById.get(producto.unidadMedidaId)?.nombre ?? '';
                   const isHov = hoveredRow === producto.id;
                   return (
                     <tr key={producto.id}

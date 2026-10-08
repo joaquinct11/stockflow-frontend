@@ -14,10 +14,12 @@ import { ErrorBoundary } from './components/shared/ErrorBoundary';
 
 // Auth Pages (carga inmediata — ruta de entrada)
 import { Login } from './pages/auth/Login';
+import { SelectTenant } from './pages/auth/SelectTenant';
 import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword } from './pages/auth/ResetPassword';
 import { ActivatePage } from './pages/auth/ActivatePage';
+import { SelectTenantRoute } from './components/shared/SelectTenantRoute';
 
 // Lazy — páginas que se cargan solo cuando se navega a ellas
 const LandingPage       = lazy(() => import('./pages/landing/LandingPage').then(m => ({ default: m.LandingPage })));
@@ -62,9 +64,9 @@ const PageLoader = () => (
 );
 
 function App() {
-  const { initialize, isAuthenticated, setSuscripcionEstado } = useAuthStore();
+  const { initialize, isAuthenticated, setSuscripcionEstado, user } = useAuthStore();
   const { isDark, setTheme } = useThemeStore();
-  const suscripcionCargada = useRef(false);
+  const suscripcionCargada = useRef<string | null>(null);
 
   useInactivityLogout();
 
@@ -76,16 +78,19 @@ function App() {
     }
   }, [initialize, setTheme]);
 
-  // Cargar estado de suscripción al autenticarse (una sola vez por sesión)
+  // Cargar estado de suscripción al autenticarse, una vez por tenant
+  // Se recarga si cambia el tenant (user?.tenantId)
   useEffect(() => {
-    if (!isAuthenticated || suscripcionCargada.current) return;
-    suscripcionCargada.current = true;
+    const currentTenantId = user?.tenantId ?? null;
+    if (!isAuthenticated || !currentTenantId) return;
+    if (suscripcionCargada.current === currentTenantId) return;
+    suscripcionCargada.current = currentTenantId;
     import('./services/suscripcion.service').then(({ suscripcionService }) => {
       suscripcionService.getEstado()
         .then((s) => setSuscripcionEstado(s.estado))
         .catch(() => { /* silencioso — usamos JWT como fallback */ });
     });
-  }, [isAuthenticated, setSuscripcionEstado]);
+  }, [isAuthenticated, user?.tenantId, setSuscripcionEstado]);
 
   return (
     <>
@@ -109,6 +114,14 @@ function App() {
 
             {/* Auth Routes - Públicas */}
             <Route path="/login" element={<Login />} />
+            <Route
+              path="/select-tenant"
+              element={
+                <SelectTenantRoute>
+                  <SelectTenant />
+                </SelectTenantRoute>
+              }
+            />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
