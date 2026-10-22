@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
@@ -18,17 +18,64 @@ const DOC_RULES: Record<TipoDocumento, { len: number; ph: string; label: string 
   PASAPORTE: { len: 0,  ph: 'Nº documento', label: '' },
 };
 
-const RUBRO_HINTS: Record<string, string> = {
+// Segmento comercial → código en el catálogo.
+// El segmento se muestra al usuario; el código va al backend.
+const SEGMENTO_HINTS: Record<string, string> = {
   BOTICA:            'Verás lotes, vencimientos, DIGEMID y el reporte OPPF.',
   FARMACIA:          'Verás lotes, vencimientos, DIGEMID y el reporte OPPF.',
   MINIMARKET:        'Verás turnos de caja, merma y control por categorías.',
   FERRETERIA:        'Verás órdenes de compra, recepciones parciales y kardex.',
-  RESTAURANTE:       'Verás POS rápido, caja por turno y control de insumos.',
   TIENDA_ROPA:       'Verás variantes por talla y color en el inventario.',
-  TIENDA:            'Verás POS rápido, caja diaria y alertas de stock.',
+  TIENDA_BODEGA:     'Verás POS rápido, caja diaria y alertas de stock.',
+  RESTAURANTE:       'Verás mesas, pedidos y comprobantes electrónicos para restaurantes.',
   EMPRESA_SERVICIOS: 'Verás facturación, clientes y reportes de ingresos.',
+  VETERINARIA:       'Verás fichas de mascotas, historial clínico, citas y agenda de profesionales.',
+  ALMACENES:         'Verás control de entradas, salidas y stock de tu almacén o depósito.',
   OTRO:              'Define los módulos que verás al ingresar.',
 };
+
+// Precios locales de fallback — solo usados mientras el catálogo carga.
+// Cuando la API falla, preciosOk=false bloquea el submit y se muestran "—".
+const PRECIOS_FALLBACK: Record<string, { basico: number; pro: number }> = {
+  VETERINARIA:       { basico: 109, pro: 189 },
+  BOTICA:            { basico: 89,  pro: 169 },
+  FARMACIA:          { basico: 89,  pro: 169 },
+  TIENDA_ROPA:       { basico: 89,  pro: 169 },
+  TIENDA_BODEGA:     { basico: 79,  pro: 149 },
+  FERRETERIA:        { basico: 99,  pro: 179 },
+  MINIMARKET:        { basico: 99,  pro: 179 },
+  RESTAURANTE:       { basico: 119, pro: 199 },
+  EMPRESA_SERVICIOS: { basico: 99,  pro: 179 },
+  ALMACENES:         { basico: 89,  pro: 169 },
+  DEFAULT:           { basico: 89,  pro: 169 },
+};
+
+function getFallbackPrecio(segmento: string): { basico: number; pro: number } {
+  return PRECIOS_FALLBACK[segmento] ?? PRECIOS_FALLBACK.DEFAULT;
+}
+
+// El catálogo usa 'ALMACEN_BASICO' (sin S), aunque el segmento es ALMACENES.
+const SEGMENTO_A_PLAN_PREFIJO: Record<string, string> = {
+  ALMACENES: 'ALMACEN',
+};
+
+// Mapea segmento comercial → código de plan en el catálogo.
+// e.g. segmento=VETERINARIA, nivel=BASICO → VETERINARIA_BASICO
+// e.g. segmento=ALMACENES,   nivel=BASICO → ALMACEN_BASICO (prefijo especial)
+function toPlanCodigo(segmento: string, nivel: string): string {
+  const prefijo = SEGMENTO_A_PLAN_PREFIJO[segmento] ?? segmento;
+  return `${prefijo}_${nivel}`;
+}
+
+// Mapea segmento comercial → rubro operativo del backend (para RegistrationRequestDTO.rubro)
+const SEGMENTO_A_RUBRO: Record<string, string> = {
+  TIENDA_BODEGA: 'TIENDA',
+  TIENDA_ROPA:   'TIENDA_ROPA',
+  ALMACENES:     'OTRO',
+};
+function toRubroOperativo(segmento: string): string {
+  return SEGMENTO_A_RUBRO[segmento] ?? segmento;
+}
 
 function pwScore(pass: string): number {
   if (!pass) return 0;
@@ -59,6 +106,14 @@ export function Register() {
   const rawPlan  = searchParams.get('plan')?.toUpperCase();
   const initPlan: PlanId = rawPlan === 'PRO' ? 'PRO' : 'BASICO';
 
+  // Segmentos válidos en el select — para validar el parámetro de URL
+  const SEGMENTOS_VALIDOS = [
+    'BOTICA','FARMACIA','VETERINARIA','MINIMARKET','FERRETERIA',
+    'TIENDA_ROPA','TIENDA_BODEGA','RESTAURANTE','EMPRESA_SERVICIOS','ALMACENES','OTRO',
+  ];
+  const rawSegmento = searchParams.get('segmento')?.toUpperCase() ?? '';
+  const initSegmento = SEGMENTOS_VALIDOS.includes(rawSegmento) ? rawSegmento : 'OTRO';
+
   // ── Step 1: datos personales (→ usuarios) ──
   const [step,     setStep]     = useState<1 | 2>(1);
   const [nombre,   setNombre]   = useState('');
@@ -72,9 +127,37 @@ export function Register() {
 
   // ── Step 2: datos del negocio (→ tenants) ──
   const [empresa,    setEmpresa]    = useState('');
-  const [rubro,      setRubro]      = useState('OTRO');
+  const [segmento,   setSegmento]   = useState(initSegmento);
   const [rucEmpresa, setRucEmpresa] = useState('');
   const [plan,       setPlan]       = useState<PlanId>(initPlan);
+
+  // Precios cargados del catálogo del servidor.
+  // preciosOk=false indica fallo de carga: bloquea el submit y muestra aviso.
+  const [precios,    setPrecios]    = useState(getFallbackPrecio('OTRO'));
+  const [preciosOk,  setPreciosOk]  = useState(false);
+  const [preciosCargando, setPreciosCargando] = useState(false);
+
+  useEffect(() => {
+    let activo = true;
+    setPreciosOk(false);
+    setPreciosCargando(true);
+    Promise.all([
+      authService.getPlanPorCodigo(toPlanCodigo(segmento, 'BASICO')),
+      authService.getPlanPorCodigo(toPlanCodigo(segmento, 'PRO')),
+    ])
+      .then(([b, p]) => {
+        if (!activo) return;
+        setPrecios({ basico: b.precioMensual, pro: p.precioMensual });
+        setPreciosOk(true);
+      })
+      .catch(() => {
+        if (!activo) return;
+        setPrecios(getFallbackPrecio(segmento));
+        setPreciosOk(false);
+      })
+      .finally(() => { if (activo) setPreciosCargando(false); });
+    return () => { activo = false; };
+  }, [segmento]);
 
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
@@ -115,8 +198,14 @@ export function Register() {
     const err = validate2();
     if (err) { setError(err); return; }
 
+    if (!preciosOk) {
+      setError('No se pudo confirmar el precio del plan con el servidor. Por favor, reintenta.');
+      return;
+    }
+
     setLoading(true); setError('');
     try {
+      const planCodigo = toPlanCodigo(segmento, plan);
       const response = await authService.register({
         email:           email.trim(),
         contraseña:      pass,
@@ -124,7 +213,8 @@ export function Register() {
         apellido:        apellido.trim(),
         nombreFarmacia:  empresa.trim(),
         planId:          plan,
-        rubro,
+        planCodigo,
+        rubro:           toRubroOperativo(segmento),
         tipoDocumento:   tipoDoc,
         numeroDocumento: numDoc,
         numeroCelular:   celular,
@@ -384,43 +474,59 @@ export function Register() {
                     <span style={{ fontSize: '.78rem', color: '#7d7f96' }}>Número de RUC con el que emitirás comprobantes.</span>
                   </div>
 
-                  {/* Rubro */}
+                  {/* Segmento comercial */}
                   <div style={{ display: 'grid', gap: 7 }}>
-                    <label htmlFor="rx-rubro" style={{ fontSize: '.83rem', fontWeight: 600, color: '#c9cbd8' }}>Tipo de negocio (rubro) <span style={{ color: '#ff8079' }}>*</span></label>
-                    <select id="rx-rubro" value={rubro} onChange={e => setRubro(e.target.value)} className="rx-select">
+                    <label htmlFor="rx-rubro" style={{ fontSize: '.83rem', fontWeight: 600, color: '#c9cbd8' }}>Tipo de negocio <span style={{ color: '#ff8079' }}>*</span></label>
+                    <select id="rx-rubro" value={segmento} onChange={e => { setSegmento(e.target.value); setPlan('BASICO'); }} className="rx-select">
                       <option value="BOTICA">Botica</option>
                       <option value="FARMACIA">Farmacia</option>
+                      <option value="VETERINARIA">Veterinaria</option>
                       <option value="MINIMARKET">Minimarket</option>
                       <option value="FERRETERIA">Ferretería</option>
-                      {/* <option value="RESTAURANTE">Restaurante</option> */}
+                      <option value="RESTAURANTE">Restaurante</option>
                       <option value="TIENDA_ROPA">Tienda de Ropa</option>
-                      <option value="TIENDA">Tienda / Bodega</option>
-                      {/* <option value="EMPRESA_SERVICIOS">Empresa de Servicios / Dealer</option> */}
+                      <option value="TIENDA_BODEGA">Tienda / Bodega</option>
+                      <option value="EMPRESA_SERVICIOS">Empresa de Servicios</option>
+                      <option value="ALMACENES">Almacén / Depósito</option>
                       <option value="OTRO">Otro</option>
                     </select>
-                    <span style={{ fontSize: '.78rem', color: '#7d7f96' }}>{RUBRO_HINTS[rubro] ?? RUBRO_HINTS.OTRO}</span>
+                    <span style={{ fontSize: '.78rem', color: '#7d7f96' }}>{SEGMENTO_HINTS[segmento] ?? SEGMENTO_HINTS.OTRO}</span>
                   </div>
 
                   {/* Plan selector */}
                   <div style={{ display: 'grid', gap: 10, paddingTop: 4 }}>
-                    <span style={{ fontSize: '.83rem', fontWeight: 600, color: '#c9cbd8' }}>Elige tu plan <span style={{ color: '#ff8079' }}>*</span></span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <span style={{ fontSize: '.83rem', fontWeight: 600, color: '#c9cbd8' }}>Elige tu plan <span style={{ color: '#ff8079' }}>*</span></span>
+                      {preciosCargando && <span style={{ fontFamily: "'Space Mono',monospace", fontSize: '.68rem', color: '#8d90a6' }}>Cargando precios…</span>}
+                      {!preciosCargando && !preciosOk && (
+                        <button type="button" onClick={() => setSegmento(s => s)} style={{ fontFamily: "'Space Mono',monospace", fontSize: '.68rem', color: '#febc2e', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                          ⚠ No se pudo verificar el precio — reintentar
+                        </button>
+                      )}
+                    </div>
                     <div data-r="plans" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <button type="button" onClick={() => { setPlan('BASICO'); setSearchParams({ plan: 'BASICO' }, { replace: true }); }} style={planStyle('BASICO')}>
                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
                           <span style={{ fontSize: '.88rem', fontWeight: 700, color: '#e8e8f0' }}>Plan Básico</span>
-                          <span style={{ fontFamily: "'Space Mono',monospace", fontSize: '.88rem', fontWeight: 700, color: '#a79fff', flexShrink: 0 }}>S/89<span style={{ fontSize: '.66rem', fontWeight: 400, color: '#7d7f96' }}>/mes</span></span>
+                          <span style={{ fontFamily: "'Space Mono',monospace", fontSize: '.88rem', fontWeight: 700, color: preciosOk ? '#a79fff' : '#5a5a72', flexShrink: 0 }}>
+                            {preciosCargando ? '…' : preciosOk ? `S/${precios.basico}` : 'S/ —'}
+                            <span style={{ fontSize: '.66rem', fontWeight: 400, color: '#7d7f96' }}>/mes</span>
+                          </span>
                         </div>
                         <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 4 }}>
                           <li style={{ display: 'flex', gap: 7, fontSize: '.75rem', color: '#8d90a6' }}><span style={{ color: '#00d4aa' }}>✓</span>POS con caja integrada</li>
                           <li style={{ display: 'flex', gap: 7, fontSize: '.75rem', color: '#8d90a6' }}><span style={{ color: '#00d4aa' }}>✓</span>Facturación electrónica</li>
-                          <li style={{ display: 'flex', gap: 7, fontSize: '.75rem', color: '#8d90a6' }}><span style={{ color: '#00d4aa' }}>✓</span>Hasta 5 usuarios</li>
+                          <li style={{ display: 'flex', gap: 7, fontSize: '.75rem', color: '#8d90a6' }}><span style={{ color: '#00d4aa' }}>✓</span>Hasta {segmento === 'VETERINARIA' ? 10 : 5} usuarios</li>
                         </ul>
                       </button>
                       <button type="button" onClick={() => { setPlan('PRO'); setSearchParams({ plan: 'PRO' }, { replace: true }); }} style={planStyle('PRO')}>
                         <span style={{ position: 'absolute', top: -9, right: 12, fontFamily: "'Space Mono',monospace", fontSize: '.62rem', fontWeight: 700, letterSpacing: '.06em', color: '#fff', background: 'linear-gradient(135deg,#6c63ff,#00d4aa)', padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>Más popular</span>
                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
                           <span style={{ fontSize: '.88rem', fontWeight: 700, color: '#e8e8f0' }}>Plan Pro</span>
-                          <span style={{ fontFamily: "'Space Mono',monospace", fontSize: '.88rem', fontWeight: 700, color: '#a79fff', flexShrink: 0 }}>S/169<span style={{ fontSize: '.66rem', fontWeight: 400, color: '#7d7f96' }}>/mes</span></span>
+                          <span style={{ fontFamily: "'Space Mono',monospace", fontSize: '.88rem', fontWeight: 700, color: preciosOk ? '#a79fff' : '#5a5a72', flexShrink: 0 }}>
+                            {preciosCargando ? '…' : preciosOk ? `S/${precios.pro}` : 'S/ —'}
+                            <span style={{ fontSize: '.66rem', fontWeight: 400, color: '#7d7f96' }}>/mes</span>
+                          </span>
                         </div>
                         <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 4 }}>
                           <li style={{ display: 'flex', gap: 7, fontSize: '.75rem', color: '#8d90a6' }}><span style={{ color: '#00d4aa' }}>✓</span>Todo lo del Básico</li>

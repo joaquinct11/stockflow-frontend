@@ -1,8 +1,11 @@
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
+import { useTenantConfigStore } from './store/tenantConfigStore';
+import { usePermissions } from './hooks/usePermissions';
 import { useInactivityLogout } from './hooks/useInactivityLogout';
 
 // Layout
@@ -56,12 +59,32 @@ const CertificadosPage  = lazy(() => import('./pages/certificados/CertificadosPa
 
 const SuperAdminLoginPage = lazy(() => import('./pages/superadmin/SuperAdminLoginPage').then(m => ({ default: m.SuperAdminLoginPage })));
 const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
+const MascotasPage        = lazy(() => import('./pages/mascotas/MascotasPage'));
+const CitasPage           = lazy(() => import('./pages/citas/CitasPage').then(m => ({ default: m.CitasPage })));
 
 const PageLoader = () => (
   <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: '#6b7280', fontFamily: 'Inter, sans-serif' }}>
     Cargando...
   </div>
 );
+
+function VeterinariaRoute({ children }: { children: React.ReactNode }) {
+  const { rubro } = useTenantConfigStore();
+  const { isAdmin, puede } = usePermissions();
+  if (rubro === null) return <PageLoader />;
+  if (rubro !== 'VETERINARIA') return <Navigate to="/dashboard" replace />;
+  if (!isAdmin && !puede('VER_MASCOTAS')) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function VeterinariaCitasRoute({ children }: { children: React.ReactNode }) {
+  const { rubro } = useTenantConfigStore();
+  const { isAdmin, puede } = usePermissions();
+  if (rubro === null) return <PageLoader />;
+  if (rubro !== 'VETERINARIA') return <Navigate to="/dashboard" replace />;
+  if (!isAdmin && !puede('VER_CITAS')) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
 
 function App() {
   const { initialize, isAuthenticated, setSuscripcionEstado, user } = useAuthStore();
@@ -400,6 +423,30 @@ function App() {
                         <CertificadosPage />
                       </ErrorBoundary>
                     </RoleProtectedRoute>
+                  </SubscripcionGuard>
+                }
+              />
+
+              {/* Mascotas — solo rubro VETERINARIA */}
+              <Route
+                path="mascotas/*"
+                element={
+                  <SubscripcionGuard>
+                    <VeterinariaRoute>
+                      <MascotasPage />
+                    </VeterinariaRoute>
+                  </SubscripcionGuard>
+                }
+              />
+
+              {/* Citas — solo rubro VETERINARIA */}
+              <Route
+                path="citas"
+                element={
+                  <SubscripcionGuard>
+                    <VeterinariaCitasRoute>
+                      <CitasPage />
+                    </VeterinariaCitasRoute>
                   </SubscripcionGuard>
                 }
               />

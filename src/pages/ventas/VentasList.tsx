@@ -67,8 +67,7 @@ export function VentasList() {
   const { canDelete, canViewAll, canViewOwn, canCreate, rol, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
   const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
 
   // ── Estado dialog "Registrar Servicio" (solo rubro dealer) ──────────────────
   const [registrarOpen, setRegistrarOpen] = useState(false);
@@ -208,7 +207,7 @@ export function VentasList() {
 
       const hasViewPermission = canViewAll('VENTAS') || canViewOwn('VENTAS');
 
-      const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+      const sucId = sucursalActual ? sucursalActual.id : undefined;
       const desde = appliedFechaDesde || defaultFechaDesde;
       const hasta = appliedFechaHasta || defaultFechaHasta;
       const inicioISO = new Date(desde + 'T00:00:00').toISOString().slice(0, 19);
@@ -220,10 +219,14 @@ export function VentasList() {
       })();
 
       const productosPromise =
-        hasViewPermission ? productoService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined) : Promise.resolve([] as ProductoDTO[]);
+        hasViewPermission ? productoService.getAll(sucursalActual ? sucursalActual.id : undefined) : Promise.resolve([] as ProductoDTO[]);
 
-      const comprobantesPromise = facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[]);
-      const clientesPromise = clienteService.getActivos().catch(() => [] as ClienteDTO[]);
+      const comprobantesPromise = (puede('VER_FACTURACION') || puede('VER_MIS_FACTURACION'))
+        ? facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[])
+        : Promise.resolve([] as ComprobanteDTO[]);
+      const clientesPromise = puede('VER_CLIENTES')
+        ? clienteService.getActivos().catch(() => [] as ClienteDTO[])
+        : Promise.resolve([] as ClienteDTO[]);
 
       const [ventasData, productosData, comprobantesData, clientesData] = await Promise.all([
         ventasPromise,
@@ -602,7 +605,7 @@ export function VentasList() {
           )}
           {esServicios && canCreate('VENTAS') && (
             <button type="button" onClick={async () => {
-              const caja = await cajaService.getActiva(isMultiLocal && sucursalActual ? sucursalActual.id : undefined).catch(() => null);
+              const caja = await cajaService.getActiva(sucursalActual ? sucursalActual.id : undefined).catch(() => null);
               if (!caja) {
                 toast.error((t) => (
                   <span>Sin caja abierta.{' '}

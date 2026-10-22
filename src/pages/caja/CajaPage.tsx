@@ -141,9 +141,8 @@ function inicialesAvatar(nombre: string | null | undefined): string {
 export function CajaPage() {
   const { user } = useAuthStore();
   const isAdmin = user?.rol === 'ADMIN';
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   const [cajas, setCajas] = useState<CajaDTO[]>([]);
   const [loading, setLoading] = useState(true);

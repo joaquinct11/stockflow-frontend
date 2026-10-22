@@ -331,9 +331,8 @@ function DeleteModal({ cert, onClose, onConfirm }: { cert: CertificadoDTO; onClo
 // ── Componente principal ─────────────────────────────────────────────────────
 export function CertificadosPage() {
   const { canCreate, canEdit, canDelete } = usePermissions();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   const [certificados, setCertificados] = useState<CertificadoDTO[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);

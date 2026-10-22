@@ -163,7 +163,9 @@ export function ProveedoresList() {
     }
   };
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    if (hasViewPermission) { cargar(); } else { setLoading(false); }
+  }, [hasViewPermission]);
 
   // ─── Computed ───────────────────────────────────────────────────────────────
   const { filtered, total, activos, inactivos, conRuc, estadoCounts } = useMemo(() => {

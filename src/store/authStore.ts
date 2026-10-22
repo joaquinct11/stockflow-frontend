@@ -20,6 +20,7 @@ interface AuthState {
   initialize: () => Promise<void>;
   refreshUser: () => Promise<void>;
   setSuscripcionEstado: (estado: string) => void;
+  updatePlanCodigo: (planCodigo: string) => void;
   setPendingSelection: (selectionToken: string, tenants: TenantInfo[]) => void;
   completeTenantSelection: (user: JwtResponse) => void;
   resetPendingSelection: () => void;
@@ -47,7 +48,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Limpiar sucursal y config del tenant anterior antes de entrar en selección
     useSucursalStore.getState().clearSucursales();
     useTenantConfigStore.getState().clearConfig();
-    set({ pendingTenantSelection: true, availableTenants: tenants, selectionToken });
+    // Limpiar sesión anterior: si isAuthenticated quedaba true desde una sesión previa,
+    // SelectTenantRoute lo detectaba y redirigía a /dashboard creando un bucle infinito.
+    set({ pendingTenantSelection: true, availableTenants: tenants, selectionToken, isAuthenticated: false, user: null });
   },
 
   completeTenantSelection: (user) => {
@@ -106,6 +109,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setSuscripcionEstado: (estado: string) => {
     set({ suscripcionEstado: estado });
+  },
+
+  updatePlanCodigo: (planCodigo: string) => {
+    if (!planCodigo) return;
+    const currentUser = get().user;
+    if (!currentUser?.suscripcion) return;
+    const updatedUser = {
+      ...currentUser,
+      suscripcion: { ...currentUser.suscripcion, planCodigo },
+    };
+    set({ user: updatedUser });
+    localStorage.setItem('user', JSON.stringify(updatedUser));
   },
 
   refreshUser: async () => {

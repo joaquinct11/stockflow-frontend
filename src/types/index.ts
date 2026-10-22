@@ -100,6 +100,7 @@ export interface RegistrationRequestDTO {
   apellido?: string;
   nombreFarmacia: string;
   planId: PlanId;
+  planCodigo?: string;
   tipoDocumento?: string;
   numeroDocumento?: string;
   numeroCelular?: string;
@@ -334,6 +335,7 @@ export interface SuscripcionDTO {
   id?: number;
   usuarioPrincipalId: number;
   planId: string;
+  planCodigo?: string;
   precioMensual: number;
   preapprovalId?: string;
   estado: string;
@@ -351,6 +353,8 @@ export interface SuscripcionDTO {
 export interface SuscripcionEstadoResponseDTO {
   estado: string;
   planId: string;
+  /** Código de plan del catálogo (ej: "VETERINARIA_BASICO"). null en suscripciones legado. */
+  planCodigo?: string;
   preapprovalId?: string;
   fechaProximoCobro?: string;
   /** Precio mensual real del plan desde BD */

@@ -2,10 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { suscripcionService } from '../../services/suscripcion.service';
+import { culqiService, type CulqiConfigResponse } from '../../services/culqi.service';
 import { useAuthStore } from '../../store/authStore';
 import type { SuscripcionDTO } from '../../types';
 import { notify } from '../../lib/notify';
 import { usePermissions } from '../../hooks/usePermissions';
+import { usePlan } from '../../hooks/usePlan';
+import { getSegmentoInfo } from '../../lib/segmentoInfo';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -93,26 +96,8 @@ const ESTADO_CFG: Record<string, { label: string; color: string | null; icon: Re
   PAGO_PROCESO:         { label: 'Pago en proceso',    color: T.warn,    icon: <IcClock size={13} /> },
 };
 
-// ─── Feature lists ────────────────────────────────────────────────────────────
-const F_BASICO = [
-  'Punto de Venta (POS) con caja integrada',
-  'Inventario en tiempo real con alertas de stock',
-  'Control de lotes y fechas de vencimiento',
-  'Órdenes de compra y recepciones',
-  'Devoluciones y notas de crédito',
-  'Facturación electrónica SUNAT',
-  'Reportes + exportación a Excel y PDF',
-  'Roles y permisos (hasta 5 usuarios)',
-  'Soporte por WhatsApp en español',
-];
-const F_PRO = [
-  'Todo lo incluido en el plan Básico',
-  'Hasta 5 sucursales por cuenta',
-  'Stock independiente por sucursal',
-  'Reportes consolidados multi-local',
-  'Selector de sucursal en POS y módulos',
-  'Hasta 15 usuarios y 5 000 productos',
-];
+// Las listas de features se obtienen de getSegmentoInfo(segmento) en tiempo de render.
+// Ver src/lib/segmentoInfo.ts para el catálogo completo por segmento.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const MES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -151,11 +136,14 @@ interface PlanCardProps {
   puedeDowngrade: boolean;
   onUpgrade: () => void;
   onDowngrade: () => void;
+  /** Precio mensual del segmento actual, del catálogo. Fallback: 89/169. */
+  precioNum: number;
+  /** Lista de features del plan (Básico o Pro) según el segmento del tenant. */
+  features: string[];
 }
-function PlanCard({ esPro, esActual, puedeUpgrade, puedeDowngrade, onUpgrade, onDowngrade }: PlanCardProps) {
+function PlanCard({ esPro, esActual, puedeUpgrade, puedeDowngrade, onUpgrade, onDowngrade, precioNum, features }: PlanCardProps) {
   const c = esPro ? T.primary : T.ok;
   const cSoft = esPro ? T.primarySoft : T.okSoft;
-  const features = esPro ? F_PRO : F_BASICO;
   const hayCta = !esActual && (esPro ? puedeUpgrade : puedeDowngrade);
   const box: React.CSSProperties = {
     position: 'relative', display: 'flex', flexDirection: 'column',
@@ -181,11 +169,13 @@ function PlanCard({ esPro, esActual, puedeUpgrade, puedeDowngrade, onUpgrade, on
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 16 }}>
         <span style={{ fontSize: '.95rem', fontWeight: 600, color: T.text3 }}>S/</span>
-        <span style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-.035em', fontVariantNumeric: 'tabular-nums' }}>{esPro ? '169,00' : '89,00'}</span>
+        <span style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-.035em', fontVariantNumeric: 'tabular-nums' }}>
+          {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(precioNum)}
+        </span>
         <span style={{ fontSize: '.84rem', color: T.text3 }}>/ mes</span>
       </div>
       <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '.72rem', color: T.text3, marginTop: 3 }}>
-        {esPro ? 'S/ 143,22 + IGV S/ 25,78' : 'S/ 75,42 + IGV S/ 13,58'}
+        {`S/ ${(precioNum / 1.18).toFixed(2)} + IGV S/ ${(precioNum - precioNum / 1.18).toFixed(2)}`}
       </div>
       <div style={{ height: 1, background: T.lineSoft, margin: '16px 0' }} />
       <div style={{ display: 'grid', gap: 9 }}>
@@ -265,7 +255,7 @@ function UsageBar({ label, usado, limite, esPro }: { label: string; usado: numbe
 }
 
 // ─── Upgrade modal ────────────────────────────────────────────────────────────
-function UpgradeModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+function UpgradeModal({ onClose, onConfirm, precioPro }: { onClose: () => void; onConfirm: () => void; precioPro: number }) {
   const upItems = ['Dashboard y métricas', 'Ventas e historial', 'Gastos registrados', 'Inventario y stock', 'Comprobantes emitidos', 'Certificados'];
   return (
     <Overlay onClose={onClose}>
@@ -276,7 +266,7 @@ function UpgradeModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: 
           </span>
           <div style={{ minWidth: 0 }}>
             <h2 style={{ fontSize: '1.08rem', fontWeight: 700, letterSpacing: '-.02em', margin: 0 }}>Antes de continuar al Plan Pro</h2>
-            <div style={{ fontSize: '.8rem', color: T.text3, marginTop: 4 }}>S/ 169,00 / mes · hasta 5 sucursales</div>
+            <div style={{ fontSize: '.8rem', color: T.text3, marginTop: 4 }}>S/ {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(precioPro)} / mes · hasta 5 sucursales</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar" style={{ width: 30, height: 30, flexShrink: 0, marginLeft: 'auto', display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}>
             <IcX size={16} />
@@ -314,7 +304,7 @@ function UpgradeModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: 
 }
 
 // ─── Downgrade modal ──────────────────────────────────────────────────────────
-function DowngradeModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+function DowngradeModal({ onClose, onConfirm, precioBasico }: { onClose: () => void; onConfirm: () => void; precioBasico: number }) {
   return (
     <Overlay onClose={onClose}>
       <div style={{ width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', background: T.surface, border: `1px solid ${T.line}`, borderRadius: 18, boxShadow: '0 30px 80px -30px rgba(0,0,0,.55)', animation: 'sus-in .2s ease', overflow: 'hidden' }}>
@@ -324,7 +314,7 @@ function DowngradeModal({ onClose, onConfirm }: { onClose: () => void; onConfirm
           </span>
           <div style={{ minWidth: 0 }}>
             <h2 style={{ fontSize: '1.08rem', fontWeight: 700, letterSpacing: '-.02em', margin: 0 }}>Cambiar a Plan Básico</h2>
-            <div style={{ fontSize: '.8rem', color: T.text3, marginTop: 4 }}>S/ 89,00 / mes · 1 sucursal</div>
+            <div style={{ fontSize: '.8rem', color: T.text3, marginTop: 4 }}>S/ {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(precioBasico)} / mes · 1 sucursal</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar" style={{ width: 30, height: 30, flexShrink: 0, marginLeft: 'auto', display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}>
             <IcX size={16} />
@@ -333,13 +323,13 @@ function DowngradeModal({ onClose, onConfirm }: { onClose: () => void; onConfirm
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', maxHeight: 'calc(100vh - 200px)', padding: '18px 22px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderRadius: 12, background: T.warnSoft, border: `1px solid ${T.warnLine}`, fontSize: '.84rem', lineHeight: 1.5, color: T.text2 }}>
             <span style={{ display: 'grid', color: T.warn, marginTop: 1 }}><IcTriangle size={16} /></span>
-            <span>Se realizará un <strong style={{ color: T.text }}>cobro inmediato de S/ 89,00</strong>. Las sucursales adicionales quedarán <strong style={{ color: T.text }}>bloqueadas temporalmente</strong>: sus datos se conservan.</span>
+            <span>Se realizará un <strong style={{ color: T.text }}>cobro inmediato de S/ {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(precioBasico)}</strong>. Las sucursales adicionales quedarán <strong style={{ color: T.text }}>bloqueadas temporalmente</strong>: sus datos se conservan.</span>
           </div>
           <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
             {[
               { color: T.ok,      icon: <IcCheck size={15} />,    text: <span>La sucursal principal <strong style={{ color: T.text }}>permanece activa</strong></span> },
               { color: T.warn,    icon: <IcLock size={15} />,     text: <span><strong style={{ color: T.text }}>Sucursales adicionales</strong> quedarán bloqueadas con sus datos intactos</span> },
-              { color: T.primary, icon: <IcCard size={15} />,     text: <span>Cobro inmediato: <strong style={{ color: T.text }}>S/ 89,00</strong></span> },
+              { color: T.primary, icon: <IcCard size={15} />,     text: <span>Cobro inmediato: <strong style={{ color: T.text }}>S/ {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(precioBasico)}</strong></span> },
               { color: T.text3,   icon: <IcReceipt size={15} />,  text: <span>Límites: 1 sucursal, 5 usuarios, 2 000 productos</span> },
             ].map((row, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '.84rem', lineHeight: 1.45, color: T.text2 }}>
@@ -415,33 +405,42 @@ function CancelarModal({ onClose, onConfirm, planNombre, precio, fechaCorte }: {
 // ─── Main component ───────────────────────────────────────────────────────────
 export function SuscripcionesList() {
   const { canView, canToggleState } = usePermissions();
-  const { user, setSuscripcionEstado } = useAuthStore();
+  const { user, setSuscripcionEstado, updatePlanCodigo } = useAuthStore();
   const navigate = useNavigate();
+  const { limites, segmento } = usePlan();
+  const segInfo = getSegmentoInfo(segmento);
 
   const [suscripcion, setSuscripcion] = useState<(SuscripcionDTO & { currentPeriodEnd?: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<'upgrade' | 'downgrade' | 'cancelar' | null>(null);
   const [uso, setUso] = useState<{ sucursales: number; usuarios: number; productos: number } | null>(null);
+  const [configBasico, setConfigBasico] = useState<CulqiConfigResponse | null>(null);
+  const [configPro, setConfigPro]       = useState<CulqiConfigResponse | null>(null);
 
   useEffect(() => { fetchSuscripcion(); }, []);
 
   const fetchSuscripcion = async () => {
     try {
       setLoading(true);
-      const [estado, detalle, usoResult] = await Promise.allSettled([
+      const [estado, detalle, usoResult, cfgBasico, cfgPro] = await Promise.allSettled([
         suscripcionService.getEstado(),
         user?.usuarioId ? suscripcionService.getMiSuscripcion(user.usuarioId) : Promise.reject(),
         suscripcionService.getUso(),
+        culqiService.getConfig('BASICO'),
+        culqiService.getConfig('PRO'),
       ]);
       if (estado.status === 'rejected') { notify.fromError(null, 'Error al cargar la suscripción'); return; }
       const e = estado.value;
       if (e.estado === 'SIN_SUSCRIPCION') { setSuscripcion(null); return; }
       setSuscripcionEstado(e.estado);
+      if (e.planCodigo) updatePlanCodigo(e.planCodigo);
+      // Usar precioMensual del backend (ya refleja el precio real del catálogo o legado)
       const pid = (e.planId ?? '').toUpperCase();
-      const precioReal = pid.includes('PRO') ? 169 : pid.includes('BASICO') ? 89 : (e.precioMensual ?? 89);
+      const precioReal = e.precioMensual ?? (pid.includes('PRO') ? 169 : 89);
       const d = detalle.status === 'fulfilled' ? detalle.value : null;
       setSuscripcion({
         planId: e.planId,
+        planCodigo: (e as { planCodigo?: string }).planCodigo,
         precioMensual: precioReal,
         estado: e.estado,
         preapprovalId: e.preapprovalId,
@@ -453,6 +452,8 @@ export function SuscripcionesList() {
         ultimos4Digitos: d?.ultimos4Digitos,
       });
       if (usoResult.status === 'fulfilled') setUso(usoResult.value);
+      if (cfgBasico.status === 'fulfilled') setConfigBasico(cfgBasico.value);
+      if (cfgPro.status   === 'fulfilled') setConfigPro(cfgPro.value);
     } catch (err) {
       notify.fromError(err, 'Error al cargar la suscripción');
     } finally {
@@ -538,7 +539,8 @@ export function SuscripcionesList() {
   const fechaValor = fmtCorto(estado === 'CANCELADA' ? currentPeriodEndRaw : suscripcion.fechaProximoCobro);
   const referencia = suscripcion.preapprovalId ?? '—';
   const planNombre = esPro ? 'Plan Pro' : 'Plan Básico';
-  const precio     = esPro ? '169,00' : '89,00';
+  const precio     = new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      .format(typeof suscripcion.precioMensual === 'number' ? suscripcion.precioMensual : 0);
   // Tarjeta
   const metodo   = suscripcion.metodoPago ?? '';
   const ultimos4 = suscripcion.ultimos4Digitos ?? null;
@@ -577,11 +579,11 @@ export function SuscripcionesList() {
     }
     : {};
 
-  // Uso del plan — datos reales del endpoint /suscripciones/uso
+  // Uso del plan — límites del catálogo vía usePlan(); fallback genérico si no hay planCodigo
   const usage: { label: string; usado: number | null; limite: number }[] = [
-    { label: 'Sucursales', usado: uso?.sucursales ?? null, limite: esPro ? 5 : 1 },
-    { label: 'Usuarios',   usado: uso?.usuarios   ?? null, limite: esPro ? 15 : 5 },
-    { label: 'Productos',  usado: uso?.productos  ?? null, limite: esPro ? 5000 : 2000 },
+    { label: 'Sucursales', usado: uso?.sucursales ?? null, limite: limites.sucursales },
+    { label: 'Usuarios',   usado: uso?.usuarios   ?? null, limite: limites.usuarios },
+    { label: 'Productos',  usado: uso?.productos  ?? null, limite: limites.productos },
   ];
 
   return (
@@ -728,8 +730,8 @@ export function SuscripcionesList() {
           <span style={{ fontSize: '.78rem', color: T.text3 }}>Cobro mensual con IGV incluido · cancela cuando quieras, sin penalidad</span>
         </div>
         <div className="sus-planes" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14, alignItems: 'stretch' }}>
-          <PlanCard esPro={false} esActual={!esPro} puedeUpgrade={puedeUpgrade} puedeDowngrade={puedeDowngrade} onUpgrade={() => setModal('upgrade')} onDowngrade={() => setModal('downgrade')} />
-          <PlanCard esPro={true}  esActual={esPro}  puedeUpgrade={puedeUpgrade} puedeDowngrade={puedeDowngrade} onUpgrade={() => setModal('upgrade')} onDowngrade={() => setModal('downgrade')} />
+          <PlanCard esPro={false} esActual={!esPro} puedeUpgrade={puedeUpgrade} puedeDowngrade={puedeDowngrade} onUpgrade={() => setModal('upgrade')} onDowngrade={() => setModal('downgrade')} precioNum={configBasico?.precioMensual ?? 89} features={segInfo.featuresBasico} />
+          <PlanCard esPro={true}  esActual={esPro}  puedeUpgrade={puedeUpgrade} puedeDowngrade={puedeDowngrade} onUpgrade={() => setModal('upgrade')} onDowngrade={() => setModal('downgrade')} precioNum={configPro?.precioMensual ?? 169} features={segInfo.featuresPro} />
         </div>
       </div>
 
@@ -738,12 +740,14 @@ export function SuscripcionesList() {
         <UpgradeModal
           onClose={() => setModal(null)}
           onConfirm={() => { setModal(null); navigate('/checkout/culqi?plan=PRO&mode=upgrade'); }}
+          precioPro={configPro?.precioMensual ?? 169}
         />
       )}
       {modal === 'downgrade' && (
         <DowngradeModal
           onClose={() => setModal(null)}
           onConfirm={() => { setModal(null); navigate('/checkout/culqi?plan=BASICO&mode=downgrade-basico'); }}
+          precioBasico={configBasico?.precioMensual ?? 89}
         />
       )}
       {modal === 'cancelar' && (

@@ -2565,9 +2565,8 @@ export function ReportesPage() {
   const hasAccess = canView('REPORTES');
   const puedeVerComisiones = puede('VER_COMISION');
 
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length>1;
-  const sucursalId = isMultiLocal&&sucursalActual?sucursalActual.id:undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual?sucursalActual.id:undefined;
 
   const [desde, setDesde] = useState<string>(startOfMonth());
   const [hasta, setHasta] = useState<string>(todayStr());

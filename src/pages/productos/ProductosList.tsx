@@ -75,10 +75,9 @@ export function ProductosList() {
   const hasViewPermission = canView('PRODUCTOS');
   const { user } = useAuthStore();
   const { config: negocioConfig } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
   const location = useLocation();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const [searchParams] = useSearchParams();
   const tipoParam = searchParams.get('tipo'); // 'SERVICIO' | 'PRODUCTO' | null
   const esRopa       = negocioConfig?.rubro === 'TIENDA_ROPA';

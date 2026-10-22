@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { sucursalService } from '../../services/sucursal.service';
 import type { SucursalDTO } from '../../services/sucursal.service';
 import { useSucursalStore } from '../../store/sucursalStore';
+import { useAuthStore } from '../../store/authStore';
 import { notify } from '../../lib/notify';
 
 const T = {
@@ -16,8 +17,7 @@ const T = {
   shadow: '0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06)',
 } as const;
 
-const MAX = 5;
-const PALETA = ['#4F6EF7', '#7C5FE0', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#14B8A6'];
+const PALETA =['#4F6EF7', '#7C5FE0', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#14B8A6'];
 
 if (typeof document !== 'undefined' && !document.getElementById('fx-suc-kf')) {
   const s = document.createElement('style');
@@ -174,6 +174,7 @@ type Seg = 'TODAS' | 'ACTIVAS' | 'INACTIVAS';
 
 export function SucursalesPage() {
   const { setSucursales, setSucursalActual, sucursalActual } = useSucursalStore();
+  const { user } = useAuthStore();
   const [sucursales, setSucursalesLocal] = useState<SucursalDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [seg, setSeg] = useState<Seg>('TODAS');
@@ -181,6 +182,10 @@ export function SucursalesPage() {
   const [form, setForm] = useState<FormState>({ id: null, nombre: '', direccion: '', telefono: '', email: '', intento: false });
   const [desactivarId, setDesactivarId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const esBasico = (user?.suscripcion?.planId ?? 'BASICO') === 'BASICO';
+  const MAX = esBasico ? 1 : 5;
+  const planNombre = esBasico ? 'Básico' : 'Pro';
 
   const cargar = async () => {
     setLoading(true);
@@ -435,7 +440,7 @@ export function SucursalesPage() {
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
         <div style={{ minWidth: 0 }}>
           <h1 style={{ fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-.028em', margin: 0 }}>Mis sucursales</h1>
-          <p style={{ fontSize: '.865rem', color: T.text3, margin: '7px 0 0' }}>Plan Pro · hasta {MAX} locales activos</p>
+          <p style={{ fontSize: '.865rem', color: T.text3, margin: '7px 0 0' }}>Plan {planNombre} · hasta {MAX} local{MAX !== 1 ? 'es' : ''} activo{MAX !== 1 ? 's' : ''}</p>
         </div>
         <button
           onClick={lleno ? undefined : abrirCrear}

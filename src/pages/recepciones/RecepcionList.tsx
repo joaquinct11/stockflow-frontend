@@ -118,9 +118,8 @@ function Stepper({ items, comprobante }: { items: RecepcionItemDTO[]; comprobant
 
 export function RecepcionList() {
   const { canCreate, canView, canEdit, puede } = usePermissions();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const rubro = useTenantConfigStore((s) => s.config?.rubro ?? 'OTRO');
   const esFarmacia = rubro === 'BOTICA' || rubro === 'FARMACIA';
 

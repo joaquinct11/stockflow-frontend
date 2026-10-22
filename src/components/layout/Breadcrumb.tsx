@@ -28,6 +28,7 @@ const routeMap: Record<string, BreadcrumbEntry> = {
   '/dashboard/admin/permisos':  { group: 'Usuarios',   label: 'Gestión de Permisos' },
   // Items sueltos
   '/dashboard/comisiones':      { label: 'Comisiones' },
+  '/dashboard/mascotas':        { group: 'Veterinaria', label: 'Mascotas' },
   '/dashboard/digemid':         { label: 'DIGEMID / OPPF' },
   '/dashboard/certificados':    { label: 'Certificados' },
   '/dashboard/sucursales':      { label: 'Sucursales' },
@@ -99,7 +100,7 @@ export function Breadcrumb() {
     recepciones: 'Recepciones', kardex: 'Kardex', perfil: 'Mi Perfil',
     permisos: 'Gestión de Permisos', caja: 'Caja', 'notas-credito': 'Notas de Crédito',
     gastos: 'Gastos y Egresos', digemid: 'DIGEMID / OPPF', certificados: 'Certificados',
-    comisiones: 'Comisiones', sucursales: 'Sucursales',
+    comisiones: 'Comisiones', sucursales: 'Sucursales', mascotas: 'Mascotas',
   };
   const hiddenSegments = new Set(['compras', 'admin']);
 

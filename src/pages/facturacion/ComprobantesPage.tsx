@@ -37,9 +37,8 @@ export function ComprobantesPage() {
   const { canAccess, puede, canCreate, canDelete, isVendedor } = usePermissions();
   const { user } = useAuthStore();
   const { config: tenantConfig } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const oseConfigured = useOseConfigured();
 
   const canView = canAccess('FACTURACION');

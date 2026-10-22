@@ -34,9 +34,8 @@ import { usePermissions } from '../../hooks/usePermissions';
 export function KardexPage() {
   const { canView, puede } = usePermissions();
   const hasViewPermission = canView('INVENTARIO');
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);

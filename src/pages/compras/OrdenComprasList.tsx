@@ -53,9 +53,8 @@ type EstadoOCFilter = 'TODOS' | 'BORRADOR' | 'ENVIADA' | 'RECIBIDA_PARCIAL' | 'R
 export function OrdenComprasList() {
   const navigate = useNavigate();
   const { canCreate, canView, canEdit, puede } = usePermissions();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   const hasViewPermission = canView('COMPRAS') || canView('PROVEEDORES');
   const canCreateOC = canCreate('COMPRAS');

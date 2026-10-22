@@ -26,6 +26,8 @@ import {
   Award,
   Boxes,
   FlaskConical,
+  PawPrint,
+  Calendar,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -61,9 +63,14 @@ type GroupItem = {
 type MenuEntry = LeafItem | GroupItem;
 
 const ROL_LABEL: Record<string, string> = {
-  ADMIN:             'Admin',
-  VENDEDOR:          'Vendedor',
-  GESTOR_INVENTARIO: 'Almacén',
+  ADMIN:               'Admin',
+  GERENTE:             'Gerente',
+  VENDEDOR:            'Vendedor',
+  GESTOR_INVENTARIO:   'Almacén',
+  VETERINARIO:         'Veterinario',
+  RECEPCIONISTA:       'Recepcionista',
+  AUXILIAR_VETERINARIO:'Auxiliar Vet.',
+  GROOMER:             'Groomer',
 };
 
 function getInitials(nombre?: string) {
@@ -78,12 +85,13 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const location = useLocation();
   const { user, suscripcionEstado } = useAuthStore();
   const { canAccess, isAdmin, puede } = usePermissions();
-  const { config: negocioConfig } = useTenantConfigStore();
+  const { rubro } = useTenantConfigStore();
   const { sucursales } = useSucursalStore();
   const { isPro } = usePlan();
-  const esRopa       = negocioConfig?.rubro === 'TIENDA_ROPA';
-  const esServicios  = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
-  const esBoticaFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
+  const esRopa           = rubro === 'TIENDA_ROPA';
+  const esServicios      = rubro === 'EMPRESA_SERVICIOS';
+  const esBoticaFarmacia = rubro === 'BOTICA' || rubro === 'FARMACIA';
+  const esVeterinaria    = rubro === 'VETERINARIA';
   const esPro        = isPro || sucursales.length > 0;
 
   // Trial info para la barra del sidebar
@@ -137,7 +145,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
       {
         type: 'group',
         key: 'gastos',
-        title: 'Gastos',
+        title: canAccess('GASTOS') ? 'Gastos' : 'Compras',
         icon: TrendingDown,
         show: canAccess('GASTOS') || (!esRopa && !esServicios && (canAccess('COMPRAS') || canAccess('RECEPCIONES'))),
         items: [
@@ -188,13 +196,15 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         ],
       },
       { type: 'item', title: 'DIGEMID / OPPF',  href: '/dashboard/digemid',        icon: FlaskConical, show: esBoticaFarmacia && isAdmin },
+      { type: 'item', title: 'Mascotas',         href: '/dashboard/mascotas',       icon: PawPrint,     show: esVeterinaria && (isAdmin || puede('VER_MASCOTAS')) },
+      { type: 'item', title: 'Citas',            href: '/dashboard/citas',          icon: Calendar,     show: esVeterinaria && (isAdmin || puede('VER_CITAS')) },
       { type: 'item', title: 'Certificados',     href: '/dashboard/certificados',   icon: Award,        show: !esServicios && canAccess('CERTIFICADOS') },
       { type: 'item', title: 'Sucursales',       href: '/dashboard/sucursales',     icon: Building2,    show: isAdmin && esPro },
       { type: 'item', title: 'Suscripciones',    href: '/dashboard/suscripciones',  icon: CreditCard,   show: canAccess('SUSCRIPCIONES') },
       { type: 'item', title: 'Reportes',         href: '/dashboard/reportes',       icon: BarChart3,    show: canAccess('REPORTES') },
       { type: 'item', title: 'Configuración',    href: '/dashboard/configuracion',  icon: Settings,     show: true },
     ],
-    [canAccess, isAdmin, puede, user?.rol, esPro, esServicios, esBoticaFarmacia]
+    [canAccess, isAdmin, puede, user?.rol, esPro, esRopa, esServicios, esBoticaFarmacia, esVeterinaria]
   );
 
   const defaultExpanded = useMemo(() => {

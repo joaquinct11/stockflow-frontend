@@ -37,9 +37,8 @@ const emptyForm: ComisionDTO = {
 };
 
 export function ComisionesPage() {
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const [comisiones, setComisiones] = useState<ComisionDTO[]>([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');

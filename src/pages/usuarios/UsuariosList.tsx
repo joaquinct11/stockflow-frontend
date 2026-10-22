@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
 import { usePlan } from '../../hooks/usePlan';
 import { useSucursalStore } from '../../store/sucursalStore';
+import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useNavigate } from 'react-router-dom';
 import { notify } from '../../lib/notify';
 
@@ -111,8 +112,8 @@ const IcoId     = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="no
 const IcoSearch = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>;
 const IcoInfo   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>;
 
-// ─── Role meta (from HTML spec) ───────────────────────────────────────────────
-type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+// ─── Role meta ────────────────────────────────────────────────────────────────
+type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO' | 'GERENTE' | 'VETERINARIO' | 'RECEPCIONISTA' | 'AUXILIAR_VETERINARIO' | 'GROOMER';
 type EstadoFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
 type RolFilter = 'TODOS' | Role;
 
@@ -122,6 +123,12 @@ const ROL_META: Record<string, { label: string; desc: string; tone: string; icon
     desc: 'Acceso total: configuración, usuarios, facturación, reportes y todas las sedes.',
     tone: T.primary,
     icon: 'M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1ZM9 12l2 2 4-4',
+  },
+  GERENTE: {
+    label: 'Gerente',
+    desc: 'Acceso operativo completo: ventas, inventario, compras y usuarios. Sin eliminar ni cancelar suscripciones.',
+    tone: '#7c3aed',
+    icon: 'M2 20h20M5 20V8l7-5 7 5v12M9 20v-5h6v5',
   },
   VENDEDOR: {
     label: 'Vendedor',
@@ -135,13 +142,45 @@ const ROL_META: Record<string, { label: string; desc: string; tone: string; icon
     tone: T.warn,
     icon: 'M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7ZM3.3 7 12 12l8.7-5M12 22V12',
   },
+  VETERINARIO: {
+    label: 'Veterinario',
+    desc: 'Acceso clínico completo: mascotas, historia clínica y tratamientos.',
+    tone: '#0891b2',
+    icon: 'M19 14c1.5-1 3-3.3 3-5.5A5.5 5.5 0 0 0 8.5 5v.03C8 5 7.5 5 7 5.2A5.5 5.5 0 1 0 6 16l2-2h5l3 3',
+  },
+  RECEPCIONISTA: {
+    label: 'Recepcionista',
+    desc: 'Gestiona agenda de citas y registra clientes. Sin acceso clínico.',
+    tone: '#0d9488',
+    icon: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z',
+  },
+  AUXILIAR_VETERINARIO: {
+    label: 'Auxiliar veterinario',
+    desc: 'Soporte clínico: aplica tratamientos e insumos bajo supervisión del veterinario.',
+    tone: '#0369a1',
+    icon: 'M4.5 6H20M4.5 10H20M4.5 14H12M4 18h4M2 6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Z',
+  },
+  GROOMER: {
+    label: 'Groomer',
+    desc: 'Peluquería y estética animal: gestiona citas de grooming y ve datos de las mascotas.',
+    tone: '#be185d',
+    icon: 'M6 3H3v3l9 9M3 3l3 3M15 6l3 3M6 15l-3 3 3 3 3-3M12 18l6-6 3 3-6 6M16 2l6 6',
+  },
 };
 
 const ROL_PILL: Record<string, { color: string; bg: string }> = {
-  ADMIN:             { color: T.primary, bg: T.primarySoft },
-  VENDEDOR:          { color: T.ok,      bg: T.okSoft      },
-  GESTOR_INVENTARIO: { color: T.warn,    bg: T.warnSoft    },
+  ADMIN:                { color: T.primary,  bg: T.primarySoft },
+  GERENTE:              { color: '#7c3aed',  bg: '#f5f3ff'     },
+  VENDEDOR:             { color: T.ok,       bg: T.okSoft      },
+  GESTOR_INVENTARIO:    { color: T.warn,     bg: T.warnSoft    },
+  VETERINARIO:          { color: '#0891b2',  bg: '#ecfeff'     },
+  RECEPCIONISTA:        { color: '#0d9488',  bg: '#f0fdfa'     },
+  AUXILIAR_VETERINARIO: { color: '#0369a1',  bg: '#eff6ff'     },
+  GROOMER:              { color: '#be185d',  bg: '#fdf2f8'     },
 };
+
+const ROLES_VETERINARIA: Role[] = ['VETERINARIO', 'RECEPCIONISTA', 'AUXILIAR_VETERINARIO', 'GROOMER'];
+const ROLES_GENERALES:   Role[] = ['ADMIN', 'GERENTE', 'VENDEDOR', 'GESTOR_INVENTARIO'];
 
 const TIPOS_DOC = [
   { key: '', label: 'Ninguno' },
@@ -161,11 +200,17 @@ export function UsuariosList() {
   const tenantId        = useAuthStore(s => s.user?.tenantId);
   const currentUserId   = useAuthStore(s => s.user?.usuarioId);
   const currentUserRole = (useAuthStore(s => s.user?.rol) || 'VENDEDOR') as Role;
+  const rubro           = useTenantConfigStore(s => s.rubro);
+  const isVeterinaria   = rubro?.toUpperCase() === 'VETERINARIA';
 
   const navigate = useNavigate();
   const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
-  const { isBasico, limites } = usePlan();
+  const { isBasico, limites, loading: planLoading, error: planError } = usePlan();
   const { sucursales } = useSucursalStore();
+
+  const rolesDisponibles: Role[] = isVeterinaria
+    ? [...ROLES_GENERALES, ...ROLES_VETERINARIA]
+    : ROLES_GENERALES;
   const isMultiLocal    = sucursales.length > 1;
   const hasViewPermission = canView('USUARIOS');
 
@@ -207,7 +252,7 @@ export function UsuariosList() {
 
   const resetForm = () => {
     setNombres(''); setApellidos(''); setFEmail(''); setFCel('');
-    setFTipoDoc(''); setFNumDoc(''); setFRol('VENDEDOR'); setFSucursal(null);
+    setFTipoDoc(''); setFNumDoc(''); setFRol(isVeterinaria ? 'RECEPCIONISTA' : 'VENDEDOR'); setFSucursal(null);
     setEditingId(null); setIsFormOpen(false);
   };
 
@@ -276,6 +321,10 @@ export function UsuariosList() {
     const q = searchTerm.trim().toLowerCase();
     const matchQ = (u: Usuario) => !q || u.nombre.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
     const base = usuarios.filter(u => matchQ(u) && (rolFilter === 'TODOS' || u.rolNombre === rolFilter));
+    const rolCountsMap: Record<string, number> = {};
+    for (const r of rolesDisponibles) {
+      rolCountsMap[r] = usuarios.filter(u => u.rolNombre === r).length;
+    }
     return {
       filtered: base.filter(u => estadoFilter === 'TODOS' || (estadoFilter === 'ACTIVOS' ? u.activo : !u.activo)),
       stats: {
@@ -289,21 +338,17 @@ export function UsuariosList() {
         ACTIVOS: base.filter(u => u.activo).length,
         INACTIVOS: base.filter(u => !u.activo).length,
       },
-      rolCounts: {
-        ADMIN:             usuarios.filter(u => u.rolNombre === 'ADMIN').length,
-        VENDEDOR:          usuarios.filter(u => u.rolNombre === 'VENDEDOR').length,
-        GESTOR_INVENTARIO: usuarios.filter(u => u.rolNombre === 'GESTOR_INVENTARIO').length,
-      },
+      rolCounts: rolCountsMap,
     };
-  }, [usuarios, searchTerm, estadoFilter, rolFilter]);
+  }, [usuarios, searchTerm, estadoFilter, rolFilter, rolesDisponibles]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / POR_PAGINA));
   const safePage   = Math.min(currentPage, totalPages);
   const desde      = (safePage - 1) * POR_PAGINA;
   const paginated  = filtered.slice(desde, desde + POR_PAGINA);
 
-  const limiteAlcanzado = isBasico && stats.total >= limites.usuarios;
-  const pctPlan = isBasico ? Math.min(100, Math.round((stats.total / limites.usuarios) * 100)) : 0;
+  const limiteAlcanzado = isBasico && !planLoading && !planError && stats.total >= limites.usuarios;
+  const pctPlan = isBasico && !planError ? Math.min(100, Math.round((stats.total / limites.usuarios) * 100)) : 0;
 
   // Confirm data
   const cfUsuario = cf.usuarioId ? usuarios.find(u => u.id === cf.usuarioId) ?? null : null;
@@ -475,7 +520,7 @@ export function UsuariosList() {
 
             {currentUserRole === 'ADMIN' ? (
               <div style={{ display: 'grid', gap: 8 }}>
-                {(['ADMIN', 'VENDEDOR', 'GESTOR_INVENTARIO'] as Role[]).map(rolKey => {
+                {rolesDisponibles.map(rolKey => {
                   const meta  = ROL_META[rolKey];
                   const selec = fRol === rolKey;
                   return (
@@ -638,7 +683,7 @@ export function UsuariosList() {
           <p style={{ fontSize: '.865rem', color: T.text3, margin: '7px 0 0' }}>Gestiona quién accede al sistema y con qué permisos</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-          {isBasico && (
+          {isBasico && !planError && !planLoading && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: '.78rem', color: T.text3, whiteSpace: 'nowrap' as const }}>Plan Básico</span>
               <div style={{ width: 72, height: 5, borderRadius: 3, background: T.surface3, overflow: 'hidden', border: `1px solid ${T.line}` }}>
@@ -646,6 +691,9 @@ export function UsuariosList() {
               </div>
               <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.75rem', color: T.text3, whiteSpace: 'nowrap' as const }}>{stats.total} / {limites.usuarios}</span>
             </div>
+          )}
+          {isBasico && planError && (
+            <span style={{ fontSize: '.78rem', color: T.warn, whiteSpace: 'nowrap' as const }}>Límites no verificados</span>
           )}
           {canCreate('USUARIOS') && (
             <button type="button" onClick={() => { if (!limiteAlcanzado) { resetForm(); setIsFormOpen(true); } }} disabled={limiteAlcanzado}
@@ -719,12 +767,12 @@ export function UsuariosList() {
 
               {/* Rol */}
               <div style={{ display: 'flex', gap: 3, padding: 3, background: T.surface2, borderRadius: 10, flexShrink: 0, overflowX: 'auto' }}>
-                <button type="button" onClick={() => { setRolFilter('TODOS'); setCurrentPage(1); }} style={seg(rolFilter === 'TODOS')}>Todos los roles</button>
-                {(['ADMIN', 'VENDEDOR', 'GESTOR_INVENTARIO'] as Role[]).map(r => (
+                <button type="button" onClick={() => { setRolFilter('TODOS'); setCurrentPage(1); }} style={seg(rolFilter === 'TODOS')}>Todos</button>
+                {rolesDisponibles.map(r => (
                   <button key={r} type="button" onClick={() => { setRolFilter(r); setCurrentPage(1); }} style={{ ...seg(rolFilter === r), gap: 6 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: ROL_META[r].tone, flexShrink: 0 }} />
-                    {r === 'ADMIN' ? 'Administrador' : r === 'VENDEDOR' ? 'Vendedor' : 'Inventario'}
-                    <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.7rem', color: T.text3 }}>{rolCounts[r]}</span>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: ROL_META[r]?.tone ?? T.text3, flexShrink: 0 }} />
+                    {ROL_META[r]?.label ?? r}
+                    <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.7rem', color: T.text3 }}>{rolCounts[r] ?? 0}</span>
                   </button>
                 ))}
               </div>

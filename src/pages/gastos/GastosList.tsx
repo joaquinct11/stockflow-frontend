@@ -217,8 +217,8 @@ const MonoLabel = ({ children }: { children: React.ReactNode }) => (
 export function GastosList() {
   const { canCreate, canEdit, canDelete, canView } = usePermissions();
   const hasView = canView('GASTOS');
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const sucursalId = sucursales.length > 1 && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   const [gastos, setGastos]     = useState<GastoDTO[]>([]);
   const [loading, setLoading]   = useState(true);

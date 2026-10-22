@@ -92,9 +92,8 @@ const POR_PAGINA = 8;
 
 export function NotasCreditoPage() {
   const { config: negocioConfig } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   // data
   const [notas, setNotas] = useState<NotaCreditoDTO[]>([]);
@@ -251,7 +250,7 @@ export function NotasCreditoPage() {
           <h1 className="text-[1.6rem] font-bold tracking-tight leading-none">Notas de Crédito</h1>
           <p className="text-sm text-muted-foreground mt-1.5">
             Notas generadas por devoluciones de venta · {filtradas.length} de {notas.length}
-            {isMultiLocal && sucursalActual ? ` · ${sucursalActual.nombre}` : ''}
+            {sucursalActual ? ` · ${sucursalActual.nombre}` : ''}
           </p>
         </div>
         <button type="button" onClick={fetchNotas} disabled={loading}

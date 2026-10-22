@@ -64,9 +64,8 @@ export function InventarioList() {
   const { canCreate, canView, puede } = usePermissions();
   const location = useLocation();
   const { config: negocioConfig } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const esFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
   const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
   const hasViewPermission = canView('INVENTARIO');

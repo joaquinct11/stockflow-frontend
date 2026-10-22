@@ -64,9 +64,8 @@ export function POSPage() {
   const location = useLocation();
   const { user } = useAuthStore();
   const { config: negocio } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded, setSucursales } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded, setSucursales } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const esRopa = negocio?.rubro === 'TIENDA_ROPA';
   const esFarmacia = negocio?.rubro === 'BOTICA' || negocio?.rubro === 'FARMACIA';
 

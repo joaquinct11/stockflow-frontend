@@ -197,6 +197,7 @@ export const API_ENDPOINTS = {
   CLIENTES: {
     LIST: '/clientes',
     LIST_ACTIVOS: '/clientes/activos',
+    STATS: '/clientes/stats',
     GET: (id: number) => `/clientes/${id}`,
     SEARCH: (nombre: string) => `/clientes/buscar?nombre=${nombre}`,
     BUSCAR_DOCUMENTO: (numero: string) => `/clientes/documento/${numero}`,
@@ -247,6 +248,26 @@ export const API_ENDPOINTS = {
     OPPF_EXPORTAR: (codEst: string, ruc: string, mes: string, ano: string, tipo: string) =>
       `/digemid/oppf/exportar?codEstablecimiento=${encodeURIComponent(codEst)}&ruc=${encodeURIComponent(ruc)}&mes=${encodeURIComponent(mes)}&ano=${encodeURIComponent(ano)}&tipo=${encodeURIComponent(tipo)}`,
     OPPF_HISTORIAL: '/digemid/oppf/historial',
+  },
+
+  MASCOTAS: {
+    LIST: '/mascotas',
+    STATS: '/mascotas/stats',
+    GET: (id: number) => `/mascotas/${id}`,
+    BY_CLIENTE: (clienteId: number) => `/mascotas/cliente/${clienteId}`,
+    BUSCAR: (nombre: string) => `/mascotas/buscar?nombre=${encodeURIComponent(nombre)}`,
+    CREATE: '/mascotas',
+    UPDATE: (id: number) => `/mascotas/${id}`,
+    ACTIVATE: (id: number) => `/mascotas/${id}/activar`,
+    DEACTIVATE: (id: number) => `/mascotas/${id}/desactivar`,
+  },
+
+  CITAS: {
+    LIST: '/citas',
+    GET: (id: number) => `/citas/${id}`,
+    CREATE: '/citas',
+    UPDATE: (id: number) => `/citas/${id}`,
+    CAMBIAR_ESTADO: (id: number) => `/citas/${id}/estado`,
   },
 
   NOTIFICACIONES: {
