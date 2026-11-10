@@ -488,7 +488,7 @@ function ResumenTab({ loading, error, data, onRetry, esServicios=false, ventasDa
       </div>
 
       {/* ── Grid 2:1 → gráfico ingresos + métodos de pago ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'minmax(0,2fr) minmax(0,1fr)', gap:14, alignItems:'start' }}>
+      <div className="grid-2col" style={{ alignItems:'start' }}>
         <Panel title="Ingresos del período" sub={chartSub}
           action={
             <div style={{ display:'flex', alignItems:'center', gap:16, fontSize:'.73rem', color:'var(--text-3)', flexShrink:0 }}>
@@ -562,7 +562,7 @@ function ResumenTab({ loading, error, data, onRetry, esServicios=false, ventasDa
       </div>
 
       {/* ── Grid 3 cols → top productos + top vendedores + insights ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:14, alignItems:'start' }}>
+      <div className="grid-2col" style={{ gap:14, alignItems:'start' }}>
         <Panel title={esServicios ? 'Top servicios' : 'Top productos'} sub="Por ingresos"
           action={btnVerTodo(()=>onTabChange?.('productos'))}>
           {topProductos.length === 0
@@ -679,7 +679,7 @@ function VentasTab({ loading, error, data, onRetry, esServicios=false, agrupacio
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
       {/* ── KPI cards ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12 }}>
+      <div className="kpi-grid">
         <KpiCard
           label="Ingresos"
           value={formatSolesRound(totalIngresos)}
@@ -787,7 +787,7 @@ function VentasTab({ loading, error, data, onRetry, esServicios=false, agrupacio
       </div>
 
       {/* ── BLOQUE INFERIOR: mismo layout del rediseño HTML ── */}
-      <div style={{
+      <div className="rpt-2col" style={{
         display:'grid',
         gridTemplateColumns:'minmax(0,1.35fr) minmax(0,1fr)',
         gap:14,
@@ -1146,11 +1146,7 @@ function ProductosTab({ loading, error, data, onRetry, esServicios=false, metric
     <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
 
       {/* ── 4 tarjetas de cuadrante ── */}
-      <div style={{
-        display:'grid',
-        gridTemplateColumns:'repeat(4,minmax(0,1fr))',
-        gap:12,
-      }}>
+      <div className="kpi-grid">
         {CUADRANTES.map(q => {
           const active=cuadrante===q.key;
           return (
@@ -1425,12 +1421,7 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
     <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
 
       {/* ── Cards por vendedor: mismo lenguaje visual del rediseño ── */}
-      <div style={{
-        display:'grid',
-        gridTemplateColumns:'repeat(4,minmax(0,1fr))',
-        gap:12,
-        alignItems:'start',
-      }}>
+      <div className="kpi-grid" style={{ alignItems:'start' }}>
         {vendedores.slice(0,4).map((v,i)=>{
           const pct=totalIng>0?((v.ingresosTotal??0)/totalIng)*100:0;
           const bg=avatarColors[i%avatarColors.length];
@@ -1536,7 +1527,7 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
 
       {/* ── Si existen más de 4 vendedores, mantenemos el resto debajo ── */}
       {vendedores.length>4 && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12 }}>
+        <div className="kpi-grid">
           {vendedores.slice(4).map((v,i)=>{
             const realIndex=i+4;
             const pct=totalIng>0?((v.ingresosTotal??0)/totalIng)*100:0;
@@ -1565,9 +1556,9 @@ function VendedoresTab({ loading, error, data, onRetry, esServicios=false, horas
       )}
 
       {/* ── Parte inferior: detalle + ventas por hora ── */}
-      <div style={{
+      <div className="rpt-2col" style={{
         display:'grid',
-        gridTemplateColumns:'minmax(0,1.55fr) minmax(360px,1fr)',
+        gridTemplateColumns:'minmax(0,1.55fr) minmax(0,1fr)',
         gap:14,
         alignItems:'start',
       }}>
@@ -1730,7 +1721,7 @@ function ClientesTab({ loading, error, data, onRetry, esServicios=false }: {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
       {/* ── KPIs ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12 }}>
+      <div className="kpi-grid">
         <KpiCard
           label="Clientes que compraron"
           value={formatNum(data.length)}
@@ -1762,7 +1753,7 @@ function ClientesTab({ loading, error, data, onRetry, esServicios=false }: {
       </div>
 
       {/* ── Segmentos + Top clientes ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'minmax(390px,.78fr) minmax(0,1.72fr)', gap:14, alignItems:'start' }}>
+      <div className="rpt-2col" style={{ display:'grid', gridTemplateColumns:'minmax(0,.78fr) minmax(0,1.72fr)', gap:14, alignItems:'start' }}>
         <Panel title="Segmentos de clientes" sub="Según frecuencia y última compra">
           <div style={{ display:'grid', gap:10 }}>
             {segmentos.map(seg=>{
@@ -1916,7 +1907,7 @@ function InventarioTab({ loading, error, data, onRetry, esServicios=false, merma
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
       {/* KPI cards — rediseño */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12 }}>
+      <div className="kpi-grid">
         <KpiCard
           label="Inventario valorizado"
           value={valorizacionStock != null ? formatSolesRound(valorizacionStock) : '—'}
@@ -1949,7 +1940,7 @@ function InventarioTab({ loading, error, data, onRetry, esServicios=false, merma
       </div>
 
       {/* ABC + cobertura */}
-      <div style={{ display:'grid', gridTemplateColumns:'minmax(0,.95fr) minmax(0,1.55fr)', gap:14, alignItems:'start' }}>
+      <div className="rpt-2col" style={{ display:'grid', gridTemplateColumns:'minmax(0,.95fr) minmax(0,1.55fr)', gap:14, alignItems:'start' }}>
         <Panel title="Análisis ABC" sub="Qué productos generan tus ingresos">
           <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
             {(['A','B','C'] as const).map(cls=>{
@@ -2035,7 +2026,7 @@ function InventarioTab({ loading, error, data, onRetry, esServicios=false, merma
       </div>
 
       {/* Productos sin movimiento + vencimientos y mermas */}
-      <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)', gap:14, alignItems:'start' }}>
+      <div className="grid-2col" style={{ alignItems:'start' }}>
         <Panel title="Productos sin movimiento" sub="Más de 30 días sin salida · capital inmovilizado">
           <div style={{ overflowX:'auto' }}>
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'.78rem' }}>
@@ -2152,7 +2143,7 @@ function FinancieroTab({ loading, error, data, previousData, historico=[], onRet
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
       {/* Cards del rediseño */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12 }}>
+      <div className="kpi-grid">
         <KpiCard
           label="Ingresos"
           value={formatSolesRound(data.ingresosVentas)}
@@ -2196,7 +2187,7 @@ function FinancieroTab({ loading, error, data, previousData, historico=[], onRet
       </div>
 
       {/* Estado de resultados + gastos por categoría */}
-      <div style={{
+      <div className="rpt-2col" style={{
         display:'grid',
         gridTemplateColumns:'minmax(0,1.08fr) minmax(0,.92fr)',
         gap:16,
@@ -2441,7 +2432,7 @@ function ComprasTab({ loading, error, data, onRetry }: {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       {/* KPI cards — misma composición visual del rediseño */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12 }}>
+      <div className="kpi-grid">
         <KpiCard
           label="Total comprado"
           value={formatSolesRound(totalMonto)}
@@ -2473,7 +2464,7 @@ function ComprasTab({ loading, error, data, onRetry }: {
       </div>
 
       {/* Ranking + detalle */}
-      <div style={{ display:'grid', gridTemplateColumns:'minmax(0,.9fr) minmax(0,1.45fr)', gap:16, alignItems:'start' }}>
+      <div className="rpt-2col" style={{ display:'grid', gridTemplateColumns:'minmax(0,.9fr) minmax(0,1.45fr)', gap:16, alignItems:'start' }}>
         <Panel title="Compras por proveedor" sub="Monto recibido en el período">
           {data.length===0 ? (
             <div style={{ textAlign:'center', color:'var(--text-3)', padding:'30px 0' }}>Sin datos</div>
@@ -2563,15 +2554,21 @@ export function ReportesPage() {
   const { config: negocioConfig } = useTenantConfigStore();
   const esServicios = negocioConfig?.rubro==='EMPRESA_SERVICIOS';
   const hasAccess = canView('REPORTES');
-  const puedeVerComisiones = puede('VER_COMISION');
+  const puedeVerComisiones = puede('VER_COMISIONES');
 
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length>1;
-  const sucursalId = isMultiLocal&&sucursalActual?sucursalActual.id:undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual?sucursalActual.id:undefined;
 
   const [desde, setDesde] = useState<string>(startOfMonth());
   const [hasta, setHasta] = useState<string>(todayStr());
   const [activeTab, setActiveTab] = useState<TabId>('resumen');
+
+  // Si el rubro cambia a EMPRESA_SERVICIOS estando en la pestaña Compras, volver a Resumen.
+  useEffect(() => {
+    if (esServicios && activeTab === 'compras') {
+      setActiveTab('resumen');
+    }
+  }, [esServicios, activeTab]);
 
   const [resumenLoading, setResumenLoading] = useState(false);
   const [resumenError, setResumenError] = useState<string|null>(null);
@@ -2828,7 +2825,7 @@ export function ReportesPage() {
       <div style={{ maxWidth:1400 }}>
 
           {/* Page header */}
-          <div style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-end', justifyContent:'space-between', gap:16 }}>
+          <div className="page-header-row">
             <div style={{ minWidth:0 }}>
               <h1 style={{ fontSize:'1.6rem', fontWeight:700, letterSpacing:'-.028em', margin:0, color:'var(--text)' }}>Reportes</h1>
               <p style={{ fontSize:'.865rem', color:'var(--text-3)', margin:'7px 0 0' }}>Indicadores clave para la toma de decisiones</p>
@@ -2863,7 +2860,7 @@ export function ReportesPage() {
           </div>
 
           {/* Filter bar */}
-          <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:10, marginTop:18 }}>
+          <div className="filter-bar filter-bar--2col" style={{ marginTop:18 }}>
             {/* Period presets */}
             <div style={{ display:'flex', gap:3, padding:3, background:'var(--surface)', border:'1px solid var(--line)', borderRadius:11, maxWidth:'100%', overflowX:'auto' }}>
               {QUICK_RANGES.map(r=>{
@@ -2893,7 +2890,7 @@ export function ReportesPage() {
 
           {/* Tab bar */}
           <div style={{ display:'flex', gap:4, marginTop:18, borderBottom:'1px solid var(--line)', overflowX:'auto', overflowY:'hidden' }}>
-            {TABS.map(([id,label,iconPath])=>{
+            {TABS.filter(([id]) => !(esServicios && id === 'compras')).map(([id,label,iconPath])=>{
               const isActive=activeTab===id;
               return (
                 <button key={id} onClick={()=>setActiveTab(id)}

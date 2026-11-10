@@ -3,6 +3,18 @@ import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
 import type { LoginDTO, RegistrationRequestDTO, JwtResponse, TenantInfo } from '../types';
 
+export interface PlanCatalogoDTO {
+  codigo: string;
+  segmento: string;
+  rubroOperativo: string;
+  nivel: 'BASICO' | 'PRO';
+  precioMensual: number;
+  maxUsuarios: number;
+  maxSucursales: number;
+  maxProductos: number;
+  labelVisible: string | null;
+}
+
 export interface CrearNegocioRequest {
   nombreNegocio: string;
   rubro?: string;
@@ -10,6 +22,7 @@ export interface CrearNegocioRequest {
   telefono?: string;
   emailContacto?: string;
   planId: string;
+  planCodigo?: string;
 }
 
 // ✅ NUEVO: DTO para cambiar contraseña
@@ -333,5 +346,38 @@ export const authService = {
   getTenantId: (): string | null => {
     const user = authService.getCurrentUser();
     return user?.tenantId || null;
+  },
+
+  /**
+   * Precios de planes para el rubro indicado.
+   * Endpoint de compatibilidad — no requiere autenticación.
+   */
+  getPreciosPlan: async (rubro: string): Promise<{ basicoMensual: number; proMensual: number }> => {
+    const { data } = await axiosInstance.get<{ basicoMensual: number; proMensual: number }>(
+      `/auth/planes/precios?rubro=${encodeURIComponent(rubro)}`
+    );
+    return data;
+  },
+
+  /**
+   * Planes Básico y Pro de un segmento comercial.
+   * Endpoint público — no requiere autenticación.
+   */
+  getPlanesSegmento: async (segmento: string): Promise<PlanCatalogoDTO[]> => {
+    const { data } = await axiosInstance.get<PlanCatalogoDTO[]>(
+      `/auth/planes/catalogo?segmento=${encodeURIComponent(segmento)}`
+    );
+    return data;
+  },
+
+  /**
+   * Detalle de un plan específico por código (e.g. "VETERINARIA_BASICO").
+   * Endpoint público — no requiere autenticación.
+   */
+  getPlanPorCodigo: async (codigo: string): Promise<PlanCatalogoDTO> => {
+    const { data } = await axiosInstance.get<PlanCatalogoDTO>(
+      `/auth/planes/${encodeURIComponent(codigo)}`
+    );
+    return data;
   },
 };

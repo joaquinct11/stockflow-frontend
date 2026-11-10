@@ -67,8 +67,7 @@ export function VentasList() {
   const { canDelete, canViewAll, canViewOwn, canCreate, rol, puede } = usePermissions();
   const { config: negocioConfig } = useTenantConfigStore();
   const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
 
   // ── Estado dialog "Registrar Servicio" (solo rubro dealer) ──────────────────
   const [registrarOpen, setRegistrarOpen] = useState(false);
@@ -208,7 +207,7 @@ export function VentasList() {
 
       const hasViewPermission = canViewAll('VENTAS') || canViewOwn('VENTAS');
 
-      const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+      const sucId = sucursalActual ? sucursalActual.id : undefined;
       const desde = appliedFechaDesde || defaultFechaDesde;
       const hasta = appliedFechaHasta || defaultFechaHasta;
       const inicioISO = new Date(desde + 'T00:00:00').toISOString().slice(0, 19);
@@ -220,10 +219,14 @@ export function VentasList() {
       })();
 
       const productosPromise =
-        hasViewPermission ? productoService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined) : Promise.resolve([] as ProductoDTO[]);
+        hasViewPermission ? productoService.getAll(sucursalActual ? sucursalActual.id : undefined) : Promise.resolve([] as ProductoDTO[]);
 
-      const comprobantesPromise = facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[]);
-      const clientesPromise = clienteService.getActivos().catch(() => [] as ClienteDTO[]);
+      const comprobantesPromise = (puede('VER_FACTURACION') || puede('VER_MIS_FACTURACION'))
+        ? facturacionService.listComprobantes().catch(() => [] as ComprobanteDTO[])
+        : Promise.resolve([] as ComprobanteDTO[]);
+      const clientesPromise = puede('VER_CLIENTES')
+        ? clienteService.getActivos().catch(() => [] as ClienteDTO[])
+        : Promise.resolve([] as ClienteDTO[]);
 
       const [ventasData, productosData, comprobantesData, clientesData] = await Promise.all([
         ventasPromise,
@@ -578,7 +581,7 @@ export function VentasList() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[1.6rem] font-bold tracking-tight leading-none">
-            {esServicios ? 'Servicios Prestados' : 'Historial de Ventas'}
+            Historial de ventas
           </h1>
           <p className="text-sm text-muted-foreground mt-1.5">
             {filteredVentas.length} de {ventas.length} ventas · {rangoLabel}
@@ -602,7 +605,7 @@ export function VentasList() {
           )}
           {esServicios && canCreate('VENTAS') && (
             <button type="button" onClick={async () => {
-              const caja = await cajaService.getActiva(isMultiLocal && sucursalActual ? sucursalActual.id : undefined).catch(() => null);
+              const caja = await cajaService.getActiva(sucursalActual ? sucursalActual.id : undefined).catch(() => null);
               if (!caja) {
                 toast.error((t) => (
                   <span>Sin caja abierta.{' '}
@@ -621,20 +624,20 @@ export function VentasList() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="kpi-grid gap-3">
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Ingresos</p>
-          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">S/ {ingresosFiltrads.toFixed(2)}</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-emerald-600 dark:text-emerald-400">S/ {ingresosFiltrads.toFixed(2)}</p>
           <p className="text-[.79rem] text-muted-foreground mt-1">{ventasActivas.length} ventas no anuladas</p>
         </div>
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Ventas</p>
-          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">{filteredVentas.length}</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-primary">{filteredVentas.length}</p>
           <p className="text-[.79rem] text-muted-foreground mt-1">{ventasActivas.length} válidas en el periodo</p>
         </div>
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Ticket promedio</p>
-          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">S/ {ticketPromedioCompletadas.toFixed(2)}</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-blue-600 dark:text-blue-400">S/ {ticketPromedioCompletadas.toFixed(2)}</p>
           <p className="text-[.79rem] text-muted-foreground mt-1">Por venta no anulada</p>
         </div>
         <div className={`p-[16px_18px] rounded-[14px] shadow-sm border ${incidenciasFiltradas.length > 0 ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-700/40' : 'bg-card border-border'}`}>

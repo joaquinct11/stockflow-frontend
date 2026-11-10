@@ -141,9 +141,8 @@ function inicialesAvatar(nombre: string | null | undefined): string {
 export function CajaPage() {
   const { user } = useAuthStore();
   const isAdmin = user?.rol === 'ADMIN';
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   const [cajas, setCajas] = useState<CajaDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -300,47 +299,46 @@ export function CajaPage() {
         <div className="min-w-0">
           <h1 className="text-[1.6rem] font-bold tracking-tight leading-none">Cuadre de Caja</h1>
           {cajaActiva ? (
-            <div className="flex flex-wrap items-center gap-2.5 mt-2">
+            <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-xs font-semibold border border-amber-200 dark:border-amber-800">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
                 Caja abierta
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {cajaActiva.usuarioNombre} · abierta {formatHora(cajaActiva.fechaApertura)} · {tiempoTranscurrido(cajaActiva.fechaApertura)}
               </span>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground mt-1.5">Sin turno activo</p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center">
           {cajaActiva ? (
             <>
-              <button
-                onClick={() => { setRetiroForm({ monto: 0, motivo: '' }); setIsRetiroOpen(true); }}
-                className="flex items-center gap-2 h-[38px] px-4 text-sm font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-primary hover:text-primary transition-colors"
-              >
-                <ArrowDownLeft size={15} className="flex-shrink-0" />
-                Registrar retiro
-              </button>
-              <button
-                onClick={() => imprimirArqueo(cajaActiva, totalContado, conteo)}
-                className="flex items-center gap-2 h-[38px] px-4 text-sm font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-primary hover:text-primary transition-colors"
-              >
-                <Printer size={15} className="flex-shrink-0" />
-                Imprimir arqueo
-              </button>
+              <div className="grid grid-cols-2 gap-2 sm:contents">
+                <button
+                  onClick={() => { setRetiroForm({ monto: 0, motivo: '' }); setIsRetiroOpen(true); }}
+                  className="flex items-center justify-center gap-2 h-[38px] px-4 text-sm font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-primary hover:text-primary transition-colors"
+                >
+                  <ArrowDownLeft size={15} className="flex-shrink-0" />
+                  Registrar retiro
+                </button>
+                <button
+                  onClick={() => imprimirArqueo(cajaActiva, totalContado, conteo)}
+                  className="flex items-center justify-center gap-2 h-[38px] px-4 text-sm font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-primary hover:text-primary transition-colors"
+                >
+                  <Printer size={15} className="flex-shrink-0" />
+                  Imprimir arqueo
+                </button>
+              </div>
               <button
                 onClick={handleCerrarCaja}
                 disabled={cerrando}
-                className="flex items-center gap-2 h-[38px] px-4 text-sm font-semibold text-white bg-primary border-0 rounded-[10px] cursor-pointer hover:brightness-105 transition-all shadow-[0_6px_16px_-8px_var(--tw-shadow-color)] shadow-primary/60 disabled:opacity-60"
+                className="flex items-center justify-center gap-2 h-[38px] px-4 text-sm font-semibold text-white bg-primary border-0 rounded-[10px] cursor-pointer hover:brightness-105 transition-all shadow-[0_6px_16px_-8px_var(--tw-shadow-color)] shadow-primary/60 disabled:opacity-60 w-full sm:w-auto"
               >
                 <Lock size={15} className="flex-shrink-0" />
                 {cerrando ? 'Cerrando...' : 'Cerrar caja'}
               </button>
             </>
           ) : (
-            <Button onClick={() => setIsAbrirOpen(true)}>
+            <Button onClick={() => setIsAbrirOpen(true)} className="w-full sm:w-auto">
               <Plus size={15} className="mr-1.5" />
               Abrir Caja
             </Button>
@@ -351,6 +349,33 @@ export function CajaPage() {
       {/* ── Sesión activa ──────────────────────────────────────────────── */}
       {cajaActiva && (
         <>
+          {/* Turno info card */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-[18px_20px] bg-card border border-border rounded-2xl shadow-sm">
+            <div className="min-w-0">
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Cajero</p>
+              <p className="mt-1 font-semibold text-[.93rem] truncate">{cajaActiva.usuarioNombre}</p>
+            </div>
+            <div>
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Estado</p>
+              <div className="mt-1">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-xs font-semibold border border-amber-200 dark:border-amber-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                  Abierta
+                </span>
+              </div>
+            </div>
+            <div>
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Apertura · Duración</p>
+              <p className="mt-1 text-[.9rem] font-medium">{formatHora(cajaActiva.fechaApertura)}</p>
+              <p className="text-xs text-muted-foreground leading-tight mt-0.5">{tiempoTranscurrido(cajaActiva.fechaApertura)}</p>
+            </div>
+            <div>
+              <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Fondo apertura</p>
+              <p className="mt-1 font-bold text-[.93rem]">{formatCurrency(cajaActiva.montoApertura)}</p>
+              <p className="text-xs text-muted-foreground leading-tight mt-0.5">ID #{cajaActiva.id}</p>
+            </div>
+          </div>
+
           {/* Arqueo card */}
           <div className="grid grid-cols-1 lg:grid-cols-[1.32fr_1fr] bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
 

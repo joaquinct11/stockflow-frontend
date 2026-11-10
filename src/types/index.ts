@@ -100,6 +100,7 @@ export interface RegistrationRequestDTO {
   apellido?: string;
   nombreFarmacia: string;
   planId: PlanId;
+  planCodigo?: string;
   tipoDocumento?: string;
   numeroDocumento?: string;
   numeroCelular?: string;
@@ -174,6 +175,16 @@ export interface ProductoDTO {
   /** Stock vigente (no vencido). Solo presente si el producto tiene lotes con fechaVencimiento.
    *  El POS debe usar este valor cuando no es undefined, en lugar de stockActual. */
   stockVigente?: number;
+  /**
+   * Precio unitario mayorista (opcional). Cuando está presente junto a cantidadMinimaMayorista,
+   * el POS aplica este precio automáticamente al alcanzar o superar la cantidad mínima.
+   */
+  precioMayorista?: number;
+  /**
+   * Cantidad mínima de unidades para activar el precio mayorista.
+   * Solo relevante cuando precioMayorista está configurado.
+   */
+  cantidadMinimaMayorista?: number;
 }
 
 // ========================================
@@ -231,6 +242,10 @@ export interface ProductoPresentacionDTO {
   /** Cuántas unidades base = 1 de esta presentación. Ej: CAJA=20, BLISTER=10, TABLETA=1 */
   factor: number;
   esPrincipal?: boolean;
+  /** Precio mayorista opcional. Se aplica cuando la cantidad >= cantidadMinimaMayorista. */
+  precioMayorista?: number;
+  /** Cantidad mínima de esta presentación para activar el precio mayorista. */
+  cantidadMinimaMayorista?: number;
   tenantId?: string;
 }
 
@@ -334,6 +349,7 @@ export interface SuscripcionDTO {
   id?: number;
   usuarioPrincipalId: number;
   planId: string;
+  planCodigo?: string;
   precioMensual: number;
   preapprovalId?: string;
   estado: string;
@@ -351,6 +367,8 @@ export interface SuscripcionDTO {
 export interface SuscripcionEstadoResponseDTO {
   estado: string;
   planId: string;
+  /** Código de plan del catálogo (ej: "VETERINARIA_BASICO"). null en suscripciones legado. */
+  planCodigo?: string;
   preapprovalId?: string;
   fechaProximoCobro?: string;
   /** Precio mensual real del plan desde BD */
@@ -410,7 +428,7 @@ export interface RolDTO {
 export interface MovimientoInventarioDTO {
   id?: number;
   productoId: number;
-  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'AJUSTE_PRECIO' | 'DEVOLUCION' | 'SALDO_INICIAL' | 'MERMA';
+  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'AJUSTE_PRECIO' | 'DEVOLUCION' | 'SALDO_INICIAL' | 'MERMA' | 'CONSUMO_OT' | 'DEVOLUCION_OT';
   cantidad: number;
   descripcion: string;
   referencia?: string;
@@ -991,3 +1009,15 @@ export interface ComprobanteTipoResumenDTO {
 //   PENDIENTE = 'PENDIENTE',
 //   CANCELADA = 'CANCELADA',
 // }
+
+// ========================================
+// PAGINACIÓN GENÉRICA
+// ========================================
+
+export interface PageDTO<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}

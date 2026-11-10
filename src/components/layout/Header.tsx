@@ -232,7 +232,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-[45] flex h-[76px] items-center gap-4 border-b border-line bg-surface/80 backdrop-blur-md px-4 lg:px-6">
+    <header className="sticky top-0 z-[45] flex h-[60px] lg:h-[76px] items-center gap-4 border-b border-line bg-surface/80 backdrop-blur-md px-4 lg:px-6">
 
       {/* Hamburguesa móvil */}
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick}>

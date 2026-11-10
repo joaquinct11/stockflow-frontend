@@ -288,7 +288,7 @@ export function UserProfile() {
       </div>
 
       {/* two-column grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '320px minmax(0,1fr)', gap: '18px', marginTop: '22px', alignItems: 'start' }}>
+      <div className="profile-layout" style={{ marginTop: '22px' }}>
 
         {/* LEFT column */}
         <div style={{ display: 'grid', gap: '14px', minWidth: 0 }}>
@@ -363,7 +363,7 @@ export function UserProfile() {
                 <p style={{ fontSize: '.82rem', color: C.text3, margin: '4px 0 0' }}>Datos de tu cuenta y empresa</p>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '1px', background: C.lineSoft }}>
+            <div className="profile-fields" style={{ background: C.lineSoft }}>
               {dataFields.map(f => (
                 <div key={f.key} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '15px 18px', background: C.surface, minWidth: 0 }}>
                   <span style={{ width: '34px', height: '34px', flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: '10px', background: C.surface2, color: C.text3 }}>
@@ -449,7 +449,7 @@ export function UserProfile() {
             {/* body */}
             <form onSubmit={guardarPerfil} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '20px 22px 22px' }}>
               <div style={{ ...monoLabel, margin: '0 0 12px' }}>Nombre</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '14px' }}>
+              <div className="form-grid-2col" style={{ gap: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: C.text2, marginBottom: '6px' }}>Nombres <span style={{ color: C.bad }}>*</span></label>
                   <input type="text" maxLength={80} value={editNombres} onChange={e => { setEditNombres(e.target.value); setNombresErr(''); }}
@@ -465,7 +465,7 @@ export function UserProfile() {
               </div>
 
               <div style={monoLabel}>Identificación y contacto</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.2fr)', gap: '14px' }}>
+              <div className="form-grid-2col" style={{ gap: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: C.text2, marginBottom: '6px' }}>Tipo de documento</label>
                   <div style={{ position: 'relative' }}>

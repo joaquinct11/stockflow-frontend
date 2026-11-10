@@ -217,8 +217,8 @@ const MonoLabel = ({ children }: { children: React.ReactNode }) => (
 export function GastosList() {
   const { canCreate, canEdit, canDelete, canView } = usePermissions();
   const hasView = canView('GASTOS');
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const sucursalId = sucursales.length > 1 && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   const [gastos, setGastos]     = useState<GastoDTO[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -396,15 +396,15 @@ export function GastosList() {
     <div style={{ fontFamily:'Inter,sans-serif', color:T.text }}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:16, marginBottom:22 }}>
-        <div>
+      <div style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-end', justifyContent:'space-between', gap:16, marginBottom:22 }}>
+        <div style={{ minWidth:0 }}>
           <h1 style={{ margin:0, fontSize:'1.6rem', fontWeight:700, letterSpacing:'-.028em', color:T.text }}>Gastos y Egresos</h1>
           <p style={{ margin:'7px 0 0', fontSize:'.865rem', color:T.text3 }}>
             Registra y controla los gastos operativos del negocio
           </p>
         </div>
         {canCreate('GASTOS') && (
-          <button onClick={openCreate} style={{ display:'flex', alignItems:'center', gap:8, height:40, padding:'0 18px', fontFamily:'Inter,sans-serif', fontSize:'.875rem', fontWeight:650, color:'#fff', background:T.primary, border:0, borderRadius:11, cursor:'pointer', whiteSpace:'nowrap', boxShadow:`0 8px 20px -10px ${T.primary}`, flexShrink:0 }}>
+          <button onClick={openCreate} className="page-action-btn" style={{ display:'flex', alignItems:'center', gap:8, height:40, padding:'0 18px', fontFamily:'Inter,sans-serif', fontSize:'.875rem', fontWeight:650, color:'#fff', background:T.primary, border:0, borderRadius:11, cursor:'pointer', whiteSpace:'nowrap', boxShadow:`0 8px 20px -10px ${T.primary}` }}>
             <Plus size={15} strokeWidth={2.5} />
             Nuevo gasto
           </button>
@@ -412,7 +412,7 @@ export function GastosList() {
       </div>
 
       {/* ── KPI cards ───────────────────────────────────────────────────── */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20 }}>
+      <div className="kpi-grid" style={{ gap:14, marginBottom:20 }}>
         {/* Total registrado */}
         <div style={{ padding:'16px 18px', background:T.surface, border:`1px solid ${T.line}`, borderRadius:14, boxShadow:T.shadow }}>
           <MonoLabel>Total registrado</MonoLabel>
@@ -473,7 +473,7 @@ export function GastosList() {
       <div style={{ background:T.surface, border:`1px solid ${T.line}`, borderRadius:14, boxShadow:T.shadow }}>
 
         {/* Filtros row */}
-        <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) auto auto', gap:10, padding:'14px 18px', borderBottom:`1px solid ${T.lineSoft}` }}>
+        <div className="filter-bar" style={{ gap:10, padding:'14px 18px', borderBottom:`1px solid ${T.lineSoft}` }}>
           {/* Búsqueda */}
           <div style={{ position:'relative', minWidth:0 }}>
             <IconSearch />
@@ -510,7 +510,7 @@ export function GastosList() {
                   <div style={{ height:1, background:T.lineSoft, margin:'8px 4px' }} />
                   <div style={{ padding:'4px 6px 6px' }}>
                     <MonoLabel>Personalizado</MonoLabel>
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8, marginTop:8 }}>
+                    <div className="form-grid-2col" style={{ gap:8, marginTop:8 }}>
                       <label style={{ display:'grid', gap:4, fontSize:'.74rem', color:T.text3 }}>
                         Desde
                         <input type="date" value={desde} onChange={e => { if(e.target.value){ setDesde(e.target.value); setPreset('todo'); } }}

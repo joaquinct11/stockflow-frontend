@@ -337,7 +337,7 @@ export function AccountSettings() {
                 <input type="text" value={form.direccion ?? ''} onChange={e => set('direccion', e.target.value)} placeholder="Av. Lima 123, Miraflores" style={inp(false, 38)} />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: '14px' }}>
+            <div className="form-grid-2col" style={{ gap: '14px' }}>
               <div>
                 <div style={fieldLabel}>Ciudad</div>
                 <input type="text" value={form.ciudad ?? ''} onChange={e => set('ciudad', e.target.value)} placeholder="Lima" style={inp()} />
@@ -386,7 +386,7 @@ export function AccountSettings() {
         </div>
       ) : (
         <div style={{ padding: '20px 22px 24px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.6fr)', gap: '18px' }}>
+          <div className="form-grid-2col" style={{ gap: '18px' }}>
             {/* Moneda */}
             <div>
               <div style={fieldLabel}>Moneda</div>
@@ -427,7 +427,7 @@ export function AccountSettings() {
 
           {/* Series */}
           <div style={monoLabel as React.CSSProperties}>Series de comprobantes</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: '12px' }}>
+          <div className="form-grid-2col" style={{ gap: '12px' }}>
             {([
               { key: 'serieBoleta' as keyof TenantConfigDTO, label: 'Boleta de venta', pref: 'B', ph: 'B001', err: sbErr, n: 2915 },
               { key: 'serieFactura' as keyof TenantConfigDTO, label: 'Factura', pref: 'F', ph: 'F001', err: sfErr, n: 342 },
@@ -595,7 +595,7 @@ export function AccountSettings() {
           )}
         </div>
 
-        <div style={{
+        <div className="settings-layout" style={{
           display: 'grid',
           gridTemplateColumns: isAdmin ? '210px minmax(0,1fr) 320px' : '210px minmax(0,1fr)',
           gap: '22px', marginTop: '22px', alignItems: 'start',

@@ -197,6 +197,7 @@ export const API_ENDPOINTS = {
   CLIENTES: {
     LIST: '/clientes',
     LIST_ACTIVOS: '/clientes/activos',
+    STATS: '/clientes/stats',
     GET: (id: number) => `/clientes/${id}`,
     SEARCH: (nombre: string) => `/clientes/buscar?nombre=${nombre}`,
     BUSCAR_DOCUMENTO: (numero: string) => `/clientes/documento/${numero}`,
@@ -205,6 +206,16 @@ export const API_ENDPOINTS = {
     DELETE: (id: number) => `/clientes/${id}`,
     ACTIVATE: (id: number) => `/clientes/${id}/activar`,
     DEACTIVATE: (id: number) => `/clientes/${id}/desactivar`,
+  },
+
+  EQUIPOS: {
+    LIST: '/equipos',
+    STATS: '/equipos/stats',
+    GET: (id: number) => `/equipos/${id}`,
+    CREATE: '/equipos',
+    UPDATE: (id: number) => `/equipos/${id}`,
+    ACTIVATE: (id: number) => `/equipos/${id}/activar`,
+    DEACTIVATE: (id: number) => `/equipos/${id}/desactivar`,
   },
 
   GASTOS: {
@@ -247,6 +258,41 @@ export const API_ENDPOINTS = {
     OPPF_EXPORTAR: (codEst: string, ruc: string, mes: string, ano: string, tipo: string) =>
       `/digemid/oppf/exportar?codEstablecimiento=${encodeURIComponent(codEst)}&ruc=${encodeURIComponent(ruc)}&mes=${encodeURIComponent(mes)}&ano=${encodeURIComponent(ano)}&tipo=${encodeURIComponent(tipo)}`,
     OPPF_HISTORIAL: '/digemid/oppf/historial',
+  },
+
+  MASCOTAS: {
+    LIST: '/mascotas',
+    STATS: '/mascotas/stats',
+    GET: (id: number) => `/mascotas/${id}`,
+    BY_CLIENTE: (clienteId: number) => `/mascotas/cliente/${clienteId}`,
+    BUSCAR: (nombre: string) => `/mascotas/buscar?nombre=${encodeURIComponent(nombre)}`,
+    CREATE: '/mascotas',
+    UPDATE: (id: number) => `/mascotas/${id}`,
+    ACTIVATE: (id: number) => `/mascotas/${id}/activar`,
+    DEACTIVATE: (id: number) => `/mascotas/${id}/desactivar`,
+  },
+
+  CITAS: {
+    LIST: '/citas',
+    GET: (id: number) => `/citas/${id}`,
+    CREATE: '/citas',
+    UPDATE: (id: number) => `/citas/${id}`,
+    CAMBIAR_ESTADO: (id: number) => `/citas/${id}/estado`,
+  },
+
+  ORDENES_TRABAJO: {
+    LIST: '/ordenes-trabajo',
+    GET: (id: number) => `/ordenes-trabajo/${id}`,
+    CREATE: '/ordenes-trabajo',
+    UPDATE: (id: number) => `/ordenes-trabajo/${id}`,
+    CAMBIAR_ESTADO: (id: number) => `/ordenes-trabajo/${id}/estado`,
+    CONSUMOS: (id: number) => `/ordenes-trabajo/${id}/consumos`,
+    DEVOLUCIONES: (otId: number, consumoId: number) => `/ordenes-trabajo/${otId}/consumos/${consumoId}/devoluciones`,
+    CLASIFICACIONES: (otId: number, consumoId: number) => `/ordenes-trabajo/${otId}/consumos/${consumoId}/clasificaciones`,
+    CIERRE_TECNICO: (id: number) => `/ordenes-trabajo/${id}/cierre-tecnico`,
+    FACTURAR: (id: number) => `/ordenes-trabajo/${id}/facturar`,
+    ENTREGA: (id: number) => `/ordenes-trabajo/${id}/entrega`,
+    ANULAR_FACTURA: (id: number) => `/ordenes-trabajo/${id}/anular-factura`,
   },
 
   NOTIFICACIONES: {

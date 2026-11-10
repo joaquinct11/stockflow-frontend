@@ -75,10 +75,9 @@ export function ProductosList() {
   const hasViewPermission = canView('PRODUCTOS');
   const { user } = useAuthStore();
   const { config: negocioConfig } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
   const location = useLocation();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const [searchParams] = useSearchParams();
   const tipoParam = searchParams.get('tipo'); // 'SERVICIO' | 'PRODUCTO' | null
   const esRopa       = negocioConfig?.rubro === 'TIENDA_ROPA';
@@ -197,10 +196,13 @@ export function ProductosList() {
     setVariantesBorrador(p => p.map((v, i) => i === idx ? { ...v, [field]: value } : v));
 
   // Presentaciones adicionales (multi-unidad, solo farmacia)
-  interface PresentacionBorrador { id?: number; unidadMedidaId: number; precioVenta: number; factor: number; esPrincipal: boolean; }
+  interface PresentacionBorrador {
+    id?: number; unidadMedidaId: number; precioVenta: number; factor: number; esPrincipal: boolean;
+    precioMayorista?: number; cantidadMinimaMayorista?: number;
+  }
   const [presentacionesBorrador, setPresentacionesBorrador] = useState<PresentacionBorrador[]>([]);
   const addPresentacionBorrador = () =>
-    setPresentacionesBorrador(p => [...p, { unidadMedidaId: unidadesMedida[0]?.id ?? 0, precioVenta: 0, factor: 1, esPrincipal: false }]);
+    setPresentacionesBorrador(p => [...p, { unidadMedidaId: unidadesMedida[0]?.id ?? 0, precioVenta: 0, factor: 1, esPrincipal: false, precioMayorista: undefined, cantidadMinimaMayorista: undefined }]);
   const removePresentacionBorrador = (idx: number) =>
     setPresentacionesBorrador(p => p.filter((_, i) => i !== idx));
   const updatePresentacionBorrador = (idx: number, field: string, value: string | number | boolean) =>
@@ -219,10 +221,12 @@ export function ProductosList() {
     tenantId: user?.tenantId ?? '',
     unidadMedidaId: 0,
     esGenerico: false,
-    tipo: 'PRODUCTO',
+    tipo: tipoParam === 'PRODUCTO' ? 'PRODUCTO' : (esServicios ? 'SERVICIO' : 'PRODUCTO'),
     unidadesPorCaja: undefined,
     talla: undefined,
     color: undefined,
+    precioMayorista: undefined,
+    cantidadMinimaMayorista: undefined,
     registroSanitario: '',
   });
 
@@ -252,6 +256,17 @@ export function ProductosList() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filtroEstado, filtroCategoria, filtroStock]);
+
+  // Sincronizar tipo cuando el usuario navega entre ?tipo=SERVICIO y ?tipo=PRODUCTO
+  // sin desmontar el componente (React Router reutiliza la instancia)
+  useEffect(() => {
+    if (editingId) return; // no pisar tipo mientras se edita
+    const tipoCalculado = tipoParam === 'PRODUCTO' ? 'PRODUCTO' : (esServicios ? 'SERVICIO' : 'PRODUCTO');
+    setFormData(prev => {
+      if (prev.tipo === tipoCalculado) return prev;
+      return { ...prev, tipo: tipoCalculado };
+    });
+  }, [tipoParam, esServicios]);
 
   // Sugerencias debounced — solo en modo crear y con 3+ caracteres
   useEffect(() => {
@@ -452,6 +467,8 @@ export function ProductosList() {
       talla: producto.talla,
       color: producto.color,
       registroSanitario: producto.registroSanitario ?? '',
+      precioMayorista: producto.precioMayorista,
+      cantidadMinimaMayorista: producto.cantidadMinimaMayorista,
     });
     setImgPreview(producto.imagenUrl ?? null);
     setEditingId(producto.id!);
@@ -473,6 +490,8 @@ export function ProductosList() {
         setPresentacionesBorrador(presentaciones.map(p => ({
           id: p.id, unidadMedidaId: p.unidadMedidaId, precioVenta: Number(p.precioVenta),
           factor: p.factor ?? 1, esPrincipal: p.esPrincipal ?? false,
+          precioMayorista: p.precioMayorista != null ? Number(p.precioMayorista) : undefined,
+          cantidadMinimaMayorista: p.cantidadMinimaMayorista ?? undefined,
         })));
       } catch { setPresentacionesBorrador([]); }
     } else {
@@ -501,6 +520,8 @@ export function ProductosList() {
       talla: undefined,
       color: undefined,
       registroSanitario: '',
+      precioMayorista: undefined,
+      cantidadMinimaMayorista: undefined,
     });
     setEditingId(null);
     setIsDialogOpen(false);
@@ -760,7 +781,7 @@ export function ProductosList() {
             </div>
           )}
           {canCreate('PRODUCTOS') && (
-            <button type="button" onClick={() => setIsDialogOpen(true)}
+            <button type="button" onClick={() => setIsDialogOpen(true)} className="page-action-btn"
               style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', fontSize: '.855rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: `0 6px 16px -8px ${T.primary}` }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M12 5v14"/><path d="M5 12h14"/></svg>
               {esServicios ? 'Nuevo Servicio' : 'Nuevo producto'}
@@ -770,7 +791,7 @@ export function ProductosList() {
       </div>
 
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12 }}>
+      <div className="kpi-grid">
         {esServicios ? (<>
           {[
             { label: 'Total Servicios', val: totalProductos, color: T.primary, sub: 'En catálogo activo' },
@@ -803,9 +824,9 @@ export function ProductosList() {
       {/* Tabla card */}
       <div style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 16, boxShadow: T.shadow, overflow: 'hidden' }}>
         {/* Toolbar */}
-        <div style={{ padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}`, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+        <div className="filter-bar" style={{ padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}`, alignItems: 'center' }}>
           {/* Search */}
-          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <div style={{ position: 'relative', minWidth: 0 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input
               placeholder={`Buscar ${esServicios ? 'servicio' : 'producto'}...`}
@@ -1165,7 +1186,7 @@ export function ProductosList() {
                 </div>
 
                 {/* Categoría + Unidad */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14, marginTop: 14 }}>
+                <div className="form-grid-2col" style={{ gap: 14, marginTop: 14 }}>
                   {/* Categoría */}
                   <div style={{ minWidth: 0 }}>
                     <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Categoría <span style={{ color: T.bad }}>*</span></label>
@@ -1246,7 +1267,7 @@ export function ProductosList() {
                 </div>
 
                 {/* Costo + Precio */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14 }}>
+                <div className="form-grid-2col" style={{ gap: 14 }}>
                   {!esServicios && (
                     <div>
                       <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Costo unitario</label>
@@ -1280,9 +1301,56 @@ export function ProductosList() {
                   </div>
                 )}
 
+                {/* Precio mayorista — oculto en empresa de servicios */}
+                {!esServicios && <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 10, border: `1px solid ${T.lineSoft}`, background: T.surface2 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: '.78rem', fontWeight: 700, color: T.text2, textTransform: 'uppercase', letterSpacing: '.04em' }}>Precio mayorista</span>
+                    <span style={{ fontSize: '.72rem', color: T.text3, fontWeight: 400 }}>— opcional</span>
+                  </div>
+                  <div className="form-grid-2col" style={{ gap: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Precio mayorista</label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: '.88rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
+                        <FxInput type="number" step="0.01" min="0.01"
+                          value={formData.precioMayorista == null ? '' : formData.precioMayorista}
+                          onChange={e => setFormData({ ...formData, precioMayorista: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                          placeholder="0,00" style={{ paddingLeft: 36, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Cantidad mínima</label>
+                      <FxInput type="number" min="1" step="1"
+                        value={formData.cantidadMinimaMayorista == null ? '' : formData.cantidadMinimaMayorista}
+                        onChange={e => setFormData({ ...formData, cantidadMinimaMayorista: e.target.value === '' ? undefined : parseInt(e.target.value) })}
+                        placeholder="ej: 12" style={{ fontVariantNumeric: 'tabular-nums' }} />
+                    </div>
+                  </div>
+                  {/* Advertencia si precio mayorista > precio unitario */}
+                  {formData.precioMayorista != null && formData.precioVenta > 0 && formData.precioMayorista > formData.precioVenta && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, padding: '7px 10px', borderRadius: 7, background: T.warnSoft, border: `1px solid ${T.warnLine}44` }}>
+                      <span style={{ fontSize: '.8rem', color: T.warn }}>⚠ El precio mayorista es mayor que el precio unitario. Esto es válido pero inusual.</span>
+                    </div>
+                  )}
+                  {/* Advertencia si solo uno de los dos campos está lleno */}
+                  {((formData.precioMayorista != null) !== (formData.cantidadMinimaMayorista != null)) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, padding: '7px 10px', borderRadius: 7, background: T.badSoft, border: `1px solid ${T.bad}33` }}>
+                      <span style={{ fontSize: '.8rem', color: T.bad }}>Debes configurar ambos campos (precio y cantidad mínima) o dejarlos vacíos.</span>
+                    </div>
+                  )}
+                  {/* Preview de la regla cuando está completa */}
+                  {formData.precioMayorista != null && formData.cantidadMinimaMayorista != null && formData.cantidadMinimaMayorista >= 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, padding: '7px 10px', borderRadius: 7, background: T.okSoft, border: `1px solid ${T.ok}33` }}>
+                      <span style={{ fontSize: '.78rem', color: T.ok }}>
+                        {`≥ ${formData.cantidadMinimaMayorista} u. → S/${formData.precioMayorista.toFixed(2)}/u.  ·  < ${formData.cantidadMinimaMayorista} u. → S/${formData.precioVenta.toFixed(2)}/u.`}
+                      </span>
+                    </div>
+                  )}
+                </div>}
+
                 {/* Stocks — solo productos */}
                 {!esServicios && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14, marginTop: 14 }}>
+                  <div className="form-grid-2col" style={{ gap: 14, marginTop: 14 }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Stock mínimo <span style={{ color: T.bad }}>*</span></label>
                       <FxInput type="number" min="0"
@@ -1351,54 +1419,109 @@ export function ProductosList() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr) 92px 36px', gap: 8, marginBottom: 6, padding: '0 2px', fontSize: '.72rem', fontWeight: 650, letterSpacing: '.03em', textTransform: 'uppercase', color: T.text3 }}>
                           <span>Presentación</span><span>Precio</span><span>Factor</span><span></span>
                         </div>
-                        <div style={{ display: 'grid', gap: 8 }}>
+
+                        <div style={{ display: 'grid', gap: 10 }}>
                           {presentacionesBorrador.map((p, idx) => {
                             const stockBase = formData.stockActual ?? 0;
                             const stockEnPres = p.factor > 0 ? Math.floor(stockBase / p.factor) : 0;
                             const configInv = stockBase > 0 && p.factor > 1 && stockEnPres === 0;
                             const precioMenor = p.precioVenta > 0 && formData.precioVenta && p.precioVenta < Number(formData.precioVenta);
                             const warn = configInv || precioMenor;
+                            const mayorOneFilled = (p.precioMayorista != null) !== (p.cantidadMinimaMayorista != null);
+                            const mayorPrecioAlto = p.precioMayorista != null && p.precioVenta > 0 && p.precioMayorista >= p.precioVenta;
+                            const mayorOk = p.precioMayorista != null && p.cantidadMinimaMayorista != null && p.precioMayorista > 0 && p.precioMayorista < p.precioVenta;
+                            const unidadNombre = unidadesMedida.find(u => u.id === p.unidadMedidaId)?.nombre ?? 'uds';
                             return (
-                              <div key={idx}>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr) 92px 36px', gap: 8, alignItems: 'center' }}>
-                                  <div style={{ position: 'relative', minWidth: 0 }}>
+                              <div key={idx} style={{ border: `1.5px solid ${warn ? T.warn : T.line}`, borderRadius: 12, background: T.surface, overflow: 'hidden', boxShadow: T.shadow }}>
+                                {/* ── Fila 1: Presentación + eliminar ── */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 8px' }}>
+                                  <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
                                     <select value={p.unidadMedidaId} onChange={e => updatePresentacionBorrador(idx, 'unidadMedidaId', parseInt(e.target.value))}
-                                      style={{ width: '100%', height: 40, padding: '0 30px 0 11px', fontFamily: 'Inter,sans-serif', fontSize: '.84rem', color: T.text, background: T.surface, border: `1px solid ${warn ? T.warn : T.line}`, borderRadius: 10, outline: 'none', appearance: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>
+                                      style={{ width: '100%', height: 36, padding: '0 28px 0 11px', fontFamily: 'Inter,sans-serif', fontSize: '.86rem', fontWeight: 600, color: T.text, background: 'transparent', border: `1px solid ${warn ? T.warn : T.line}`, borderRadius: 8, outline: 'none', appearance: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>
                                       {unidadesMedida.map(u => <option key={u.id} value={u.id}>{u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}</option>)}
                                     </select>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><path d="m6 9 6 6 6-6"/></svg>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><path d="m6 9 6 6 6-6"/></svg>
                                   </div>
-                                  <div style={{ position: 'relative' }}>
-                                    <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: '.8rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
-                                    <FxInput type="number" step="0.01" min="0.01"
-                                      value={p.precioVenta === 0 ? '' : p.precioVenta}
-                                      onChange={e => updatePresentacionBorrador(idx, 'precioVenta', parseFloat(e.target.value || '0'))}
-                                      placeholder="0,00" style={{ height: 40, paddingLeft: 30, border: `1px solid ${warn ? T.warn : T.line}` }} />
-                                  </div>
-                                  <FxInput type="number" min="1"
-                                    value={p.factor} onChange={e => updatePresentacionBorrador(idx, 'factor', parseInt(e.target.value || '1'))}
-                                    title="Cuántas unidades base contiene"
-                                    style={{ height: 40, fontSize: '.84rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums', border: `1px solid ${warn ? T.warn : T.line}` }} />
                                   <button type="button" onClick={() => removePresentacionBorrador(idx)}
-                                    style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}
+                                    style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', flexShrink: 0 }}
                                     onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = T.badSoft; (e.currentTarget as HTMLButtonElement).style.color = T.bad; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = T.text3; }}>
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                   </button>
                                 </div>
+                                {/* ── Fila 2: Precio de venta y Factor ── */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: `1px solid ${T.lineSoft}` }}>
+                                  <div style={{ padding: '8px 12px 10px', borderRight: `1px solid ${T.lineSoft}` }}>
+                                    <label style={{ display: 'block', fontSize: '.69rem', fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, marginBottom: 5 }}>Precio de venta</label>
+                                    <div style={{ position: 'relative' }}>
+                                      <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: '.78rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
+                                      <FxInput type="number" step="0.01" min="0.01"
+                                        value={p.precioVenta === 0 ? '' : p.precioVenta}
+                                        onChange={e => updatePresentacionBorrador(idx, 'precioVenta', parseFloat(e.target.value || '0'))}
+                                        placeholder="0.00" style={{ height: 38, paddingLeft: 28, fontSize: '.88rem', fontWeight: 600, border: `1px solid ${warn ? T.warn : T.line}` }} />
+                                    </div>
+                                  </div>
+                                  <div style={{ padding: '8px 12px 10px' }}>
+                                    <label style={{ display: 'block', fontSize: '.69rem', fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, marginBottom: 5 }}>Factor</label>
+                                    <FxInput type="number" min="1"
+                                      value={p.factor} onChange={e => updatePresentacionBorrador(idx, 'factor', parseInt(e.target.value || '1'))}
+                                      title="Cuántas unidades base contiene"
+                                      style={{ height: 38, fontSize: '.88rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums', border: `1px solid ${warn ? T.warn : T.line}` }} />
+                                    {!configInv && p.factor > 1 && stockBase > 0 && (
+                                      <div style={{ marginTop: 4, fontSize: '.7rem', color: T.text3, fontVariantNumeric: 'tabular-nums' }}>
+                                        {stockEnPres} {unidadNombre} disponibles
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* ── Aviso de error ── */}
                                 {warn && (
-                                  <div style={{ marginTop: 5, padding: '7px 10px', borderRadius: 8, background: T.warnSoft, border: `1px solid ${T.warnLine}`, fontSize: '.76rem', color: T.warn }}>
+                                  <div style={{ borderTop: `1px solid ${T.warnLine}`, padding: '6px 12px', background: T.warnSoft, fontSize: '.75rem', color: T.warn }}>
                                     {configInv
-                                      ? `⚠ Factor ${p.factor} con stock ${stockBase} → 0 unidades disponibles. La unidad base parece ser mayor que esta presentación.`
-                                      : '⚠ Esta presentación tiene precio menor que la unidad base. Las presentaciones deben ser más caras.'
-                                    }
+                                      ? `⚠ Factor ${p.factor} con stock ${stockBase} → 0 presentaciones disponibles.`
+                                      : '⚠ El precio de esta presentación es menor que la unidad base.'}
                                   </div>
                                 )}
-                                {!warn && p.factor > 1 && stockBase > 0 && (
-                                  <div style={{ fontSize: '.76rem', color: T.text3, marginTop: 4, paddingLeft: 2 }}>
-                                    Stock en esta presentación: <strong>{stockEnPres}</strong> {unidadesMedida.find(u => u.id === p.unidadMedidaId)?.nombre ?? ''}
+                                {/* ── Sección mayorista ── */}
+                                <div style={{ borderTop: `1px solid ${T.lineSoft}`, background: T.surface3, padding: '8px 12px 10px' }}>
+                                  <div style={{ fontSize: '.69rem', fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, marginBottom: 7 }}>
+                                    Precio mayorista <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span>
                                   </div>
-                                )}
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    <div>
+                                      <label style={{ display: 'block', fontSize: '.7rem', color: T.text3, marginBottom: 4 }}>Precio</label>
+                                      <div style={{ position: 'relative' }}>
+                                        <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: '.76rem', fontWeight: 650, color: T.text3, pointerEvents: 'none' }}>S/</span>
+                                        <FxInput type="number" step="0.01" min="0.01"
+                                          value={p.precioMayorista == null ? '' : p.precioMayorista}
+                                          onChange={e => updatePresentacionBorrador(idx, 'precioMayorista', e.target.value === '' ? undefined as unknown as number : parseFloat(e.target.value))}
+                                          placeholder="—" style={{ height: 34, paddingLeft: 26, fontSize: '.82rem' }} />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label style={{ display: 'block', fontSize: '.7rem', color: T.text3, marginBottom: 4 }}>Cant. mínima</label>
+                                      <FxInput type="number" min="1"
+                                        value={p.cantidadMinimaMayorista == null ? '' : p.cantidadMinimaMayorista}
+                                        onChange={e => updatePresentacionBorrador(idx, 'cantidadMinimaMayorista', e.target.value === '' ? undefined as unknown as number : parseInt(e.target.value))}
+                                        placeholder="—" style={{ height: 34, fontSize: '.82rem' }} />
+                                    </div>
+                                  </div>
+                                  {mayorOneFilled && (
+                                    <div style={{ marginTop: 6, padding: '5px 8px', borderRadius: 7, background: T.warnSoft, border: `1px solid ${T.warnLine}`, fontSize: '.74rem', color: T.warn }}>
+                                      ⚠ Completa ambos campos (precio y cantidad mínima) para activar el precio mayorista.
+                                    </div>
+                                  )}
+                                  {mayorPrecioAlto && (
+                                    <div style={{ marginTop: 6, padding: '5px 8px', borderRadius: 7, background: T.warnSoft, border: `1px solid ${T.warnLine}`, fontSize: '.74rem', color: T.warn }}>
+                                      ⚠ El precio mayorista debe ser menor que el precio minorista (S/ {p.precioVenta.toFixed(2)}).
+                                    </div>
+                                  )}
+                                  {mayorOk && (
+                                    <div style={{ marginTop: 6, padding: '5px 8px', borderRadius: 7, background: T.okSoft, border: `1px solid ${T.ok}33`, fontSize: '.74rem', color: T.ok, fontVariantNumeric: 'tabular-nums' }}>
+                                      ✓ &lt; {p.cantidadMinimaMayorista} {unidadNombre} → S/ {p.precioVenta.toFixed(2)} · ≥ {p.cantidadMinimaMayorista} {unidadNombre} → S/ {p.precioMayorista!.toFixed(2)}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
@@ -1427,12 +1550,12 @@ export function ProductosList() {
                       </div>
                     ) : (
                       <div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) minmax(0,1fr) 78px 36px', gap: 8, marginBottom: 6, padding: '0 2px', fontSize: '.72rem', fontWeight: 650, letterSpacing: '.03em', textTransform: 'uppercase', color: T.text3 }}>
-                          <span>Talla</span><span>Color</span><span>SKU</span><span>Stock</span><span></span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) minmax(0,1fr) 36px', gap: 8, marginBottom: 6, padding: '0 2px', fontSize: '.72rem', fontWeight: 650, letterSpacing: '.03em', textTransform: 'uppercase', color: T.text3 }}>
+                          <span>Talla</span><span>Color</span><span>SKU</span><span></span>
                         </div>
                         <div style={{ display: 'grid', gap: 8 }}>
                           {variantesBorrador.map((v, idx) => (
-                            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) minmax(0,1fr) 78px 36px', gap: 8, alignItems: 'center' }}>
+                            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) minmax(0,1fr) 36px', gap: 8, alignItems: 'center' }}>
                               <div style={{ position: 'relative', minWidth: 0 }}>
                                 <select value={v.talla} onChange={e => updateVarianteBorrador(idx, 'talla', e.target.value)}
                                   style={{ width: '100%', height: 40, padding: '0 26px 0 11px', fontFamily: 'Inter,sans-serif', fontSize: '.84rem', fontWeight: 600, color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, outline: 'none', appearance: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>
@@ -1443,7 +1566,6 @@ export function ProductosList() {
                               </div>
                               <FxInput value={v.color} onChange={e => updateVarianteBorrador(idx, 'color', e.target.value)} placeholder="Negro, Azul…" style={{ height: 40, fontSize: '.84rem' }} />
                               <FxInput value={v.sku} onChange={e => updateVarianteBorrador(idx, 'sku', e.target.value)} placeholder="VEST-NEG-S" style={{ height: 40, fontFamily: "'IBM Plex Mono',monospace", fontSize: '.8rem' }} />
-                              <FxInput type="number" min="0" value={v.stockActual} onChange={e => updateVarianteBorrador(idx, 'stockActual', parseInt(e.target.value || '0'))} placeholder="0" style={{ height: 40, fontSize: '.84rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} />
                               <button type="button" onClick={() => removeVarianteBorrador(idx)}
                                 style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = T.badSoft; (e.currentTarget as HTMLButtonElement).style.color = T.bad; }}
@@ -1490,42 +1612,44 @@ export function ProductosList() {
         size="lg"
       >
         <div className="space-y-5">
-          {/* Formulario agregar/editar variante */}
-          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-            <p className="text-sm font-semibold">{editingVarianteId ? 'Editar variante' : 'Nueva variante'}</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Talla</label>
-                <select
-                  value={varianteForm.talla ?? ''}
-                  onChange={e => setVarianteForm(p => ({ ...p, talla: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm h-9"
-                >
-                  <option value="">Sin talla</option>
-                  {['XS','S','M','L','XL','XXL','XXXL','28','30','32','34','36','38','40','42','44','UNICA'].map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+          {/* Formulario agregar/editar variante — solo si tiene permiso de editar */}
+          {canEdit('PRODUCTOS') && (
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <p className="text-sm font-semibold">{editingVarianteId ? 'Editar variante' : 'Nueva variante'}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Talla</label>
+                  <select
+                    value={varianteForm.talla ?? ''}
+                    onChange={e => setVarianteForm(p => ({ ...p, talla: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm h-9"
+                  >
+                    <option value="">Sin talla</option>
+                    {['XS','S','M','L','XL','XXL','XXXL','28','30','32','34','36','38','40','42','44','UNICA'].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Color</label>
+                  <Input placeholder="Ej: Negro, Rojo, Azul marino..." value={varianteForm.color ?? ''} onChange={e => setVarianteForm(p => ({ ...p, color: e.target.value }))} />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <label className="text-xs font-medium text-muted-foreground">SKU (opcional)</label>
+                  <Input placeholder="Ej: VEST-NEG-S" value={varianteForm.sku ?? ''} onChange={e => setVarianteForm(p => ({ ...p, sku: e.target.value }))} />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Color</label>
-                <Input placeholder="Ej: Negro, Rojo, Azul marino..." value={varianteForm.color ?? ''} onChange={e => setVarianteForm(p => ({ ...p, color: e.target.value }))} />
-              </div>
-              <div className="space-y-1 col-span-2">
-                <label className="text-xs font-medium text-muted-foreground">SKU (opcional)</label>
-                <Input placeholder="Ej: VEST-NEG-S" value={varianteForm.sku ?? ''} onChange={e => setVarianteForm(p => ({ ...p, sku: e.target.value }))} />
-              </div>
-            </div>
-            <div className="flex gap-2 justify-end">
-              {editingVarianteId && (
-                <Button variant="outline" size="sm" onClick={() => { setEditingVarianteId(null); setVarianteForm({ productoId: selectedProductoVariantes?.id ?? 0, talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '', activo: true }); }}>
-                  Cancelar
+              <div className="flex gap-2 justify-end">
+                {editingVarianteId && (
+                  <Button variant="outline" size="sm" onClick={() => { setEditingVarianteId(null); setVarianteForm({ productoId: selectedProductoVariantes?.id ?? 0, talla: '', color: '', stockActual: 0, stockMinimo: 0, sku: '', activo: true }); }}>
+                    Cancelar
+                  </Button>
+                )}
+                <Button size="sm" onClick={handleSaveVariante} disabled={savingVariante}>
+                  {savingVariante ? <Loader2 size={14} className="animate-spin mr-1" /> : <Plus size={14} className="mr-1" />}
+                  {editingVarianteId ? 'Actualizar' : 'Agregar variante'}
                 </Button>
-              )}
-              <Button size="sm" onClick={handleSaveVariante} disabled={savingVariante}>
-                {savingVariante ? <Loader2 size={14} className="animate-spin mr-1" /> : <Plus size={14} className="mr-1" />}
-                {editingVarianteId ? 'Actualizar' : 'Agregar variante'}
-              </Button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Lista de variantes existentes */}
           {loadingVariantes ? (
@@ -1533,7 +1657,7 @@ export function ProductosList() {
           ) : productoVariantes.length === 0 ? (
             <div className="text-center py-6 text-sm text-muted-foreground">
               <Layers size={32} className="mx-auto mb-2 opacity-30" />
-              <p>Sin variantes aún. Agrega la primera combinación arriba.</p>
+              <p>Sin variantes aún{canEdit('PRODUCTOS') ? '. Agrega la primera combinación arriba.' : '.'}</p>
             </div>
           ) : (
             <div className="rounded-lg border overflow-hidden">
@@ -1544,7 +1668,9 @@ export function ProductosList() {
                     <TableHead>Color</TableHead>
                     <TableHead>SKU</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    {(canEdit('PRODUCTOS') || canDelete('PRODUCTOS')) && (
+                      <TableHead className="text-right">Acciones</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1556,16 +1682,22 @@ export function ProductosList() {
                       <TableCell className={`text-right font-mono font-semibold ${(v.stockActual ?? 0) <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                         {v.stockActual ?? 0}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => handleEditVariante(v)} title="Editar">
-                            <Edit2 size={13} />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteVariante(v.id!)} title="Eliminar" className="text-destructive hover:text-destructive">
-                            <Trash2 size={13} />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {(canEdit('PRODUCTOS') || canDelete('PRODUCTOS')) && (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            {canEdit('PRODUCTOS') && (
+                              <Button variant="ghost" size="icon" onClick={() => handleEditVariante(v)} title="Editar">
+                                <Edit2 size={13} />
+                              </Button>
+                            )}
+                            {canDelete('PRODUCTOS') && (
+                              <Button variant="ghost" size="icon" onClick={() => handleDeleteVariante(v.id!)} title="Eliminar" className="text-destructive hover:text-destructive">
+                                <Trash2 size={13} />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

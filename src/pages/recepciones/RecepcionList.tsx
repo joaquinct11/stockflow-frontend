@@ -118,9 +118,8 @@ function Stepper({ items, comprobante }: { items: RecepcionItemDTO[]; comprobant
 
 export function RecepcionList() {
   const { canCreate, canView, canEdit, puede } = usePermissions();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const rubro = useTenantConfigStore((s) => s.config?.rubro ?? 'OTRO');
   const esFarmacia = rubro === 'BOTICA' || rubro === 'FARMACIA';
 
@@ -758,7 +757,7 @@ export function RecepcionList() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="kpi-grid gap-4">
         {/* Total */}
         <Card className="relative overflow-hidden border-0 shadow-sm">
           <div className="absolute inset-0 bg-gradient-to-br from-slate-500/5 to-transparent pointer-events-none" />

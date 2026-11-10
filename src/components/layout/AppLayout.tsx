@@ -44,6 +44,23 @@ export function AppLayout() {
   }, [isAuthenticated]);
 
   return (
+    <>
+      {/* Overlay mobile — fuera del flex container para evitar bug de Safari/WebKit con overflow:hidden */}
+      <div
+        onClick={() => setSidebarOpen(false)}
+        className="lg:hidden"
+        style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 39,
+          background: 'rgba(9,11,16,0.55)',
+          backdropFilter: sidebarOpen ? 'blur(6px)' : 'none',
+          WebkitBackdropFilter: sidebarOpen ? 'blur(6px)' : 'none',
+          opacity: sidebarOpen ? 1 : 0,
+          pointerEvents: sidebarOpen ? 'auto' : 'none',
+          transition: 'opacity 0.2s ease',
+        }}
+      />
     <div className="flex h-screen overflow-hidden">
       <Sidebar
         isOpen={sidebarOpen}
@@ -59,7 +76,7 @@ export function AppLayout() {
         <Header onMenuClick={() => setSidebarOpen(true)} />
 
         <main className="flex-1 overflow-y-auto bg-muted/10">
-          <div className="container mx-auto p-4 lg:p-6 animate-fade-in">
+          <div className="container mx-auto px-4 lg:px-6 pt-4 lg:pt-6 pb-10 lg:pb-12 animate-fade-in">
             <Breadcrumb />
             <Outlet />
           </div>
@@ -68,5 +85,6 @@ export function AppLayout() {
 
       <OnboardingChecklist />
     </div>
+    </>
   );
 }

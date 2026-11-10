@@ -1,8 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { authService } from '../../services/auth.service';
+import { getSegmentoInfo } from '../../lib/segmentoInfo';
 import './landing.css';
 
-type Tab = 'farmacia' | 'ropa' | 'bodega' | 'ferreteria' | 'minimarket' | 'almacen';
+type Tab = 'farmacia' | 'ropa' | 'bodega' | 'ferreteria' | 'minimarket' | 'empresa' | 'veterinaria';
+
+const TAB_SEGMENTO: Record<Tab, string> = {
+  farmacia:    'FARMACIA_BOTICA',
+  ropa:        'TIENDA_ROPA',
+  bodega:      'TIENDA_BODEGA',
+  ferreteria:  'FERRETERIA',
+  minimarket:  'MINIMARKET',
+  empresa:     'EMPRESA_SERVICIOS',
+  veterinaria: 'VETERINARIA',
+};
+
+// Segmento del tab → segmento válido en el formulario de registro.
+// FARMACIA_BOTICA → FARMACIA (default; el usuario puede cambiar a BOTICA en el formulario).
+const TAB_TO_REGISTER_SEGMENTO: Record<Tab, string> = {
+  farmacia:    'FARMACIA',
+  ropa:        'TIENDA_ROPA',
+  bodega:      'TIENDA_BODEGA',
+  ferreteria:  'FERRETERIA',
+  minimarket:  'MINIMARKET',
+  empresa:     'EMPRESA_SERVICIOS',
+  veterinaria: 'VETERINARIA',
+};
 
 function tabStyle(active: boolean): React.CSSProperties {
   return {
@@ -46,11 +70,81 @@ const TAG_STYLE: React.CSSProperties = {
   padding: '7px 11px',
 };
 
+type PreciosEstado = 'cargando' | 'ok' | 'error';
+
+/**
+ * Calcula el precio Básico mínimo entre varios grupos de planes.
+ * Puro y exportable para tests.
+ */
+export function precioMinimoDesde(
+  gruposPlanes: Array<Array<{ nivel: string; precioMensual: number }>>
+): number | null {
+  const precios = gruposPlanes.flatMap(g =>
+    g.filter(p => p.nivel === 'BASICO').map(p => p.precioMensual)
+  );
+  return precios.length > 0 ? Math.min(...precios) : null;
+}
+
 export function LandingPage() {
   const [tab, setTab] = useState<Tab>('farmacia');
   const [locales, setLocales] = useState<1 | 5 | null>(null);
   const [faq, setFaq] = useState<number | null>(1);
+  const [precios, setPrecios] = useState<{ basico: number; pro: number } | null>(null);
+  const [preciosEstado, setPreciosEstado] = useState<PreciosEstado>('cargando');
+  const [limitesCatalogo, setLimitesCatalogo] = useState<{
+    basico: { usuarios: number; sucursales: number; productos: number };
+    pro:    { usuarios: number; sucursales: number; productos: number };
+  } | null>(null);
+  const [precioMin,      setPrecioMin]      = useState<number | null>(null);
+  const [precioMinEstado, setPrecioMinEstado] = useState<PreciosEstado>('cargando');
   const revealRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let activo = true;
+    const segmento = TAB_SEGMENTO[tab];
+    setPrecios(null);
+    setLimitesCatalogo(null);
+    setPreciosEstado('cargando');
+    authService.getPlanesSegmento(segmento)
+      .then(planes => {
+        if (!activo) return;
+        const b = planes.find(p => p.nivel === 'BASICO');
+        const pr = planes.find(p => p.nivel === 'PRO');
+        if (b && pr) {
+          setPrecios({ basico: b.precioMensual, pro: pr.precioMensual });
+          setLimitesCatalogo({
+            basico: { usuarios: b.maxUsuarios, sucursales: b.maxSucursales, productos: b.maxProductos },
+            pro:    { usuarios: pr.maxUsuarios, sucursales: pr.maxSucursales, productos: pr.maxProductos },
+          });
+          setPreciosEstado('ok');
+        } else {
+          setPreciosEstado('error');
+        }
+      })
+      .catch(() => {
+        if (!activo) return;
+        setPreciosEstado('error');
+      });
+    return () => { activo = false; };
+  }, [tab]);
+
+  useEffect(() => {
+    const segmentos = Object.values(TAB_SEGMENTO);
+    Promise.allSettled(segmentos.map(s => authService.getPlanesSegmento(s)))
+      .then(results => {
+        const grupos = results
+          .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof authService.getPlanesSegmento>>> => r.status === 'fulfilled')
+          .map(r => r.value);
+        const min = precioMinimoDesde(grupos);
+        if (min !== null) {
+          setPrecioMin(min);
+          setPrecioMinEstado('ok');
+        } else {
+          setPrecioMinEstado('error');
+        }
+      })
+      .catch(() => setPrecioMinEstado('error'));
+  }, []);
 
   useEffect(() => {
     const els = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
@@ -150,7 +244,7 @@ export function LandingPage() {
               {val:'12+',label:'Módulos integrados'},
               {val:'SUNAT',label:'Facturación electrónica'},
               {val:'14 días',label:'Prueba gratuita'},
-              {val:'S/ 89',label:'Desde por mes'},
+              {val: precioMinEstado === 'ok' && precioMin !== null ? `S/ ${precioMin}` : precioMinEstado === 'cargando' ? '…' : 'S/ —', label:'Desde por mes'},
             ].map((s, i, arr) => (
               <div key={s.val} data-r="statitem" style={{padding:'26px 24px',borderRight: i < arr.length - 1 ? '1px solid rgba(255,255,255,.07)' : 'none'}}>
                 <div style={{fontFamily:"'Space Mono',monospace",fontSize:'1.7rem',fontWeight:700,background:'linear-gradient(135deg,#8b85ff,#00d4aa)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>{s.val}</div>
@@ -287,7 +381,7 @@ export function LandingPage() {
               <h2 style={{fontSize:'clamp(1.9rem,3.4vw,2.9rem)',fontWeight:800,lineHeight:1.1,letterSpacing:'-.03em',margin:'14px 0 0'}}>Elige tu tipo de negocio y mira qué cambia</h2>
             </div>
             <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:32}}>
-              {([['farmacia','💊 Farmacias y boticas'],['ropa','👗 Tiendas de ropa'],['bodega','🏪 Tiendas y bodegas'],['ferreteria','🔧 Ferreterías'],['minimarket','🛒 Minimarkets'],['almacen','📦 Almacenes']] as [Tab, string][]).map(([k, label]) => (
+              {([['farmacia','💊 Farmacias y boticas'],['veterinaria','🐾 Veterinarias'],['ropa','👗 Tiendas de ropa'],['bodega','🏪 Tiendas y bodegas'],['ferreteria','🔧 Ferreterías'],['minimarket','🛒 Minimarkets'],['empresa','🏢 Empresa de servicios']] as [Tab, string][]).map(([k, label]) => (
                 <button key={k} type="button" onClick={() => setTab(k)} style={tabStyle(tab === k)}>{label}</button>
               ))}
             </div>
@@ -315,37 +409,34 @@ export function LandingPage() {
                 {locales === 1 ? 'Te alcanza el Plan Básico.' : locales === 5 ? 'Necesitas el Plan Pro (multi‑sucursal).' : ''}
               </span>
             </div>
-            <div data-r="two" style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:16,marginTop:16,maxWidth:920}}>
+            <div data-r="two" style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:16,marginTop:16,maxWidth:920,margin:'16px auto 0'}}>
               {/* Plan Básico */}
               <div style={{display:'flex',flexDirection:'column',padding:32,border:'1px solid rgba(255,255,255,.08)',borderRadius:20,background:'#0e0f15'}}>
                 <div style={{fontFamily:"'Space Mono',monospace",fontSize:'.72rem',fontWeight:700,letterSpacing:'.15em',textTransform:'uppercase',color:'#8b85ff'}}>Plan Básico</div>
                 <div style={{display:'flex',alignItems:'baseline',gap:6,marginTop:16}}>
                   <span style={{fontSize:'1.15rem',fontWeight:600,color:'#9898b0'}}>S/</span>
-                  <span style={{fontSize:'3rem',fontWeight:800,lineHeight:1,letterSpacing:'-.04em'}}>89</span>
+                  <span style={{fontSize:'3rem',fontWeight:800,lineHeight:1,letterSpacing:'-.04em',color: preciosEstado === 'error' ? '#5a5a72' : undefined}}>
+                    {preciosEstado === 'ok' && precios ? precios.basico : preciosEstado === 'cargando' ? '…' : '—'}
+                  </span>
                   <span style={{fontSize:'.9rem',color:'#5a5a72'}}>/mes</span>
                 </div>
+                {preciosEstado === 'error' && (
+                  <div style={{marginTop:8,fontSize:'.78rem',color:'#febc2e',fontFamily:"'Space Mono',monospace"}}>⚠ No se pudo cargar el precio</div>
+                )}
                 <p style={{fontSize:'.9rem',color:'#7d7f96',lineHeight:1.6,margin:'14px 0 0'}}>Todo lo que necesitas para gestionar tu negocio desde el primer día.</p>
-                <Link to="/register?plan=BASICO" className="lp-plan-basic-btn">Probar 14 días gratis</Link>
+                <Link to={`/register?plan=BASICO&segmento=${TAB_TO_REGISTER_SEGMENTO[tab]}`} className="lp-plan-basic-btn">Probar 14 días gratis</Link>
                 <div style={{height:1,background:'rgba(255,255,255,.08)',margin:'26px 0'}}></div>
                 <ul style={{listStyle:'none',margin:0,padding:0,display:'grid',gap:11,fontSize:'.9rem',color:'#9898b0'}}>
-                  {[
-                    [true,'POS','con caja integrada (efectivo, tarjeta, Yape/Plin)'],
-                    [false,'','Inventario en tiempo real con alertas de stock'],
-                    [false,'','Control de lotes y fechas de vencimiento'],
-                    [false,'','Órdenes de compra y recepciones a proveedores'],
-                    [false,'','Devoluciones y notas de crédito aplicables en POS'],
-                    [true,'Facturación electrónica','— boletas y facturas a SUNAT'],
-                    [false,'','CDR oficial, XML y PDF descargables'],
-                    [false,'','Gestión de clientes y proveedores'],
-                    [false,'','Importación masiva desde Excel'],
-                    [false,'','Reportes históricos + exportación a Excel y PDF'],
-                    [false,'','Roles con permisos configurables'],
-                    [true,'Hasta 5 usuarios',''],
-                    [true,'Hasta 2,000 productos',''],
-                    [false,'','Soporte por WhatsApp en español'],
-                  ].map(([bold, b, rest], i) => (
-                    <li key={i} style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span>{bold ? <><strong style={{color:'#e8e8f0',fontWeight:600}}>{b as string}</strong>{rest ? ` ${rest}` : ''}</> : (rest as string)}</span></li>
+                  {getSegmentoInfo(TAB_SEGMENTO[tab]).featuresBasico.map((f, i) => (
+                    <li key={i} style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span>{f}</span></li>
                   ))}
+                  {limitesCatalogo && (<>
+                    <li style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span><strong style={{color:'#e8e8f0',fontWeight:600}}>Hasta {limitesCatalogo.basico.usuarios} usuarios</strong></span></li>
+                    <li style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span><strong style={{color:'#e8e8f0',fontWeight:600}}>Hasta {limitesCatalogo.basico.productos.toLocaleString('es-PE')} productos</strong></span></li>
+                    {limitesCatalogo.basico.sucursales > 1 && (
+                      <li style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span><strong style={{color:'#e8e8f0',fontWeight:600}}>Hasta {limitesCatalogo.basico.sucursales} sucursales</strong></span></li>
+                    )}
+                  </>)}
                 </ul>
               </div>
               {/* Plan Pro */}
@@ -354,26 +445,26 @@ export function LandingPage() {
                 <div style={{fontFamily:"'Space Mono',monospace",fontSize:'.72rem',fontWeight:700,letterSpacing:'.15em',textTransform:'uppercase',color:'#a79fff'}}>Plan Pro</div>
                 <div style={{display:'flex',alignItems:'baseline',gap:6,marginTop:16}}>
                   <span style={{fontSize:'1.15rem',fontWeight:600,color:'#9898b0'}}>S/</span>
-                  <span style={{fontSize:'3rem',fontWeight:800,lineHeight:1,letterSpacing:'-.04em'}}>169</span>
+                  <span style={{fontSize:'3rem',fontWeight:800,lineHeight:1,letterSpacing:'-.04em',color: preciosEstado === 'error' ? '#5a5a72' : undefined}}>
+                    {preciosEstado === 'ok' && precios ? precios.pro : preciosEstado === 'cargando' ? '…' : '—'}
+                  </span>
                   <span style={{fontSize:'.9rem',color:'#5a5a72'}}>/mes</span>
                 </div>
+                {preciosEstado === 'error' && (
+                  <div style={{marginTop:8,fontSize:'.78rem',color:'#febc2e',fontFamily:"'Space Mono',monospace"}}>⚠ No se pudo cargar el precio</div>
+                )}
                 <p style={{fontSize:'.9rem',color:'#9898b0',lineHeight:1.6,margin:'14px 0 0'}}>Todo el Plan Básico más gestión multilocal para negocios con varias sucursales.</p>
-                <Link to="/register?plan=PRO" className="lp-plan-pro-btn">Probar 14 días gratis</Link>
+                <Link to={`/register?plan=PRO&segmento=${TAB_TO_REGISTER_SEGMENTO[tab]}`} className="lp-plan-pro-btn">Probar 14 días gratis</Link>
                 <div style={{height:1,background:'rgba(255,255,255,.1)',margin:'26px 0'}}></div>
                 <ul style={{listStyle:'none',margin:0,padding:0,display:'grid',gap:11,fontSize:'.9rem',color:'#c9cbd8'}}>
-                  {[
-                    <><strong style={{color:'#e8e8f0',fontWeight:600}}>Todo lo del Plan Básico</strong></>,
-                    <><strong style={{color:'#e8e8f0',fontWeight:600}}>Hasta 5 sucursales</strong> — cada una completamente independiente</>,
-                    'Stock, caja y POS por sucursal',
-                    'Ventas y reportes filtrados por local',
-                    'Movimientos de inventario entre sucursales',
-                    'Usuarios y permisos configurables por sucursal',
-                    <><strong style={{color:'#e8e8f0',fontWeight:600}}>Hasta 15 usuarios</strong></>,
-                    <><strong style={{color:'#e8e8f0',fontWeight:600}}>Hasta 5,000 productos</strong></>,
-                    'Soporte prioritario por WhatsApp',
-                  ].map((item, i) => (
-                    <li key={i} style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span>{item}</span></li>
+                  {getSegmentoInfo(TAB_SEGMENTO[tab]).featuresPro.map((f, i) => (
+                    <li key={i} style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span>{f}</span></li>
                   ))}
+                  {limitesCatalogo && (<>
+                    <li style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span><strong style={{color:'#e8e8f0',fontWeight:600}}>Hasta {limitesCatalogo.pro.usuarios} usuarios</strong></span></li>
+                    <li style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span><strong style={{color:'#e8e8f0',fontWeight:600}}>Hasta {limitesCatalogo.pro.productos.toLocaleString('es-PE')} productos</strong></span></li>
+                    <li style={{display:'flex',gap:10}}><span style={{color:'#00d4aa'}}>✓</span><span><strong style={{color:'#e8e8f0',fontWeight:600}}>Hasta {limitesCatalogo.pro.sucursales} sucursales</strong></span></li>
+                  </>)}
                 </ul>
               </div>
             </div>
@@ -444,7 +535,7 @@ export function LandingPage() {
                 <span style={{fontFamily:"'Space Mono',monospace",fontSize:'1.15rem',fontWeight:700,background:'linear-gradient(135deg,#8b85ff,#00d4aa)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>Fluxus</span>
               </a>
               <p style={{fontSize:'.88rem',color:'#5a5a72',lineHeight:1.7,margin:'16px 0 0',maxWidth:280}}>Mini‑ERP para negocios peruanos. POS, inventario, compras, devoluciones, clientes, proveedores y facturación electrónica integrada con SUNAT.</p>
-              <p style={{fontSize:11,color:'#7d7f96',lineHeight:1.7,margin:'12px 0 0'}}>Joaquin Castillo Tello · RUC: 10769109566<br />Jr. Libertad 455, Magdalena del Mar, Lima<br />Nombre comercial: Fluxus</p>
+              <p style={{fontSize:11,color:'#7d7f96',lineHeight:1.7,margin:'12px 0 0'}}>Fluxus · RUC: 10769109566 · Lima, Perú</p>
             </div>
             <div>
               <h4 style={{fontFamily:"'Space Mono',monospace",fontSize:'.8rem',fontWeight:700,letterSpacing:'.05em',margin:'0 0 16px'}}>Producto</h4>
@@ -472,8 +563,8 @@ export function LandingPage() {
             </div>
           </div>
           <div style={{maxWidth:1180,margin:'0 auto',padding:'22px 28px 100px',borderTop:'1px solid rgba(255,255,255,.06)',display:'flex',flexWrap:'wrap',gap:12,justifyContent:'space-between',fontFamily:"'Space Mono',monospace",fontSize:'.72rem',color:'#7d7f96'}}>
-            <span>© 2026 Joaquin Castillo Tello (Fluxus) · RUC 10769109566</span>
-            <span>Magdalena del Mar, Lima · Perú</span>
+            <span>© 2026 Fluxus · RUC 10769109566</span>
+            <span>Lima · Perú</span>
           </div>
         </footer>
 
@@ -487,48 +578,9 @@ export function LandingPage() {
   );
 }
 
-/* ── Rubro tab content ─────────────────────────────────────────────────────── */
-const RUBROS: Record<Tab, { title: string; desc: string; checks: string[]; tags: string[] }> = {
-  farmacia: {
-    title: 'Farmacias y boticas',
-    desc: 'Control de lotes, fechas de vencimiento, registro sanitario, DIGEMID y reporte OPPF mensual automático.',
-    checks: ['Catálogo DIGEMID con 18 000+ registros vinculables','Alertas de vencimiento por lote antes de perder mercadería','Reporte OPPF mensual en ZIP, listo para presentar'],
-    tags: ['Lotes y vencimientos','Registro sanitario','DIGEMID','OPPF','POS','Facturación SUNAT'],
-  },
-  ropa: {
-    title: 'Tiendas de ropa',
-    desc: 'Gestión por talla y color, control de stock por variante y POS rápido con búsqueda por categoría.',
-    checks: ['Una ficha por producto, stock separado por variante','Búsqueda por categoría para cobrar sin código de barras','Cambios y devoluciones con nota de crédito aplicable en caja'],
-    tags: ['Tallas y colores','Variantes','Devoluciones','POS'],
-  },
-  bodega: {
-    title: 'Tiendas y bodegas',
-    desc: 'POS rápido con caja integrada, historial diario de ventas, control de proveedores y alertas de stock.',
-    checks: ['Cobro en segundos con código de barras y vuelto automático','Cierre de caja diario con totales por método de pago','Alertas de stock mínimo para reponer antes de quedarte sin nada'],
-    tags: ['POS','Caja','Alertas de stock','Proveedores'],
-  },
-  ferreteria: {
-    title: 'Ferreterías y distribuidoras',
-    desc: 'OCs a varios proveedores, recepciones parciales, costos de compra actualizados y kardex por producto.',
-    checks: ['Miles de SKUs con búsqueda instantánea','Recepción parcial cuando el proveedor manda a medias','Kardex valorizado para saber tu margen real'],
-    tags: ['Órdenes de compra','Recepciones parciales','Kardex','Costos'],
-  },
-  minimarket: {
-    title: 'Minimarkets',
-    desc: 'Manejo de múltiples categorías, POS por código de barras, control de merma y vencimientos.',
-    checks: ['Varias cajas y turnos, cada uno con su cierre','Ajustes de inventario para registrar merma sin descuadrar','Permisos por usuario: el cajero solo cobra'],
-    tags: ['Turnos de caja','Merma','Categorías','Roles'],
-  },
-  almacen: {
-    title: 'Almacenes y depósitos',
-    desc: 'Movimientos de inventario, kardex completo, ajustes manuales y reportes de valorización de stock.',
-    checks: ['Ingresos, salidas y traslados con trazabilidad','Traslados entre sucursales en el Plan Pro','Valorización de stock para cierres contables'],
-    tags: ['Movimientos','Traslados','Kardex','Valorización'],
-  },
-};
-
+/* ── Rubro tab content — usa segmentoInfo.ts como fuente única de datos ─────── */
 function RubroContent({ tab }: { tab: Tab }) {
-  const r = RUBROS[tab];
+  const r = getSegmentoInfo(TAB_SEGMENTO[tab]);
   return (
     <div data-r="tabgrid" style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)',gap:32,alignItems:'center'}}>
       <div>
