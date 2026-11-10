@@ -24,9 +24,10 @@ export type Module =
   | 'CITAS'
   | 'CAJA'
   | 'DEVOLUCIONES'
-  | 'NOTAS_CREDITO';
+  | 'NOTAS_CREDITO'
+  | 'ORDENES_TRABAJO';
 
-type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO' | 'VETERINARIO' | 'RECEPCIONISTA' | 'AUXILIAR_VETERINARIO' | 'GROOMER';
+type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO' | 'VETERINARIO' | 'RECEPCIONISTA' | 'AUXILIAR_VETERINARIO' | 'GROOMER' | 'TECNICO_SERVICIO';
 
 // Mapping from frontend Permission names to backend verb prefixes (verb-first format).
 const PERMISSION_CODE_MAP: Record<Permission, string> = {
@@ -160,6 +161,15 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
     ver: 'VER_NOTAS_CREDITO',
     crear: 'EMITIR_NOTA_CREDITO',
   },
+  ORDENES_TRABAJO: {
+    ver: 'VER_OT',
+    ver_todas: 'VER_TODAS_OT',
+    crear: 'CREAR_OT',
+    editar: 'EDITAR_OT',
+    cambiarEstado: 'CAMBIAR_ESTADO_OT',
+    // activar se reutiliza para ASIGNAR_TECNICO_OT (mismo peso de acceso)
+    activar: 'ASIGNAR_TECNICO_OT',
+  },
 };
 
 // Fallback role-based permission table (used when no backend permisos are assigned)
@@ -173,6 +183,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: ['ver_personal'],
     AUXILIAR_VETERINARIO: ['ver_personal'],
     GROOMER: ['ver_personal'],
+    TECNICO_SERVICIO: ['ver_personal'],
   },
 
   PROVEEDORES: {
@@ -184,6 +195,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   PRODUCTOS: {
@@ -195,6 +207,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: ['ver'],
     GROOMER: [],
+    TECNICO_SERVICIO: ['ver'],
   },
 
   VENTAS: {
@@ -206,6 +219,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   POS: {
@@ -217,6 +231,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   INVENTARIO: {
@@ -228,6 +243,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   USUARIOS: {
@@ -239,6 +255,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   SUSCRIPCIONES: {
@@ -250,6 +267,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   REPORTES: {
@@ -261,6 +279,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   FACTURACION: {
@@ -272,6 +291,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   COMPRAS: {
@@ -283,6 +303,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   RECEPCIONES: {
@@ -294,6 +315,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   CONFIGURACION: {
@@ -305,6 +327,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: ['ver'],
     AUXILIAR_VETERINARIO: ['ver'],
     GROOMER: ['ver'],
+    TECNICO_SERVICIO: ['ver'],
   },
 
   CLIENTES: {
@@ -316,6 +339,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: ['crear', 'editar', 'ver'],
     AUXILIAR_VETERINARIO: ['ver'],
     GROOMER: ['ver'],
+    TECNICO_SERVICIO: ['ver'],
   },
 
   GASTOS: {
@@ -327,6 +351,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   CERTIFICADOS: {
@@ -338,6 +363,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   MASCOTAS: {
@@ -349,6 +375,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: ['crear', 'editar', 'ver'],
     AUXILIAR_VETERINARIO: ['ver'],
     GROOMER: ['ver'],
+    TECNICO_SERVICIO: [],
   },
 
   CITAS: {
@@ -360,6 +387,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: ['crear', 'editar', 'cambiarEstado', 'eliminar', 'ver'],
     AUXILIAR_VETERINARIO: ['ver'],
     GROOMER: ['ver'],
+    TECNICO_SERVICIO: [],
   },
 
   CAJA: {
@@ -371,6 +399,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   DEVOLUCIONES: {
@@ -382,6 +411,7 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   NOTAS_CREDITO: {
@@ -393,6 +423,19 @@ const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
     RECEPCIONISTA: [],
     AUXILIAR_VETERINARIO: [],
     GROOMER: [],
+    TECNICO_SERVICIO: [],
+  },
+  // OT no se asigna a roles base — solo ADMIN por defecto; otros roles acceden por permiso individual
+  ORDENES_TRABAJO: {
+    ADMIN: ['ver', 'ver_todas', 'crear', 'editar', 'cambiarEstado'],
+    GERENTE: [],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: ['ver', 'cambiarEstado'],
   },
 };
 
@@ -457,6 +500,27 @@ export function usePermissions() {
       return (PERMISSIONS.POS[rol] ?? []).length > 0;
     }
 
+    // ORDENES_TRABAJO: además de los permisos genéricos, verificar los permisos operacionales
+    // del técnico que no están en el BACKEND_PERMISSION_MAP estándar.
+    if (module === 'ORDENES_TRABAJO') {
+      return (
+        puede('VER_OT') ||
+        puede('CREAR_OT') ||
+        puede('EDITAR_OT') ||
+        puede('CAMBIAR_ESTADO_OT') ||
+        puede('ASIGNAR_TECNICO_OT') ||
+        puede('REGISTRAR_CONSUMO_OT') ||
+        puede('DEVOLVER_CONSUMO_OT') ||
+        puede('CLASIFICAR_CONSUMO_OT') ||
+        puede('CERRAR_TECNICO_OT') ||
+        puede('FACTURAR_OT') ||
+        puede('REGISTRAR_ENTREGA_OT') ||
+        puede('ANULAR_FACTURA_OT') ||
+        // fallback: tabla de roles para ADMIN sin permisos explícitos en BD
+        (PERMISSIONS.ORDENES_TRABAJO[rol] ?? []).length > 0
+      );
+    }
+
     return (
       canView(module) ||
       canViewAll(module) ||
@@ -476,7 +540,9 @@ export function usePermissions() {
   const isRecepcionista = rol === 'RECEPCIONISTA';
   const isAuxiliarVeterinario = rol === 'AUXILIAR_VETERINARIO';
   const isGroomer = rol === 'GROOMER';
+  const isTecnicoServicio = rol === 'TECNICO_SERVICIO';
   const isRolVeterinaria = isVeterinario || isRecepcionista || isAuxiliarVeterinario || isGroomer;
+  const isRolServicios = isTecnicoServicio;
 
   return {
     rol,
@@ -502,6 +568,8 @@ export function usePermissions() {
     isRecepcionista,
     isAuxiliarVeterinario,
     isGroomer,
+    isTecnicoServicio,
     isRolVeterinaria,
+    isRolServicios,
   };
 }

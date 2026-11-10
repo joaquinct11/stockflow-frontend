@@ -61,12 +61,33 @@ const SuperAdminLoginPage = lazy(() => import('./pages/superadmin/SuperAdminLogi
 const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
 const MascotasPage        = lazy(() => import('./pages/mascotas/MascotasPage'));
 const CitasPage           = lazy(() => import('./pages/citas/CitasPage').then(m => ({ default: m.CitasPage })));
+const EquiposPage         = lazy(() => import('./pages/equipos/EquiposPage'));
+const OrdenesTrabajoPage  = lazy(() => import('./pages/ordenes-trabajo/OrdenesTrabajoPage'));
+const OtDetailPage        = lazy(() => import('./pages/ordenes-trabajo/OtDetailPage'));
 
 const PageLoader = () => (
   <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: '#6b7280', fontFamily: 'Inter, sans-serif' }}>
     Cargando...
   </div>
 );
+
+function ServiciosEquiposRoute({ children }: { children: React.ReactNode }) {
+  const { rubro } = useTenantConfigStore();
+  const { isAdmin, puede } = usePermissions();
+  if (rubro === null) return <PageLoader />;
+  if (rubro !== 'EMPRESA_SERVICIOS') return <Navigate to="/dashboard" replace />;
+  if (!isAdmin && !puede('VER_EQUIPOS')) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function ServiciosOtRoute({ children }: { children: React.ReactNode }) {
+  const { rubro } = useTenantConfigStore();
+  const { isAdmin, puede } = usePermissions();
+  if (rubro === null) return <PageLoader />;
+  if (rubro !== 'EMPRESA_SERVICIOS') return <Navigate to="/dashboard" replace />;
+  if (!isAdmin && !puede('VER_OT')) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
 
 function VeterinariaRoute({ children }: { children: React.ReactNode }) {
   const { rubro } = useTenantConfigStore();
@@ -387,6 +408,40 @@ function App() {
                     <RoleProtectedRoute allowedRoles={['ADMIN']} anyPermission={['VER_COMISIONES']}>
                       <ComisionesPage />
                     </RoleProtectedRoute>
+                  </SubscripcionGuard>
+                }
+              />
+
+              {/* Equipos de clientes — rubro EMPRESA_SERVICIOS */}
+              <Route
+                path="equipos"
+                element={
+                  <SubscripcionGuard>
+                    <ServiciosEquiposRoute>
+                      <EquiposPage />
+                    </ServiciosEquiposRoute>
+                  </SubscripcionGuard>
+                }
+              />
+
+              {/* Órdenes de Trabajo — rubro EMPRESA_SERVICIOS */}
+              <Route
+                path="ordenes-trabajo"
+                element={
+                  <SubscripcionGuard>
+                    <ServiciosOtRoute>
+                      <OrdenesTrabajoPage />
+                    </ServiciosOtRoute>
+                  </SubscripcionGuard>
+                }
+              />
+              <Route
+                path="ordenes-trabajo/:id"
+                element={
+                  <SubscripcionGuard>
+                    <ServiciosOtRoute>
+                      <OtDetailPage />
+                    </ServiciosOtRoute>
                   </SubscripcionGuard>
                 }
               />

@@ -7,10 +7,11 @@ import { dashboardService, type ActividadRecienteDTO } from '../../services/dash
 import { mascotaService, type MascotaStatsDTO } from '../../services/mascota.service';
 import { clienteService, type ClienteStatsDTO } from '../../services/cliente.service';
 import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, Clock, RefreshCw, Calendar, CreditCard, Zap, ClipboardList, BarChart2, Wallet, FileText, Award, Users, ArrowRightLeft, PlusSquare } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, Clock, RefreshCw, Calendar, CreditCard, Zap, ClipboardList, BarChart2, FileText, Award, Users, ArrowRightLeft, PlusSquare, Wrench, MonitorCog } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { gastoService } from '../../services/gasto.service';
 import { comisionService } from '../../services/comision.service';
+import { ordenTrabajoService, type OtPageResumenDTO } from '../../services/ordenTrabajo.service';
 import { Button } from '../../components/ui/Button';
 import { notify } from '../../lib/notify';
 import { useAuthStore } from '../../store/authStore';
@@ -21,11 +22,11 @@ import { useOseConfigured } from '../../hooks/useOseConfigured';
 import { OseBanner } from '../../components/shared/OseBanner';
 import { usePermissions } from '../../hooks/usePermissions';
 
-type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO' | 'TECNICO_SERVICIO';
 type TimeFilter = 'HOY' | 'SEMANA' | 'MES' | 'ANUAL';
 
 function safeRol(rol?: string): Role {
-  if (rol === 'ADMIN' || rol === 'GERENTE' || rol === 'VENDEDOR' || rol === 'GESTOR_INVENTARIO') return rol;
+  if (rol === 'ADMIN' || rol === 'GERENTE' || rol === 'VENDEDOR' || rol === 'GESTOR_INVENTARIO' || rol === 'TECNICO_SERVICIO') return rol;
   return 'VENDEDOR';
 }
 
@@ -206,10 +207,16 @@ export function Dashboard() {
   const puedeVerCitas      = puede('VER_CITAS');
   const puedeVerClientes   = puede('VER_CLIENTES');
   const esRolVeterinaria   = rawRol === 'VETERINARIO' || rawRol === 'RECEPCIONISTA' || rawRol === 'AUXILIAR_VETERINARIO' || rawRol === 'GROOMER';
+  const isTecnicoServicio  = rawRol === 'TECNICO_SERVICIO';
+  const puedeVerOT         = puede('VER_OT');
 
-  const { config: negocioConfig } = useTenantConfigStore();
-  const esServicios        = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
-  const esTenantVeterinaria = negocioConfig?.rubro === 'VETERINARIA';
+  const { config: negocioConfig, rubro: tenantRubroActual } = useTenantConfigStore();
+  // tenantRubroActual se fija inmediatamente al seleccionar tenant (antes de que llegue el GET /tenant/config).
+  // Usarlo como fuente primaria evita que un config stale en localStorage dispare llamadas
+  // a módulos de otro rubro (p. ej. vet stats para TIENDA_ROPA) durante el primer render.
+  const rubroActual         = tenantRubroActual ?? negocioConfig?.rubro ?? null;
+  const esServicios         = rubroActual === 'EMPRESA_SERVICIOS';
+  const esTenantVeterinaria = rubroActual === 'VETERINARIA';
   const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
   const oseConfigured = useOseConfigured();
 
@@ -229,6 +236,7 @@ export function Dashboard() {
   const [totalGastosPeriodo, setTotalGastosPeriodo] = useState<number>(0);
   const [actividad, setActividad] = useState<ActividadRecienteDTO[]>([]);
   const [actividadLoading, setActividadLoading] = useState(false);
+  const [otResumen, setOtResumen] = useState<OtPageResumenDTO | null>(null);
 
   // Estado de suscripción
   const [suscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
@@ -335,6 +343,14 @@ export function Dashboard() {
       .catch(() => setTotalComisionesMes(0));
   }, [esServicios, rol]);
 
+  // OT resumen — para ADMIN de EMPRESA_SERVICIOS y para TECNICO_SERVICIO
+  useEffect(() => {
+    if (!esServicios || !puedeVerOT) return;
+    ordenTrabajoService.listar({ page: 0, size: 1 })
+      .then((res) => setOtResumen(res.resumen))
+      .catch(() => setOtResumen(null));
+  }, [esServicios, puedeVerOT]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -356,7 +372,7 @@ export function Dashboard() {
       const now = new Date();
       const fmt = (d: Date) => d.toISOString().slice(0, 19);
 
-      // Movimientos: solo si tiene VER_INVENTARIO
+      // Movimientos: recientes solo con VER_INVENTARIO; próximos a vencer también para VENDEDOR (VER_PRODUCTOS)
       let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
       let proximosVencerPromise: Promise<MovimientoInventarioDTO[]>;
       if (puedeVerInventario) {
@@ -725,89 +741,147 @@ export function Dashboard() {
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
           <Zap size={12} /> Acceso rápido
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
 
           {esServicios ? (
-            /* ── Acciones para EMPRESA_SERVICIOS / Dealer ── */
-            <>
-              <button
-                onClick={() => navigate('/dashboard/ventas')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
-                  <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Registrar Servicio</p>
-                  <p className="text-xs text-muted-foreground mt-1">Nueva prestación</p>
-                </div>
-              </button>
+            /* ── Acciones para EMPRESA_SERVICIOS ── */
+            isTecnicoServicio ? (
+              /* Técnico: accesos operativos de OT */
+              <>
+                <button
+                  onClick={() => navigate('/dashboard/ordenes-trabajo')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                    <Wrench size={18} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Órdenes de Trabajo</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ver listado</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/dashboard/comisiones')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
-                  <Award size={18} className="text-amber-600 dark:text-amber-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Comisiones</p>
-                  <p className="text-xs text-muted-foreground mt-1">Ingresos de Bitel</p>
-                </div>
-              </button>
+                <button
+                  onClick={() => navigate('/dashboard/equipos')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-teal-500/20 transition-colors">
+                    <MonitorCog size={18} className="text-teal-600 dark:text-teal-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Equipos</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ver equipos</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/dashboard/facturacion')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
-                  <FileText size={18} className="text-blue-600 dark:text-blue-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Facturación</p>
-                  <p className="text-xs text-muted-foreground mt-1">Boletas y facturas</p>
-                </div>
-              </button>
+                <button
+                  onClick={() => navigate('/dashboard/clientes')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                    <Users size={18} className="text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Clientes</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ver / buscar</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/dashboard/caja')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-teal-500/20 transition-colors">
-                  <Wallet size={18} className="text-teal-600 dark:text-teal-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Cuadre de Caja</p>
-                  <p className="text-xs text-muted-foreground mt-1">Apertura / cierre</p>
-                </div>
-              </button>
+                <button
+                  onClick={() => navigate('/dashboard/productos')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                    <Package size={18} className="text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Catálogo</p>
+                    <p className="text-xs text-muted-foreground mt-1">Repuestos / servicios</p>
+                  </div>
+                </button>
+              </>
+            ) : (
+              /* Admin / Gerente servicios: accesos orientados a OT */
+              <>
+                <button
+                  onClick={() => navigate('/dashboard/ordenes-trabajo', { state: { openDialog: true } })}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                    <Wrench size={18} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Nueva OT</p>
+                    <p className="text-xs text-muted-foreground mt-1">Crear orden de trabajo</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/pos')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
-                  <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Venta en POS</p>
-                  <p className="text-xs text-muted-foreground mt-1">Punto de venta</p>
-                </div>
-              </button>
+                <button
+                  onClick={() => navigate('/dashboard/equipos')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-teal-500/20 transition-colors">
+                    <MonitorCog size={18} className="text-teal-600 dark:text-teal-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Equipos</p>
+                    <p className="text-xs text-muted-foreground mt-1">Registrar equipo</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/dashboard/reportes')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
-                  <BarChart2 size={18} className="text-violet-600 dark:text-violet-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Reportes</p>
-                  <p className="text-xs text-muted-foreground mt-1">Ver análisis</p>
-                </div>
-              </button>
-            </>
+                <button
+                  onClick={() => navigate('/dashboard/clientes')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                    <Users size={18} className="text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Clientes</p>
+                    <p className="text-xs text-muted-foreground mt-1">Registrar / buscar</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => navigate('/dashboard/facturacion')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                    <FileText size={18} className="text-green-600 dark:text-green-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Facturación</p>
+                    <p className="text-xs text-muted-foreground mt-1">Boletas y facturas</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => navigate('/dashboard/comisiones')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                    <Award size={18} className="text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Comisiones</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ingresos del período</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => navigate('/dashboard/reportes')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                    <BarChart2 size={18} className="text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Reportes</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ver análisis</p>
+                  </div>
+                </button>
+              </>
+            )
           ) : (
             /* ── Acciones para rubros con inventario ── */
             <>
@@ -1092,27 +1166,51 @@ export function Dashboard() {
       </div>
 
       {/* Stats Grid — 4 KPI cards */}
-      <div className="grid gap-[14px] grid-cols-2 lg:grid-cols-4 animate-fade-in-up-delay-1">
+      <div className="kpi-grid gap-[14px] animate-fade-in-up-delay-1">
 
         {esServicios ? (
-          /* ── Cards para dealer ── */
-          <>
-            <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[.78rem] font-semibold text-muted-foreground">Unidades Vendidas</span>
+          /* ── Cards para EMPRESA_SERVICIOS ── */
+          isTecnicoServicio ? (
+            /* Técnico: indicadores de sus OT asignadas */
+            <>
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">Mis OT Abiertas</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.abiertas ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">Mis pendientes</p>
               </div>
-              <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{stats.unidadesVendidas}</div>
-              <p className="text-[.78rem] text-muted-foreground mt-3">+{stats.unidadesHoy} hoy</p>
-            </div>
-
-            <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[.78rem] font-semibold text-muted-foreground">Comisiones del Mes</span>
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">Mis OT En Proceso</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.enProceso ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">En proceso</p>
               </div>
-              <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">S/ {totalComisionesMes.toFixed(2)}</div>
-              <p className="text-[.78rem] text-muted-foreground mt-3">Recibido de operadoras</p>
-            </div>
-          </>
+              <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">Mis OT Total</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.total ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">Total</p>
+              </div>
+            </>
+          ) : (
+            /* Admin servicios: OT stats + comisiones */
+            <>
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">OT Abiertas</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.abiertas ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">{otResumen?.enProceso ?? 0} en proceso</p>
+              </div>
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">OT Cerradas</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.cerradas ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">de {otResumen?.total ?? 0} en total</p>
+              </div>
+              <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[.78rem] font-semibold text-muted-foreground">Comisiones del Mes</span>
+                </div>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">S/ {totalComisionesMes.toFixed(2)}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">Recibido del período</p>
+              </div>
+            </>
+          )
         ) : esRolVeterinaria ? (
           /* ── KPI cards para roles veterinarios ── */
           <>
@@ -1149,7 +1247,7 @@ export function Dashboard() {
               </div>
             )}
 
-            {puedeVerInventario && !productosError && (
+            {(puedeVerProductos || puedeVerInventario) && !productosError && (
               <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[.78rem] font-semibold text-muted-foreground">Bajo stock</span>
@@ -1234,8 +1332,8 @@ export function Dashboard() {
               </>
             )}
 
-            {/* Card 3: Bajo stock — requiere VER_INVENTARIO (indicador de gestión, no de catálogo) */}
-            {puedeVerInventario && !productosError && (
+            {/* Card 3: Bajo stock — requiere VER_PRODUCTOS o VER_INVENTARIO */}
+            {(puedeVerProductos || puedeVerInventario) && !productosError && (
               <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[.78rem] font-semibold text-muted-foreground">Bajo stock</span>
@@ -1315,11 +1413,11 @@ export function Dashboard() {
       </div>
 
       {/* Sección inferior — bajo stock · por vencer · actividad (2 columnas mockup) */}
-      {!esServicios && ((puedeVerInventario && stats.bajoStockItems.length > 0) || stats.productosProximosAVencer.length > 0 || rawRol === 'ADMIN') && (
+      {(((puedeVerProductos || puedeVerInventario) && stats.bajoStockItems.length > 0) || stats.productosProximosAVencer.length > 0 || rawRol === 'ADMIN') && (
         <div className="grid gap-[14px] grid-cols-1 lg:grid-cols-[1.25fr_1fr] items-start animate-fade-in-up-delay-2">
 
           {/* Columna izquierda: Necesitan reposición */}
-          {puedeVerInventario && stats.bajoStockItems.length > 0 ? (
+          {(puedeVerProductos || puedeVerInventario) && stats.bajoStockItems.length > 0 ? (
             <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
               <div className="flex items-center justify-between gap-3 px-[18px] py-[15px] border-b border-border/60">
                 <div className="flex items-center gap-[9px]">
@@ -1330,7 +1428,7 @@ export function Dashboard() {
                   </span>
                 </div>
                 <button
-                  onClick={() => navigate('/dashboard/productos?filtro=bajo-stock')}
+                  onClick={() => navigate(esServicios ? '/dashboard/productos?tipo=PRODUCTO' : '/dashboard/productos?filtro=bajo-stock')}
                   className="text-[.8rem] font-semibold text-primary hover:underline"
                 >
                   Ver todos
@@ -1350,10 +1448,10 @@ export function Dashboard() {
                       <p className="text-[.72rem] text-muted-foreground mt-[3px]">mín. {producto.stockMinimo}</p>
                     </div>
                     <button
-                      onClick={() => navigate('/dashboard/compras/ordenes')}
+                      onClick={() => navigate(esServicios ? '/dashboard/inventario' : '/dashboard/compras/ordenes')}
                       className="flex-shrink-0 text-[.78rem] font-semibold text-primary border border-primary/30 bg-primary/8 hover:bg-primary/15 rounded-lg px-[11px] py-[6px] transition-colors"
                     >
-                      Pedir
+                      {esServicios ? 'Stock' : 'Pedir'}
                     </button>
                   </div>
                 ))}
@@ -1456,47 +1554,6 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Actividad reciente standalone — cuando no hay bajo stock ni vencimientos */}
-      {rawRol === 'ADMIN' && esServicios && (
-        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden animate-fade-in-up-delay-2">
-          <div className="flex items-center justify-between gap-3 px-[18px] py-[15px] border-b border-border/60">
-            <span className="text-[.92rem] font-[650]">Actividad reciente</span>
-          </div>
-          <div className="overflow-y-auto overflow-x-hidden max-h-[300px] px-[18px] pb-[14px]" style={{ overscrollBehavior: 'contain' }}>
-            {actividadLoading ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-                <RefreshCw size={13} className="mr-2 animate-spin" />
-                Cargando...
-              </div>
-            ) : actividad.length === 0 ? (
-              <p className="text-[.845rem] text-muted-foreground text-center py-6">Sin actividad reciente</p>
-            ) : (
-              actividad.map((item, i) => {
-                const { bg, text, letter } = tipoActividadStyle(item.tipo);
-                const fecha = new Date(item.fechaHora);
-                return (
-                  <div key={i} className={`flex gap-3 py-[10px] ${i > 0 ? 'border-t border-border/50' : ''}`}>
-                    <span className={`w-[28px] h-[28px] flex-shrink-0 rounded-lg flex items-center justify-center text-[.68rem] font-bold ${bg} ${text}`}>
-                      {letter}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[.845rem] leading-[1.45]">
-                        {item.descripcion}
-                        {item.detalle && (
-                          <span className="text-muted-foreground"> · {item.detalle}</span>
-                        )}
-                      </p>
-                      <p className="font-mono text-[.71rem] text-muted-foreground mt-[3px]">
-                        {formatRelativo(fecha)}{item.usuarioNombre ? ` · ${item.usuarioNombre}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

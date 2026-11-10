@@ -28,6 +28,8 @@ import {
   FlaskConical,
   PawPrint,
   Calendar,
+  MonitorCog,
+  Wrench,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -71,6 +73,7 @@ const ROL_LABEL: Record<string, string> = {
   RECEPCIONISTA:       'Recepcionista',
   AUXILIAR_VETERINARIO:'Auxiliar Vet.',
   GROOMER:             'Groomer',
+  TECNICO_SERVICIO:    'Técnico de servicio',
 };
 
 function getInitials(nombre?: string) {
@@ -93,6 +96,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const esBoticaFarmacia = rubro === 'BOTICA' || rubro === 'FARMACIA';
   const esVeterinaria    = rubro === 'VETERINARIA';
   const esPro        = isPro || sucursales.length > 0;
+  const isTecnicoServicio = user?.rol === 'TECNICO_SERVICIO';
 
   // Trial info para la barra del sidebar
   const trialEndDate = (user?.suscripcion?.trialEndDate) as string | undefined;
@@ -137,9 +141,9 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         items: [
           { title: 'Punto de Venta',   href: '/pos',                        icon: ScanLine,      show: canAccess('POS') },
           { title: 'Cuadre de Caja',   href: '/dashboard/caja',             icon: Wallet,        show: canAccess('POS') },
-          { title: esServicios ? 'Servicios prestados' : 'Historial de Ventas', href: '/dashboard/ventas', icon: ShoppingCart, show: canAccess('VENTAS') },
+          { title: 'Historial de ventas', href: '/dashboard/ventas', icon: ShoppingCart, show: canAccess('VENTAS') },
           { title: 'Facturación',      href: '/dashboard/facturacion',      icon: FileText,      show: canAccess('FACTURACION') },
-          { title: 'Notas de Crédito', href: '/dashboard/notas-credito',    icon: Receipt,       show: !esServicios && (isAdmin || puede('VER_NOTAS_CREDITO')) },
+          { title: 'Notas de Crédito', href: '/dashboard/notas-credito',    icon: Receipt,       show: isAdmin || puede('VER_NOTAS_CREDITO') },
         ],
       },
       {
@@ -196,15 +200,17 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         ],
       },
       { type: 'item', title: 'DIGEMID / OPPF',  href: '/dashboard/digemid',        icon: FlaskConical, show: esBoticaFarmacia && isAdmin },
+      { type: 'item', title: 'Equipos',           href: '/dashboard/equipos',        icon: MonitorCog,   show: esServicios && (isAdmin || puede('VER_EQUIPOS')) },
+      { type: 'item', title: 'Órdenes de Trabajo', href: '/dashboard/ordenes-trabajo', icon: Wrench,       show: esServicios && (isAdmin || puede('VER_OT')) },
       { type: 'item', title: 'Mascotas',         href: '/dashboard/mascotas',       icon: PawPrint,     show: esVeterinaria && (isAdmin || puede('VER_MASCOTAS')) },
       { type: 'item', title: 'Citas',            href: '/dashboard/citas',          icon: Calendar,     show: esVeterinaria && (isAdmin || puede('VER_CITAS')) },
       { type: 'item', title: 'Certificados',     href: '/dashboard/certificados',   icon: Award,        show: !esServicios && canAccess('CERTIFICADOS') },
       { type: 'item', title: 'Sucursales',       href: '/dashboard/sucursales',     icon: Building2,    show: isAdmin && esPro },
       { type: 'item', title: 'Suscripciones',    href: '/dashboard/suscripciones',  icon: CreditCard,   show: canAccess('SUSCRIPCIONES') },
       { type: 'item', title: 'Reportes',         href: '/dashboard/reportes',       icon: BarChart3,    show: canAccess('REPORTES') },
-      { type: 'item', title: 'Configuración',    href: '/dashboard/configuracion',  icon: Settings,     show: true },
+      { type: 'item', title: 'Configuración',    href: '/dashboard/configuracion',  icon: Settings,     show: !isTecnicoServicio },
     ],
-    [canAccess, isAdmin, puede, user?.rol, esPro, esRopa, esServicios, esBoticaFarmacia, esVeterinaria]
+    [canAccess, isAdmin, puede, user?.rol, esPro, esRopa, esServicios, esBoticaFarmacia, esVeterinaria, isTecnicoServicio]
   );
 
   const defaultExpanded = useMemo(() => {
@@ -260,13 +266,6 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
         </button>
       )}
 
-      {/* Overlay móvil */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
-          onClick={onClose}
-        />
-      )}
 
       {/* Sidebar */}
       <aside
