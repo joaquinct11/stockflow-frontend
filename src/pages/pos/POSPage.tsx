@@ -29,6 +29,15 @@ import type { LoteVencimientoDTO, StockLoteDisponibleDTO } from '../../services/
 
 // ── Tipos locales ──────────────────────────────────────────────────────────────
 
+/** Datos de presentación cacheados para recalcular precio sin closures stale. */
+interface PresentacionPrecio {
+  precioVenta: number;
+  precioMayorista?: number;
+  cantidadMinima?: number;
+  /** Factor de conversión: cuántas unidades base equivale esta presentación. */
+  factor?: number;
+}
+
 interface CartItem {
   producto: ProductoDTO;
   cantidad: number;
@@ -40,6 +49,8 @@ interface CartItem {
   presentacionId?: number;
   /** Cuántas unidades base descuenta del stock. 1 = unidad principal. */
   factor?: number;
+  /** Precio y config mayorista de la presentación seleccionada. null = unidad principal. */
+  presentacion?: PresentacionPrecio | null;
 }
 
 const cartItemKey = (item: { producto: ProductoDTO; varianteId?: number; stockLoteId?: number }) =>
@@ -68,6 +79,7 @@ export function POSPage() {
   const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const esRopa = negocio?.rubro === 'TIENDA_ROPA';
   const esFarmacia = negocio?.rubro === 'BOTICA' || negocio?.rubro === 'FARMACIA';
+  const esServicios = negocio?.rubro === 'EMPRESA_SERVICIOS';
 
   useEffect(() => {
     if (sucursalLoaded) return;
@@ -113,7 +125,7 @@ export function POSPage() {
   const [lotesDisponibles, setLotesDisponibles] = useState<StockLoteDisponibleDTO[]>([]);
   const [loadingLotes, setLoadingLotes] = useState(false);
   // Presentación seleccionada pendiente de asignar lote
-  const [pendingPresentacion, setPendingPresentacion] = useState<{ id?: number; factor: number; precio: number; label: string } | null>(null);
+  const [pendingPresentacion, setPendingPresentacion] = useState<{ id?: number; factor: number; precio: number; label: string; precioMayorista?: number; cantidadMinima?: number } | null>(null);
 
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
@@ -165,6 +177,52 @@ export function POSPage() {
     return Math.floor(getStockDisponible(item.producto) / f);
   };
 
+  /**
+   * Devuelve el precio unitario correcto para una línea del carrito.
+   *
+   * Prioridad:
+   *  1. precioOverride (solo para variantes ropa / descuento manual autorizado externamente).
+   *  2. Config mayorista propia de la presentación (si la tiene completa).
+   *  3. Config mayorista del producto base, comparando unidades equivalentes
+   *     (cantidad × factor). Aplica cuando la presentación NO tiene config propia.
+   *  4. precioVenta de la presentación (o del producto si no hay presentación).
+   */
+  const calcularPrecioItem = (
+    producto: ProductoDTO,
+    cantidad: number,
+    precioOverride?: number,
+    presentacion?: PresentacionPrecio | null,
+  ): number => {
+    if (precioOverride != null && precioOverride > 0) return precioOverride;
+    if (presentacion) {
+      // La presentación tiene su propia config mayorista completa → usarla directamente
+      if (presentacion.precioMayorista != null && presentacion.cantidadMinima != null) {
+        return cantidad >= presentacion.cantidadMinima
+          ? presentacion.precioMayorista
+          : presentacion.precioVenta;
+      }
+      // Sin config propia: recurrir al mayorista del producto base usando unidades equivalentes
+      const factor = presentacion.factor ?? 1;
+      const cantidadBase = cantidad * factor;
+      if (
+        producto.precioMayorista != null &&
+        producto.cantidadMinimaMayorista != null &&
+        cantidadBase >= producto.cantidadMinimaMayorista
+      ) {
+        return producto.precioMayorista;
+      }
+      return presentacion.precioVenta;
+    }
+    if (
+      producto.precioMayorista != null &&
+      producto.cantidadMinimaMayorista != null &&
+      cantidad >= producto.cantidadMinimaMayorista
+    ) {
+      return producto.precioMayorista;
+    }
+    return producto.precioVenta ?? 0;
+  };
+
   const confirmarCantidad = (key: string) => {
     const nueva = parseInt(editandoCantidad?.valor ?? '');
     if (!isNaN(nueva) && nueva >= 1) {
@@ -173,7 +231,12 @@ export function POSPage() {
       if (nueva > max) toast.error(`Stock máximo disponible: ${max}`);
       setCart(prev => prev.map(i => {
         if (cartItemKey(i) !== key) return i;
-        return { ...i, cantidad: Math.min(nueva, getStockMax(i)) };
+        const nuevaCantidad = Math.min(nueva, getStockMax(i));
+        return {
+          ...i,
+          cantidad: nuevaCantidad,
+          precioUnitario: calcularPrecioItem(i.producto, nuevaCantidad, undefined, i.presentacion),
+        };
       }));
     }
     setEditandoCantidad(null);
@@ -248,7 +311,7 @@ export function POSPage() {
       setProximoVencimientoMap(map);
       const countMap = new Map<number, number>();
       porProducto.forEach((lotesProducto, productoId) => {
-        const vigentes = lotesProducto.filter(l => l.diasRestantes >= 0).length;
+        const vigentes = lotesProducto.filter(l => l.diasRestantes >= 0 && (l.stockActual ?? 0) > 0).length;
         countMap.set(productoId, vigentes > 0 ? vigentes : lotesProducto.length);
       });
       setLoteCountMap(countMap);
@@ -361,6 +424,7 @@ export function POSPage() {
       const lower = q.toLowerCase();
       const matches = todosProductos
         .filter(p => p.activo !== false)
+        .filter(p => !esServicios || p.tipo !== 'SERVICIO')
         .filter(p => !soloGenerico || p.esGenerico === true)
         .filter(p => p.nombre.toLowerCase().includes(lower) || (p.codigoBarras ?? '').toLowerCase().includes(lower) || (p.componentes ?? '').toLowerCase().includes(lower))
         .sort((a, b) => {
@@ -382,6 +446,7 @@ export function POSPage() {
     const limite = new Date(hoy); limite.setDate(limite.getDate() + 90);
     return todosProductos
       .filter(p => p.activo !== false && getStockDisponible(p) > 0)
+      .filter(p => !esServicios || p.tipo !== 'SERVICIO')
       .filter(p => !soloGenerico || p.esGenerico === true)
       .sort((a, b) => {
         const fvA = a.proximaFechaVencimiento ? new Date(a.proximaFechaVencimiento + 'T00:00:00') : null;
@@ -441,7 +506,7 @@ export function POSPage() {
   // pp se pasa directamente para evitar leer pendingPresentacion desde closure stale (async/await)
   const abrirLotePickerParaProducto = async (
     producto: ProductoDTO,
-    pp?: { id?: number; factor: number; precio: number; label: string } | null,
+    pp?: { id?: number; factor: number; precio: number; label: string; precioMayorista?: number; cantidadMinima?: number } | null,
   ) => {
     if (producto.stockVigente != null) {
       try {
@@ -457,7 +522,13 @@ export function POSPage() {
     // Sin lotes (o producto sin stockVigente): agregar directo al carrito
     if (getStockDisponible(producto) <= 0) { toast.error(`Sin stock disponible: ${producto.nombre}`); return; }
     if (producto.stockVigente != null) toast('Sin lotes activos · FEFO automático', { icon: '📦', duration: 2500 });
-    agregarItemAlCarrito(producto, undefined, pp?.label, true, pp?.precio ?? producto.precioVenta, undefined, undefined, pp?.id, pp?.factor ?? 1);
+    agregarItemAlCarrito(
+      producto, undefined, pp?.label, true,
+      undefined,  // sin precioOverride — el precio se calcula desde la config de la presentación
+      undefined, undefined,
+      pp?.id, pp?.factor ?? 1,
+      pp ? { precioVenta: pp.precio, precioMayorista: pp.precioMayorista, cantidadMinima: pp.cantidadMinima, factor: pp.factor ?? 1 } : null,
+    );
   };
 
   const agregarAlCarrito = async (producto: ProductoDTO, switchToCart = false) => {
@@ -499,6 +570,7 @@ export function POSPage() {
     producto: ProductoDTO, varianteId?: number, varianteDescripcion?: string,
     switchToCart = false, precioOverride?: number, stockLoteId?: number, stockLoteLabel?: string,
     presentacionId?: number, factor?: number,
+    presentacion?: PresentacionPrecio | null,
   ) => {
     const key = cartItemKey({ producto, varianteId, stockLoteId });
     const existing = cart.find(i => cartItemKey(i) === key);
@@ -515,11 +587,18 @@ export function POSPage() {
       const idx = prev.findIndex(i => cartItemKey(i) === key);
       if (idx >= 0) {
         const newCart = [...prev];
-        newCart[idx] = { ...newCart[idx], cantidad: newCart[idx].cantidad + 1 };
+        const nuevaCantidad = newCart[idx].cantidad + 1;
+        newCart[idx] = {
+          ...newCart[idx],
+          cantidad: nuevaCantidad,
+          // Recalcular precio usando config de la presentación almacenada en el ítem
+          precioUnitario: calcularPrecioItem(newCart[idx].producto, nuevaCantidad, precioOverride, newCart[idx].presentacion),
+        };
         return newCart;
       }
-      const precio = (precioOverride != null && precioOverride > 0) ? precioOverride : (producto.precioVenta ?? 0);
-      return [...prev, { producto, cantidad: 1, precioUnitario: precio, varianteId, varianteDescripcion, stockLoteId, stockLoteLabel, presentacionId, factor: factor ?? 1 }];
+      const nuevaCantidad = 1;
+      const precio = calcularPrecioItem(producto, nuevaCantidad, precioOverride, presentacion);
+      return [...prev, { producto, cantidad: nuevaCantidad, precioUnitario: precio, varianteId, varianteDescripcion, stockLoteId, stockLoteLabel, presentacionId, factor: factor ?? 1, presentacion: presentacion ?? null }];
     });
     if (switchToCart) setMobileCartOpen(true);
     refocus();
@@ -535,7 +614,12 @@ export function POSPage() {
     }
     setCart(prev => prev.map(item => {
       if (cartItemKey(item) !== key) return item;
-      return { ...item, cantidad: item.cantidad + delta };
+      const nuevaCantidad = item.cantidad + delta;
+      return {
+        ...item,
+        cantidad: nuevaCantidad,
+        precioUnitario: calcularPrecioItem(item.producto, nuevaCantidad, undefined, item.presentacion),
+      };
     }).filter(item => item.cantidad > 0));
   };
 
@@ -843,6 +927,27 @@ export function POSPage() {
                       ) : (
                         <>
                           <span className="text-[.76rem] text-muted-foreground font-mono">{fmt(item.precioUnitario)} c/u</span>
+                          {/* Badge mayorista: se muestra cuando el precio aplicado ES el mayorista */}
+                          {(item.presentacion
+                            ? (() => {
+                                // Presentación con config propia
+                                if (item.presentacion.precioMayorista != null && item.presentacion.cantidadMinima != null) {
+                                  return item.cantidad >= item.presentacion.cantidadMinima;
+                                }
+                                // Sin config propia: fallback a config base del producto (unidades equivalentes)
+                                const f = item.presentacion.factor ?? 1;
+                                return item.producto.precioMayorista != null &&
+                                  item.producto.cantidadMinimaMayorista != null &&
+                                  (item.cantidad * f) >= item.producto.cantidadMinimaMayorista;
+                              })()
+                            : item.producto.precioMayorista != null &&
+                              item.producto.cantidadMinimaMayorista != null &&
+                              item.cantidad >= item.producto.cantidadMinimaMayorista
+                          ) && (
+                            <span style={{ fontSize: '.64rem', fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'var(--ok-soft)', color: 'var(--ok)', border: '1px solid var(--ok)33', letterSpacing: '.02em' }}>
+                              MAYOR
+                            </span>
+                          )}
                           {esRopa && (
                             <button onClick={() => iniciarEditarPrecio(cartItemKey(item), item.precioUnitario)}
                               className="text-muted-foreground hover:text-primary transition-colors"><Edit2 size={10} /></button>
@@ -1707,13 +1812,18 @@ export function POSPage() {
               {presentacionesDisponibles.map(pres => {
                 const factor = pres.factor ?? 1;
                 const stockDisp = Math.floor(getStockDisponible(presentacionPickerProducto) / factor);
+                const tieneMayorista = pres.precioMayorista != null && pres.cantidadMinimaMayorista != null;
                 return (
                   <button key={pres.id}
                     disabled={stockDisp <= 0}
                     onClick={async () => {
                       if (stockDisp <= 0) { toast.error('Sin stock disponible'); return; }
                       const label = pres.unidadMedidaNombre || pres.unidadMedidaAbreviatura || 'Presentación';
-                      const pp = { id: pres.id, factor, precio: Number(pres.precioVenta), label };
+                      const pp = {
+                        id: pres.id, factor, precio: Number(pres.precioVenta), label,
+                        precioMayorista: pres.precioMayorista != null ? Number(pres.precioMayorista) : undefined,
+                        cantidadMinima: pres.cantidadMinimaMayorista ?? undefined,
+                      };
                       setPresentacionPickerOpen(false);
                       await abrirLotePickerParaProducto(presentacionPickerProducto, pp);
                     }}
@@ -1722,6 +1832,7 @@ export function POSPage() {
                       <p className="font-semibold text-sm">{pres.unidadMedidaNombre || pres.unidadMedidaAbreviatura}</p>
                       <p className="text-xs text-muted-foreground">
                         {factor > 1 ? `× ${factor} uds base · ` : ''}stock: {stockDisp}
+                        {tieneMayorista && ` · mayor. ≥${pres.cantidadMinimaMayorista} → S/${Number(pres.precioMayorista).toFixed(2)}`}
                       </p>
                     </div>
                     <p className="font-bold text-sm text-primary">S/ {Number(pres.precioVenta).toFixed(2)}</p>
@@ -1767,8 +1878,12 @@ export function POSPage() {
                         onClick={() => {
                           const pp = pendingPresentacion;
                           setPendingPresentacion(null);
-                          agregarItemAlCarrito(lotePickerProducto, undefined, pp?.label, false,
-                            pp?.precio ?? lote.precioVenta ?? undefined, lote.id, label, pp?.id, pp?.factor ?? 1);
+                          agregarItemAlCarrito(
+                            lotePickerProducto, undefined, pp?.label, false,
+                            undefined,  // sin precioOverride — precio desde config de presentación
+                            lote.id, label, pp?.id, pp?.factor ?? 1,
+                            pp ? { precioVenta: pp.precio, precioMayorista: pp.precioMayorista, cantidadMinima: pp.cantidadMinima, factor: pp.factor ?? 1 } : null,
+                          );
                           setLotePickerOpen(false);
                         }}
                         className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed">
@@ -1833,7 +1948,12 @@ export function POSPage() {
               if (getStockDisponible(lotePickerProducto) <= 0) { toast.error(`Sin stock disponible: ${lotePickerProducto.nombre}`); return; }
               const pp = pendingPresentacion;
               setPendingPresentacion(null);
-              agregarItemAlCarrito(lotePickerProducto, undefined, pp?.label, false, pp?.precio ?? undefined, undefined, undefined, pp?.id, pp?.factor ?? 1);
+              agregarItemAlCarrito(
+                lotePickerProducto, undefined, pp?.label, false,
+                undefined,  // sin precioOverride — precio desde config de presentación
+                undefined, undefined, pp?.id, pp?.factor ?? 1,
+                pp ? { precioVenta: pp.precio, precioMayorista: pp.precioMayorista, cantidadMinima: pp.cantidadMinima, factor: pp.factor ?? 1 } : null,
+              );
               setLotePickerOpen(false);
             }}
               disabled={(() => {

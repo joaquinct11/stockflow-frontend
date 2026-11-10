@@ -208,6 +208,16 @@ export const API_ENDPOINTS = {
     DEACTIVATE: (id: number) => `/clientes/${id}/desactivar`,
   },
 
+  EQUIPOS: {
+    LIST: '/equipos',
+    STATS: '/equipos/stats',
+    GET: (id: number) => `/equipos/${id}`,
+    CREATE: '/equipos',
+    UPDATE: (id: number) => `/equipos/${id}`,
+    ACTIVATE: (id: number) => `/equipos/${id}/activar`,
+    DEACTIVATE: (id: number) => `/equipos/${id}/desactivar`,
+  },
+
   GASTOS: {
     LIST: '/gastos',
     LIST_ACTIVOS: '/gastos/activos',
@@ -268,6 +278,21 @@ export const API_ENDPOINTS = {
     CREATE: '/citas',
     UPDATE: (id: number) => `/citas/${id}`,
     CAMBIAR_ESTADO: (id: number) => `/citas/${id}/estado`,
+  },
+
+  ORDENES_TRABAJO: {
+    LIST: '/ordenes-trabajo',
+    GET: (id: number) => `/ordenes-trabajo/${id}`,
+    CREATE: '/ordenes-trabajo',
+    UPDATE: (id: number) => `/ordenes-trabajo/${id}`,
+    CAMBIAR_ESTADO: (id: number) => `/ordenes-trabajo/${id}/estado`,
+    CONSUMOS: (id: number) => `/ordenes-trabajo/${id}/consumos`,
+    DEVOLUCIONES: (otId: number, consumoId: number) => `/ordenes-trabajo/${otId}/consumos/${consumoId}/devoluciones`,
+    CLASIFICACIONES: (otId: number, consumoId: number) => `/ordenes-trabajo/${otId}/consumos/${consumoId}/clasificaciones`,
+    CIERRE_TECNICO: (id: number) => `/ordenes-trabajo/${id}/cierre-tecnico`,
+    FACTURAR: (id: number) => `/ordenes-trabajo/${id}/facturar`,
+    ENTREGA: (id: number) => `/ordenes-trabajo/${id}/entrega`,
+    ANULAR_FACTURA: (id: number) => `/ordenes-trabajo/${id}/anular-factura`,
   },
 
   NOTIFICACIONES: {
