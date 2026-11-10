@@ -230,6 +230,242 @@
   }
 }
 
+/* ── Responsive KPI grid ────────────────────────────────────────────── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  .kpi-grid { grid-template-columns: minmax(0, 1fr); }
+  .kpi-grid > * { grid-column: span 1 !important; }
+}
+
+/* ── Filter bar: search + botones en línea, apila en móvil ──────────── */
+.filter-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+.filter-bar.filter-bar--2col {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+@media (max-width: 860px) {
+  .filter-bar,
+  .filter-bar.filter-bar--2col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Filter panel expandido: 2 columnas → 1 en móvil ───────────────── */
+.filter-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 18px;
+}
+@media (max-width: 860px) {
+  .filter-panel { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── Botón acción principal: full-width en móvil pequeño ────────────── */
+@media (max-width: 620px) {
+  .page-action-btn { width: 100% !important; justify-content: center !important; }
+}
+
+/* ── Citas: sidebar + calendario, apila en tablet ───────────────────── */
+.citas-grid {
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  /* El contenedor raíz de la página de citas vuelve a flujo normal */
+  .citas-outer {
+    height: auto !important;
+    overflow: visible !important;
+    min-height: unset !important;
+    flex: unset !important;
+  }
+  .citas-grid {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible !important;
+    flex: unset !important;
+    min-height: unset !important;
+  }
+  /* El panel del calendario: se expande con su contenido, mantiene fondo blanco */
+  .citas-calendar-wrap {
+    height: auto !important;
+    overflow: hidden !important;  /* Mantiene border-radius y fondo */
+    flex: unset !important;
+    min-height: 0 !important;
+  }
+  /* DayView/WeekView: se expanden al tamaño real (928px) en vez de scroll interno */
+  .dayview-root {
+    height: auto !important;
+    overflow: visible !important;
+    flex: unset !important;
+  }
+  .dayview-hscroll {
+    flex: unset !important;
+    min-height: unset !important;
+  }
+  .dayview-scroll {
+    overflow: visible !important;
+    height: auto !important;
+    flex: unset !important;
+  }
+}
+.citas-side-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+/* ── Page header row: título + acción wrap en móvil ────────────────── */
+.page-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* ── 2-col grid adaptable (reportes, citas detalle, etc.) ───────────── */
+.grid-2col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+@media (max-width: 860px) {
+  .grid-2col { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── KPI grid inventario: 3 col desktop → 1 col mobile ─────────────── */
+.inv-kpi-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+@media (max-width: 620px) {
+  .inv-kpi-grid { grid-template-columns: minmax(0,1fr); }
+}
+
+/* ── Scrollbox para tablas en móvil ─────────────────────────────────── */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll table {
+  min-width: 640px;
+}
+
+/* ── Settings layout: nav + content + preview → apila en móvil ─────── */
+.settings-layout {
+  /* el inline style controla columns en desktop */
+}
+@media (max-width: 860px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  /* Nav de settings: grilla de 3 columnas para que quepan todos los botones */
+  .settings-layout > nav {
+    position: static !important;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+  }
+  .settings-layout > nav > button {
+    height: auto !important;
+    min-height: 38px !important;
+    padding: 6px 8px !important;
+    white-space: normal !important;
+    font-size: .74rem !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    line-height: 1.3 !important;
+  }
+}
+
+/* ── Citas: scroll horizontal del grid de columnas (profesionales/días) */
+.dayview-hscroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+}
+
+/* ── Permisos: two-panel layout → apila en móvil ───────────────────── */
+.permisos-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+}
+.permisos-panel-left  { flex: 0 1 310px; min-width: 250px; }
+.permisos-panel-right { flex: 1 1 560px; min-width: 0; }
+@media (max-width: 768px) {
+  .permisos-panel-left,
+  .permisos-panel-right { flex: 1 1 100%; min-width: 0; }
+}
+
+/* ── Reportes: paneles lado a lado → apila en móvil ────────────────── */
+@media (max-width: 860px) {
+  .rpt-2col {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* ── kpi-grid variante 3 columnas (no 4) ────────────────────────── */
+.kpi-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 768px) { .kpi-grid-3 { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── Suscripciones ───────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sus-grid   { grid-template-columns: minmax(0,1fr) !important; }
+  .sus-planes { grid-template-columns: minmax(0,1fr) !important; }
+}
+.sus-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 1px;
+}
+@media (max-width: 640px) {
+  .sus-meta-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .sus-meta-grid > *:last-child:nth-child(odd) { grid-column: span 2; }
+}
+
+/* ── Mi Perfil: layout 2-col → 1-col en mobile ──────────────────── */
+.profile-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.profile-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+}
+@media (max-width: 768px) {
+  .profile-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .profile-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Form 2-col → 1-col en móvil ────────────────────────────────────── */
+.form-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 768px) {
+  .form-grid-2col { grid-template-columns: minmax(0, 1fr); }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }

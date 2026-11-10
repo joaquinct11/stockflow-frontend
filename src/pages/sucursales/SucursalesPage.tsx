@@ -338,7 +338,7 @@ export function SucursalesPage() {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
+          <div className="form-grid-2col" style={{ gap: 12 }}>
             <div>
               <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Teléfono</label>
               <FieldInput
@@ -470,7 +470,7 @@ export function SucursalesPage() {
       )}
 
       {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginTop: 20 }}>
+      <div className="kpi-grid" style={{ marginTop: 20 }}>
         {/* Sucursales activas */}
         <div style={{ padding: '16px 18px', background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>

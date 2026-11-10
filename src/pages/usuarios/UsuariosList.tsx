@@ -113,7 +113,7 @@ const IcoSearch = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="no
 const IcoInfo   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>;
 
 // ─── Role meta ────────────────────────────────────────────────────────────────
-type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO' | 'GERENTE' | 'VETERINARIO' | 'RECEPCIONISTA' | 'AUXILIAR_VETERINARIO' | 'GROOMER';
+type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO' | 'GERENTE' | 'VETERINARIO' | 'RECEPCIONISTA' | 'AUXILIAR_VETERINARIO' | 'GROOMER' | 'TECNICO_SERVICIO';
 type EstadoFilter = 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
 type RolFilter = 'TODOS' | Role;
 
@@ -166,6 +166,12 @@ const ROL_META: Record<string, { label: string; desc: string; tone: string; icon
     tone: '#be185d',
     icon: 'M6 3H3v3l9 9M3 3l3 3M15 6l3 3M6 15l-3 3 3 3 3-3M12 18l6-6 3 3-6 6M16 2l6 6',
   },
+  TECNICO_SERVICIO: {
+    label: 'Técnico de servicio',
+    desc: 'Opera órdenes de trabajo, registra consumos y realiza el cierre técnico.',
+    tone: '#1e40af',
+    icon: 'M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18ZM6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2M10 6h4M10 10h4M10 14h4M10 18h4',
+  },
 };
 
 const ROL_PILL: Record<string, { color: string; bg: string }> = {
@@ -177,9 +183,11 @@ const ROL_PILL: Record<string, { color: string; bg: string }> = {
   RECEPCIONISTA:        { color: '#0d9488',  bg: '#f0fdfa'     },
   AUXILIAR_VETERINARIO: { color: '#0369a1',  bg: '#eff6ff'     },
   GROOMER:              { color: '#be185d',  bg: '#fdf2f8'     },
+  TECNICO_SERVICIO:     { color: '#1e40af',  bg: '#eff6ff'     },
 };
 
 const ROLES_VETERINARIA: Role[] = ['VETERINARIO', 'RECEPCIONISTA', 'AUXILIAR_VETERINARIO', 'GROOMER'];
+const ROLES_SERVICIOS:   Role[] = ['TECNICO_SERVICIO'];
 const ROLES_GENERALES:   Role[] = ['ADMIN', 'GERENTE', 'VENDEDOR', 'GESTOR_INVENTARIO'];
 
 const TIPOS_DOC = [
@@ -202,6 +210,7 @@ export function UsuariosList() {
   const currentUserRole = (useAuthStore(s => s.user?.rol) || 'VENDEDOR') as Role;
   const rubro           = useTenantConfigStore(s => s.rubro);
   const isVeterinaria   = rubro?.toUpperCase() === 'VETERINARIA';
+  const isServicios     = rubro?.toUpperCase() === 'EMPRESA_SERVICIOS';
 
   const navigate = useNavigate();
   const { canCreate, canEdit, canDelete, canToggleState, canView } = usePermissions();
@@ -210,6 +219,8 @@ export function UsuariosList() {
 
   const rolesDisponibles: Role[] = isVeterinaria
     ? [...ROLES_GENERALES, ...ROLES_VETERINARIA]
+    : isServicios
+    ? [...ROLES_GENERALES, ...ROLES_SERVICIOS]
     : ROLES_GENERALES;
   const isMultiLocal    = sucursales.length > 1;
   const hasViewPermission = canView('USUARIOS');
@@ -550,7 +561,7 @@ export function UsuariosList() {
             {isMultiLocal && fRol !== 'ADMIN' && (
               <div style={{ marginTop: 14 }}>
                 <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Sede asignada <span style={{ color: T.bad }}>*</span></label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
+                <div className="form-grid-2col" style={{ gap: 8 }}>
                   {sucursales.map(s => {
                     const sel = fSucursal === s.id;
                     return (
@@ -696,7 +707,7 @@ export function UsuariosList() {
             <span style={{ fontSize: '.78rem', color: T.warn, whiteSpace: 'nowrap' as const }}>Límites no verificados</span>
           )}
           {canCreate('USUARIOS') && (
-            <button type="button" onClick={() => { if (!limiteAlcanzado) { resetForm(); setIsFormOpen(true); } }} disabled={limiteAlcanzado}
+            <button type="button" onClick={() => { if (!limiteAlcanzado) { resetForm(); setIsFormOpen(true); } }} disabled={limiteAlcanzado} className="page-action-btn"
               style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', fontSize: '.855rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 10, cursor: limiteAlcanzado ? 'not-allowed' as const : 'pointer', whiteSpace: 'nowrap' as const, boxShadow: `0 6px 16px -8px ${T.primary}`, opacity: limiteAlcanzado ? 0.5 : 1 }}>
               <IcoPlus /> Nuevo usuario
             </button>
@@ -727,7 +738,7 @@ export function UsuariosList() {
       ) : (
         <>
           {/* KPI cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12 }}>
+          <div className="kpi-grid">
             {([
               { label: 'Total usuarios',  value: stats.total,     sub: 'Registrados en el sistema', color: T.text  },
               { label: 'Activos',         value: stats.activos,   sub: 'Pueden iniciar sesión',     color: T.ok   },
@@ -745,8 +756,8 @@ export function UsuariosList() {
           {/* Main card */}
           <div style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow }}>
             {/* Toolbar */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}` }}>
-              <div style={{ position: 'relative', flex: '1 1 280px', minWidth: 0 }}>
+            <div className="filter-bar" style={{ gap: 10, padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}` }}>
+              <div style={{ position: 'relative', minWidth: 0 }}>
                 <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: T.text3, pointerEvents: 'none' as const, display: 'grid' }}><IcoSearch /></span>
                 <input type="text" value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                   placeholder="Buscar por nombre o email…"

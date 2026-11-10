@@ -348,6 +348,7 @@ export function ProveedoresList() {
             <button
               type="button"
               onClick={abrirNuevo}
+              className="page-action-btn"
               style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', fontSize: '.855rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: `0 6px 16px -8px ${T.primary}` }}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
@@ -357,7 +358,7 @@ export function ProveedoresList() {
         </div>
 
         {/* KPIs */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12 }}>
+        <div className="kpi-grid">
           {[
             { label: 'Total proveedores', val: total, sub: 'Registrados', color: undefined },
             { label: 'Activos', val: activos, sub: 'Disponibles para compras', color: T.ok },
@@ -376,8 +377,8 @@ export function ProveedoresList() {
         <div style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow }}>
 
           {/* Filters */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}` }}>
-            <div style={{ position: 'relative', flex: '1 1 280px', minWidth: 0 }}>
+          <div className="filter-bar" style={{ padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}` }}>
+            <div style={{ position: 'relative', minWidth: 0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: T.text3, pointerEvents: 'none' }}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
               <input
                 type="text"

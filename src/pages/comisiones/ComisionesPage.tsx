@@ -132,7 +132,7 @@ export function ComisionesPage() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <TrendingUp size={24} className="text-primary" />
@@ -142,7 +142,7 @@ export function ComisionesPage() {
             Ingresos por comisiones de terceros (Bitel, Claro, etc.)
           </p>
         </div>
-        <Button onClick={abrirCrear}>
+        <Button onClick={abrirCrear} className="shrink-0">
           <Plus size={16} /> Nueva comisión
         </Button>
       </div>
@@ -200,8 +200,52 @@ export function ComisionesPage() {
         )}
       </div>
 
-      {/* Tabla */}
-      <Card className="border-0 shadow-sm overflow-hidden">
+      {/* Cards mobile */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {pagina.length === 0 ? (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="py-10 flex flex-col items-center gap-2 text-muted-foreground">
+              <TrendingUp size={32} className="opacity-20" />
+              <p className="text-sm">{search ? 'Sin resultados' : 'Aún no hay comisiones registradas'}</p>
+            </CardContent>
+          </Card>
+        ) : pagina.map((c) => (
+          <Card key={c.id} className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="font-medium text-sm leading-snug flex-1 min-w-0">{c.concepto}</div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => abrirEditar(c)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                    <Edit size={14} />
+                  </button>
+                  <button onClick={() => setConfirmId(c.id!)} className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-muted-foreground hover:text-red-500 transition-colors">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+              <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
+                {formatCurrency(c.monto)}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><Calendar size={11} />{formatDate(c.fecha)}</span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium px-2 py-0.5">
+                  <Building2 size={10} />{c.pagador}
+                </span>
+                {c.metodoPago && <span>{c.metodoPago}</span>}
+                {c.numeroComprobante && (
+                  <span className="flex items-center gap-1"><FileText size={11} />{c.numeroComprobante}</span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {totalPages > 1 && (
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} totalItems={filtradas.length} itemsPerPage={PER_PAGE} />
+        )}
+      </div>
+
+      {/* Tabla desktop */}
+      <Card className="hidden sm:block border-0 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b">

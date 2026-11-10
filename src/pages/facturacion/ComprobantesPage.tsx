@@ -505,23 +505,23 @@ export function ComprobantesPage() {
             {appliedFechaDesde && <> · {rangoLabel}</>}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:flex-wrap">
           {sortedComprobantes.length > 0 && (
-            <>
+            <div className="grid grid-cols-2 gap-2 sm:contents">
               <button type="button" onClick={handleExportExcel}
-                className="flex items-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-emerald-500 hover:text-emerald-600 transition-colors">
+                className="flex items-center justify-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-emerald-500 hover:text-emerald-600 transition-colors">
                 <FileSpreadsheet size={15} />
                 Excel
               </button>
               <button type="button" onClick={handleExportPDF} disabled={exporting}
-                className="flex items-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-red-500 hover:text-red-600 transition-colors disabled:opacity-50">
+                className="flex items-center justify-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-red-500 hover:text-red-600 transition-colors disabled:opacity-50">
                 <FileDown size={15} />
                 {exporting ? 'Exportando...' : 'PDF'}
               </button>
-            </>
+            </div>
           )}
           {canEmitir && (
-            <Button onClick={() => { setEmitirForm(emptyForm()); setIsEmitirOpen(true); }} className="gap-2 h-9">
+            <Button onClick={() => { setEmitirForm(emptyForm()); setIsEmitirOpen(true); }} className="gap-2 h-9 w-full sm:w-auto">
               <Plus size={15} />
               Emitir comprobante
             </Button>
@@ -530,24 +530,24 @@ export function ComprobantesPage() {
       </div>
 
       {/* ── KPIs ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="kpi-grid gap-3">
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Total facturado</p>
-          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-emerald-600 dark:text-emerald-400">
             S/ {kpiTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <p className="text-[.79rem] text-muted-foreground mt-1">Comprobantes no anulados</p>
         </div>
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Comprobantes</p>
-          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">{statsComprobantes.length}</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-primary">{statsComprobantes.length}</p>
           <p className="text-[.79rem] text-muted-foreground mt-1">
             {kpiBoletas} boleta{kpiBoletas !== 1 ? 's' : ''} · {kpiFacturas} factura{kpiFacturas !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Aceptados SUNAT</p>
-          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">{kpiAceptados}</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-emerald-600 dark:text-emerald-400">{kpiAceptados}</p>
           <p className="text-[.79rem] text-muted-foreground mt-1">de {vigentes.length} vigente{vigentes.length !== 1 ? 's' : ''}</p>
         </div>
         <div className={`p-[16px_18px] rounded-[14px] shadow-sm border ${kpiPorAtender > 0 ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-700/40' : 'bg-card border-border'}`}>

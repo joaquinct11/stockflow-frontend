@@ -455,7 +455,7 @@ export function OrdenComprasList() {
     const h = small ? 34 : 42;
     const px = small ? 14 : 18;
     const base: React.CSSProperties = { height: h, padding: `0 ${px}px`, borderRadius: 10, fontFamily: 'Inter,sans-serif', fontSize: small ? '.82rem' : '.9rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', transition: 'opacity .15s' };
-    if (variant === 'primary') return { ...base, background: T.primary, color: '#fff' };
+    if (variant === 'primary') return { ...base, background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' };
     if (variant === 'outline') return { ...base, background: T.surface, color: T.text2, border: `1px solid ${T.line}` };
     if (variant === 'ghost')   return { ...base, background: 'transparent', color: T.text2 };
     if (variant === 'danger')  return { ...base, background: T.badSoft, color: T.bad, border: `1px solid ${T.badLine}` };
@@ -498,13 +498,13 @@ export function OrdenComprasList() {
     <div style={{ fontFamily: 'Inter,sans-serif', color: T.text }}>
 
       {/* ── Page header ──────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 24 }}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between" style={{ marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: T.text, letterSpacing: '-.02em' }}>Órdenes de Compra</h1>
           <p style={{ margin: '3px 0 0', fontSize: '.9rem', color: T.text3 }}>Crea, envía y recepciona compras a tus proveedores</p>
         </div>
         {canCreateOC && (
-          <button style={btn('primary')} onClick={() => setIsCreateOpen(true)}>
+          <button style={{ ...btn('primary'), display: 'flex', justifyContent: 'center' }} className="w-full sm:w-auto" onClick={() => setIsCreateOpen(true)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
             Nueva OC
           </button>
@@ -522,7 +522,7 @@ export function OrdenComprasList() {
       )}
 
       {/* ── Stats ────────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 14, marginBottom: 24 }}>
+      <div className="kpi-grid" style={{ marginBottom: 24 }}>
         {[
           { label: 'Borradores', value: stats.borrador, sub: 'Aún no enviadas', color: T.text3, icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> },
           { label: 'Enviadas', value: stats.enviada, sub: 'Esperando recepción', color: T.primary, icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.primary} strokeWidth="1.8"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> },

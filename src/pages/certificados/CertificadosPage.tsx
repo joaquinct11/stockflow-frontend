@@ -497,13 +497,13 @@ export function CertificadosPage() {
       <style>{`@keyframes fx-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`}</style>
 
       {/* Header */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
+      <div className="page-header-row" style={{ marginBottom: 20 }}>
         <div style={{ minWidth: 0 }}>
           <h1 style={{ fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-.028em', margin: 0 }}>Certificados</h1>
           <p style={{ fontSize: '.865rem', color: T.text3, margin: '7px 0 0' }}>Control de vigencias de documentos del establecimiento</p>
         </div>
         {canCreate('CERTIFICADOS') && (
-          <button onClick={abrirNuevo} style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', fontFamily: 'Inter,sans-serif', fontSize: '.855rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: `0 6px 16px -8px ${T.primary}` }}>
+          <button onClick={abrirNuevo} className="page-action-btn" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', fontFamily: 'Inter,sans-serif', fontSize: '.855rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: `0 6px 16px -8px ${T.primary}` }}>
             <Ic paths={IC.plus} size={15} /> Nuevo certificado
           </button>
         )}
@@ -528,7 +528,7 @@ export function CertificadosPage() {
       )}
 
       {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, marginBottom: 14 }}>
+      <div className="kpi-grid" style={{ marginBottom: 14 }}>
         {KPIS.map(({ k, label, n, pie, tone, paths }) => {
           const on = seg === k && k !== 'TODOS';
           const hot = tone && n > 0 && k !== 'VIGENTE';
@@ -553,7 +553,7 @@ export function CertificadosPage() {
       {/* Tabla card */}
       <div style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow }}>
         {/* Toolbar */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}` }}>
+        <div className="filter-bar filter-bar--2col" style={{ padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}` }}>
           <div style={{ position: 'relative', flex: '1 1 280px', minWidth: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: T.text3, pointerEvents: 'none' }}>
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />

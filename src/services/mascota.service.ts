@@ -5,6 +5,7 @@ export interface MascotaResumenDTO {
   id: number;
   clienteId: number;
   clienteNombre: string;
+  clienteTelefono?: string | null;
   nombre: string;
   especie: string;
   raza: string | null;
@@ -66,6 +67,7 @@ export interface MascotaPageResponse {
     total: number;
     activas: number;
     inactivas: number;
+    porEspecie?: { perro: number; gato: number; otros: number };
   };
 }
 
@@ -81,10 +83,11 @@ export const mascotaService = {
     size?: number;
     estado?: 'ACTIVAS' | 'INACTIVAS' | 'TODOS';
     search?: string;
+    especie?: string;
   } = {}): Promise<MascotaPageResponse> {
-    const { page = 0, size = 15, estado = 'ACTIVAS', search = '' } = params;
+    const { page = 0, size = 15, estado = 'ACTIVAS', search = '', especie } = params;
     const { data } = await axiosInstance.get<MascotaPageResponse>(API_ENDPOINTS.MASCOTAS.LIST, {
-      params: { page, size, estado, search },
+      params: { page, size, estado, search, ...(especie && especie !== 'TODAS' ? { especie } : {}) },
     });
     return data;
   },
