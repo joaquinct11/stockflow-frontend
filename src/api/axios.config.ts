@@ -15,12 +15,17 @@ export const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     const accessToken = localStorage.getItem('accessToken');
-    if (accessToken) {
+    // Solo añadir Authorization si es un accessToken real (nunca selectionToken ni "null")
+    if (accessToken && accessToken !== 'null' && accessToken !== '') {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
 
+    // X-Sucursal-Id: solo enviar si hay sesión completa (no durante pendingTenantSelection)
+    // Se detecta pending state por la presencia de selectionToken sin accessToken válido
+    const isPendingSelection = !!localStorage.getItem('selectionToken') &&
+      (!accessToken || accessToken === 'null' || accessToken === '');
     const sucursalId = localStorage.getItem('sucursalActualId');
-    if (sucursalId) {
+    if (sucursalId && !isPendingSelection) {
       config.headers['X-Sucursal-Id'] = sucursalId;
     }
 

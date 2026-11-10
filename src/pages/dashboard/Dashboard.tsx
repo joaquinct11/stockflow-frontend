@@ -4,11 +4,14 @@ import { productoService } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
 import { movimientoService } from '../../services/movimiento.service';
 import { dashboardService, type ActividadRecienteDTO } from '../../services/dashboard.service';
+import { mascotaService, type MascotaStatsDTO } from '../../services/mascota.service';
+import { clienteService, type ClienteStatsDTO } from '../../services/cliente.service';
 import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
-import { Package, ShoppingCart, AlertCircle, Clock, RefreshCw, Calendar, CreditCard, Zap, ClipboardList, BarChart2, Wallet, FileText, Award, Users, ArrowRightLeft, PlusSquare } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, Clock, RefreshCw, Calendar, CreditCard, Zap, ClipboardList, BarChart2, FileText, Award, Users, ArrowRightLeft, PlusSquare, Wrench, MonitorCog } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { gastoService } from '../../services/gasto.service';
 import { comisionService } from '../../services/comision.service';
+import { ordenTrabajoService, type OtPageResumenDTO } from '../../services/ordenTrabajo.service';
 import { Button } from '../../components/ui/Button';
 import { notify } from '../../lib/notify';
 import { useAuthStore } from '../../store/authStore';
@@ -17,12 +20,13 @@ import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useSucursalStore } from '../../store/sucursalStore';
 import { useOseConfigured } from '../../hooks/useOseConfigured';
 import { OseBanner } from '../../components/shared/OseBanner';
+import { usePermissions } from '../../hooks/usePermissions';
 
-type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO' | 'TECNICO_SERVICIO';
 type TimeFilter = 'HOY' | 'SEMANA' | 'MES' | 'ANUAL';
 
 function safeRol(rol?: string): Role {
-  if (rol === 'ADMIN' || rol === 'VENDEDOR' || rol === 'GESTOR_INVENTARIO') return rol;
+  if (rol === 'ADMIN' || rol === 'GERENTE' || rol === 'VENDEDOR' || rol === 'GESTOR_INVENTARIO' || rol === 'TECNICO_SERVICIO') return rol;
   return 'VENDEDOR';
 }
 
@@ -68,18 +72,18 @@ function getRangeStart(filter: TimeFilter, now = new Date()) {
 }
 
 function getVentaDate(v: VentaDTO): Date | null {
-  const anyV = v as any;
+  const anyV = v as unknown as Record<string, unknown>;
   const raw =
-    anyV?.createdAt ??
-    anyV?.fecha ??
-    anyV?.fechaVenta ??
-    anyV?.fechaCreacion ??
-    anyV?.created_at ??
+    anyV?.['createdAt'] ??
+    anyV?.['fecha'] ??
+    anyV?.['fechaVenta'] ??
+    anyV?.['fechaCreacion'] ??
+    anyV?.['created_at'] ??
     null;
 
   if (!raw) return null;
 
-  const d = raw instanceof Date ? raw : new Date(raw);
+  const d = raw instanceof Date ? raw : new Date(raw as string | number);
   if (Number.isNaN(d.getTime())) return null;
   return d;
 }
@@ -189,11 +193,31 @@ export function Dashboard() {
   const { user, suscripcionEstado } = useAuthStore();
   const { userId } = useCurrentUser();
   const navigate = useNavigate();
-  const rol = safeRol(user?.rol);
-  const { config: negocioConfig } = useTenantConfigStore();
-  const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
+  const rawRol = user?.rol ?? '';
+  const rol = safeRol(rawRol);
+  const { puede } = usePermissions();
+
+  // Permission flags — derived from JWT permisos, not hardcoded by role
+  const puedeVerVentas     = puede('VER_VENTAS');
+  const puedeVerMisVentas  = puede('VER_MIS_VENTAS');
+  const puedeVerInventario = puede('VER_INVENTARIO');
+  const puedeVerGastos     = puede('VER_GASTOS');
+  const puedeVerProductos  = puede('VER_PRODUCTOS');
+  const puedeVerMascotas   = puede('VER_MASCOTAS');
+  const puedeVerCitas      = puede('VER_CITAS');
+  const puedeVerClientes   = puede('VER_CLIENTES');
+  const esRolVeterinaria   = rawRol === 'VETERINARIO' || rawRol === 'RECEPCIONISTA' || rawRol === 'AUXILIAR_VETERINARIO' || rawRol === 'GROOMER';
+  const isTecnicoServicio  = rawRol === 'TECNICO_SERVICIO';
+  const puedeVerOT         = puede('VER_OT');
+
+  const { config: negocioConfig, rubro: tenantRubroActual } = useTenantConfigStore();
+  // tenantRubroActual se fija inmediatamente al seleccionar tenant (antes de que llegue el GET /tenant/config).
+  // Usarlo como fuente primaria evita que un config stale en localStorage dispare llamadas
+  // a módulos de otro rubro (p. ej. vet stats para TIENDA_ROPA) durante el primer render.
+  const rubroActual         = tenantRubroActual ?? negocioConfig?.rubro ?? null;
+  const esServicios         = rubroActual === 'EMPRESA_SERVICIOS';
+  const esTenantVeterinaria = rubroActual === 'VETERINARIA';
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
   const oseConfigured = useOseConfigured();
 
   const [loading, setLoading] = useState(true);
@@ -201,12 +225,18 @@ export function Dashboard() {
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
   const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [canLoadVentas, setCanLoadVentas] = useState<boolean>(false);
+  const [productosError, setProductosError] = useState(false);
+  const [mascotaStats, setMascotaStats] = useState<MascotaStatsDTO | null>(null);
+  const [clienteStats, setClienteStats] = useState<ClienteStatsDTO | null>(null);
+  const [mascotaStatsError, setMascotaStatsError] = useState(false);
+  const [clienteStatsError, setClienteStatsError] = useState(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('MES');
   const isInitialLoad = useRef(true);
   const [totalComisionesMes, setTotalComisionesMes] = useState<number>(0);
   const [totalGastosPeriodo, setTotalGastosPeriodo] = useState<number>(0);
   const [actividad, setActividad] = useState<ActividadRecienteDTO[]>([]);
   const [actividadLoading, setActividadLoading] = useState(false);
+  const [otResumen, setOtResumen] = useState<OtPageResumenDTO | null>(null);
 
   // Estado de suscripción
   const [suscripcion] = useState<SuscripcionDTO | null>(user?.suscripcion ?? null);
@@ -240,7 +270,7 @@ export function Dashboard() {
 
 
   // Fecha de corte para cancelación pendiente
-  const currentPeriodEndRaw = (suscripcion as any)?.currentPeriodEnd as string | undefined;
+  const currentPeriodEndRaw = suscripcion?.currentPeriodEnd;
   const fechaCorte = currentPeriodEndRaw
     ? new Date(currentPeriodEndRaw).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })
     : null;
@@ -257,7 +287,7 @@ export function Dashboard() {
     isInitialLoad.current = true;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sucursalLoaded, rol, userId, sucursalActual?.id]);
+  }, [sucursalLoaded, rawRol, userId, sucursalActual?.id, esTenantVeterinaria]);
 
   // Re-fetcha solo ventas cuando cambia el tab (no en el mount inicial)
   useEffect(() => {
@@ -266,8 +296,8 @@ export function Dashboard() {
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().slice(0, 19);
     const rangeStart = getRangeStart(timeFilter, now);
-    const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
-    const promise = rol === 'ADMIN'
+    const sucId = sucursalActual ? sucursalActual.id : undefined;
+    const promise = puedeVerVentas
       ? ventaService.getByPeriod(fmt(rangeStart), fmt(now), sucId)
       : (userId ? ventaService.getByVendorAndPeriod(userId, fmt(rangeStart), fmt(now), sucId) : Promise.resolve([] as VentaDTO[]));
     promise
@@ -276,28 +306,28 @@ export function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeFilter]);
 
-  // Gastos del período — solo ADMIN
+  // Gastos del período — solo ADMIN con permiso VER_GASTOS
   useEffect(() => {
-    if (rol !== 'ADMIN') return;
+    if (rawRol !== 'ADMIN' || !puedeVerGastos) return;
     const now = new Date();
     const inicio = getRangeStart(timeFilter, now);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const sid = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+    const sid = sucursalActual ? sucursalActual.id : undefined;
     gastoService.getTotal(fmt(inicio), fmt(now), sid)
       .then((t) => setTotalGastosPeriodo(Number(t)))
       .catch(() => setTotalGastosPeriodo(0));
-  }, [timeFilter, rol, sucursalActual?.id]);
+  }, [timeFilter, rawRol, sucursalActual?.id]);
 
-  // Actividad reciente — carga lazy después del render principal (no bloquea KPIs)
+  // Actividad reciente — solo ADMIN (endpoint requiere acceso administrativo)
   useEffect(() => {
-    if (!sucursalLoaded) return;
+    if (!sucursalLoaded || rawRol !== 'ADMIN') return;
     setActividadLoading(true);
-    const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+    const sucId = sucursalActual ? sucursalActual.id : undefined;
     dashboardService.getActividadReciente(15, sucId)
       .then(setActividad)
       .catch(() => setActividad([]))
       .finally(() => setActividadLoading(false));
-  }, [sucursalLoaded, sucursalActual?.id]);
+  }, [sucursalLoaded, sucursalActual?.id, rawRol]);
 
   // Comisiones del mes — solo para dealer
   useEffect(() => {
@@ -313,24 +343,40 @@ export function Dashboard() {
       .catch(() => setTotalComisionesMes(0));
   }, [esServicios, rol]);
 
+  // OT resumen — para ADMIN de EMPRESA_SERVICIOS y para TECNICO_SERVICIO
+  useEffect(() => {
+    if (!esServicios || !puedeVerOT) return;
+    ordenTrabajoService.listar({ page: 0, size: 1 })
+      .then((res) => setOtResumen(res.resumen))
+      .catch(() => setOtResumen(null));
+  }, [esServicios, puedeVerOT]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
+      setProductosError(false);
+      setMascotaStatsError(false);
+      setClienteStatsError(false);
 
-      // ✅ Productos siempre (con stock por sucursal si es multi-local)
-      const productosPromise = productoService.getAll(isMultiLocal && sucursalActual ? sucursalActual.id : undefined);
+      let _productosError = false;
+      let _ventasCanLoad = false;
+      let _mascotaStatsError = false;
+      let _clienteStatsError = false;
+
+      // Productos: solo si tiene VER_PRODUCTOS
+      const productosPromise = puedeVerProductos
+        ? productoService.getAll(sucursalActual ? sucursalActual.id : undefined)
+            .catch(() => { _productosError = true; return [] as ProductoDTO[]; })
+        : Promise.resolve([] as ProductoDTO[]);
 
       const now = new Date();
       const fmt = (d: Date) => d.toISOString().slice(0, 19);
 
-      // Movimientos: 30 días de actividad + endpoint dedicado para próximos a vencer
+      // Movimientos: recientes solo con VER_INVENTARIO; próximos a vencer también para VENDEDOR (VER_PRODUCTOS)
       let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
       let proximosVencerPromise: Promise<MovimientoInventarioDTO[]>;
-      if (rol === 'VENDEDOR') {
-        movimientosPromise = Promise.resolve([]);
-        proximosVencerPromise = movimientoService.getProximosAVencer(90).catch(() => []);
-      } else {
-        const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+      if (puedeVerInventario) {
+        const sucId = sucursalActual ? sucursalActual.id : undefined;
         movimientosPromise = movimientoService
           .getRecientes(30, sucId)
           .catch((err) => {
@@ -338,44 +384,63 @@ export function Dashboard() {
             return [];
           });
         proximosVencerPromise = movimientoService.getProximosAVencer(90).catch(() => []);
+      } else {
+        movimientosPromise = Promise.resolve([]);
+        proximosVencerPromise = Promise.resolve([]);
       }
 
-      // Ventas: carga según el tab activo (timeFilter)
+      // Ventas: según permisos efectivos del usuario
       const rangeStart = getRangeStart(timeFilter, now);
       let ventasPromise: Promise<VentaDTO[]>;
-      const sucId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
-      if (rol === 'ADMIN') {
-        setCanLoadVentas(true);
-        ventasPromise = ventaService.getByPeriod(fmt(rangeStart), fmt(now), sucId);
-      } else if (rol === 'VENDEDOR' && userId) {
-        setCanLoadVentas(true);
-        ventasPromise = ventaService.getByVendorAndPeriod(userId, fmt(rangeStart), fmt(now), sucId);
+      const sucId = sucursalActual ? sucursalActual.id : undefined;
+      if (puedeVerVentas) {
+        _ventasCanLoad = true;
+        ventasPromise = ventaService.getByPeriod(fmt(rangeStart), fmt(now), sucId)
+          .catch(() => { _ventasCanLoad = false; return [] as VentaDTO[]; });
+      } else if (puedeVerMisVentas && userId) {
+        _ventasCanLoad = true;
+        ventasPromise = ventaService.getByVendorAndPeriod(userId, fmt(rangeStart), fmt(now), sucId)
+          .catch(() => { _ventasCanLoad = false; return [] as VentaDTO[]; });
       } else {
-        setCanLoadVentas(rol === 'VENDEDOR');
-        ventasPromise = Promise.resolve([]);
+        ventasPromise = Promise.resolve([] as VentaDTO[]);
       }
 
-      const [productosData, ventasData, movimientosData, proximosVencerData] = await Promise.all([
+      // Stats veterinarias: solo cuando el TENANT es rubro VETERINARIA
+      // (no basta con rol vet — el backend protege con requireRubro y el front no debe generar 403 innecesarios)
+      const needsVetStats = esTenantVeterinaria;
+      const mascotaStatsPromise = (needsVetStats && puedeVerMascotas)
+        ? mascotaService.getStats()
+            .catch(() => { _mascotaStatsError = true; return null as MascotaStatsDTO | null; })
+        : Promise.resolve(null as MascotaStatsDTO | null);
+
+      const clienteStatsPromise = (needsVetStats && puedeVerClientes)
+        ? clienteService.getStats()
+            .catch(() => { _clienteStatsError = true; return null as ClienteStatsDTO | null; })
+        : Promise.resolve(null as ClienteStatsDTO | null);
+
+      const [productosData, ventasData, movimientosData, proximosVencerData, mascotaStatsData, clienteStatsData] = await Promise.all([
         productosPromise,
         ventasPromise,
         movimientosPromise,
         proximosVencerPromise,
+        mascotaStatsPromise,
+        clienteStatsPromise,
       ]);
 
       setProductos(productosData);
       setVentas(ventasData);
+      setProductosError(_productosError);
+      setCanLoadVentas(_ventasCanLoad);
+      setMascotaStats(mascotaStatsData);
+      setClienteStats(clienteStatsData);
+      setMascotaStatsError(_mascotaStatsError);
+      setClienteStatsError(_clienteStatsError);
       // Combina movimientos recientes + próximos a vencer (sin duplicados por id)
       const movimientosIds = new Set((movimientosData ?? []).map(m => m.id));
       const extra = (proximosVencerData ?? []).filter(m => !movimientosIds.has(m.id));
       setMovimientos([...(movimientosData ?? []), ...extra]);
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
-        setVentas([]);
-        setCanLoadVentas(false);
-        notify.error('Sin acceso a ventas', { detail: 'Tu rol no tiene permiso para ver el historial de ventas.' });
-      } else {
-        notify.fromError(error, 'No se pudieron cargar los datos del dashboard. Intenta recargar la página.');
-      }
+    } catch (error) {
+      notify.fromError(error, 'No se pudieron cargar los datos del dashboard. Intenta recargar la página.');
       if (import.meta.env.DEV) { console.error('❌ Error en fetchData:', error);}
     } finally {
       setLoading(false);
@@ -521,7 +586,7 @@ export function Dashboard() {
 
   if (loading) return <LoadingSpinner />;
 
-  const showVentasCards = canLoadVentas && (rol === 'ADMIN' || rol === 'VENDEDOR');
+  const showVentasCards = canLoadVentas;
 
   return (
     <div className="relative space-y-6">
@@ -676,94 +741,152 @@ export function Dashboard() {
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
           <Zap size={12} /> Acceso rápido
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
 
           {esServicios ? (
-            /* ── Acciones para EMPRESA_SERVICIOS / Dealer ── */
-            <>
-              <button
-                onClick={() => navigate('/dashboard/ventas')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
-                  <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Registrar Servicio</p>
-                  <p className="text-xs text-muted-foreground mt-1">Nueva prestación</p>
-                </div>
-              </button>
+            /* ── Acciones para EMPRESA_SERVICIOS ── */
+            isTecnicoServicio ? (
+              /* Técnico: accesos operativos de OT */
+              <>
+                <button
+                  onClick={() => navigate('/dashboard/ordenes-trabajo')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                    <Wrench size={18} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Órdenes de Trabajo</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ver listado</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/dashboard/comisiones')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
-                  <Award size={18} className="text-amber-600 dark:text-amber-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Comisiones</p>
-                  <p className="text-xs text-muted-foreground mt-1">Ingresos de Bitel</p>
-                </div>
-              </button>
+                <button
+                  onClick={() => navigate('/dashboard/equipos')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-teal-500/20 transition-colors">
+                    <MonitorCog size={18} className="text-teal-600 dark:text-teal-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Equipos</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ver equipos</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/dashboard/facturacion')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
-                  <FileText size={18} className="text-blue-600 dark:text-blue-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Facturación</p>
-                  <p className="text-xs text-muted-foreground mt-1">Boletas y facturas</p>
-                </div>
-              </button>
+                <button
+                  onClick={() => navigate('/dashboard/clientes')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                    <Users size={18} className="text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Clientes</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ver / buscar</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/dashboard/caja')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-teal-500/20 transition-colors">
-                  <Wallet size={18} className="text-teal-600 dark:text-teal-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Cuadre de Caja</p>
-                  <p className="text-xs text-muted-foreground mt-1">Apertura / cierre</p>
-                </div>
-              </button>
+                <button
+                  onClick={() => navigate('/dashboard/productos')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                    <Package size={18} className="text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Catálogo</p>
+                    <p className="text-xs text-muted-foreground mt-1">Repuestos / servicios</p>
+                  </div>
+                </button>
+              </>
+            ) : (
+              /* Admin / Gerente servicios: accesos orientados a OT */
+              <>
+                <button
+                  onClick={() => navigate('/dashboard/ordenes-trabajo', { state: { openDialog: true } })}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                    <Wrench size={18} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Nueva OT</p>
+                    <p className="text-xs text-muted-foreground mt-1">Crear orden de trabajo</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/pos')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
-                  <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Venta en POS</p>
-                  <p className="text-xs text-muted-foreground mt-1">Punto de venta</p>
-                </div>
-              </button>
+                <button
+                  onClick={() => navigate('/dashboard/equipos')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-teal-500/20 transition-colors">
+                    <MonitorCog size={18} className="text-teal-600 dark:text-teal-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Equipos</p>
+                    <p className="text-xs text-muted-foreground mt-1">Registrar equipo</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => navigate('/dashboard/reportes')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
-              >
-                <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
-                  <BarChart2 size={18} className="text-violet-600 dark:text-violet-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-none">Reportes</p>
-                  <p className="text-xs text-muted-foreground mt-1">Ver análisis</p>
-                </div>
-              </button>
-            </>
+                <button
+                  onClick={() => navigate('/dashboard/clientes')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                    <Users size={18} className="text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Clientes</p>
+                    <p className="text-xs text-muted-foreground mt-1">Registrar / buscar</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => navigate('/dashboard/facturacion')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                    <FileText size={18} className="text-green-600 dark:text-green-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Facturación</p>
+                    <p className="text-xs text-muted-foreground mt-1">Boletas y facturas</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => navigate('/dashboard/comisiones')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                    <Award size={18} className="text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Comisiones</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ingresos del período</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => navigate('/dashboard/reportes')}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                    <BarChart2 size={18} className="text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-none">Reportes</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ver análisis</p>
+                  </div>
+                </button>
+              </>
+            )
           ) : (
             /* ── Acciones para rubros con inventario ── */
             <>
               {/* ADMIN */}
-              {rol === 'ADMIN' && (
+              {rawRol === 'ADMIN' && (
                 <>
                   <button
                     onClick={() => navigate('/pos')}
@@ -819,8 +942,65 @@ export function Dashboard() {
                 </>
               )}
 
+              {/* GERENTE */}
+              {rawRol === 'GERENTE' && (
+                <>
+                  <button
+                    onClick={() => navigate('/pos')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                      <ShoppingCart size={18} className="text-green-600 dark:text-green-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Nueva Venta</p>
+                      <p className="text-xs text-muted-foreground mt-1">Abrir POS</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/ventas')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                      <FileText size={18} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Ventas</p>
+                      <p className="text-xs text-muted-foreground mt-1">Ver historial</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/inventario')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                      <ClipboardList size={18} className="text-violet-600 dark:text-violet-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Movimientos</p>
+                      <p className="text-xs text-muted-foreground mt-1">Historial stock</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/clientes')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                      <Users size={18} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Clientes</p>
+                      <p className="text-xs text-muted-foreground mt-1">Ver / buscar</p>
+                    </div>
+                  </button>
+                </>
+              )}
+
               {/* VENDEDOR */}
-              {rol === 'VENDEDOR' && (
+              {rawRol === 'VENDEDOR' && (
                 <>
                   <button
                     onClick={() => navigate('/pos')}
@@ -877,7 +1057,7 @@ export function Dashboard() {
               )}
 
               {/* GESTOR_INVENTARIO */}
-              {rol === 'GESTOR_INVENTARIO' && (
+              {rawRol === 'GESTOR_INVENTARIO' && (
                 <>
                   <button
                     onClick={() => navigate('/dashboard/inventario', { state: { openDialog: true } })}
@@ -919,41 +1099,192 @@ export function Dashboard() {
                   </button>
                 </>
               )}
+
+              {/* Roles veterinarios */}
+              {esRolVeterinaria && (
+                <>
+                  <button
+                    onClick={() => navigate('/dashboard/mascotas')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-teal-500/20 transition-colors">
+                      <Package size={18} className="text-teal-600 dark:text-teal-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Mascotas</p>
+                      <p className="text-xs text-muted-foreground mt-1">Ver / gestionar</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/dashboard/clientes')}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                      <Users size={18} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-none">Clientes</p>
+                      <p className="text-xs text-muted-foreground mt-1">Dueños / pacientes</p>
+                    </div>
+                  </button>
+
+                  {puedeVerCitas && (
+                    <button
+                      onClick={() => navigate('/dashboard/citas')}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                    >
+                      <div className="h-9 w-9 rounded-lg bg-sky-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-500/20 transition-colors">
+                        <Calendar size={18} className="text-sky-600 dark:text-sky-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold leading-none">Citas</p>
+                        <p className="text-xs text-muted-foreground mt-1">Agenda veterinaria</p>
+                      </div>
+                    </button>
+                  )}
+
+                  {puedeVerProductos && (
+                    <button
+                      onClick={() => navigate('/dashboard/productos')}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border hover:bg-accent hover:border-primary/30 transition-all text-left group shadow-sm"
+                    >
+                      <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                        <Package size={18} className="text-violet-600 dark:text-violet-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold leading-none">Productos</p>
+                        <p className="text-xs text-muted-foreground mt-1">Insumos / medicamentos</p>
+                      </div>
+                    </button>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>
       </div>
 
       {/* Stats Grid — 4 KPI cards */}
-      <div className="grid gap-[14px] grid-cols-2 lg:grid-cols-4 animate-fade-in-up-delay-1">
+      <div className="kpi-grid gap-[14px] animate-fade-in-up-delay-1">
 
         {esServicios ? (
-          /* ── Cards para dealer ── */
+          /* ── Cards para EMPRESA_SERVICIOS ── */
+          isTecnicoServicio ? (
+            /* Técnico: indicadores de sus OT asignadas */
+            <>
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">Mis OT Abiertas</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.abiertas ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">Mis pendientes</p>
+              </div>
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">Mis OT En Proceso</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.enProceso ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">En proceso</p>
+              </div>
+              <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">Mis OT Total</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.total ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">Total</p>
+              </div>
+            </>
+          ) : (
+            /* Admin servicios: OT stats + comisiones */
+            <>
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">OT Abiertas</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.abiertas ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">{otResumen?.enProceso ?? 0} en proceso</p>
+              </div>
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <span className="text-[.78rem] font-semibold text-muted-foreground">OT Cerradas</span>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{otResumen?.cerradas ?? '—'}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">de {otResumen?.total ?? 0} en total</p>
+              </div>
+              <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[.78rem] font-semibold text-muted-foreground">Comisiones del Mes</span>
+                </div>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">S/ {totalComisionesMes.toFixed(2)}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">Recibido del período</p>
+              </div>
+            </>
+          )
+        ) : esRolVeterinaria ? (
+          /* ── KPI cards para roles veterinarios ── */
           <>
-            <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[.78rem] font-semibold text-muted-foreground">Unidades Vendidas</span>
-              </div>
-              <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{stats.unidadesVendidas}</div>
-              <p className="text-[.78rem] text-muted-foreground mt-3">+{stats.unidadesHoy} hoy</p>
-            </div>
+            {puedeVerMascotas && !mascotaStatsError && mascotaStats && (
+              <>
+                <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[.78rem] font-semibold text-muted-foreground">Mascotas activas</span>
+                    <span className="inline-flex items-center text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                      En atención
+                    </span>
+                  </div>
+                  <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{mascotaStats.activas}</div>
+                  <p className="text-[.78rem] text-muted-foreground mt-3">de {mascotaStats.total} registradas</p>
+                </div>
 
-            <div className="col-span-2 lg:col-span-2 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[.78rem] font-semibold text-muted-foreground">Comisiones del Mes</span>
+                <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[.78rem] font-semibold text-muted-foreground">Total mascotas</span>
+                  </div>
+                  <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{mascotaStats.total}</div>
+                  <p className="text-[.78rem] text-muted-foreground mt-3">{mascotaStats.inactivas} inactivas</p>
+                </div>
+              </>
+            )}
+
+            {puedeVerClientes && !clienteStatsError && clienteStats && (
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[.78rem] font-semibold text-muted-foreground">Clientes registrados</span>
+                </div>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{clienteStats.total}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">{clienteStats.activos} activos</p>
               </div>
-              <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">S/ {totalComisionesMes.toFixed(2)}</div>
-              <p className="text-[.78rem] text-muted-foreground mt-3">Recibido de operadoras</p>
-            </div>
+            )}
+
+            {(puedeVerProductos || puedeVerInventario) && !productosError && (
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[.78rem] font-semibold text-muted-foreground">Bajo stock</span>
+                  {stats.bajoStockCount > 0 ? (
+                    <span className="inline-flex items-center text-[.72rem] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                      Requiere acción
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                      Todo en orden
+                    </span>
+                  )}
+                </div>
+                <div className={`text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums ${stats.bajoStockCount > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                  {stats.bajoStockCount}
+                </div>
+                <p className="text-[.78rem] text-muted-foreground mt-3 leading-relaxed">
+                  {stats.bajoStockCount === 0
+                    ? 'Sin alertas de stock'
+                    : `${stats.bajoStockItems.filter(p => p.stockActual === 0).length} sin stock · ${stats.bajoStockItems.filter(p => p.stockActual > 0).length} por debajo del mínimo`}
+                </p>
+              </div>
+            )}
           </>
         ) : (
           /* ── 4 KPI cards para inventario ── */
           <>
+            {/* Cards 1 y 2: Ingresos y Ventas — solo para usuarios con VER_VENTAS o VER_MIS_VENTAS */}
+            {(puedeVerVentas || puedeVerMisVentas) && (
+              <>
             {/* Card 1: Ingresos */}
             <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[.78rem] font-semibold text-muted-foreground">
-                  {timeFilter === 'HOY' ? 'Ingresos hoy' : timeFilter === 'SEMANA' ? 'Ingresos semana' : timeFilter === 'MES' ? 'Ingresos mes' : 'Ingresos año'}
+                  {puedeVerVentas
+                    ? (timeFilter === 'HOY' ? 'Ingresos hoy' : timeFilter === 'SEMANA' ? 'Ingresos semana' : timeFilter === 'MES' ? 'Ingresos mes' : 'Ingresos año')
+                    : (timeFilter === 'HOY' ? 'Mis ingresos hoy' : timeFilter === 'SEMANA' ? 'Mis ingresos semana' : timeFilter === 'MES' ? 'Mis ingresos mes' : 'Mis ingresos año')}
                 </span>
                 {showVentasCards && stats.ingresoFiltrado > 0 && (
                   <span className="inline-flex items-center gap-[3px] text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
@@ -980,7 +1311,7 @@ export function Dashboard() {
             <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[.78rem] font-semibold text-muted-foreground">
-                  {rol === 'VENDEDOR' ? 'Tus ventas' : timeFilter === 'HOY' ? 'Ventas hoy' : timeFilter === 'SEMANA' ? 'Ventas semana' : timeFilter === 'MES' ? 'Ventas mes' : 'Ventas año'}
+                  {rawRol === 'VENDEDOR' ? 'Tus ventas' : timeFilter === 'HOY' ? 'Ventas hoy' : timeFilter === 'SEMANA' ? 'Ventas semana' : timeFilter === 'MES' ? 'Ventas mes' : 'Ventas año'}
                 </span>
                 {stats.ventasHoy > 0 && (
                   <span className="inline-flex items-center gap-[3px] text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
@@ -998,39 +1329,43 @@ export function Dashboard() {
                 </strong>
               </p>
             </div>
+              </>
+            )}
 
-            {/* Card 3: Bajo stock */}
-            <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[.78rem] font-semibold text-muted-foreground">Bajo stock</span>
-                {stats.bajoStockCount > 0 ? (
-                  <span className="inline-flex items-center text-[.72rem] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
-                    Requiere acción
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
-                    Todo en orden
-                  </span>
-                )}
+            {/* Card 3: Bajo stock — requiere VER_PRODUCTOS o VER_INVENTARIO */}
+            {(puedeVerProductos || puedeVerInventario) && !productosError && (
+              <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[.78rem] font-semibold text-muted-foreground">Bajo stock</span>
+                  {stats.bajoStockCount > 0 ? (
+                    <span className="inline-flex items-center text-[.72rem] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                      Requiere acción
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                      Todo en orden
+                    </span>
+                  )}
+                </div>
+                <div className={`text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums ${stats.bajoStockCount > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                  {stats.bajoStockCount}
+                </div>
+                <p className="text-[.78rem] text-muted-foreground mt-3 leading-relaxed">
+                  {stats.bajoStockCount === 0
+                    ? 'Sin alertas de stock'
+                    : `${stats.bajoStockItems.filter(p => p.stockActual === 0).length} sin stock · ${stats.bajoStockItems.filter(p => p.stockActual > 0).length} por debajo del mínimo`}
+                </p>
               </div>
-              <div className={`text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums ${stats.bajoStockCount > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
-                {stats.bajoStockCount}
-              </div>
-              <p className="text-[.78rem] text-muted-foreground mt-3 leading-relaxed">
-                {stats.bajoStockCount === 0
-                  ? 'Sin alertas de stock'
-                  : `${stats.bajoStockItems.filter(p => p.stockActual === 0).length} sin stock · ${stats.bajoStockItems.filter(p => p.stockActual > 0).length} por debajo del mínimo`}
-              </p>
-            </div>
+            )}
 
             {/* Card 4: Utilidad / Productos */}
-            {rol === 'ADMIN' ? (
+            {rawRol === 'ADMIN' ? (
               <UtilidadCard
                 ingresos={stats.ingresoFiltrado}
                 cogs={stats.cogsTotal}
                 gastos={totalGastosPeriodo}
               />
-            ) : (
+            ) : puedeVerProductos && !productosError ? (
               <div className="p-[18px] bg-card border border-border rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[.78rem] font-semibold text-muted-foreground">Productos</span>
@@ -1038,17 +1373,51 @@ export function Dashboard() {
                 <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{stats.totalProductos}</div>
                 <p className="text-[.78rem] text-muted-foreground mt-3">En inventario activo</p>
               </div>
+            ) : null}
+
+            {/* Fila adicional de métricas veterinarias para ADMIN/GERENTE en tenant VETERINARIA */}
+            {esTenantVeterinaria && puedeVerMascotas && !mascotaStatsError && mascotaStats && (
+              <>
+                <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[.78rem] font-semibold text-muted-foreground">Mascotas activas</span>
+                    <span className="inline-flex items-center text-[.72rem] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-[7px] py-[2px] flex-shrink-0">
+                      En atención
+                    </span>
+                  </div>
+                  <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{mascotaStats.activas}</div>
+                  <p className="text-[.78rem] text-muted-foreground mt-3">de {mascotaStats.total} registradas</p>
+                </div>
+
+                <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[.78rem] font-semibold text-muted-foreground">Total mascotas</span>
+                  </div>
+                  <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{mascotaStats.total}</div>
+                  <p className="text-[.78rem] text-muted-foreground mt-3">{mascotaStats.inactivas} inactivas</p>
+                </div>
+              </>
+            )}
+
+            {esTenantVeterinaria && puedeVerClientes && !clienteStatsError && clienteStats && (
+              <div className="col-span-2 lg:col-span-1 p-[18px] bg-card border border-border rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[.78rem] font-semibold text-muted-foreground">Clientes registrados</span>
+                </div>
+                <div className="text-[1.9rem] font-bold tracking-[-0.035em] mt-3 tabular-nums">{clienteStats.total}</div>
+                <p className="text-[.78rem] text-muted-foreground mt-3">{clienteStats.activos} activos</p>
+              </div>
             )}
           </>
         )}
       </div>
 
       {/* Sección inferior — bajo stock · por vencer · actividad (2 columnas mockup) */}
-      {!esServicios && (stats.bajoStockItems.length > 0 || stats.productosProximosAVencer.length > 0 || rol === 'ADMIN') && (
+      {(((puedeVerProductos || puedeVerInventario) && stats.bajoStockItems.length > 0) || stats.productosProximosAVencer.length > 0 || rawRol === 'ADMIN') && (
         <div className="grid gap-[14px] grid-cols-1 lg:grid-cols-[1.25fr_1fr] items-start animate-fade-in-up-delay-2">
 
           {/* Columna izquierda: Necesitan reposición */}
-          {stats.bajoStockItems.length > 0 ? (
+          {(puedeVerProductos || puedeVerInventario) && stats.bajoStockItems.length > 0 ? (
             <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
               <div className="flex items-center justify-between gap-3 px-[18px] py-[15px] border-b border-border/60">
                 <div className="flex items-center gap-[9px]">
@@ -1059,7 +1428,7 @@ export function Dashboard() {
                   </span>
                 </div>
                 <button
-                  onClick={() => navigate('/dashboard/productos?filtro=bajo-stock')}
+                  onClick={() => navigate(esServicios ? '/dashboard/productos?tipo=PRODUCTO' : '/dashboard/productos?filtro=bajo-stock')}
                   className="text-[.8rem] font-semibold text-primary hover:underline"
                 >
                   Ver todos
@@ -1079,10 +1448,10 @@ export function Dashboard() {
                       <p className="text-[.72rem] text-muted-foreground mt-[3px]">mín. {producto.stockMinimo}</p>
                     </div>
                     <button
-                      onClick={() => navigate('/dashboard/compras/ordenes')}
+                      onClick={() => navigate(esServicios ? '/dashboard/inventario' : '/dashboard/compras/ordenes')}
                       className="flex-shrink-0 text-[.78rem] font-semibold text-primary border border-primary/30 bg-primary/8 hover:bg-primary/15 rounded-lg px-[11px] py-[6px] transition-colors"
                     >
-                      Pedir
+                      {esServicios ? 'Stock' : 'Pedir'}
                     </button>
                   </div>
                 ))}
@@ -1140,7 +1509,7 @@ export function Dashboard() {
             )}
 
             {/* Actividad reciente (ADMIN) */}
-            {rol === 'ADMIN' && (
+            {rawRol === 'ADMIN' && (
               <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between gap-3 px-[18px] py-[15px] border-b border-border/60">
                   <span className="text-[.92rem] font-[650]">Actividad reciente</span>
@@ -1185,47 +1554,6 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Actividad reciente standalone — cuando no hay bajo stock ni vencimientos */}
-      {rol === 'ADMIN' && esServicios && (
-        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden animate-fade-in-up-delay-2">
-          <div className="flex items-center justify-between gap-3 px-[18px] py-[15px] border-b border-border/60">
-            <span className="text-[.92rem] font-[650]">Actividad reciente</span>
-          </div>
-          <div className="overflow-y-auto overflow-x-hidden max-h-[300px] px-[18px] pb-[14px]" style={{ overscrollBehavior: 'contain' }}>
-            {actividadLoading ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-                <RefreshCw size={13} className="mr-2 animate-spin" />
-                Cargando...
-              </div>
-            ) : actividad.length === 0 ? (
-              <p className="text-[.845rem] text-muted-foreground text-center py-6">Sin actividad reciente</p>
-            ) : (
-              actividad.map((item, i) => {
-                const { bg, text, letter } = tipoActividadStyle(item.tipo);
-                const fecha = new Date(item.fechaHora);
-                return (
-                  <div key={i} className={`flex gap-3 py-[10px] ${i > 0 ? 'border-t border-border/50' : ''}`}>
-                    <span className={`w-[28px] h-[28px] flex-shrink-0 rounded-lg flex items-center justify-center text-[.68rem] font-bold ${bg} ${text}`}>
-                      {letter}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[.845rem] leading-[1.45]">
-                        {item.descripcion}
-                        {item.detalle && (
-                          <span className="text-muted-foreground"> · {item.detalle}</span>
-                        )}
-                      </p>
-                      <p className="font-mono text-[.71rem] text-muted-foreground mt-[3px]">
-                        {formatRelativo(fecha)}{item.usuarioNombre ? ` · ${item.usuarioNombre}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

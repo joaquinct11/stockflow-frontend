@@ -9,6 +9,8 @@ export interface Usuario {
   apellido?: string;
   contraseña?: string;
   rolNombre: string;
+  /** Alias de rolNombre que algunas respuestas del backend incluyen */
+  rol?: string;
   activo?: boolean;
   tenantId: string;
   ultimoLogin?: string;
@@ -19,21 +21,46 @@ export interface Usuario {
   sucursalId?: number | null;
 }
 
+/** Forma de error que devuelve el backend en los bloques catch */
+export type ApiError = {
+  response?: {
+    data?: { mensaje?: string; message?: string; mensajes?: Record<string, string> };
+    status?: number;
+  };
+  message?: string;
+};
+
+/** Tenant disponible para selección en flujo multi-tenant (Case B). */
+export interface TenantInfo {
+  tenantId: string;
+  nombre: string;
+  rubro: string;
+  logoUrl?: string | null;
+  rol: string;
+}
+
 export interface JwtResponse {
-  // id?: number;
-  accessToken: string;      // ✅ Token corto (15 min)
-  refreshToken: string;     // ✅ Token largo (7 días)
+  // Campos presentes en AMBOS casos
   tipo: string;
   usuarioId: number;
   email: string;
   nombre: string;
-  rol: string;
-  tenantId: string;  // ✅ AGREGADO
-  expiresIn: number;        // Segundos (ej: 900 para 15 min)
-  suscripcion?: SuscripcionDTO;  // ✅ AGREGADO
-  permisos?: string[];      // Códigos de permisos del usuario (e.g. PRODUCTOS_VER)
+  expiresIn: number;
+
+  // Case A (single-tenant): todos presentes
+  // Case B (multi-tenant): null/undefined hasta que se llame select-tenant
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  rol?: string | null;
+  tenantId?: string | null;
+  suscripcion?: SuscripcionDTO;
+  permisos?: string[];
   /** Sucursal fija asignada. null/undefined = ADMIN (ve todas). */
   sucursalId?: number | null;
+
+  // Case B solamente
+  selectionToken?: string | null;
+  tenants?: TenantInfo[] | null;
 }
 
 // ========================================
@@ -73,6 +100,7 @@ export interface RegistrationRequestDTO {
   apellido?: string;
   nombreFarmacia: string;
   planId: PlanId;
+  planCodigo?: string;
   tipoDocumento?: string;
   numeroDocumento?: string;
   numeroCelular?: string;
@@ -147,6 +175,16 @@ export interface ProductoDTO {
   /** Stock vigente (no vencido). Solo presente si el producto tiene lotes con fechaVencimiento.
    *  El POS debe usar este valor cuando no es undefined, en lugar de stockActual. */
   stockVigente?: number;
+  /**
+   * Precio unitario mayorista (opcional). Cuando está presente junto a cantidadMinimaMayorista,
+   * el POS aplica este precio automáticamente al alcanzar o superar la cantidad mínima.
+   */
+  precioMayorista?: number;
+  /**
+   * Cantidad mínima de unidades para activar el precio mayorista.
+   * Solo relevante cuando precioMayorista está configurado.
+   */
+  cantidadMinimaMayorista?: number;
 }
 
 // ========================================
@@ -204,6 +242,10 @@ export interface ProductoPresentacionDTO {
   /** Cuántas unidades base = 1 de esta presentación. Ej: CAJA=20, BLISTER=10, TABLETA=1 */
   factor: number;
   esPrincipal?: boolean;
+  /** Precio mayorista opcional. Se aplica cuando la cantidad >= cantidadMinimaMayorista. */
+  precioMayorista?: number;
+  /** Cantidad mínima de esta presentación para activar el precio mayorista. */
+  cantidadMinimaMayorista?: number;
   tenantId?: string;
 }
 
@@ -307,6 +349,7 @@ export interface SuscripcionDTO {
   id?: number;
   usuarioPrincipalId: number;
   planId: string;
+  planCodigo?: string;
   precioMensual: number;
   preapprovalId?: string;
   estado: string;
@@ -318,11 +361,14 @@ export interface SuscripcionDTO {
   fechaCancelacion?: string;
   deletedAt?: string;
   trialEndDate?: string;
+  currentPeriodEnd?: string;
 }
 
 export interface SuscripcionEstadoResponseDTO {
   estado: string;
   planId: string;
+  /** Código de plan del catálogo (ej: "VETERINARIA_BASICO"). null en suscripciones legado. */
+  planCodigo?: string;
   preapprovalId?: string;
   fechaProximoCobro?: string;
   /** Precio mensual real del plan desde BD */
@@ -382,7 +428,7 @@ export interface RolDTO {
 export interface MovimientoInventarioDTO {
   id?: number;
   productoId: number;
-  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'AJUSTE_PRECIO' | 'DEVOLUCION' | 'SALDO_INICIAL' | 'MERMA';
+  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'AJUSTE_PRECIO' | 'DEVOLUCION' | 'SALDO_INICIAL' | 'MERMA' | 'CONSUMO_OT' | 'DEVOLUCION_OT';
   cantidad: number;
   descripcion: string;
   referencia?: string;
@@ -963,3 +1009,15 @@ export interface ComprobanteTipoResumenDTO {
 //   PENDIENTE = 'PENDIENTE',
 //   CANCELADA = 'CANCELADA',
 // }
+
+// ========================================
+// PAGINACIÓN GENÉRICA
+// ========================================
+
+export interface PageDTO<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}

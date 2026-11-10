@@ -1,5 +1,6 @@
 import { ChevronRight, Home } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { useBreadcrumbStore } from '../../store/breadcrumbStore';
 
 type BreadcrumbEntry = {
   group?: string;
@@ -8,7 +9,7 @@ type BreadcrumbEntry = {
 
 const routeMap: Record<string, BreadcrumbEntry> = {
   // Ventas (grupo)
-  '/dashboard/ventas':          { group: 'Ventas',     label: 'Historial de Ventas' },
+  '/dashboard/ventas':          { group: 'Ventas',     label: 'Historial de ventas' },
   '/dashboard/caja':            { group: 'Ventas',     label: 'Cuadre de Caja' },
   '/dashboard/facturacion':     { group: 'Ventas',     label: 'Facturación' },
   '/dashboard/notas-credito':   { group: 'Ventas',     label: 'Notas de Crédito' },
@@ -26,8 +27,13 @@ const routeMap: Record<string, BreadcrumbEntry> = {
   // Usuarios (grupo)
   '/dashboard/usuarios':        { group: 'Usuarios',   label: 'Usuarios' },
   '/dashboard/admin/permisos':  { group: 'Usuarios',   label: 'Gestión de Permisos' },
+  // Servicios (empresa de servicios)
+  '/dashboard/equipos':              { label: 'Equipos' },
+  '/dashboard/ordenes-trabajo':      { label: 'Órdenes de trabajo' },
   // Items sueltos
   '/dashboard/comisiones':      { label: 'Comisiones' },
+  '/dashboard/mascotas':        { group: 'Veterinaria', label: 'Mascotas' },
+  '/dashboard/citas':           { group: 'Veterinaria', label: 'Citas y Agenda' },
   '/dashboard/digemid':         { label: 'DIGEMID / OPPF' },
   '/dashboard/certificados':    { label: 'Certificados' },
   '/dashboard/sucursales':      { label: 'Sucursales' },
@@ -40,6 +46,7 @@ const routeMap: Record<string, BreadcrumbEntry> = {
 export function Breadcrumb() {
   const location = useLocation();
   const path = location.pathname;
+  const { label: dynamicLabel } = useBreadcrumbStore();
 
   const separador = <ChevronRight size={14} className="mx-1 flex-shrink-0 opacity-50" />;
 
@@ -67,6 +74,23 @@ export function Breadcrumb() {
         {homeLink}
         {separador}
         <span className="font-medium text-foreground">Punto de Venta</span>
+      </nav>
+    );
+  }
+
+  // Detalle de OT: /dashboard/ordenes-trabajo/:id
+  if (/^\/dashboard\/ordenes-trabajo\/\d+/.test(path)) {
+    return (
+      <nav className="flex items-center text-sm text-muted-foreground mb-4 overflow-x-auto scrollbar-none min-w-0">
+        {homeLink}
+        {separador}
+        <Link to="/dashboard/ordenes-trabajo" className="hover:text-foreground transition-colors truncate">
+          Órdenes de trabajo
+        </Link>
+        {separador}
+        <span className="font-medium text-foreground truncate">
+          {dynamicLabel ?? 'Detalle'}
+        </span>
       </nav>
     );
   }
@@ -99,7 +123,7 @@ export function Breadcrumb() {
     recepciones: 'Recepciones', kardex: 'Kardex', perfil: 'Mi Perfil',
     permisos: 'Gestión de Permisos', caja: 'Caja', 'notas-credito': 'Notas de Crédito',
     gastos: 'Gastos y Egresos', digemid: 'DIGEMID / OPPF', certificados: 'Certificados',
-    comisiones: 'Comisiones', sucursales: 'Sucursales',
+    comisiones: 'Comisiones', sucursales: 'Sucursales', mascotas: 'Mascotas',
   };
   const hiddenSegments = new Set(['compras', 'admin']);
 

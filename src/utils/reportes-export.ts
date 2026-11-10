@@ -5,6 +5,8 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+type JsPDFWithAutoTable = jsPDF & { lastAutoTable?: { finalY?: number } };
 import type { TenantConfigDTO } from '../types';
 import type {
   ReportesResumenDTO,
@@ -377,7 +379,7 @@ export function exportarPDF(
       margin: { left: 14, right: 14 },
       ...opts,
     });
-    y = ((doc as any).lastAutoTable?.finalY ?? y) + 6;
+    y = ((doc as JsPDFWithAutoTable).lastAutoTable?.finalY ?? y) + 6;
     if (y > 270) { doc.addPage(); y = 15; }
   };
 
@@ -617,7 +619,7 @@ export function exportarVentasPDF(ventas: VentaDTO[], etiqueta: string, negocio?
   const pageW = doc.internal.pageSize.getWidth();
 
   const totalIngresos = ventas.reduce((s, v) => s + (v.total ?? 0), 0);
-  let y = dibujarEncabezadoNegocio(doc, negocio, 'Listado de Ventas', `Período: ${etiqueta} · ${ventas.length} venta(s) · Total: ${sol(totalIngresos)}`);
+  const y = dibujarEncabezadoNegocio(doc, negocio, 'Listado de Ventas', `Período: ${etiqueta} · ${ventas.length} venta(s) · Total: ${sol(totalIngresos)}`);
 
 
   autoTable(doc, {
@@ -716,7 +718,7 @@ export function exportarOCPDF(oc: OrdenCompraDTO, negocio?: TenantConfigDTO | nu
     },
   });
 
-  y = ((doc as any).lastAutoTable?.finalY ?? y) + 6;
+  y = ((doc as JsPDFWithAutoTable).lastAutoTable?.finalY ?? y) + 6;
 
   // ── Total ───────────────────────────────────────────────────────────────────
   const subtotal = items.reduce((acc, it) => acc + (it.precioUnitario ?? 0) * (it.cantidadSolicitada ?? 0), 0);
@@ -806,7 +808,7 @@ export function exportarStockPDF(
 
   const valorTotal = productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0);
   const bajoStockCount = productos.filter((p) => (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)).length;
-  let y = dibujarEncabezadoNegocio(doc, negocio, 'Stock Actual',
+  const y = dibujarEncabezadoNegocio(doc, negocio, 'Stock Actual',
     `${fecha}  ·  ${productos.length} productos  ·  ${bajoStockCount} bajo stock  ·  Valorizado: ${sol(valorTotal)}`);
 
 

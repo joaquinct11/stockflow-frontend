@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+﻿import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { notify } from '../../lib/notify';
 import {
@@ -63,7 +63,7 @@ function SearchIco({ size = 16, color = 'currentColor' }: { size?: number; color
 
 function money(n: number) {
   const a = Math.abs(n).toFixed(2).split('.');
-  return 'S/ ' + a[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + a[1];
+  return 'S/\u00A0' + a[0].replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0') + ',' + a[1];
 }
 
 const UNIDADES_BASICAS = new Set([
@@ -504,14 +504,17 @@ export function DigemidOppfPage() {
             <h1 style={{ fontSize:'1.6rem', fontWeight:700, letterSpacing:'-.028em', margin:0, color:T.text }}>DIGEMID / OPPF</h1>
             <p style={{ fontSize:'.865rem', color:T.text3, margin:'7px 0 0' }}>Vincula tus productos al catálogo DIGEMID y reporta precios al Observatorio (OPPF)</p>
           </div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:9 }}>
+          <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:flex-wrap sm:items-center" style={{ gap: 9 }}>
             <button type="button" onClick={handleVincularTodos}
               disabled={vinculandoTodos || totalSinVincular === 0}
-              style={{ ...actionBtnSecondary, opacity: (vinculandoTodos || totalSinVincular === 0) ? 0.55 : 1, cursor: (vinculandoTodos || totalSinVincular === 0) ? 'not-allowed' : 'pointer' }}>
+              style={{ ...actionBtnSecondary, justifyContent:'center', width:'100%', opacity: (vinculandoTodos || totalSinVincular === 0) ? 0.55 : 1, cursor: (vinculandoTodos || totalSinVincular === 0) ? 'not-allowed' : 'pointer' }}
+              className="sm:w-auto">
               <Svg d={IC.bolt} size={15} />
               {vinculandoTodos ? 'Vinculando…' : 'Vincular automáticamente'}
             </button>
-            <button type="button" onClick={() => setModalExport(true)} style={actionBtnPrimary}>
+            <button type="button" onClick={() => setModalExport(true)}
+              style={{ ...actionBtnPrimary, justifyContent:'center', width:'100%' }}
+              className="sm:w-auto">
               <Svg d={IC.dl} size={15} />
               Exportar OPPF
             </button>
@@ -740,7 +743,7 @@ export function DigemidOppfPage() {
                   <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                     <span style={{ display:'flex', alignItems:'center', gap:6, color:T.warn }}>
                       <Svg d={IC.tri} size={13} sw={2} />
-                      P2 de S/ 0,01 es el precio mínimo que acepta OPPF
+                      P2 de S/ 0,01 es el precio mínimo que acepta OPPF
                     </span>
                     {productosFiltrados.length > PAGE_SIZE && (
                       <div style={{ display:'flex', gap:4, marginLeft:12 }}>

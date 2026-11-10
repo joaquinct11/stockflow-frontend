@@ -1,8 +1,11 @@
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
+import { useTenantConfigStore } from './store/tenantConfigStore';
+import { usePermissions } from './hooks/usePermissions';
 import { useInactivityLogout } from './hooks/useInactivityLogout';
 
 // Layout
@@ -14,10 +17,12 @@ import { ErrorBoundary } from './components/shared/ErrorBoundary';
 
 // Auth Pages (carga inmediata — ruta de entrada)
 import { Login } from './pages/auth/Login';
+import { SelectTenant } from './pages/auth/SelectTenant';
 import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword } from './pages/auth/ResetPassword';
 import { ActivatePage } from './pages/auth/ActivatePage';
+import { SelectTenantRoute } from './components/shared/SelectTenantRoute';
 
 // Lazy — páginas que se cargan solo cuando se navega a ellas
 const LandingPage       = lazy(() => import('./pages/landing/LandingPage').then(m => ({ default: m.LandingPage })));
@@ -54,6 +59,11 @@ const CertificadosPage  = lazy(() => import('./pages/certificados/CertificadosPa
 
 const SuperAdminLoginPage = lazy(() => import('./pages/superadmin/SuperAdminLoginPage').then(m => ({ default: m.SuperAdminLoginPage })));
 const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
+const MascotasPage        = lazy(() => import('./pages/mascotas/MascotasPage'));
+const CitasPage           = lazy(() => import('./pages/citas/CitasPage').then(m => ({ default: m.CitasPage })));
+const EquiposPage         = lazy(() => import('./pages/equipos/EquiposPage'));
+const OrdenesTrabajoPage  = lazy(() => import('./pages/ordenes-trabajo/OrdenesTrabajoPage'));
+const OtDetailPage        = lazy(() => import('./pages/ordenes-trabajo/OtDetailPage'));
 
 const PageLoader = () => (
   <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: '#6b7280', fontFamily: 'Inter, sans-serif' }}>
@@ -61,10 +71,46 @@ const PageLoader = () => (
   </div>
 );
 
+function ServiciosEquiposRoute({ children }: { children: React.ReactNode }) {
+  const { rubro } = useTenantConfigStore();
+  const { isAdmin, puede } = usePermissions();
+  if (rubro === null) return <PageLoader />;
+  if (rubro !== 'EMPRESA_SERVICIOS') return <Navigate to="/dashboard" replace />;
+  if (!isAdmin && !puede('VER_EQUIPOS')) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function ServiciosOtRoute({ children }: { children: React.ReactNode }) {
+  const { rubro } = useTenantConfigStore();
+  const { isAdmin, puede } = usePermissions();
+  if (rubro === null) return <PageLoader />;
+  if (rubro !== 'EMPRESA_SERVICIOS') return <Navigate to="/dashboard" replace />;
+  if (!isAdmin && !puede('VER_OT')) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function VeterinariaRoute({ children }: { children: React.ReactNode }) {
+  const { rubro } = useTenantConfigStore();
+  const { isAdmin, puede } = usePermissions();
+  if (rubro === null) return <PageLoader />;
+  if (rubro !== 'VETERINARIA') return <Navigate to="/dashboard" replace />;
+  if (!isAdmin && !puede('VER_MASCOTAS')) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function VeterinariaCitasRoute({ children }: { children: React.ReactNode }) {
+  const { rubro } = useTenantConfigStore();
+  const { isAdmin, puede } = usePermissions();
+  if (rubro === null) return <PageLoader />;
+  if (rubro !== 'VETERINARIA') return <Navigate to="/dashboard" replace />;
+  if (!isAdmin && !puede('VER_CITAS')) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 function App() {
-  const { initialize, isAuthenticated, setSuscripcionEstado } = useAuthStore();
+  const { initialize, isAuthenticated, setSuscripcionEstado, user } = useAuthStore();
   const { isDark, setTheme } = useThemeStore();
-  const suscripcionCargada = useRef(false);
+  const suscripcionCargada = useRef<string | null>(null);
 
   useInactivityLogout();
 
@@ -76,16 +122,19 @@ function App() {
     }
   }, [initialize, setTheme]);
 
-  // Cargar estado de suscripción al autenticarse (una sola vez por sesión)
+  // Cargar estado de suscripción al autenticarse, una vez por tenant
+  // Se recarga si cambia el tenant (user?.tenantId)
   useEffect(() => {
-    if (!isAuthenticated || suscripcionCargada.current) return;
-    suscripcionCargada.current = true;
+    const currentTenantId = user?.tenantId ?? null;
+    if (!isAuthenticated || !currentTenantId) return;
+    if (suscripcionCargada.current === currentTenantId) return;
+    suscripcionCargada.current = currentTenantId;
     import('./services/suscripcion.service').then(({ suscripcionService }) => {
       suscripcionService.getEstado()
         .then((s) => setSuscripcionEstado(s.estado))
         .catch(() => { /* silencioso — usamos JWT como fallback */ });
     });
-  }, [isAuthenticated, setSuscripcionEstado]);
+  }, [isAuthenticated, user?.tenantId, setSuscripcionEstado]);
 
   return (
     <>
@@ -109,6 +158,14 @@ function App() {
 
             {/* Auth Routes - Públicas */}
             <Route path="/login" element={<Login />} />
+            <Route
+              path="/select-tenant"
+              element={
+                <SelectTenantRoute>
+                  <SelectTenant />
+                </SelectTenantRoute>
+              }
+            />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
@@ -355,6 +412,40 @@ function App() {
                 }
               />
 
+              {/* Equipos de clientes — rubro EMPRESA_SERVICIOS */}
+              <Route
+                path="equipos"
+                element={
+                  <SubscripcionGuard>
+                    <ServiciosEquiposRoute>
+                      <EquiposPage />
+                    </ServiciosEquiposRoute>
+                  </SubscripcionGuard>
+                }
+              />
+
+              {/* Órdenes de Trabajo — rubro EMPRESA_SERVICIOS */}
+              <Route
+                path="ordenes-trabajo"
+                element={
+                  <SubscripcionGuard>
+                    <ServiciosOtRoute>
+                      <OrdenesTrabajoPage />
+                    </ServiciosOtRoute>
+                  </SubscripcionGuard>
+                }
+              />
+              <Route
+                path="ordenes-trabajo/:id"
+                element={
+                  <SubscripcionGuard>
+                    <ServiciosOtRoute>
+                      <OtDetailPage />
+                    </ServiciosOtRoute>
+                  </SubscripcionGuard>
+                }
+              />
+
               {/* Sucursales — solo ADMIN plan PRO */}
               <Route
                 path="sucursales"
@@ -387,6 +478,30 @@ function App() {
                         <CertificadosPage />
                       </ErrorBoundary>
                     </RoleProtectedRoute>
+                  </SubscripcionGuard>
+                }
+              />
+
+              {/* Mascotas — solo rubro VETERINARIA */}
+              <Route
+                path="mascotas/*"
+                element={
+                  <SubscripcionGuard>
+                    <VeterinariaRoute>
+                      <MascotasPage />
+                    </VeterinariaRoute>
+                  </SubscripcionGuard>
+                }
+              />
+
+              {/* Citas — solo rubro VETERINARIA */}
+              <Route
+                path="citas"
+                element={
+                  <SubscripcionGuard>
+                    <VeterinariaCitasRoute>
+                      <CitasPage />
+                    </VeterinariaCitasRoute>
                   </SubscripcionGuard>
                 }
               />

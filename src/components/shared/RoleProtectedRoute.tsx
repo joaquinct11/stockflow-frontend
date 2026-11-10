@@ -3,7 +3,7 @@ import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
 import type { Module } from '../../hooks/usePermissions';
 import toast from 'react-hot-toast';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface RoleProtectedRouteProps {
   children: React.ReactNode;
@@ -23,7 +23,7 @@ interface RoleProtectedRouteProps {
 export function RoleProtectedRoute({ children, allowedRoles, requiredPermission, anyPermission, module }: RoleProtectedRouteProps) {
   const { user } = useAuthStore();
   const { canAccess } = usePermissions();
-  const [hasShownToast, setHasShownToast] = useState(false);
+  const hasShownToastRef = useRef(false);
 
   const userRole = user?.rol;
   const permisos = user?.permisos ?? [];
@@ -34,11 +34,11 @@ export function RoleProtectedRoute({ children, allowedRoles, requiredPermission,
       (anyPermission ? anyPermission.some((p) => permisos.includes(p)) : false);
 
   useEffect(() => {
-    if (!hasPermission && !hasShownToast) {
+    if (!hasPermission && !hasShownToastRef.current) {
+      hasShownToastRef.current = true;
       toast.error('No tienes permisos para acceder a esta sección');
-      setHasShownToast(true);
     }
-  }, [hasPermission, hasShownToast]);
+  }, [hasPermission]);
 
   if (!hasPermission) {
     return <Navigate to="/dashboard" replace />;

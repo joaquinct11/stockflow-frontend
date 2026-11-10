@@ -29,6 +29,13 @@ import { ONBOARDING_REFRESH } from '../../utils/onboardingEvents';
 
 const CONFETTI_COLORS = ['#6366f1', '#8b5cf6', '#22c55e', '#f59e0b', '#ec4899', '#3b82f6'];
 
+const CONFETTI_STYLES = Array.from({ length: 30 }).map((_, i) => ({
+  left: `${Math.random() * 100}%`,
+  backgroundColor: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+  animation: `confettiFall ${1.5 + Math.random() * 2}s ${Math.random() * 0.8}s ease-in forwards`,
+  transform: `rotate(${Math.random() * 360}deg)`,
+}));
+
 function CompletadoModal({ pasos, onClose }: { pasos: PasoOnboarding[]; onClose: () => void }) {
   const pendientesOpcionales = pasos.filter(p => p.opcional && !p.completado);
 
@@ -36,11 +43,8 @@ function CompletadoModal({ pasos, onClose }: { pasos: PasoOnboarding[]; onClose:
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {Array.from({ length: 30 }).map((_, i) => (
-          <div key={i} className="absolute w-2 h-2 rounded-sm opacity-0"
-            style={{ left: `${Math.random() * 100}%`, backgroundColor: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-              animation: `confettiFall ${1.5 + Math.random() * 2}s ${Math.random() * 0.8}s ease-in forwards`,
-              transform: `rotate(${Math.random() * 360}deg)` }} />
+        {CONFETTI_STYLES.map((style, i) => (
+          <div key={i} className="absolute w-2 h-2 rounded-sm opacity-0" style={style} />
         ))}
       </div>
       <style>{`@keyframes confettiFall{0%{transform:translateY(-20px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}`}</style>
@@ -245,7 +249,7 @@ export function OnboardingChecklist() {
   };
 
   useEffect(() => {
-    if (!esAdmin || dismissed) { setLoading(false); return; }
+    if (!esAdmin || dismissed) { queueMicrotask(() => setLoading(false)); return; }
     lastFetchRef.current = Date.now();
     onboardingService.getProgreso()
       .then((data) => {
@@ -257,7 +261,6 @@ export function OnboardingChecklist() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esAdmin, dismissed]);
 
   useEffect(() => {
@@ -265,30 +268,26 @@ export function OnboardingChecklist() {
     const handleFocus = () => { if (Date.now() - lastFetchRef.current > 60_000) fetchProgreso(); };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esAdmin, dismissed]);
 
   useEffect(() => {
     if (!esAdmin || dismissed) return;
     window.addEventListener(ONBOARDING_REFRESH, fetchProgreso);
     return () => window.removeEventListener(ONBOARDING_REFRESH, fetchProgreso);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esAdmin, dismissed]);
 
   useEffect(() => {
     if (!progreso) return;
     if (progreso.completado && prevCompletadoRef.current === false) {
-      if (localStorage.getItem(celebratedKey) !== 'true') setShowCompletado(true);
+      if (localStorage.getItem(celebratedKey) !== 'true') queueMicrotask(() => setShowCompletado(true));
     }
     prevCompletadoRef.current = progreso.completado;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progreso?.completado]);
 
   useEffect(() => {
     if (!esAdmin || dismissed || !open) return;
     const id = setInterval(fetchProgreso, 20000);
     return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esAdmin, dismissed, open]);
 
   const handleDismiss = () => { localStorage.setItem(dismissedKey, 'true'); setDismissed(true); };
@@ -313,34 +312,6 @@ export function OnboardingChecklist() {
   const { pasos, porcentaje } = progreso;
   const pendientes = pasos.filter(p => !p.completado).length;
 
-  // Trigger pill — visible cuando el panel está cerrado o descartado
-  const TriggerPill = () => (
-    <button
-      onClick={dismissed ? handleReopen : () => setOpen(true)}
-      className="flex items-center gap-2.5 h-9 pl-3 pr-3.5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 group"
-      title="Ver progreso de configuración"
-    >
-      <div className="relative w-6 h-6 flex-shrink-0">
-        <svg viewBox="0 0 24 24" className="w-6 h-6 -rotate-90">
-          <circle cx="12" cy="12" r="9" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
-          <circle cx="12" cy="12" r="9" fill="none" stroke="#3b82f6" strokeWidth="2.5"
-            strokeDasharray={`${2 * Math.PI * 9}`}
-            strokeDashoffset={`${2 * Math.PI * 9 * (1 - porcentaje / 100)}`}
-            strokeLinecap="round" className="transition-all duration-700" />
-        </svg>
-        <Rocket size={10} className="absolute inset-0 m-auto text-blue-600" />
-      </div>
-      <div className="text-left">
-        <div className="text-xs font-semibold text-gray-700 dark:text-gray-200 leading-tight">
-          Setup <span className="text-blue-600">{porcentaje}%</span>
-        </div>
-        <div className="text-[10px] text-gray-400 leading-tight">
-          {pendientes} paso{pendientes !== 1 ? 's' : ''} restante{pendientes !== 1 ? 's' : ''}
-        </div>
-      </div>
-      <ChevronUp size={12} className="text-gray-400 group-hover:text-blue-500 transition-colors ml-0.5" />
-    </button>
-  );
 
   return (
     <>
@@ -443,7 +414,33 @@ export function OnboardingChecklist() {
         )}
 
         {/* Trigger pill — cuando está cerrado o descartado */}
-        {(!open || dismissed) && <TriggerPill />}
+        {(!open || dismissed) && (
+          <button
+            onClick={dismissed ? handleReopen : () => setOpen(true)}
+            className="flex items-center gap-2.5 h-9 pl-3 pr-3.5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 group"
+            title="Ver progreso de configuración"
+          >
+            <div className="relative w-6 h-6 flex-shrink-0">
+              <svg viewBox="0 0 24 24" className="w-6 h-6 -rotate-90">
+                <circle cx="12" cy="12" r="9" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
+                <circle cx="12" cy="12" r="9" fill="none" stroke="#3b82f6" strokeWidth="2.5"
+                  strokeDasharray={`${2 * Math.PI * 9}`}
+                  strokeDashoffset={`${2 * Math.PI * 9 * (1 - porcentaje / 100)}`}
+                  strokeLinecap="round" className="transition-all duration-700" />
+              </svg>
+              <Rocket size={10} className="absolute inset-0 m-auto text-blue-600" />
+            </div>
+            <div className="text-left">
+              <div className="text-xs font-semibold text-gray-700 dark:text-gray-200 leading-tight">
+                Setup <span className="text-blue-600">{porcentaje}%</span>
+              </div>
+              <div className="text-[10px] text-gray-400 leading-tight">
+                {pendientes} paso{pendientes !== 1 ? 's' : ''} restante{pendientes !== 1 ? 's' : ''}
+              </div>
+            </div>
+            <ChevronUp size={12} className="text-gray-400 group-hover:text-blue-500 transition-colors ml-0.5" />
+          </button>
+        )}
       </div>
     </>
   );

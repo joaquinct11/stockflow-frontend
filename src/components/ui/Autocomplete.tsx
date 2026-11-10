@@ -55,18 +55,16 @@ export function Autocomplete({
   // Resetear búsqueda al cerrar
   useEffect(() => {
     if (!isOpen) {
-      setSearch('');
-      setHighlightedIndex(0);
+      queueMicrotask(() => {
+        setSearch('');
+        setHighlightedIndex(0);
+      });
     }
   }, [isOpen]);
 
   // Actualizar input cuando cambia el value
   useEffect(() => {
-    if (value) {
-      setSearch(value.label);
-    } else {
-      setSearch('');
-    }
+    queueMicrotask(() => setSearch(value ? value.label : ''));
   }, [value]);
 
   const handleSelect = (option: Option) => {

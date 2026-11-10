@@ -21,38 +21,32 @@ export function OseBanner() {
   if (dismissed) return null;
 
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 px-4 py-3">
-      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 px-3 py-2">
+      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
 
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-          Facturación electrónica no configurada
-        </p>
-        <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-          Sin esta configuración <strong>no podrás emitir boletas ni facturas con validez SUNAT</strong>.
-          Contáctanos y lo activamos sin costo adicional.
-        </p>
-      </div>
+      <p className="flex-1 min-w-0 text-xs font-medium text-amber-800 dark:text-amber-300 leading-snug">
+        <strong>Facturación no configurada</strong> · Sin esto no puedes emitir boletas/facturas SUNAT.
+      </p>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 ml-auto">
         <a
           href={`https://wa.me/${WA_NUMBER}?text=${WA_MSG}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#25D366] hover:bg-[#20bc5a] px-3 py-1.5 rounded-md transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#25D366] hover:bg-[#20bc5a] px-2.5 py-1 rounded-md transition-colors whitespace-nowrap"
         >
-          <MessageCircle size={13} />
-          Activar por WhatsApp
+          <MessageCircle size={12} />
+          Activar
         </a>
         <button
           onClick={() => {
             sessionStorage.setItem(dismissKey, 'true');
             setDismissed(true);
           }}
-          className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 transition-colors p-1"
-          title="Cerrar (hasta la próxima sesión)"
+          className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 transition-colors p-0.5"
+          title="Cerrar"
         >
-          <X size={15} />
+          <X size={14} />
         </button>
       </div>
     </div>

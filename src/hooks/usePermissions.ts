@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
 
 type Permission = 'crear'| 'activar' | 'cambiarEstado' | 'editar' | 'eliminar' | 'ver' | 'ver_todas' | 'ver_propias' | 'ver_global' | 'ver_personal';
@@ -18,9 +19,15 @@ export type Module =
   | 'RECEPCIONES'
   | 'CLIENTES'
   | 'GASTOS'
-  | 'CERTIFICADOS';
+  | 'CERTIFICADOS'
+  | 'MASCOTAS'
+  | 'CITAS'
+  | 'CAJA'
+  | 'DEVOLUCIONES'
+  | 'NOTAS_CREDITO'
+  | 'ORDENES_TRABAJO';
 
-type Role = 'ADMIN' | 'VENDEDOR' | 'GESTOR_INVENTARIO';
+type Role = 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'GESTOR_INVENTARIO' | 'VETERINARIO' | 'RECEPCIONISTA' | 'AUXILIAR_VETERINARIO' | 'GROOMER' | 'TECNICO_SERVICIO';
 
 // Mapping from frontend Permission names to backend verb prefixes (verb-first format).
 const PERMISSION_CODE_MAP: Record<Permission, string> = {
@@ -126,104 +133,309 @@ const BACKEND_PERMISSION_MAP: Partial<Record<Module, Partial<Record<Permission, 
     editar: 'EDITAR_CERTIFICADO',
     eliminar: 'ELIMINAR_CERTIFICADO',
   },
+  MASCOTAS: {
+    ver: 'VER_MASCOTAS',
+    ver_todas: 'VER_MASCOTAS',
+    crear: 'CREAR_MASCOTA',
+    editar: 'EDITAR_MASCOTA',
+    cambiarEstado: 'CAMBIAR_ESTADO_MASCOTA',
+  },
+  CITAS: {
+    ver: 'VER_CITAS',
+    ver_todas: 'VER_CITAS',
+    crear: 'CREAR_CITA',
+    editar: 'EDITAR_CITA',
+    cambiarEstado: 'CAMBIAR_ESTADO_CITA',
+    eliminar: 'CANCELAR_CITA',
+  },
+  CAJA: {
+    ver: 'VER_CAJA',
+    crear: 'ABRIR_CAJA',
+    editar: 'CERRAR_CAJA',
+  },
+  DEVOLUCIONES: {
+    ver: 'VER_DEVOLUCIONES',
+    crear: 'CREAR_DEVOLUCION',
+  },
+  NOTAS_CREDITO: {
+    ver: 'VER_NOTAS_CREDITO',
+    crear: 'EMITIR_NOTA_CREDITO',
+  },
+  ORDENES_TRABAJO: {
+    ver: 'VER_OT',
+    ver_todas: 'VER_TODAS_OT',
+    crear: 'CREAR_OT',
+    editar: 'EDITAR_OT',
+    cambiarEstado: 'CAMBIAR_ESTADO_OT',
+    // activar se reutiliza para ASIGNAR_TECNICO_OT (mismo peso de acceso)
+    activar: 'ASIGNAR_TECNICO_OT',
+  },
 };
 
 // Fallback role-based permission table (used when no backend permisos are assigned)
 const PERMISSIONS: Record<Module, Record<Role, Permission[]>> = {
   DASHBOARD: {
     ADMIN: ['ver_global', 'ver_personal'],
+    GERENTE: ['ver_global', 'ver_personal'],
     VENDEDOR: ['ver_personal'],
     GESTOR_INVENTARIO: ['ver_personal'],
+    VETERINARIO: ['ver_personal'],
+    RECEPCIONISTA: ['ver_personal'],
+    AUXILIAR_VETERINARIO: ['ver_personal'],
+    GROOMER: ['ver_personal'],
+    TECNICO_SERVICIO: ['ver_personal'],
   },
 
   PROVEEDORES: {
     ADMIN: ['crear', 'editar', 'activar', 'cambiarEstado', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['crear', 'editar', 'cambiarEstado', 'ver'],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   PRODUCTOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: ['ver'],
     GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
+    VETERINARIO: ['ver'],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: ['ver'],
+    GROOMER: [],
+    TECNICO_SERVICIO: ['ver'],
   },
 
   VENTAS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver_todas'],
+    GERENTE: ['crear', 'eliminar', 'ver_todas'],
     VENDEDOR: ['crear', 'ver_propias'],
     GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   POS: {
     ADMIN: ['ver', 'crear'],
+    GERENTE: ['ver', 'crear'],
     VENDEDOR: ['ver', 'crear'],
     GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   INVENTARIO: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['crear', 'ver'],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   USUARIOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'cambiarEstado', 'ver'],
+    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   SUSCRIPCIONES: {
     ADMIN: ['ver', 'activar', 'eliminar'],
+    GERENTE: ['ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   REPORTES: {
     ADMIN: ['ver'],
+    GERENTE: ['ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['ver'],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   FACTURACION: {
     ADMIN: ['ver', 'ver_todas', 'crear', 'eliminar'],
+    GERENTE: ['ver', 'ver_todas', 'crear', 'eliminar'],
     VENDEDOR: ['crear', 'ver_propias'],
     GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   COMPRAS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   RECEPCIONES: {
     ADMIN: ['crear', 'editar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: ['crear', 'editar', 'ver'],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   CONFIGURACION: {
     ADMIN: ['ver', 'editar'],
+    GERENTE: ['ver'],
     VENDEDOR: ['ver'],
     GESTOR_INVENTARIO: ['ver'],
+    VETERINARIO: ['ver'],
+    RECEPCIONISTA: ['ver'],
+    AUXILIAR_VETERINARIO: ['ver'],
+    GROOMER: ['ver'],
+    TECNICO_SERVICIO: ['ver'],
   },
 
   CLIENTES: {
     ADMIN: ['crear', 'editar', 'eliminar', 'cambiarEstado', 'ver'],
+    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
     VENDEDOR: ['crear', 'editar', 'ver'],
     GESTOR_INVENTARIO: [],
+    VETERINARIO: ['ver'],
+    RECEPCIONISTA: ['crear', 'editar', 'ver'],
+    AUXILIAR_VETERINARIO: ['ver'],
+    GROOMER: ['ver'],
+    TECNICO_SERVICIO: ['ver'],
   },
 
   GASTOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
   },
 
   CERTIFICADOS: {
     ADMIN: ['crear', 'editar', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'ver'],
     VENDEDOR: [],
     GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
+  },
+
+  MASCOTAS: {
+    ADMIN: ['crear', 'editar', 'cambiarEstado', 'ver'],
+    GERENTE: ['crear', 'editar', 'cambiarEstado', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: [],
+    VETERINARIO: ['crear', 'editar', 'ver'],
+    RECEPCIONISTA: ['crear', 'editar', 'ver'],
+    AUXILIAR_VETERINARIO: ['ver'],
+    GROOMER: ['ver'],
+    TECNICO_SERVICIO: [],
+  },
+
+  CITAS: {
+    ADMIN: ['crear', 'editar', 'cambiarEstado', 'eliminar', 'ver'],
+    GERENTE: ['crear', 'editar', 'cambiarEstado', 'eliminar', 'ver'],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: [],
+    VETERINARIO: ['ver', 'cambiarEstado'],
+    RECEPCIONISTA: ['crear', 'editar', 'cambiarEstado', 'eliminar', 'ver'],
+    AUXILIAR_VETERINARIO: ['ver'],
+    GROOMER: ['ver'],
+    TECNICO_SERVICIO: [],
+  },
+
+  CAJA: {
+    ADMIN: ['ver', 'crear', 'editar'],
+    GERENTE: ['ver', 'crear', 'editar'],
+    VENDEDOR: ['ver', 'crear', 'editar'],
+    GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
+  },
+
+  DEVOLUCIONES: {
+    ADMIN: ['ver', 'crear'],
+    GERENTE: ['ver', 'crear'],
+    VENDEDOR: ['ver', 'crear'],
+    GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
+  },
+
+  NOTAS_CREDITO: {
+    ADMIN: ['ver', 'crear'],
+    GERENTE: ['ver', 'crear'],
+    VENDEDOR: ['ver', 'crear'],
+    GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: [],
+  },
+  // OT no se asigna a roles base — solo ADMIN por defecto; otros roles acceden por permiso individual
+  ORDENES_TRABAJO: {
+    ADMIN: ['ver', 'ver_todas', 'crear', 'editar', 'cambiarEstado'],
+    GERENTE: [],
+    VENDEDOR: [],
+    GESTOR_INVENTARIO: [],
+    VETERINARIO: [],
+    RECEPCIONISTA: [],
+    AUXILIAR_VETERINARIO: [],
+    GROOMER: [],
+    TECNICO_SERVICIO: ['ver', 'cambiarEstado'],
   },
 };
 
@@ -268,11 +480,11 @@ export function usePermissions() {
   const canViewPersonal = (module: Module) => hasPermission(module, 'ver_personal');
 
   /** Check a raw backend permission code directly (e.g. 'CREAR_PRODUCTO'). Admin always returns true. */
-  const puede = (code: string): boolean => {
+  const puede = useCallback((code: string): boolean => {
     if (isAdmin) return true;
     const permisos = user?.permisos ?? [];
     return permisos.includes(code);
-  };
+  }, [isAdmin, user]);
 
   /**
    * Returns true if the user can access the module at all —
@@ -286,6 +498,27 @@ export function usePermissions() {
     // POS no tiene códigos de permiso en el backend → usar tabla por rol directamente
     if (module === 'POS') {
       return (PERMISSIONS.POS[rol] ?? []).length > 0;
+    }
+
+    // ORDENES_TRABAJO: además de los permisos genéricos, verificar los permisos operacionales
+    // del técnico que no están en el BACKEND_PERMISSION_MAP estándar.
+    if (module === 'ORDENES_TRABAJO') {
+      return (
+        puede('VER_OT') ||
+        puede('CREAR_OT') ||
+        puede('EDITAR_OT') ||
+        puede('CAMBIAR_ESTADO_OT') ||
+        puede('ASIGNAR_TECNICO_OT') ||
+        puede('REGISTRAR_CONSUMO_OT') ||
+        puede('DEVOLVER_CONSUMO_OT') ||
+        puede('CLASIFICAR_CONSUMO_OT') ||
+        puede('CERRAR_TECNICO_OT') ||
+        puede('FACTURAR_OT') ||
+        puede('REGISTRAR_ENTREGA_OT') ||
+        puede('ANULAR_FACTURA_OT') ||
+        // fallback: tabla de roles para ADMIN sin permisos explícitos en BD
+        (PERMISSIONS.ORDENES_TRABAJO[rol] ?? []).length > 0
+      );
     }
 
     return (
@@ -302,6 +535,14 @@ export function usePermissions() {
 
   const isVendedor = rol === 'VENDEDOR';
   const isGestorInventario = rol === 'GESTOR_INVENTARIO';
+  const isGerente = rol === 'GERENTE';
+  const isVeterinario = rol === 'VETERINARIO';
+  const isRecepcionista = rol === 'RECEPCIONISTA';
+  const isAuxiliarVeterinario = rol === 'AUXILIAR_VETERINARIO';
+  const isGroomer = rol === 'GROOMER';
+  const isTecnicoServicio = rol === 'TECNICO_SERVICIO';
+  const isRolVeterinaria = isVeterinario || isRecepcionista || isAuxiliarVeterinario || isGroomer;
+  const isRolServicios = isTecnicoServicio;
 
   return {
     rol,
@@ -322,5 +563,13 @@ export function usePermissions() {
     isAdmin,
     isVendedor,
     isGestorInventario,
+    isGerente,
+    isVeterinario,
+    isRecepcionista,
+    isAuxiliarVeterinario,
+    isGroomer,
+    isTecnicoServicio,
+    isRolVeterinaria,
+    isRolServicios,
   };
 }

@@ -14,8 +14,8 @@ export const cajaService = {
         params: sucursalId ? { sucursalId } : undefined,
       });
       return data;
-    } catch (err: any) {
-      if (err?.response?.status === 404) return null;
+    } catch (err) {
+      if ((err as { response?: { status?: number } })?.response?.status === 404) return null;
       throw err;
     }
   },

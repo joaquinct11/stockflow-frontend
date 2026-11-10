@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, initialize } = useAuthStore();
+  const { isAuthenticated, pendingTenantSelection, initialize } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -17,6 +17,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (isLoading) {
     return <LoadingSpinner />;
+  }
+
+  // Usuario autenticado parcialmente: debe completar la selección de tenant
+  if (pendingTenantSelection) {
+    if (import.meta.env.DEV) { console.log('🏢 Selección de tenant pendiente, redirigiendo...');}
+    return <Navigate to="/select-tenant" replace />;
   }
 
   if (!isAuthenticated) {

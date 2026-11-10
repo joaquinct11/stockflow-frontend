@@ -64,9 +64,8 @@ export function InventarioList() {
   const { canCreate, canView, puede } = usePermissions();
   const location = useLocation();
   const { config: negocioConfig } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const esFarmacia = negocioConfig?.rubro === 'BOTICA' || negocioConfig?.rubro === 'FARMACIA';
   const esServicios = negocioConfig?.rubro === 'EMPRESA_SERVICIOS';
   const hasViewPermission = canView('INVENTARIO');
@@ -90,8 +89,8 @@ export function InventarioList() {
   }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [selectedProducto, setSelectedProducto] = useState<any>(null);
-  const [, setSelectedProveedorMov] = useState<any>(null);
+  const [selectedProducto, setSelectedProducto] = useState<{ id: number | string; label: string } | null>(null);
+  const [, setSelectedProveedorMov] = useState<{ id: number | string; label: string } | null>(null);
 
   // Variantes (TIENDA_ROPA)
   const esRopa = negocioConfig?.rubro === 'TIENDA_ROPA';
@@ -451,8 +450,8 @@ export function InventarioList() {
       refreshOnboarding();
       resetForm();
       await fetchData();
-    } catch (error: any) {
-      if (import.meta.env.DEV) console.error('Error:', error.response?.data);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Error:', (error as { response?: { data?: unknown } })?.response?.data);
       notify.fromError(error, 'No se pudo registrar el movimiento. Revisa los datos e intenta de nuevo.');
     }
   };
@@ -498,12 +497,14 @@ export function InventarioList() {
       DEVOLUCION:    { bg: T.warnSoft,    color: T.warn },
       SALDO_INICIAL: { bg: '#F3E8FF',     color: '#7C3AED' },
       MERMA:         { bg: '#FEF3C7',     color: '#B45309' },
+      CONSUMO_OT:    { bg: T.badSoft,     color: T.bad },
+      DEVOLUCION_OT: { bg: T.warnSoft,    color: T.warn },
     };
     const c = map[tipo] ?? { bg: T.surface2, color: T.text3 };
     return { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 20, background: c.bg, fontSize: '.76rem', fontWeight: 600, color: c.color, whiteSpace: 'nowrap' as const };
   };
   const getTipoDot = (tipo: string): React.CSSProperties => {
-    const map: Record<string, string> = { ENTRADA: T.ok, SALIDA: T.bad, AJUSTE: T.primary, AJUSTE_PRECIO: T.primary, DEVOLUCION: T.warn, SALDO_INICIAL: '#7C3AED', MERMA: '#B45309' };
+    const map: Record<string, string> = { ENTRADA: T.ok, SALIDA: T.bad, AJUSTE: T.primary, AJUSTE_PRECIO: T.primary, DEVOLUCION: T.warn, SALDO_INICIAL: '#7C3AED', MERMA: '#B45309', CONSUMO_OT: T.bad, DEVOLUCION_OT: T.warn };
     return { width: 6, height: 6, borderRadius: '50%', background: map[tipo] ?? T.text3, flexShrink: 0 };
   };
 
@@ -639,7 +640,7 @@ export function InventarioList() {
       </div>
 
       {/* ── KPIs ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 16 }}>
+      <div className="inv-kpi-grid" style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
         {[
           { label: 'Productos en inventario', value: String(invStats.total), sub: `${productosFisicos.reduce((a,p) => a + (p.stockActual ?? 0), 0)} unidades totales`, valColor: T.text },
           { label: 'Requieren reabastecimiento', value: String(invStats.bajoStock), sub: invStats.bajoStock > 0 ? 'Stock igual o menor al mínimo' : 'Todo en orden', valColor: invStats.bajoStock > 0 ? T.bad : T.ok },
@@ -1019,9 +1020,9 @@ export function InventarioList() {
                           setAjustePrecioStr(precio != null ? String(precio) : '');
                           const regSan = producto.registroSanitario ?? '';
                           setFormData(prev => ({ ...prev, productoId: producto.id!, costoUnitario: costo, precioVenta: precio, ...(esFarmacia && prev.tipo === 'ENTRADA' && regSan ? { registroSanitario: regSan } : {}) }));
-                          if (esRopa) { setLoadingVariantes(true); try { const vs = await productoVarianteService.getByProducto(producto.id!, sucursalId); setVariantesProducto(vs.filter(v => v.activo !== false)); } catch {} finally { setLoadingVariantes(false); } }
+                          if (esRopa) { setLoadingVariantes(true); try { const vs = await productoVarianteService.getByProducto(producto.id!, sucursalId); setVariantesProducto(vs.filter(v => v.activo !== false)); } catch { /* silent */ } finally { setLoadingVariantes(false); } }
                           if (esFarmacia) { productoPresentacionService.listar(producto.id!).then(pres => { setPresentacionesProducto(pres); const init: Record<number, string> = {}; pres.forEach(p => { if (p.id) init[p.id] = String(p.precioVenta ?? ''); }); setPreciosPresent(init); }).catch(() => setPresentacionesProducto([])); }
-                          if (esFarmacia && producto.stockVigente != null) { setLoadingLotesProducto(true); try { const ld = await movimientoService.getLotesPorProducto(producto.id!); setLotesDelProducto(ld.filter(l => l.diasRestantes != null)); } catch {} finally { setLoadingLotesProducto(false); } }
+                          if (esFarmacia && producto.stockVigente != null) { setLoadingLotesProducto(true); try { const ld = await movimientoService.getLotesPorProducto(producto.id!); setLotesDelProducto(ld.filter(l => l.diasRestantes != null)); } catch { /* silent */ } finally { setLoadingLotesProducto(false); } }
                         }
                       } else {
                         setSelectedProducto(null);
@@ -1138,7 +1139,7 @@ export function InventarioList() {
                           const prod = productos.find(p => p.id === selectedProducto.id) ?? productosForm.find(p => p.id === selectedProducto.id);
                           const disp = esFarmacia && (prod?.stockVigente != null)
                             ? prod.stockVigente
-                            : (stockEnSucursal.get(selectedProducto.id) ?? prod?.stockActual ?? 0);
+                            : (stockEnSucursal.get(selectedProducto.id as number) ?? prod?.stockActual ?? 0);
                           const after = disp - formData.cantidad;
                           const insuf = formData.cantidad > 0 && after < 0;
                           return <span style={{ fontSize: '.86rem', fontWeight: 600, color: insuf ? T.bad : T.text2 }}>
@@ -1350,7 +1351,7 @@ export function InventarioList() {
                   Siguiente →
                 </button>
               ) : (
-                <button type="button" style={BTN_PRI} onClick={handleSubmit as any}>
+                <button type="button" style={BTN_PRI} onClick={(e) => void handleSubmit(e as unknown as React.FormEvent)}>
                   Registrar movimiento
                 </button>
               )}
@@ -1380,8 +1381,8 @@ export function InventarioList() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 1, background: T.lineSoft, borderBottom: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
               {[
                 { label: 'Movimientos', value: String(kardexMovimientos.length) },
-                { label: 'Entradas', value: String(kardexMovimientos.filter(m => m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION').reduce((a, m) => a + (m.cantidad ?? 0), 0)) },
-                { label: 'Salidas', value: String(kardexMovimientos.filter(m => m.tipo === 'SALIDA' || m.tipo === 'MERMA').reduce((a, m) => a + (m.cantidad ?? 0), 0)) },
+                { label: 'Entradas', value: String(kardexMovimientos.filter(m => m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION' || m.tipo === 'DEVOLUCION_OT').reduce((a, m) => a + (m.cantidad ?? 0), 0)) },
+                { label: 'Salidas', value: String(kardexMovimientos.filter(m => m.tipo === 'SALIDA' || m.tipo === 'MERMA' || m.tipo === 'CONSUMO_OT').reduce((a, m) => a + (m.cantidad ?? 0), 0)) },
                 { label: 'Stock actual', value: String((esFarmacia && kardexProducto?.stockVigente != null) ? kardexProducto.stockVigente : (kardexProducto?.stockActual ?? 0)) },
               ].map(r => (
                 <div key={r.label} style={{ padding: '13px 22px', background: T.surface }}>
@@ -1394,13 +1395,13 @@ export function InventarioList() {
             {/* Filtros kardex */}
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '12px 22px', borderBottom: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
               <div style={{ display: 'flex', gap: 3, padding: 3, background: T.surface2, borderRadius: 10, maxWidth: '100%', overflowX: 'auto' }}>
-                {['TODOS','ENTRADA','SALIDA','AJUSTE','DEVOLUCION','SALDO_INICIAL','MERMA'].map(t => {
+                {['TODOS','ENTRADA','SALIDA','AJUSTE','DEVOLUCION','SALDO_INICIAL','MERMA','CONSUMO_OT','DEVOLUCION_OT'].map(t => {
                   const active = kardexTipoFilter === t;
                   return (
                     <button key={t} type="button" onClick={() => setKardexTipoFilter(t)}
                       style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 9px', fontFamily: 'Inter,sans-serif', fontSize: '.78rem', fontWeight: active ? 600 : 500, color: active ? T.text : T.text3, background: active ? T.surface : 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: active ? T.shadow : 'none' }}>
                       {t !== 'TODOS' && <span style={getTipoDot(t)} />}
-                      {t === 'TODOS' ? 'Todos' : t === 'SALDO_INICIAL' ? 'Saldo ini.' : t.charAt(0) + t.slice(1).toLowerCase()}
+                      {t === 'TODOS' ? 'Todos' : t === 'SALDO_INICIAL' ? 'Saldo ini.' : t === 'CONSUMO_OT' ? 'Consumo OT' : t === 'DEVOLUCION_OT' ? 'Devolución OT' : t.charAt(0) + t.slice(1).toLowerCase()}
                     </button>
                   );
                 })}
@@ -1444,8 +1445,8 @@ export function InventarioList() {
                       sorted.forEach(m => {
                         const esSalida = m.tipo === 'SALIDA';
                         const esMerma = m.tipo === 'MERMA';
-                        const esDescuento = m.tipo === 'SALIDA' || m.tipo === 'MERMA';
-                        const esEntrada = ['ENTRADA','SALDO_INICIAL','DEVOLUCION'].includes(m.tipo ?? '');
+                        const esDescuento = m.tipo === 'SALIDA' || m.tipo === 'MERMA' || m.tipo === 'CONSUMO_OT';
+                        const esEntrada = ['ENTRADA','SALDO_INICIAL','DEVOLUCION','DEVOLUCION_OT'].includes(m.tipo ?? '');
                         if (esEntrada) stockAcumulado += m.cantidad ?? 0;
                         else if (m.tipo === 'AJUSTE') stockAcumulado = m.cantidad ?? stockAcumulado;
                         else if (esDescuento) stockAcumulado -= m.cantidad ?? 0;
@@ -1466,13 +1467,13 @@ export function InventarioList() {
                               <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.8rem', fontWeight: 600, color: T.text }}>{m.createdAt ? new Date(m.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>
                               <div style={{ fontSize: '.72rem', color: T.text3, marginTop: 1 }}>{m.createdAt ? new Date(m.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
                             </td>
-                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}><span style={getTipoStyle(m.tipo ?? '')}><span style={getTipoDot(m.tipo ?? '')} />{m.tipo === 'SALDO_INICIAL' ? 'Saldo ini.' : m.tipo === 'AJUSTE_PRECIO' ? 'Ajuste precio' : (m.tipo?.charAt(0) ?? '') + (m.tipo?.slice(1).toLowerCase() ?? '')}</span></td>
+                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}><span style={getTipoStyle(m.tipo ?? '')}><span style={getTipoDot(m.tipo ?? '')} />{m.tipo === 'SALDO_INICIAL' ? 'Saldo ini.' : m.tipo === 'AJUSTE_PRECIO' ? 'Ajuste precio' : m.tipo === 'CONSUMO_OT' ? 'Consumo OT' : m.tipo === 'DEVOLUCION_OT' ? 'Devolución OT' : (m.tipo?.charAt(0) ?? '') + (m.tipo?.slice(1).toLowerCase() ?? '')}</span></td>
                             <td style={{ padding: '10px 14px', maxWidth: 200 }}>
                               <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.78rem', color: T.text2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.referencia || '—'}</div>
                               <div style={{ fontSize: '.72rem', color: T.text3, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.descripcion || ''}</div>
                             </td>
                             <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 650, color: T.ok, fontVariantNumeric: 'tabular-nums' }}>{esEntrada ? `+${m.cantidad}` : ''}</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 650, color: T.bad, fontVariantNumeric: 'tabular-nums' }}>{(esSalida || esMerma) ? `-${m.cantidad}` : ''}</td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 650, color: T.bad, fontVariantNumeric: 'tabular-nums' }}>{(esSalida || esMerma || m.tipo === 'CONSUMO_OT') ? `-${m.cantidad}` : ''}</td>
                             <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: T.text }}>{stockAcumulado}</td>
                             <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>{m.costoUnitario != null ? `S/ ${m.costoUnitario.toFixed(2)}` : '—'}</td>
                             <td style={{ padding: '10px 22px 10px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>{costoTotal != null && costoTotal > 0 ? `S/ ${costoTotal.toFixed(2)}` : '—'}</td>

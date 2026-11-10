@@ -24,7 +24,7 @@ export function SubscripcionGuard({ children }: SubscripcionGuardProps) {
   const planId = user?.suscripcion?.planId ?? 'BASICO';
   const puedeReintentar = esAdmin;
   // currentPeriodEnd para cancelación pendiente (viene del store o del DTO de estado)
-  const currentPeriodEnd = (user?.suscripcion as any)?.currentPeriodEnd as string | undefined;
+  const currentPeriodEnd = user?.suscripcion?.currentPeriodEnd;
 
   // Trial vencido: backend aún en TRIAL con fecha pasada, O ya cambió a PENDIENTE sin preapprovalId
   const esTrialVencido =
