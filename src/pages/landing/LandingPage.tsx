@@ -4,7 +4,7 @@ import { authService } from '../../services/auth.service';
 import { getSegmentoInfo } from '../../lib/segmentoInfo';
 import './landing.css';
 
-type Tab = 'farmacia' | 'ropa' | 'bodega' | 'ferreteria' | 'minimarket' | 'almacen' | 'veterinaria';
+type Tab = 'farmacia' | 'ropa' | 'bodega' | 'ferreteria' | 'minimarket' | 'empresa' | 'veterinaria';
 
 const TAB_SEGMENTO: Record<Tab, string> = {
   farmacia:    'FARMACIA_BOTICA',
@@ -12,20 +12,19 @@ const TAB_SEGMENTO: Record<Tab, string> = {
   bodega:      'TIENDA_BODEGA',
   ferreteria:  'FERRETERIA',
   minimarket:  'MINIMARKET',
-  almacen:     'ALMACENES',
+  empresa:     'EMPRESA_SERVICIOS',
   veterinaria: 'VETERINARIA',
 };
 
 // Segmento del tab → segmento válido en el formulario de registro.
 // FARMACIA_BOTICA → FARMACIA (default; el usuario puede cambiar a BOTICA en el formulario).
-// ALMACENES → ALMACENES (toPlanCodigo resuelve ALMACEN_BASICO via prefijo especial).
 const TAB_TO_REGISTER_SEGMENTO: Record<Tab, string> = {
   farmacia:    'FARMACIA',
   ropa:        'TIENDA_ROPA',
   bodega:      'TIENDA_BODEGA',
   ferreteria:  'FERRETERIA',
   minimarket:  'MINIMARKET',
-  almacen:     'ALMACENES',
+  empresa:     'EMPRESA_SERVICIOS',
   veterinaria: 'VETERINARIA',
 };
 
@@ -73,6 +72,19 @@ const TAG_STYLE: React.CSSProperties = {
 
 type PreciosEstado = 'cargando' | 'ok' | 'error';
 
+/**
+ * Calcula el precio Básico mínimo entre varios grupos de planes.
+ * Puro y exportable para tests.
+ */
+export function precioMinimoDesde(
+  gruposPlanes: Array<Array<{ nivel: string; precioMensual: number }>>
+): number | null {
+  const precios = gruposPlanes.flatMap(g =>
+    g.filter(p => p.nivel === 'BASICO').map(p => p.precioMensual)
+  );
+  return precios.length > 0 ? Math.min(...precios) : null;
+}
+
 export function LandingPage() {
   const [tab, setTab] = useState<Tab>('farmacia');
   const [locales, setLocales] = useState<1 | 5 | null>(null);
@@ -83,6 +95,8 @@ export function LandingPage() {
     basico: { usuarios: number; sucursales: number; productos: number };
     pro:    { usuarios: number; sucursales: number; productos: number };
   } | null>(null);
+  const [precioMin,      setPrecioMin]      = useState<number | null>(null);
+  const [precioMinEstado, setPrecioMinEstado] = useState<PreciosEstado>('cargando');
   const revealRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -113,6 +127,24 @@ export function LandingPage() {
       });
     return () => { activo = false; };
   }, [tab]);
+
+  useEffect(() => {
+    const segmentos = Object.values(TAB_SEGMENTO);
+    Promise.allSettled(segmentos.map(s => authService.getPlanesSegmento(s)))
+      .then(results => {
+        const grupos = results
+          .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof authService.getPlanesSegmento>>> => r.status === 'fulfilled')
+          .map(r => r.value);
+        const min = precioMinimoDesde(grupos);
+        if (min !== null) {
+          setPrecioMin(min);
+          setPrecioMinEstado('ok');
+        } else {
+          setPrecioMinEstado('error');
+        }
+      })
+      .catch(() => setPrecioMinEstado('error'));
+  }, []);
 
   useEffect(() => {
     const els = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
@@ -212,7 +244,7 @@ export function LandingPage() {
               {val:'12+',label:'Módulos integrados'},
               {val:'SUNAT',label:'Facturación electrónica'},
               {val:'14 días',label:'Prueba gratuita'},
-              {val: preciosEstado === 'ok' && precios ? `S/ ${precios.basico}` : preciosEstado === 'cargando' ? '…' : 'S/ —', label:'Desde por mes'},
+              {val: precioMinEstado === 'ok' && precioMin !== null ? `S/ ${precioMin}` : precioMinEstado === 'cargando' ? '…' : 'S/ —', label:'Desde por mes'},
             ].map((s, i, arr) => (
               <div key={s.val} data-r="statitem" style={{padding:'26px 24px',borderRight: i < arr.length - 1 ? '1px solid rgba(255,255,255,.07)' : 'none'}}>
                 <div style={{fontFamily:"'Space Mono',monospace",fontSize:'1.7rem',fontWeight:700,background:'linear-gradient(135deg,#8b85ff,#00d4aa)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>{s.val}</div>
@@ -349,7 +381,7 @@ export function LandingPage() {
               <h2 style={{fontSize:'clamp(1.9rem,3.4vw,2.9rem)',fontWeight:800,lineHeight:1.1,letterSpacing:'-.03em',margin:'14px 0 0'}}>Elige tu tipo de negocio y mira qué cambia</h2>
             </div>
             <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:32}}>
-              {([['farmacia','💊 Farmacias y boticas'],['veterinaria','🐾 Veterinarias'],['ropa','👗 Tiendas de ropa'],['bodega','🏪 Tiendas y bodegas'],['ferreteria','🔧 Ferreterías'],['minimarket','🛒 Minimarkets'],['almacen','📦 Almacenes']] as [Tab, string][]).map(([k, label]) => (
+              {([['farmacia','💊 Farmacias y boticas'],['veterinaria','🐾 Veterinarias'],['ropa','👗 Tiendas de ropa'],['bodega','🏪 Tiendas y bodegas'],['ferreteria','🔧 Ferreterías'],['minimarket','🛒 Minimarkets'],['empresa','🏢 Empresa de servicios']] as [Tab, string][]).map(([k, label]) => (
                 <button key={k} type="button" onClick={() => setTab(k)} style={tabStyle(tab === k)}>{label}</button>
               ))}
             </div>
@@ -377,7 +409,7 @@ export function LandingPage() {
                 {locales === 1 ? 'Te alcanza el Plan Básico.' : locales === 5 ? 'Necesitas el Plan Pro (multi‑sucursal).' : ''}
               </span>
             </div>
-            <div data-r="two" style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:16,marginTop:16,maxWidth:920}}>
+            <div data-r="two" style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:16,marginTop:16,maxWidth:920,margin:'16px auto 0'}}>
               {/* Plan Básico */}
               <div style={{display:'flex',flexDirection:'column',padding:32,border:'1px solid rgba(255,255,255,.08)',borderRadius:20,background:'#0e0f15'}}>
                 <div style={{fontFamily:"'Space Mono',monospace",fontSize:'.72rem',fontWeight:700,letterSpacing:'.15em',textTransform:'uppercase',color:'#8b85ff'}}>Plan Básico</div>
@@ -503,7 +535,7 @@ export function LandingPage() {
                 <span style={{fontFamily:"'Space Mono',monospace",fontSize:'1.15rem',fontWeight:700,background:'linear-gradient(135deg,#8b85ff,#00d4aa)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>Fluxus</span>
               </a>
               <p style={{fontSize:'.88rem',color:'#5a5a72',lineHeight:1.7,margin:'16px 0 0',maxWidth:280}}>Mini‑ERP para negocios peruanos. POS, inventario, compras, devoluciones, clientes, proveedores y facturación electrónica integrada con SUNAT.</p>
-              <p style={{fontSize:11,color:'#7d7f96',lineHeight:1.7,margin:'12px 0 0'}}>Joaquin Castillo Tello · RUC: 10769109566<br />Jr. Libertad 455, Magdalena del Mar, Lima<br />Nombre comercial: Fluxus</p>
+              <p style={{fontSize:11,color:'#7d7f96',lineHeight:1.7,margin:'12px 0 0'}}>Fluxus · RUC: 10769109566 · Lima, Perú</p>
             </div>
             <div>
               <h4 style={{fontFamily:"'Space Mono',monospace",fontSize:'.8rem',fontWeight:700,letterSpacing:'.05em',margin:'0 0 16px'}}>Producto</h4>
@@ -531,8 +563,8 @@ export function LandingPage() {
             </div>
           </div>
           <div style={{maxWidth:1180,margin:'0 auto',padding:'22px 28px 100px',borderTop:'1px solid rgba(255,255,255,.06)',display:'flex',flexWrap:'wrap',gap:12,justifyContent:'space-between',fontFamily:"'Space Mono',monospace",fontSize:'.72rem',color:'#7d7f96'}}>
-            <span>© 2026 Joaquin Castillo Tello (Fluxus) · RUC 10769109566</span>
-            <span>Magdalena del Mar, Lima · Perú</span>
+            <span>© 2026 Fluxus · RUC 10769109566</span>
+            <span>Lima · Perú</span>
           </div>
         </footer>
 

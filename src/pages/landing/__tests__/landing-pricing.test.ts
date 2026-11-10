@@ -13,14 +13,15 @@
 import { describe, it, expect } from 'vitest';
 import { getSegmentoInfo } from '../../../lib/segmentoInfo';
 
-// Mapeo TAB → segmento (copia del que usa LandingPage)
+// Mapeo TAB → segmento (copia del que usa LandingPage).
+// ALMACENES removido (rubro OTRO bloqueado); EMPRESA_SERVICIOS añadido.
 const TAB_SEGMENTO: Record<string, string> = {
   farmacia:    'FARMACIA_BOTICA',
   ropa:        'TIENDA_ROPA',
   bodega:      'TIENDA_BODEGA',
   ferreteria:  'FERRETERIA',
   minimarket:  'MINIMARKET',
-  almacen:     'ALMACENES',
+  empresa:     'EMPRESA_SERVICIOS',
   veterinaria: 'VETERINARIA',
 };
 

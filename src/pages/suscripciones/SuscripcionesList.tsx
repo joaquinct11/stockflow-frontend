@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { suscripcionService } from '../../services/suscripcion.service';
-import { culqiService, type CulqiConfigResponse } from '../../services/culqi.service';
+import { culqiService } from '../../services/culqi.service';
+import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import type { SuscripcionDTO } from '../../types';
 import { notify } from '../../lib/notify';
@@ -414,20 +415,21 @@ export function SuscripcionesList() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<'upgrade' | 'downgrade' | 'cancelar' | null>(null);
   const [uso, setUso] = useState<{ sucursales: number; usuarios: number; productos: number } | null>(null);
-  const [configBasico, setConfigBasico] = useState<CulqiConfigResponse | null>(null);
-  const [configPro, setConfigPro]       = useState<CulqiConfigResponse | null>(null);
+  const [precioBasicoCatalogo, setPrecioBasicoCatalogo] = useState<number>(89);
+  const [precioProCatalogo, setPrecioProCatalogo]       = useState<number>(169);
 
   useEffect(() => { fetchSuscripcion(); }, []);
 
   const fetchSuscripcion = async () => {
     try {
       setLoading(true);
-      const [estado, detalle, usoResult, cfgBasico, cfgPro] = await Promise.allSettled([
+      const [estado, detalle, usoResult, , , planesCatalogo] = await Promise.allSettled([
         suscripcionService.getEstado(),
         user?.usuarioId ? suscripcionService.getMiSuscripcion(user.usuarioId) : Promise.reject(),
         suscripcionService.getUso(),
         culqiService.getConfig('BASICO'),
         culqiService.getConfig('PRO'),
+        segmento ? authService.getPlanesSegmento(segmento) : Promise.resolve([]),
       ]);
       if (estado.status === 'rejected') { notify.fromError(null, 'Error al cargar la suscripción'); return; }
       const e = estado.value;
@@ -452,8 +454,13 @@ export function SuscripcionesList() {
         ultimos4Digitos: d?.ultimos4Digitos,
       });
       if (usoResult.status === 'fulfilled') setUso(usoResult.value);
-      if (cfgBasico.status === 'fulfilled') setConfigBasico(cfgBasico.value);
-      if (cfgPro.status   === 'fulfilled') setConfigPro(cfgPro.value);
+      if (planesCatalogo.status === 'fulfilled') {
+        const planes = planesCatalogo.value;
+        const pBasico = planes.find(p => p.nivel === 'BASICO');
+        const pPro    = planes.find(p => p.nivel === 'PRO');
+        if (pBasico) setPrecioBasicoCatalogo(pBasico.precioMensual);
+        if (pPro)    setPrecioProCatalogo(pPro.precioMensual);
+      }
     } catch (err) {
       notify.fromError(err, 'Error al cargar la suscripción');
     } finally {
@@ -638,7 +645,7 @@ export function SuscripcionesList() {
             )}
 
             {/* 3-cell meta row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 1, background: T.lineSoft, borderTop: `1px solid ${T.lineSoft}`, borderBottom: `1px solid ${T.lineSoft}` }}>
+            <div className="sus-meta-grid" style={{ background: T.lineSoft, borderTop: `1px solid ${T.lineSoft}`, borderBottom: `1px solid ${T.lineSoft}` }}>
               <div style={{ padding: '14px 22px', background: T.surface }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.74rem', color: T.text3, whiteSpace: 'nowrap' }}>
                   <IcCalendar size={13} />{fechaLabel}
@@ -687,22 +694,25 @@ export function SuscripcionesList() {
             )}
 
             {/* Action buttons */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, padding: '16px 22px 20px' }}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap" style={{ padding: '16px 22px 20px' }}>
               {hayPrimario && (
                 <button type="button" onClick={() => navigate(`/checkout/culqi?plan=${esPro ? 'PRO' : 'BASICO'}`)}
-                  style={{ flex: '1 1 200px', height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'Inter, sans-serif', fontSize: '.9rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 11, cursor: 'pointer', boxShadow: `0 8px 20px -10px ${T.primary}` }}>
+                  style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'Inter, sans-serif', fontSize: '.9rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 11, cursor: 'pointer', boxShadow: `0 8px 20px -10px ${T.primary}` }}
+                  className="w-full sm:flex-1">
                   <IcCard size={16} />{primarioLabel}
                 </button>
               )}
               {(esActiva || esSusp) && (
                 <button type="button" onClick={() => navigate('/checkout/culqi?mode=cambiar-tarjeta')}
-                  style={{ flex: '1 1 160px', height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'Inter, sans-serif', fontSize: '.9rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 11, cursor: 'pointer' }}>
+                  style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'Inter, sans-serif', fontSize: '.9rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 11, cursor: 'pointer' }}
+                  className="w-full sm:flex-1">
                   <IcCard size={16} />Cambiar tarjeta
                 </button>
               )}
               {esActiva && canToggleState('SUSCRIPCIONES') && (
                 <button type="button" onClick={() => setModal('cancelar')}
-                  style={{ flex: '0 1 auto', height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0 16px', fontFamily: 'Inter, sans-serif', fontSize: '.88rem', fontWeight: 600, color: T.bad, background: 'transparent', border: '1px solid transparent', borderRadius: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0 16px', fontFamily: 'Inter, sans-serif', fontSize: '.88rem', fontWeight: 600, color: T.bad, background: 'transparent', border: '1px solid transparent', borderRadius: 11, cursor: 'pointer' }}
+                  className="w-full sm:w-auto">
                   <IcXCircle size={16} />Cancelar suscripción
                 </button>
               )}
@@ -730,8 +740,8 @@ export function SuscripcionesList() {
           <span style={{ fontSize: '.78rem', color: T.text3 }}>Cobro mensual con IGV incluido · cancela cuando quieras, sin penalidad</span>
         </div>
         <div className="sus-planes" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14, alignItems: 'stretch' }}>
-          <PlanCard esPro={false} esActual={!esPro} puedeUpgrade={puedeUpgrade} puedeDowngrade={puedeDowngrade} onUpgrade={() => setModal('upgrade')} onDowngrade={() => setModal('downgrade')} precioNum={configBasico?.precioMensual ?? 89} features={segInfo.featuresBasico} />
-          <PlanCard esPro={true}  esActual={esPro}  puedeUpgrade={puedeUpgrade} puedeDowngrade={puedeDowngrade} onUpgrade={() => setModal('upgrade')} onDowngrade={() => setModal('downgrade')} precioNum={configPro?.precioMensual ?? 169} features={segInfo.featuresPro} />
+          <PlanCard esPro={false} esActual={!esPro} puedeUpgrade={puedeUpgrade} puedeDowngrade={puedeDowngrade} onUpgrade={() => setModal('upgrade')} onDowngrade={() => setModal('downgrade')} precioNum={precioBasicoCatalogo} features={segInfo.featuresBasico} />
+          <PlanCard esPro={true}  esActual={esPro}  puedeUpgrade={puedeUpgrade} puedeDowngrade={puedeDowngrade} onUpgrade={() => setModal('upgrade')} onDowngrade={() => setModal('downgrade')} precioNum={precioProCatalogo} features={segInfo.featuresPro} />
         </div>
       </div>
 
@@ -740,14 +750,14 @@ export function SuscripcionesList() {
         <UpgradeModal
           onClose={() => setModal(null)}
           onConfirm={() => { setModal(null); navigate('/checkout/culqi?plan=PRO&mode=upgrade'); }}
-          precioPro={configPro?.precioMensual ?? 169}
+          precioPro={precioProCatalogo}
         />
       )}
       {modal === 'downgrade' && (
         <DowngradeModal
           onClose={() => setModal(null)}
           onConfirm={() => { setModal(null); navigate('/checkout/culqi?plan=BASICO&mode=downgrade-basico'); }}
-          precioBasico={configBasico?.precioMensual ?? 89}
+          precioBasico={precioBasicoCatalogo}
         />
       )}
       {modal === 'cancelar' && (

@@ -1,10 +1,13 @@
 /**
  * Valida el orden de las pestañas de la landing y sus mapeos de segmento/registro.
+ *
+ * ALMACENES fue removido (rubro OTRO bloqueado para nuevos registros).
+ * EMPRESA_SERVICIOS fue añadido como rubro habilitado.
  */
 
 import { describe, it, expect } from 'vitest';
 
-type Tab = 'farmacia' | 'ropa' | 'bodega' | 'ferreteria' | 'minimarket' | 'almacen' | 'veterinaria';
+type Tab = 'farmacia' | 'ropa' | 'bodega' | 'ferreteria' | 'minimarket' | 'empresa' | 'veterinaria';
 
 // Orden de pestañas tal como aparece en el render (fuente de verdad)
 const TAB_ORDER: Tab[] = [
@@ -14,7 +17,7 @@ const TAB_ORDER: Tab[] = [
   'bodega',
   'ferreteria',
   'minimarket',
-  'almacen',
+  'empresa',
 ];
 
 const TAB_SEGMENTO: Record<Tab, string> = {
@@ -23,7 +26,7 @@ const TAB_SEGMENTO: Record<Tab, string> = {
   bodega:      'TIENDA_BODEGA',
   ferreteria:  'FERRETERIA',
   minimarket:  'MINIMARKET',
-  almacen:     'ALMACENES',
+  empresa:     'EMPRESA_SERVICIOS',
   veterinaria: 'VETERINARIA',
 };
 
@@ -33,7 +36,7 @@ const TAB_TO_REGISTER_SEGMENTO: Record<Tab, string> = {
   bodega:      'TIENDA_BODEGA',
   ferreteria:  'FERRETERIA',
   minimarket:  'MINIMARKET',
-  almacen:     'ALMACENES',
+  empresa:     'EMPRESA_SERVICIOS',
   veterinaria: 'VETERINARIA',
 };
 
@@ -51,12 +54,22 @@ describe('Orden de pestañas de la landing', () => {
       'bodega',
       'ferreteria',
       'minimarket',
-      'almacen',
+      'empresa',
     ]);
   });
 
   it('hay exactamente 7 pestañas', () => {
     expect(TAB_ORDER).toHaveLength(7);
+  });
+
+  it('ALMACENES no aparece como pestaña (rubro bloqueado para nuevos registros)', () => {
+    const segmentos = TAB_ORDER.map(t => TAB_SEGMENTO[t]);
+    expect(segmentos).not.toContain('ALMACENES');
+  });
+
+  it('EMPRESA_SERVICIOS aparece como pestaña (rubro habilitado)', () => {
+    const segmentos = TAB_ORDER.map(t => TAB_SEGMENTO[t]);
+    expect(segmentos).toContain('EMPRESA_SERVICIOS');
   });
 });
 
@@ -68,7 +81,7 @@ describe('Mapeo tab → segmento de catálogo', () => {
     ['bodega',      'TIENDA_BODEGA'],
     ['ferreteria',  'FERRETERIA'],
     ['minimarket',  'MINIMARKET'],
-    ['almacen',     'ALMACENES'],
+    ['empresa',     'EMPRESA_SERVICIOS'],
   ] as [Tab, string][])('tab %s → segmento %s', (tab, segmento) => {
     expect(TAB_SEGMENTO[tab]).toBe(segmento);
   });
@@ -76,13 +89,13 @@ describe('Mapeo tab → segmento de catálogo', () => {
 
 describe('Mapeo tab → segmento de registro (?segmento= en URL)', () => {
   it.each([
-    ['farmacia',    'FARMACIA'],    // FARMACIA_BOTICA → default FARMACIA; el usuario puede cambiar a BOTICA
+    ['farmacia',    'FARMACIA'],           // FARMACIA_BOTICA → default FARMACIA; el usuario puede cambiar a BOTICA
     ['veterinaria', 'VETERINARIA'],
     ['ropa',        'TIENDA_ROPA'],
     ['bodega',      'TIENDA_BODEGA'],
     ['ferreteria',  'FERRETERIA'],
     ['minimarket',  'MINIMARKET'],
-    ['almacen',     'ALMACENES'],   // ALMACENES → toPlanCodigo produce ALMACEN_BASICO/PRO
+    ['empresa',     'EMPRESA_SERVICIOS'],
   ] as [Tab, string][])('tab %s → register segmento %s', (tab, registerSegmento) => {
     expect(TAB_TO_REGISTER_SEGMENTO[tab]).toBe(registerSegmento);
   });
@@ -92,13 +105,19 @@ describe('Mapeo tab → segmento de registro (?segmento= en URL)', () => {
     expect(TAB_TO_REGISTER_SEGMENTO.farmacia).not.toBe('BOTICA');
   });
 
-  it('el tab almacen apunta a ALMACENES (produce ALMACEN_BASICO, no OTRO_BASICO)', () => {
-    expect(TAB_TO_REGISTER_SEGMENTO.almacen).toBe('ALMACENES');
-    expect(TAB_TO_REGISTER_SEGMENTO.almacen).not.toBe('OTRO');
+  it('ningún tab apunta a ALMACENES (rubro OTRO bloqueado)', () => {
+    const valores = Object.values(TAB_TO_REGISTER_SEGMENTO);
+    expect(valores).not.toContain('ALMACENES');
+    expect(valores).not.toContain('OTRO');
   });
 
   it('ningún tab apunta a FARMACIA_BOTICA como segmento de registro', () => {
     const valores = Object.values(TAB_TO_REGISTER_SEGMENTO);
     expect(valores).not.toContain('FARMACIA_BOTICA');
+  });
+
+  it('ningún tab apunta a RESTAURANTE (rubro bloqueado)', () => {
+    const valores = Object.values(TAB_TO_REGISTER_SEGMENTO);
+    expect(valores).not.toContain('RESTAURANTE');
   });
 });

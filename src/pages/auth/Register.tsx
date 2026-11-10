@@ -27,11 +27,8 @@ const SEGMENTO_HINTS: Record<string, string> = {
   FERRETERIA:        'Verás órdenes de compra, recepciones parciales y kardex.',
   TIENDA_ROPA:       'Verás variantes por talla y color en el inventario.',
   TIENDA_BODEGA:     'Verás POS rápido, caja diaria y alertas de stock.',
-  RESTAURANTE:       'Verás mesas, pedidos y comprobantes electrónicos para restaurantes.',
   EMPRESA_SERVICIOS: 'Verás facturación, clientes y reportes de ingresos.',
   VETERINARIA:       'Verás fichas de mascotas, historial clínico, citas y agenda de profesionales.',
-  ALMACENES:         'Verás control de entradas, salidas y stock de tu almacén o depósito.',
-  OTRO:              'Define los módulos que verás al ingresar.',
 };
 
 // Precios locales de fallback — solo usados mientras el catálogo carga.
@@ -44,9 +41,7 @@ const PRECIOS_FALLBACK: Record<string, { basico: number; pro: number }> = {
   TIENDA_BODEGA:     { basico: 79,  pro: 149 },
   FERRETERIA:        { basico: 99,  pro: 179 },
   MINIMARKET:        { basico: 99,  pro: 179 },
-  RESTAURANTE:       { basico: 119, pro: 199 },
   EMPRESA_SERVICIOS: { basico: 99,  pro: 179 },
-  ALMACENES:         { basico: 89,  pro: 169 },
   DEFAULT:           { basico: 89,  pro: 169 },
 };
 
@@ -54,24 +49,35 @@ function getFallbackPrecio(segmento: string): { basico: number; pro: number } {
   return PRECIOS_FALLBACK[segmento] ?? PRECIOS_FALLBACK.DEFAULT;
 }
 
-// El catálogo usa 'ALMACEN_BASICO' (sin S), aunque el segmento es ALMACENES.
-const SEGMENTO_A_PLAN_PREFIJO: Record<string, string> = {
-  ALMACENES: 'ALMACEN',
-};
+const SEGMENTO_A_PLAN_PREFIJO: Record<string, string> = {};
 
 // Mapea segmento comercial → código de plan en el catálogo.
 // e.g. segmento=VETERINARIA, nivel=BASICO → VETERINARIA_BASICO
-// e.g. segmento=ALMACENES,   nivel=BASICO → ALMACEN_BASICO (prefijo especial)
 function toPlanCodigo(segmento: string, nivel: string): string {
   const prefijo = SEGMENTO_A_PLAN_PREFIJO[segmento] ?? segmento;
   return `${prefijo}_${nivel}`;
+}
+
+// Opciones válidas del dropdown (7 opciones comerciales).
+// FARMACIA y BOTICA llegan desde la URL pero se muestran como FARMACIA_BOTICA.
+const DROPDOWN_SEGMENTOS = [
+  'FARMACIA_BOTICA', 'VETERINARIA', 'MINIMARKET', 'FERRETERIA',
+  'TIENDA_ROPA', 'TIENDA_BODEGA', 'EMPRESA_SERVICIOS',
+] as const;
+
+// Normaliza el parámetro ?segmento= de la URL al valor del dropdown y al sub-tipo farmacia/botica.
+export function parseSegmentoFromUrl(raw: string): { dropdown: string; farmacia: 'FARMACIA' | 'BOTICA' } {
+  const u = (raw ?? '').toUpperCase();
+  if (u === 'FARMACIA') return { dropdown: 'FARMACIA_BOTICA', farmacia: 'FARMACIA' };
+  if (u === 'BOTICA')   return { dropdown: 'FARMACIA_BOTICA', farmacia: 'BOTICA' };
+  if ((DROPDOWN_SEGMENTOS as readonly string[]).includes(u)) return { dropdown: u, farmacia: 'FARMACIA' };
+  return { dropdown: 'FARMACIA_BOTICA', farmacia: 'FARMACIA' };
 }
 
 // Mapea segmento comercial → rubro operativo del backend (para RegistrationRequestDTO.rubro)
 const SEGMENTO_A_RUBRO: Record<string, string> = {
   TIENDA_BODEGA: 'TIENDA',
   TIENDA_ROPA:   'TIENDA_ROPA',
-  ALMACENES:     'OTRO',
 };
 function toRubroOperativo(segmento: string): string {
   return SEGMENTO_A_RUBRO[segmento] ?? segmento;
@@ -106,13 +112,9 @@ export function Register() {
   const rawPlan  = searchParams.get('plan')?.toUpperCase();
   const initPlan: PlanId = rawPlan === 'PRO' ? 'PRO' : 'BASICO';
 
-  // Segmentos válidos en el select — para validar el parámetro de URL
-  const SEGMENTOS_VALIDOS = [
-    'BOTICA','FARMACIA','VETERINARIA','MINIMARKET','FERRETERIA',
-    'TIENDA_ROPA','TIENDA_BODEGA','RESTAURANTE','EMPRESA_SERVICIOS','ALMACENES','OTRO',
-  ];
-  const rawSegmento = searchParams.get('segmento')?.toUpperCase() ?? '';
-  const initSegmento = SEGMENTOS_VALIDOS.includes(rawSegmento) ? rawSegmento : 'OTRO';
+  const rawSegmento = searchParams.get('segmento') ?? '';
+  const { dropdown: initDropdown, farmacia: initFarmacia } = parseSegmentoFromUrl(rawSegmento);
+  const initEffectiveSegmento = initDropdown === 'FARMACIA_BOTICA' ? initFarmacia : initDropdown;
 
   // ── Step 1: datos personales (→ usuarios) ──
   const [step,     setStep]     = useState<1 | 2>(1);
@@ -126,14 +128,18 @@ export function Register() {
   const [celular,  setCelular]  = useState('');
 
   // ── Step 2: datos del negocio (→ tenants) ──
-  const [empresa,    setEmpresa]    = useState('');
-  const [segmento,   setSegmento]   = useState(initSegmento);
-  const [rucEmpresa, setRucEmpresa] = useState('');
+  const [empresa,           setEmpresa]           = useState('');
+  const [segmento,          setSegmento]          = useState(initDropdown);
+  // Sub-tipo visible solo cuando segmento === 'FARMACIA_BOTICA'
+  const [tipoFarmaciaBotica, setTipoFarmaciaBotica] = useState<'FARMACIA' | 'BOTICA'>(initFarmacia);
+  const [rucEmpresa,        setRucEmpresa]        = useState('');
+  // Rubro operativo efectivo que se envía al backend y se usa para cargar planes.
+  const effectiveSegmento = segmento === 'FARMACIA_BOTICA' ? tipoFarmaciaBotica : segmento;
   const [plan,       setPlan]       = useState<PlanId>(initPlan);
 
   // Precios cargados del catálogo del servidor.
   // preciosOk=false indica fallo de carga: bloquea el submit y muestra aviso.
-  const [precios,    setPrecios]    = useState(getFallbackPrecio('OTRO'));
+  const [precios,    setPrecios]    = useState(getFallbackPrecio(initEffectiveSegmento));
   const [preciosOk,  setPreciosOk]  = useState(false);
   const [preciosCargando, setPreciosCargando] = useState(false);
 
@@ -142,8 +148,8 @@ export function Register() {
     setPreciosOk(false);
     setPreciosCargando(true);
     Promise.all([
-      authService.getPlanPorCodigo(toPlanCodigo(segmento, 'BASICO')),
-      authService.getPlanPorCodigo(toPlanCodigo(segmento, 'PRO')),
+      authService.getPlanPorCodigo(toPlanCodigo(effectiveSegmento, 'BASICO')),
+      authService.getPlanPorCodigo(toPlanCodigo(effectiveSegmento, 'PRO')),
     ])
       .then(([b, p]) => {
         if (!activo) return;
@@ -152,12 +158,12 @@ export function Register() {
       })
       .catch(() => {
         if (!activo) return;
-        setPrecios(getFallbackPrecio(segmento));
+        setPrecios(getFallbackPrecio(effectiveSegmento));
         setPreciosOk(false);
       })
       .finally(() => { if (activo) setPreciosCargando(false); });
     return () => { activo = false; };
-  }, [segmento]);
+  }, [effectiveSegmento]);
 
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
@@ -205,7 +211,7 @@ export function Register() {
 
     setLoading(true); setError('');
     try {
-      const planCodigo = toPlanCodigo(segmento, plan);
+      const planCodigo = toPlanCodigo(effectiveSegmento, plan);
       const response = await authService.register({
         email:           email.trim(),
         contraseña:      pass,
@@ -214,7 +220,7 @@ export function Register() {
         nombreFarmacia:  empresa.trim(),
         planId:          plan,
         planCodigo,
-        rubro:           toRubroOperativo(segmento),
+        rubro:           toRubroOperativo(effectiveSegmento),
         tipoDocumento:   tipoDoc,
         numeroDocumento: numDoc,
         numeroCelular:   celular,
@@ -477,20 +483,46 @@ export function Register() {
                   {/* Segmento comercial */}
                   <div style={{ display: 'grid', gap: 7 }}>
                     <label htmlFor="rx-rubro" style={{ fontSize: '.83rem', fontWeight: 600, color: '#c9cbd8' }}>Tipo de negocio <span style={{ color: '#ff8079' }}>*</span></label>
-                    <select id="rx-rubro" value={segmento} onChange={e => { setSegmento(e.target.value); setPlan('BASICO'); }} className="rx-select">
-                      <option value="BOTICA">Botica</option>
-                      <option value="FARMACIA">Farmacia</option>
-                      <option value="VETERINARIA">Veterinaria</option>
-                      <option value="MINIMARKET">Minimarket</option>
-                      <option value="FERRETERIA">Ferretería</option>
-                      <option value="RESTAURANTE">Restaurante</option>
-                      <option value="TIENDA_ROPA">Tienda de Ropa</option>
-                      <option value="TIENDA_BODEGA">Tienda / Bodega</option>
-                      <option value="EMPRESA_SERVICIOS">Empresa de Servicios</option>
-                      <option value="ALMACENES">Almacén / Depósito</option>
-                      <option value="OTRO">Otro</option>
+                    <select
+                      id="rx-rubro"
+                      value={segmento}
+                      onChange={e => {
+                        setSegmento(e.target.value);
+                        if (e.target.value === 'FARMACIA_BOTICA') setTipoFarmaciaBotica('FARMACIA');
+                        setPlan('BASICO');
+                      }}
+                      className="rx-select"
+                    >
+                      <option value="FARMACIA_BOTICA">Farmacia y botica</option>
+                      <option value="VETERINARIA">Veterinarias</option>
+                      <option value="TIENDA_ROPA">Tiendas de ropa</option>
+                      <option value="TIENDA_BODEGA">Tiendas y bodegas</option>
+                      <option value="FERRETERIA">Ferreterías</option>
+                      <option value="MINIMARKET">Minimarkets</option>
+                      <option value="EMPRESA_SERVICIOS">Empresa de servicios</option>
                     </select>
-                    <span style={{ fontSize: '.78rem', color: '#7d7f96' }}>{SEGMENTO_HINTS[segmento] ?? SEGMENTO_HINTS.OTRO}</span>
+                    {segmento === 'FARMACIA_BOTICA' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                        <span style={{ fontSize: '.78rem', color: '#8d90a6', flexShrink: 0 }}>¿Es una:</span>
+                        {(['FARMACIA', 'BOTICA'] as const).map(tipo => (
+                          <button
+                            key={tipo}
+                            type="button"
+                            onClick={() => setTipoFarmaciaBotica(tipo)}
+                            style={{
+                              fontSize: '.78rem', fontWeight: 600, padding: '4px 13px', borderRadius: 100,
+                              cursor: 'pointer', transition: 'all .15s',
+                              ...(tipoFarmaciaBotica === tipo
+                                ? { border: '1px solid rgba(108,99,255,.65)', color: '#a79fff', background: 'rgba(108,99,255,.15)' }
+                                : { border: '1px solid rgba(255,255,255,.12)', color: '#7d7f96', background: 'none' }),
+                            }}
+                          >
+                            {tipo === 'FARMACIA' ? 'Farmacia' : 'Botica'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <span style={{ fontSize: '.78rem', color: '#7d7f96' }}>{SEGMENTO_HINTS[effectiveSegmento]}</span>
                   </div>
 
                   {/* Plan selector */}
@@ -516,7 +548,7 @@ export function Register() {
                         <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 4 }}>
                           <li style={{ display: 'flex', gap: 7, fontSize: '.75rem', color: '#8d90a6' }}><span style={{ color: '#00d4aa' }}>✓</span>POS con caja integrada</li>
                           <li style={{ display: 'flex', gap: 7, fontSize: '.75rem', color: '#8d90a6' }}><span style={{ color: '#00d4aa' }}>✓</span>Facturación electrónica</li>
-                          <li style={{ display: 'flex', gap: 7, fontSize: '.75rem', color: '#8d90a6' }}><span style={{ color: '#00d4aa' }}>✓</span>Hasta {segmento === 'VETERINARIA' ? 10 : 5} usuarios</li>
+                          <li style={{ display: 'flex', gap: 7, fontSize: '.75rem', color: '#8d90a6' }}><span style={{ color: '#00d4aa' }}>✓</span>Hasta {effectiveSegmento === 'VETERINARIA' ? 10 : 5} usuarios</li>
                         </ul>
                       </button>
                       <button type="button" onClick={() => { setPlan('PRO'); setSearchParams({ plan: 'PRO' }, { replace: true }); }} style={planStyle('PRO')}>
