@@ -407,7 +407,7 @@ export default function LandingPage() {
           </div>
           <div data-r="segs" style={{display:'grid',gridTemplateColumns:'repeat(12,minmax(0,1fr))',gap:'14px',marginTop:'44px'}}>
             {SEG_CONFIGS.map((s,i) => (
-              <a key={s.k} href="#planes" onClick={e => { setSeg(i); }} data-reveal="1"
+              <a key={s.k} href="#planes" onClick={() => { setSeg(i); }} data-reveal="1"
                 className="lp-seg-card"
                 style={{position:'relative',border:'1px solid rgba(255,255,255,.08)',borderRadius:'20px',background:'linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01))',overflow:'hidden',gridColumn:`span ${i < 4 ? 3 : 4}`,display:'flex',flexDirection:'column',padding:'24px 24px 22px',color:'#ececf3'}}>
                 <div style={{position:'absolute',top:'-60px',right:'-60px',width:'180px',height:'180px',borderRadius:'50%',background:'radial-gradient(circle,rgba(108,99,255,.18),transparent 70%)',pointerEvents:'none'}} />
