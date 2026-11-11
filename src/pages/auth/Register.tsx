@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 import toast from 'react-hot-toast';
 import type { PlanId, TipoDocumento } from '../../types';
 import './register.css';
+import { IC } from '../../constants/rubros';
 
 interface ApiErrorShape {
   response?: { data?: { mensaje?: string } };
@@ -483,24 +484,44 @@ export function Register() {
                   {/* Segmento comercial */}
                   <div style={{ display: 'grid', gap: 7 }}>
                     <label htmlFor="rx-rubro" style={{ fontSize: '.83rem', fontWeight: 600, color: '#c9cbd8' }}>Tipo de negocio <span style={{ color: '#ff8079' }}>*</span></label>
-                    <select
-                      id="rx-rubro"
-                      value={segmento}
-                      onChange={e => {
-                        setSegmento(e.target.value);
-                        if (e.target.value === 'FARMACIA_BOTICA') setTipoFarmaciaBotica('FARMACIA');
-                        setPlan('BASICO');
-                      }}
-                      className="rx-select"
-                    >
-                      <option value="FARMACIA_BOTICA">Farmacia y botica</option>
-                      <option value="VETERINARIA">Veterinarias</option>
-                      <option value="TIENDA_ROPA">Tiendas de ropa</option>
-                      <option value="TIENDA_BODEGA">Tiendas y bodegas</option>
-                      <option value="FERRETERIA">Ferreterías</option>
-                      <option value="MINIMARKET">Minimarkets</option>
-                      <option value="EMPRESA_SERVICIOS">Empresa de servicios</option>
-                    </select>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{
+                        position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)',
+                        pointerEvents: 'none', zIndex: 1,
+                        width: 32, height: 32, flexShrink: 0,
+                        display: 'grid', placeItems: 'center',
+                        borderRadius: 9,
+                        color: (IC[segmento] ?? IC.FARMACIA_BOTICA)[1],
+                        background: `color-mix(in oklab, ${(IC[segmento] ?? IC.FARMACIA_BOTICA)[1]} 14%, #101118)`,
+                        border: `1px solid color-mix(in oklab, ${(IC[segmento] ?? IC.FARMACIA_BOTICA)[1]} 28%, transparent)`,
+                      }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                          <path d={(IC[segmento] ?? IC.FARMACIA_BOTICA)[0]} />
+                        </svg>
+                      </span>
+                      <select
+                        id="rx-rubro"
+                        value={segmento}
+                        onChange={e => {
+                          setSegmento(e.target.value);
+                          if (e.target.value === 'FARMACIA_BOTICA') setTipoFarmaciaBotica('FARMACIA');
+                          setPlan('BASICO');
+                        }}
+                        className="rx-select"
+                        style={{ padding: '0 14px 0 52px', appearance: 'none', WebkitAppearance: 'none' }}
+                      >
+                        <option value="FARMACIA_BOTICA">Farmacia y botica</option>
+                        <option value="VETERINARIA">Veterinarias</option>
+                        <option value="TIENDA_ROPA">Tiendas de ropa</option>
+                        <option value="TIENDA_BODEGA">Tiendas y bodegas</option>
+                        <option value="FERRETERIA">Ferreterías</option>
+                        <option value="MINIMARKET">Minimarkets</option>
+                        <option value="EMPRESA_SERVICIOS">Empresa de servicios</option>
+                      </select>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', color: '#5a5a72', pointerEvents: 'none' }}>
+                        <path d="m6 9 6 6 6-6"/>
+                      </svg>
+                    </div>
                     {segmento === 'FARMACIA_BOTICA' && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
                         <span style={{ fontSize: '.78rem', color: '#8d90a6', flexShrink: 0 }}>¿Es una:</span>

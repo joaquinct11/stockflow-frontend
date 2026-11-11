@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Moon, Sun, LogOut, User, Menu, ChevronDown, Settings, AlertTriangle, Info, CheckCircle, X, BellOff, Building2, MapPin, ArrowLeftRight } from 'lucide-react';
+import { Bell, Moon, Sun, LogOut, User, Menu, ChevronDown, Settings, AlertTriangle, Info, CheckCircle, X, BellOff, Building2, MapPin, ArrowLeftRight, Plus } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useThemeStore } from '../../store/themeStore';
 import { useAuthStore } from '../../store/authStore';
@@ -8,6 +8,7 @@ import { notificacionService, type NotificacionDTO } from '../../services/notifi
 import { useSucursalStore } from '../../store/sucursalStore';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import type { TenantInfo } from '../../types';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -63,6 +64,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { sucursales, sucursalActual, setSucursalActual } = useSucursalStore();
   const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [cachedTenants, setCachedTenants] = useState<TenantInfo[] | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isSucursalOpen, setIsSucursalOpen] = useState(false);
   const sucursalRef = useRef<HTMLDivElement>(null);
@@ -185,18 +187,37 @@ export function Header({ onMenuClick }: HeaderProps) {
   const handleProfileClick = () => { setIsDropdownOpen(false); navigate('/dashboard/perfil'); };
   const handleSettingsClick = () => { setIsDropdownOpen(false); navigate('/dashboard/configuracion'); };
 
+  const handleDropdownToggle = () => {
+    const opening = !isDropdownOpen;
+    setIsDropdownOpen(opening);
+    if (opening && cachedTenants === null) {
+      authService.getMisTenants()
+        .then(ts => setCachedTenants(ts))
+        .catch(() => {});
+    }
+  };
+
   const handleSwitchTenant = async () => {
     setIsDropdownOpen(false);
     try {
-      const tenants = await authService.getMisTenants();
-      if (tenants.length <= 1) {
-        toast('Solo tienes acceso a un negocio.');
-        return;
-      }
+      const tenants = cachedTenants ?? await authService.getMisTenants();
+      if (!cachedTenants) setCachedTenants(tenants);
       startTenantSwitch(tenants);
       navigate('/select-tenant');
     } catch {
       toast.error('No se pudo cargar los negocios disponibles.');
+    }
+  };
+
+  const handleAddNegocio = async () => {
+    setIsDropdownOpen(false);
+    try {
+      const tenants = cachedTenants ?? await authService.getMisTenants();
+      if (!cachedTenants) setCachedTenants(tenants);
+      startTenantSwitch(tenants);
+      navigate('/select-tenant', { state: { openAdd: true } });
+    } catch {
+      toast.error('No se pudo iniciar el flujo. Intenta de nuevo.');
     }
   };
 
@@ -450,7 +471,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         {/* User dropdown */}
         <div className="relative" ref={dropdownRef}>
           <button
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            onClick={handleDropdownToggle}
             className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted transition-colors"
           >
             {/* Avatar con iniciales */}
@@ -505,13 +526,24 @@ export function Header({ onMenuClick }: HeaderProps) {
                   <Settings size={15} className="text-muted-foreground" />
                   Configuración
                 </button>
-                <button
-                  onClick={handleSwitchTenant}
-                  className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-2.5 text-sm font-medium transition-colors"
-                >
-                  <ArrowLeftRight size={15} className="text-muted-foreground" />
-                  Cambiar negocio
-                </button>
+                {cachedTenants !== null && cachedTenants.length > 1 && (
+                  <button
+                    onClick={handleSwitchTenant}
+                    className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-2.5 text-sm font-medium transition-colors"
+                  >
+                    <ArrowLeftRight size={15} className="text-muted-foreground" />
+                    Cambiar de negocio
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={handleAddNegocio}
+                    className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-2.5 text-sm font-medium transition-colors"
+                  >
+                    <Plus size={15} className="text-muted-foreground" />
+                    Agregar otro negocio
+                  </button>
+                )}
               </div>
 
               <div className="border-t my-1" />

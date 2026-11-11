@@ -13,6 +13,7 @@ const RUBRO_TO_SEGMENTO: Record<string, string> = {
   FARMACIA:          'FARMACIA_BOTICA',
   BOTICA:            'FARMACIA_BOTICA',
   VETERINARIA:       'VETERINARIA',
+  TIENDA_ROPA:       'TIENDA_ROPA',
   TIENDA:            'TIENDA_BODEGA',
   FERRETERIA:        'FERRETERIA',
   MINIMARKET:        'MINIMARKET',
@@ -72,10 +73,14 @@ describe('RUBRO_TO_SEGMENTO — mapeo completo', () => {
   });
 
   it('todos los rubros del formulario tienen entrada en el mapa', () => {
-    const rubros = ['FARMACIA', 'BOTICA', 'FERRETERIA', 'VETERINARIA', 'TIENDA', 'MINIMARKET', 'RESTAURANTE', 'EMPRESA_SERVICIOS', 'OTRO'];
+    const rubros = ['FARMACIA', 'BOTICA', 'FERRETERIA', 'VETERINARIA', 'TIENDA_ROPA', 'TIENDA', 'MINIMARKET', 'RESTAURANTE', 'EMPRESA_SERVICIOS', 'OTRO'];
     for (const r of rubros) {
       expect(RUBRO_TO_SEGMENTO[r], `falta mapping para ${r}`).toBeDefined();
     }
+  });
+
+  it('TIENDA_ROPA mapea al segmento TIENDA_ROPA', () => {
+    expect(RUBRO_TO_SEGMENTO['TIENDA_ROPA']).toBe('TIENDA_ROPA');
   });
 });
 
@@ -111,6 +116,36 @@ describe('Precios de plan — rubros con precio diferente al genérico', () => {
     const planes = makePlanes('TIENDA', 79, 149);
     expect(planes.find(p => p.nivel === 'BASICO')?.precioMensual).toBe(79);
     expect(planCodigoParaRubroYNivel('TIENDA', planes, 'BASICO')).toBe('TIENDA_BASICO');
+  });
+});
+
+describe('Catálogo canónico — 7 opciones compartidas', () => {
+  const RUBROS_CATALOG_VALUES = ['FARMACIA', 'VETERINARIA', 'TIENDA_ROPA', 'TIENDA', 'FERRETERIA', 'MINIMARKET', 'EMPRESA_SERVICIOS'];
+
+  it('el catálogo tiene exactamente 7 opciones', () => {
+    expect(RUBROS_CATALOG_VALUES).toHaveLength(7);
+  });
+
+  it('todos los rubros del catálogo canónico tienen entrada en RUBRO_TO_SEGMENTO', () => {
+    for (const r of RUBROS_CATALOG_VALUES) {
+      expect(RUBRO_TO_SEGMENTO[r], `falta mapping para ${r}`).toBeDefined();
+    }
+  });
+});
+
+describe('Precios de plan — TIENDA_ROPA', () => {
+  const planes = makePlanes('TIENDA_ROPA', 89, 169);
+
+  it('plan Básico tiene segmento TIENDA_ROPA', () => {
+    expect(planes[0].segmento).toBe('TIENDA_ROPA');
+  });
+
+  it('plan Básico envía planCodigo TIENDA_ROPA_BASICO', () => {
+    expect(planCodigoParaRubroYNivel('TIENDA_ROPA', planes, 'BASICO')).toBe('TIENDA_ROPA_BASICO');
+  });
+
+  it('plan Pro envía planCodigo TIENDA_ROPA_PRO', () => {
+    expect(planCodigoParaRubroYNivel('TIENDA_ROPA', planes, 'PRO')).toBe('TIENDA_ROPA_PRO');
   });
 });
 

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import type { CrearNegocioRequest, PlanCatalogoDTO } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import type { TenantInfo } from '../../types';
 import toast from 'react-hot-toast';
+import { IC, RUBROS_CATALOG } from '../../constants/rubros';
 
 // ── Validación ────────────────────────────────────────────────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -22,35 +23,12 @@ function validateNegocioField(name: string, value: string): string {
   return '';
 }
 
-// ── Catálogo de iconos SVG por rubro ─────────────────────────────────────────
-const IC: Record<string, [string, string]> = {
-  FARMACIA:          ['M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM8.5 8.5l7 7', '#00d4aa'],
-  BOTICA:            ['M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM8.5 8.5l7 7', '#00d4aa'],
-  FERRETERIA:        ['M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9Z', '#f5a524'],
-  VETERINARIA:       ['M11 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0M17 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0M21 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0M7 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0M8.5 15.5c0-2 1.6-3.5 3.5-3.5s3.5 1.5 3.5 3.5c0 1.5 1.5 2 1.5 3.5a2 2 0 0 1-2 2c-1 0-2-.7-3-.7s-2 .7-3 .7a2 2 0 0 1-2-2c0-1.5 1.5-2 1.5-3.5Z', '#ec6fb1'],
-  TIENDA:            ['M20.4 6.6 16 4a4 4 0 0 1-8 0L3.6 6.6a1 1 0 0 0-.5 1.2l1.4 4a1 1 0 0 0 1 .7H7V20a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-7.5h1.5a1 1 0 0 0 1-.7l1.4-4a1 1 0 0 0-.5-1.2Z', '#8b85ff'],
-  MINIMARKET:        ['M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4ZM3 6h18M16 10a4 4 0 0 1-8 0', '#a3e635'],
-  RESTAURANTE:       ['M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7', '#fb923c'],
-  EMPRESA_SERVICIOS: ['M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7ZM3.3 7 12 12l8.7-5M12 22V12', '#38bdf8'],
-  OTRO:              ['M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1ZM3 9l2-5h14l2 5M10 13h4', '#9898b0'],
-};
-
-const RUBROS = [
-  { value: 'FARMACIA',          label: 'Farmacia / Botica' },
-  { value: 'BOTICA',            label: 'Botica' },
-  { value: 'FERRETERIA',        label: 'Ferretería' },
-  { value: 'VETERINARIA',       label: 'Veterinaria' },
-  { value: 'TIENDA',            label: 'Tienda de ropa' },
-  { value: 'MINIMARKET',        label: 'Minimarket' },
-  { value: 'RESTAURANTE',       label: 'Restaurante' },
-  { value: 'EMPRESA_SERVICIOS', label: 'Empresa de servicios' },
-  { value: 'OTRO',              label: 'Otro' },
-];
 
 const RUBRO_TO_SEGMENTO: Record<string, string> = {
   FARMACIA:          'FARMACIA_BOTICA',
   BOTICA:            'FARMACIA_BOTICA',
   VETERINARIA:       'VETERINARIA',
+  TIENDA_ROPA:       'TIENDA_ROPA',
   TIENDA:            'TIENDA_BODEGA',
   FERRETERIA:        'FERRETERIA',
   MINIMARKET:        'MINIMARKET',
@@ -154,7 +132,7 @@ function TenantCard({
           </span>
         </span>
         <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 10px', marginTop: 6, fontSize: '.78rem', color: '#7d7f96' }}>
-          <span>{RUBROS.find(r => r.value === tenant.rubro)?.label ?? tenant.rubro}</span>
+          <span>{RUBROS_CATALOG.find(r => r.value === tenant.rubro)?.label ?? tenant.rubro}</span>
           <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#4a4b60', flexShrink: 0 }} />
           <span style={{ fontWeight: 600, color: rolColor }}>{tenant.rol}</span>
         </span>
@@ -175,18 +153,21 @@ function TenantCard({
 // ── Componente principal ──────────────────────────────────────────────────────
 export function SelectTenant() {
   const navigate  = useNavigate();
+  const location  = useLocation();
   const { availableTenants, completeTenantSelection, resetPendingSelection, selectionToken } = useAuthStore();
   const { setRubro } = useTenantConfigStore();
 
   const userEmail = decodeEmailFromToken(selectionToken);
   const initials  = userEmail ? userEmail.slice(0, 2).toUpperCase() : '??';
 
+  const openAdd = !!(location.state as { openAdd?: boolean } | null)?.openAdd;
+
   const [loading,     setLoading]     = useState(false);
   const [selectingId, setSelectingId] = useState<string | null>(null);
 
-  const [showForm,    setShowForm]    = useState(false);
+  const [showForm,    setShowForm]    = useState(openAdd);
   const [formLoading, setFormLoading] = useState(false);
-  const [form, setForm] = useState<CrearNegocioRequest>({ nombreNegocio: '', rubro: 'OTRO', ruc: '', telefono: '', emailContacto: '', planId: 'BASICO' });
+  const [form, setForm] = useState<CrearNegocioRequest>({ nombreNegocio: '', rubro: 'FARMACIA', ruc: '', telefono: '', emailContacto: '', planId: 'BASICO' });
   const [formErrors, setFormErrors]   = useState<Record<string, string>>({});
   const [formTried,  setFormTried]    = useState(false);
   const [planes,        setPlanes]        = useState<PlanCatalogoDTO[]>([]);
@@ -242,7 +223,7 @@ export function SelectTenant() {
       toast.success(`¡Negocio "${newTenant.nombre}" creado! Ahora puedes seleccionarlo.`);
       setShowForm(false);
       setFormTried(false);
-      setForm({ nombreNegocio: '', rubro: 'OTRO', ruc: '', telefono: '', emailContacto: '', planId: 'BASICO', planCodigo: undefined });
+      setForm({ nombreNegocio: '', rubro: 'FARMACIA', ruc: '', telefono: '', emailContacto: '', planId: 'BASICO', planCodigo: undefined });
       setFormErrors({});
     } catch {
       toast.error('Error al crear el negocio. Verifica los datos e intenta de nuevo.');
@@ -422,7 +403,7 @@ export function SelectTenant() {
                     name="rubro" value={form.rubro} onChange={handleFormChange}
                     style={{ ...INP, padding: '0 40px 0 52px', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
                   >
-                    {RUBROS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    {RUBROS_CATALOG.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', color: '#5a5a72', pointerEvents: 'none' }}><path d="m6 9 6 6 6-6"/></svg>
                 </div>
