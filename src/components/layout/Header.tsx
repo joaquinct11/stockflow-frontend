@@ -8,7 +8,6 @@ import { notificacionService, type NotificacionDTO } from '../../services/notifi
 import { useSucursalStore } from '../../store/sucursalStore';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import type { TenantInfo } from '../../types';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -60,11 +59,10 @@ function formatRelativo(fecha: string): string {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { isDark, toggleTheme } = useThemeStore();
-  const { user, logout, startTenantSwitch } = useAuthStore();
+  const { user, logout, startTenantSwitch, knownTenants, tenantsLoading, tenantsError } = useAuthStore();
   const { sucursales, sucursalActual, setSucursalActual } = useSucursalStore();
   const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [cachedTenants, setCachedTenants] = useState<TenantInfo[] | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isSucursalOpen, setIsSucursalOpen] = useState(false);
   const sucursalRef = useRef<HTMLDivElement>(null);
@@ -188,20 +186,13 @@ export function Header({ onMenuClick }: HeaderProps) {
   const handleSettingsClick = () => { setIsDropdownOpen(false); navigate('/dashboard/configuracion'); };
 
   const handleDropdownToggle = () => {
-    const opening = !isDropdownOpen;
-    setIsDropdownOpen(opening);
-    if (opening && cachedTenants === null) {
-      authService.getMisTenants()
-        .then(ts => setCachedTenants(ts))
-        .catch(() => {});
-    }
+    setIsDropdownOpen(prev => !prev);
   };
 
   const handleSwitchTenant = async () => {
     setIsDropdownOpen(false);
     try {
-      const tenants = cachedTenants ?? await authService.getMisTenants();
-      if (!cachedTenants) setCachedTenants(tenants);
+      const tenants = knownTenants ?? await authService.getMisTenants();
       startTenantSwitch(tenants);
       navigate('/select-tenant');
     } catch {
@@ -212,8 +203,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const handleAddNegocio = async () => {
     setIsDropdownOpen(false);
     try {
-      const tenants = cachedTenants ?? await authService.getMisTenants();
-      if (!cachedTenants) setCachedTenants(tenants);
+      const tenants = knownTenants ?? await authService.getMisTenants();
       startTenantSwitch(tenants);
       navigate('/select-tenant', { state: { openAdd: true } });
     } catch {
@@ -510,6 +500,25 @@ export function Header({ onMenuClick }: HeaderProps) {
                 </div>
               </div>
 
+              {/* Info negocio activo + plan */}
+              {user?.tenantNombre && (
+                <div className="px-4 py-2.5 border-b">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Negocio actual</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate flex-1 min-w-0">{user.tenantNombre}</p>
+                    {user?.suscripcion?.planId && (
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${
+                        user.suscripcion.planId.toUpperCase() === 'PRO'
+                          ? 'bg-violet-500/15 text-violet-400'
+                          : 'bg-sky-500/10 text-sky-400'
+                      }`}>
+                        {user.suscripcion.planId.toUpperCase() === 'PRO' ? 'PRO' : 'Básico'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Opciones */}
               <div className="py-1">
                 <button
@@ -526,7 +535,14 @@ export function Header({ onMenuClick }: HeaderProps) {
                   <Settings size={15} className="text-muted-foreground" />
                   Configuración
                 </button>
-                {cachedTenants !== null && cachedTenants.length > 1 && (
+                {/* Estado de carga de tenants */}
+                {tenantsLoading && (
+                  <div className="px-4 py-2 flex items-center gap-2.5 text-xs text-muted-foreground/50">
+                    <span className="h-3 w-3 rounded-full border border-muted-foreground/30 border-t-transparent animate-spin shrink-0" />
+                    Cargando negocios…
+                  </div>
+                )}
+                {!tenantsLoading && !tenantsError && knownTenants !== null && knownTenants.length > 1 && (
                   <button
                     onClick={handleSwitchTenant}
                     className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-2.5 text-sm font-medium transition-colors"

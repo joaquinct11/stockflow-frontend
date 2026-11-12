@@ -219,7 +219,10 @@ export function SelectTenant() {
     setFormLoading(true);
     try {
       const newTenant = await authService.crearNegocio(form);
-      useAuthStore.setState(s => ({ availableTenants: [...s.availableTenants, newTenant] }));
+      useAuthStore.setState(s => ({
+        availableTenants: [...s.availableTenants, newTenant],
+        knownTenants: s.knownTenants !== null ? [...s.knownTenants, newTenant] : null,
+      }));
       toast.success(`¡Negocio "${newTenant.nombre}" creado! Ahora puedes seleccionarlo.`);
       setShowForm(false);
       setFormTried(false);
@@ -240,7 +243,14 @@ export function SelectTenant() {
       let finalUser = data;
       try {
         const profile = await authService.obtenerPerfil();
-        finalUser = { ...data, permisos: profile.permisos || [], rol: profile.rol, tenantId: profile.tenantId, sucursalId: profile.sucursalId ?? null };
+        finalUser = {
+          ...data,
+          permisos: profile.permisos || [],
+          rol: profile.rol,
+          tenantId: profile.tenantId,
+          sucursalId: profile.sucursalId ?? null,
+          tenantNombre: profile.nombreFarmacia,
+        };
       } catch {
         // Usar datos del JWT si falla /me
       }

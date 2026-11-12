@@ -9,12 +9,13 @@ import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { useAuthStore } from '../../store/authStore';
 import { sucursalService } from '../../services/sucursal.service';
 import { useSucursalStore } from '../../store/sucursalStore';
+import { authService } from '../../services/auth.service';
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { setConfig } = useTenantConfigStore();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, knownTenants, tenantsLoading, setKnownTenants, setTenantsLoading, setTenantsError } = useAuthStore();
   const { setSucursales, setSucursalActual, clearSucursales, setLoading: setSucursalLoading } = useSucursalStore();
 
   // Cargar config del negocio al montar
@@ -23,6 +24,16 @@ export function AppLayout() {
     tenantConfigService.getConfig()
       .then(setConfig)
       .catch(() => { /* silencioso */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  // Cargar lista de tenants al montar (eager) para evitar retraso en «Cambiar de negocio»
+  useEffect(() => {
+    if (!isAuthenticated || knownTenants !== null || tenantsLoading) return;
+    setTenantsLoading(true);
+    authService.getMisTenants()
+      .then(ts => setKnownTenants(ts))
+      .catch(() => setTenantsError());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 

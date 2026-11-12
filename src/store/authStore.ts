@@ -15,6 +15,11 @@ interface AuthState {
   availableTenants: TenantInfo[];
   selectionToken: string | null;
 
+  // Lista conocida de tenants (disponible antes de abrir el dropdown)
+  knownTenants: TenantInfo[] | null;
+  tenantsLoading: boolean;
+  tenantsError: boolean;
+
   setUser: (user: JwtResponse) => void;
   logout: () => void;
   initialize: () => Promise<void>;
@@ -25,6 +30,9 @@ interface AuthState {
   completeTenantSelection: (user: JwtResponse) => void;
   resetPendingSelection: () => void;
   startTenantSwitch: (tenants: TenantInfo[]) => void;
+  setKnownTenants: (tenants: TenantInfo[]) => void;
+  setTenantsLoading: (loading: boolean) => void;
+  setTenantsError: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -34,6 +42,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   pendingTenantSelection: false,
   availableTenants: [],
   selectionToken: null,
+  knownTenants: null,
+  tenantsLoading: false,
+  tenantsError: false,
 
   setUser: (user) => {
     if (import.meta.env.DEV) { console.log('✅ Usuario establecido:', user.email);}
@@ -55,12 +66,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   completeTenantSelection: (user) => {
     if (import.meta.env.DEV) { console.log('✅ Selección de tenant completada:', user.tenantId);}
+    const availTenants = get().availableTenants;
     set({
       user,
       isAuthenticated: true,
       pendingTenantSelection: false,
       availableTenants: [],
       selectionToken: null,
+      // Preservar la lista de tenants para que el Header la tenga inmediatamente
+      knownTenants: availTenants.length > 0 ? availTenants : get().knownTenants,
+      tenantsLoading: false,
+      tenantsError: false,
     });
     localStorage.setItem('user', JSON.stringify(user));
     if (user.accessToken) { localStorage.setItem('accessToken', user.accessToken); }
@@ -82,6 +98,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({
       pendingTenantSelection: true,
       availableTenants: tenants,
+      knownTenants: tenants,
       selectionToken: null,
       isAuthenticated: false,
     });
@@ -96,6 +113,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       pendingTenantSelection: false,
       availableTenants: [],
       selectionToken: null,
+      knownTenants: null,
+      tenantsLoading: false,
+      tenantsError: false,
     });
     localStorage.removeItem('user');
     localStorage.removeItem('accessToken');
@@ -110,6 +130,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setSuscripcionEstado: (estado: string) => {
     set({ suscripcionEstado: estado });
   },
+
+  setKnownTenants: (tenants) => set({ knownTenants: tenants, tenantsLoading: false, tenantsError: false }),
+  setTenantsLoading: (loading) => set({ tenantsLoading: loading }),
+  setTenantsError: () => set({ tenantsError: true, tenantsLoading: false }),
 
   updatePlanCodigo: (planCodigo: string) => {
     if (!planCodigo) return;
@@ -175,6 +199,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           rol: profile.rol,
           tenantId: profile.tenantId,
           sucursalId: profile.sucursalId ?? null,
+          tenantNombre: profile.nombreFarmacia,
         };
         set({ user: updatedUser });
         localStorage.setItem('user', JSON.stringify(updatedUser));

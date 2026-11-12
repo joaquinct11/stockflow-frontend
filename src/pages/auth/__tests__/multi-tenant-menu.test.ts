@@ -3,11 +3,12 @@
  *
  * Requerimientos cubiertos:
  *  1. «Agregar otro negocio» solo visible para ADMIN.
- *  2. «Cambiar de negocio» solo visible cuando cachedTenants !== null && length > 1.
+ *  2. «Cambiar de negocio» solo visible cuando knownTenants !== null && length > 1 y sin error/loading.
  *  3. Navegación correcta: /select-tenant con y sin openAdd.
  *  4. Endpoint correcto: POST /auth/create-tenant (nunca /auth/register).
- *  5. Caché de tenants evita llamadas duplicadas al backend.
+ *  5. Estado de carga de tenants distingue entre cargando / cargado / error.
  *  6. SelectTenant openAdd state controlado solo por la acción "Agregar otro negocio".
+ *  7. Nombre del negocio (tenantNombre) y etiqueta del plan mostrados en el dropdown.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -19,8 +20,23 @@ function shouldShowAgregarNegocio(rol: string | null | undefined): boolean {
   return rol === 'ADMIN';
 }
 
-function shouldShowCambiarNegocio(cachedTenants: TenantInfo[] | null): boolean {
-  return cachedTenants !== null && cachedTenants.length > 1;
+/**
+ * Replica la lógica del Header para mostrar «Cambiar de negocio».
+ * Requiere: tenants cargados, sin error, y más de 1 tenant.
+ */
+function shouldShowCambiarNegocio(
+  knownTenants: TenantInfo[] | null,
+  tenantsLoading = false,
+  tenantsError = false,
+): boolean {
+  if (tenantsLoading || tenantsError || knownTenants === null) return false;
+  return knownTenants.length > 1;
+}
+
+/** Deriva la etiqueta de plan que se muestra en el dropdown del Header. */
+function planLabel(planId: string | null | undefined): string {
+  if (!planId) return '';
+  return planId.toUpperCase() === 'PRO' ? 'PRO' : 'Básico';
 }
 
 function buildNavigatePath(action: 'switch' | 'add'): { path: string; state?: { openAdd: boolean } } {
@@ -88,7 +104,7 @@ describe('Visibilidad de «Agregar otro negocio» por rol', () => {
 // ── Tests: visibilidad de «Cambiar de negocio» ────────────────────────────────
 
 describe('Visibilidad de «Cambiar de negocio»', () => {
-  it('cachedTenants=null (cargando) — oculto', () => {
+  it('knownTenants=null (no cargado aún) — oculto', () => {
     expect(shouldShowCambiarNegocio(null)).toBe(false);
   });
 
@@ -115,6 +131,37 @@ describe('Visibilidad de «Cambiar de negocio»', () => {
       expect(shouldShowCambiarNegocio(tenants)).toBe(true);
     });
   });
+
+  // ── Nuevos: estado de carga explícito ──────────────────────────────────────
+  it('REQ-5 — mientras carga (tenantsLoading=true): oculto aunque haya 2 tenants', () => {
+    expect(shouldShowCambiarNegocio(TWO_TENANTS, true, false)).toBe(false);
+  });
+
+  it('REQ-5 — mientras carga (tenantsLoading=true) con lista null: oculto', () => {
+    expect(shouldShowCambiarNegocio(null, true, false)).toBe(false);
+  });
+
+  it('REQ-6 — error al cargar (tenantsError=true): oculto, no interpreta error como lista vacía', () => {
+    // El error no debe hacer aparecer «Cambiar de negocio» ni interpretarse como "1 tenant"
+    expect(shouldShowCambiarNegocio(null,  false, true)).toBe(false);
+    expect(shouldShowCambiarNegocio([],    false, true)).toBe(false);
+    expect(shouldShowCambiarNegocio(TWO_TENANTS, false, true)).toBe(false);
+  });
+
+  it('REQ-6 — error y loading simultáneos: oculto', () => {
+    expect(shouldShowCambiarNegocio(TWO_TENANTS, true, true)).toBe(false);
+  });
+
+  it('REQ-1 — usuario con un tenant: no muestra «Cambiar de negocio»', () => {
+    expect(shouldShowCambiarNegocio(ONE_TENANT, false, false)).toBe(false);
+  });
+
+  it('REQ-2 — usuario con dos tenants: muestra «Cambiar de negocio» al terminar la carga', () => {
+    // Durante la carga: oculto
+    expect(shouldShowCambiarNegocio(null,       true,  false)).toBe(false);
+    // Al completar la carga: visible
+    expect(shouldShowCambiarNegocio(TWO_TENANTS, false, false)).toBe(true);
+  });
 });
 
 // ── Tests: visibilidad combinada ADMIN con múltiples tenants ──────────────────
@@ -125,9 +172,15 @@ describe('Combinación de visibilidad ADMIN + multi-tenant', () => {
     expect(shouldShowCambiarNegocio(ONE_TENANT)).toBe(false);
   });
 
-  it('ADMIN con 2 tenants: ve ambas opciones', () => {
+  it('REQ-3 — ADMIN con 2 tenants: ve ambas opciones', () => {
     expect(shouldShowAgregarNegocio('ADMIN')).toBe(true);
     expect(shouldShowCambiarNegocio(TWO_TENANTS)).toBe(true);
+  });
+
+  it('REQ-4 — usuario sin ADMIN: no muestra «Agregar otro negocio»', () => {
+    ROLES_NO_ADMIN.forEach(rol => {
+      expect(shouldShowAgregarNegocio(rol)).toBe(false);
+    });
   });
 
   it('VENDEDOR con 2 tenants: ve Cambiar, no ve Agregar', () => {
@@ -224,6 +277,28 @@ describe('Flujo end-to-end (lógica)', () => {
     expect(after.find(t => t.tenantId === 't2')).toBeDefined();
   });
 
+  it('REQ-7 — después de crear negocio, knownTenants se actualiza y «Cambiar de negocio» aparece sin cerrar sesión', () => {
+    // Estado inicial: 1 tenant conocido, Cambiar oculto
+    let knownTenants: TenantInfo[] | null = [...ONE_TENANT];
+    expect(shouldShowCambiarNegocio(knownTenants)).toBe(false);
+
+    // Simula la creación del negocio y actualización del store
+    const newTenant = makeTenant('t2', 'Tienda Nueva');
+    knownTenants = [...knownTenants, newTenant];
+
+    // Ahora hay 2 tenants → debe aparecer «Cambiar de negocio» (sin logout)
+    expect(shouldShowCambiarNegocio(knownTenants)).toBe(true);
+    expect(knownTenants).toHaveLength(2);
+  });
+
+  it('REQ-8 — al cambiar de tenant, tenantNombre se actualiza con nombreFarmacia del perfil', () => {
+    // Simula el mapeo que hace SelectTenant.handleSelect
+    const derivarTenantNombre = (nombreFarmacia: string | undefined) => nombreFarmacia ?? null;
+    expect(derivarTenantNombre('BOTICA SALUD')).toBe('BOTICA SALUD');
+    expect(derivarTenantNombre('TIENDA ROPA')).toBe('TIENDA ROPA');
+    expect(derivarTenantNombre(undefined)).toBeNull();
+  });
+
   it('un usuario no puede acceder a tenants de otros usuarios (aislamiento)', () => {
     const user1Tenants = [makeTenant('t-user1-a', 'Negocio A')];
     const user2Tenants = [makeTenant('t-user2-b', 'Negocio B')];
@@ -231,5 +306,31 @@ describe('Flujo end-to-end (lógica)', () => {
       .map(t => t.tenantId)
       .filter(id => user2Tenants.some(t => t.tenantId === id));
     expect(sharedIds).toHaveLength(0);
+  });
+});
+
+// ── Tests: etiqueta de plan en el dropdown ────────────────────────────────────
+
+describe('Etiqueta de plan en el dropdown del Header', () => {
+  it('REQ-9  — BOTICA (planId BASICO) muestra «Básico»', () => {
+    expect(planLabel('BASICO')).toBe('Básico');
+  });
+
+  it('REQ-10 — TIENDA ROPA (planId PRO) muestra «PRO»', () => {
+    expect(planLabel('PRO')).toBe('PRO');
+  });
+
+  it('REQ-11 — FERRETERÍA (planId BASICO) muestra «Básico»', () => {
+    expect(planLabel('BASICO')).toBe('Básico');
+  });
+
+  it('planId en minúsculas se normaliza correctamente', () => {
+    expect(planLabel('pro')).toBe('PRO');
+    expect(planLabel('basico')).toBe('Básico');
+  });
+
+  it('planId null/undefined produce cadena vacía', () => {
+    expect(planLabel(null)).toBe('');
+    expect(planLabel(undefined)).toBe('');
   });
 });
