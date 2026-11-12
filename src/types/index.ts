@@ -57,6 +57,8 @@ export interface JwtResponse {
   permisos?: string[];
   /** Sucursal fija asignada. null/undefined = ADMIN (ve todas). */
   sucursalId?: number | null;
+  /** Nombre del negocio/tenant activo (nombreFarmacia en /auth/me). */
+  tenantNombre?: string | null;
 
   // Case B solamente
   selectionToken?: string | null;
