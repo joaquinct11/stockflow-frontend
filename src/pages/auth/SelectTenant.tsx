@@ -173,27 +173,38 @@ export function SelectTenant() {
   const [planes,        setPlanes]        = useState<PlanCatalogoDTO[]>([]);
   const [planesLoading, setPlanesLoading] = useState(false);
   const [planesError,   setPlanesError]   = useState(false);
+  // Sub-tipo visible solo cuando rubro === 'FARMACIA' (que engloba Farmacia y Botica)
+  const [subtipoFarmaBotica, setSubtipoFarmaBotica] = useState<'FARMACIA' | 'BOTICA'>('FARMACIA');
+
+  // Rubro operativo efectivo que se envía al backend y filtra el catálogo de planes.
+  const effectiveRubro = (form.rubro === 'FARMACIA' ? subtipoFarmaBotica : form.rubro) ?? 'OTRO';
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     let processed = value;
     if (name === 'ruc')      processed = value.replace(/\D/g, '').slice(0, 11);
     if (name === 'telefono') processed = value.replace(/\D/g, '').slice(0, 9);
+    if (name === 'rubro')    setSubtipoFarmaBotica('FARMACIA');
     setForm(prev => ({ ...prev, [name]: processed }));
     setFormErrors(prev => ({ ...prev, [name]: validateNegocioField(name, processed) }));
   };
 
-
   useEffect(() => {
-    const segmento = RUBRO_TO_SEGMENTO[form.rubro?.toUpperCase() ?? 'OTRO'] ?? 'OTRO';
+    const segmento = RUBRO_TO_SEGMENTO[effectiveRubro.toUpperCase()] ?? 'OTRO';
     let cancelled = false;
     setPlanesLoading(true);
     setPlanesError(false);
     authService.getPlanesSegmento(segmento)
       .then(data => {
         if (cancelled) return;
-        setPlanes(data);
-        const basico = data.find(p => p.nivel === 'BASICO');
+        // Filtrar por rubroOperativo para evitar duplicados en segmentos con múltiples rubros
+        // (ej: FARMACIA_BOTICA devuelve 4 planes: 2 FARMACIA + 2 BOTICA).
+        const filtered = data.filter(p => p.rubroOperativo === effectiveRubro.toUpperCase());
+        const toShow = filtered.length > 0
+          ? filtered
+          : data.filter((p, idx, arr) => arr.findIndex(q => q.nivel === p.nivel) === idx);
+        setPlanes(toShow);
+        const basico = toShow.find(p => p.nivel === 'BASICO');
         if (basico) setForm(prev => ({ ...prev, planId: 'BASICO', planCodigo: basico.codigo }));
       })
       .catch(() => {
@@ -204,7 +215,7 @@ export function SelectTenant() {
       .finally(() => { if (!cancelled) setPlanesLoading(false); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.rubro]);
+  }, [effectiveRubro]);
 
   const handleCrearNegocio = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,7 +229,7 @@ export function SelectTenant() {
     if (Object.values(errs).some(v => v)) return;
     setFormLoading(true);
     try {
-      const newTenant = await authService.crearNegocio(form);
+      const newTenant = await authService.crearNegocio({ ...form, rubro: effectiveRubro });
       useAuthStore.setState(s => ({
         availableTenants: [...s.availableTenants, newTenant],
         knownTenants: s.knownTenants !== null ? [...s.knownTenants, newTenant] : null,
@@ -227,6 +238,7 @@ export function SelectTenant() {
       setShowForm(false);
       setFormTried(false);
       setForm({ nombreNegocio: '', rubro: 'FARMACIA', ruc: '', telefono: '', emailContacto: '', planId: 'BASICO', planCodigo: undefined });
+      setSubtipoFarmaBotica('FARMACIA');
       setFormErrors({});
     } catch {
       toast.error('Error al crear el negocio. Verifica los datos e intenta de nuevo.');
@@ -417,6 +429,27 @@ export function SelectTenant() {
                   </select>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', color: '#5a5a72', pointerEvents: 'none' }}><path d="m6 9 6 6 6-6"/></svg>
                 </div>
+                {form.rubro === 'FARMACIA' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                    <span style={{ fontSize: '.78rem', color: '#8d90a6', flexShrink: 0 }}>¿Es una:</span>
+                    {(['FARMACIA', 'BOTICA'] as const).map(tipo => (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => setSubtipoFarmaBotica(tipo)}
+                        style={{
+                          fontSize: '.78rem', fontWeight: 600, padding: '4px 13px', borderRadius: 100,
+                          cursor: 'pointer', transition: 'all .15s',
+                          ...(subtipoFarmaBotica === tipo
+                            ? { border: '1px solid rgba(108,99,255,.65)', color: '#a79fff', background: 'rgba(108,99,255,.15)' }
+                            : { border: '1px solid rgba(255,255,255,.12)', color: '#7d7f96', background: 'none' }),
+                        }}
+                      >
+                        {tipo === 'FARMACIA' ? 'Farmacia' : 'Botica'}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Plan */}
