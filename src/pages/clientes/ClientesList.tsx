@@ -260,7 +260,7 @@ export function ClientesList() {
           <p style={{ fontSize: '.865rem', color: T.text3, margin: '7px 0 0' }}>Gestiona la cartera de clientes de tu negocio</p>
         </div>
         {canCreate('CLIENTES') && (
-          <button type="button" onClick={openNew}
+          <button type="button" onClick={openNew} className="page-action-btn"
             style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', fontSize: '.855rem', fontWeight: 650, color: '#fff', background: T.primary, border: 0, borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: `0 6px 16px -8px ${T.primary}` }}>
             <IcoPlus /> Nuevo cliente
           </button>
@@ -274,7 +274,7 @@ export function ClientesList() {
       ) : (
         <>
           {/* KPI cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12 }}>
+          <div className="kpi-grid">
             {([
               { label: 'Total clientes', value: total, sub: 'Registrados', color: T.text },
               { label: 'Activos', value: activos, sub: 'Disponibles para vender', color: T.ok },
@@ -292,8 +292,8 @@ export function ClientesList() {
           {/* Main card */}
           <div style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow }}>
             {/* Filters */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}` }}>
-              <div style={{ position: 'relative', flex: '1 1 280px', minWidth: 0 }}>
+            <div className="filter-bar" style={{ padding: '14px 18px', borderBottom: `1px solid ${T.lineSoft}` }}>
+              <div style={{ position: 'relative', minWidth: 0 }}>
                 <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: T.text3, pointerEvents: 'none', display: 'grid' }}><IcoSearch /></span>
                 <input type="text" value={busqueda} onChange={e => { setBusqueda(e.target.value); setPage(1); }}
                   placeholder="Buscar por nombre, documento, teléfono o email…"

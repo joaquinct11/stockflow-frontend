@@ -37,9 +37,8 @@ export function ComprobantesPage() {
   const { canAccess, puede, canCreate, canDelete, isVendedor } = usePermissions();
   const { user } = useAuthStore();
   const { config: tenantConfig } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
   const oseConfigured = useOseConfigured();
 
   const canView = canAccess('FACTURACION');
@@ -506,23 +505,23 @@ export function ComprobantesPage() {
             {appliedFechaDesde && <> · {rangoLabel}</>}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:flex-wrap">
           {sortedComprobantes.length > 0 && (
-            <>
+            <div className="grid grid-cols-2 gap-2 sm:contents">
               <button type="button" onClick={handleExportExcel}
-                className="flex items-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-emerald-500 hover:text-emerald-600 transition-colors">
+                className="flex items-center justify-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-emerald-500 hover:text-emerald-600 transition-colors">
                 <FileSpreadsheet size={15} />
                 Excel
               </button>
               <button type="button" onClick={handleExportPDF} disabled={exporting}
-                className="flex items-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-red-500 hover:text-red-600 transition-colors disabled:opacity-50">
+                className="flex items-center justify-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-red-500 hover:text-red-600 transition-colors disabled:opacity-50">
                 <FileDown size={15} />
                 {exporting ? 'Exportando...' : 'PDF'}
               </button>
-            </>
+            </div>
           )}
           {canEmitir && (
-            <Button onClick={() => { setEmitirForm(emptyForm()); setIsEmitirOpen(true); }} className="gap-2 h-9">
+            <Button onClick={() => { setEmitirForm(emptyForm()); setIsEmitirOpen(true); }} className="gap-2 h-9 w-full sm:w-auto">
               <Plus size={15} />
               Emitir comprobante
             </Button>
@@ -531,24 +530,24 @@ export function ComprobantesPage() {
       </div>
 
       {/* ── KPIs ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="kpi-grid gap-3">
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Total facturado</p>
-          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-emerald-600 dark:text-emerald-400">
             S/ {kpiTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <p className="text-[.79rem] text-muted-foreground mt-1">Comprobantes no anulados</p>
         </div>
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Comprobantes</p>
-          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">{statsComprobantes.length}</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-primary">{statsComprobantes.length}</p>
           <p className="text-[.79rem] text-muted-foreground mt-1">
             {kpiBoletas} boleta{kpiBoletas !== 1 ? 's' : ''} · {kpiFacturas} factura{kpiFacturas !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Aceptados SUNAT</p>
-          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums">{kpiAceptados}</p>
+          <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-emerald-600 dark:text-emerald-400">{kpiAceptados}</p>
           <p className="text-[.79rem] text-muted-foreground mt-1">de {vigentes.length} vigente{vigentes.length !== 1 ? 's' : ''}</p>
         </div>
         <div className={`p-[16px_18px] rounded-[14px] shadow-sm border ${kpiPorAtender > 0 ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-700/40' : 'bg-card border-border'}`}>
@@ -559,10 +558,10 @@ export function ComprobantesPage() {
       </div>
 
       {/* ── Table card ── */}
-      <div className="bg-card border rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-card border rounded-2xl shadow-sm">
 
         {/* Filter toolbar */}
-        <div className="grid grid-cols-[1fr_auto_auto] gap-2.5 p-3.5 border-b border-border/60">
+        <div className="grid grid-cols-[1fr_auto_auto] gap-2.5 p-3.5 border-b border-border/60 rounded-t-2xl">
           <div className="relative min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <input
@@ -721,6 +720,7 @@ export function ComprobantesPage() {
         )}
 
         {/* Table content */}
+        <div className="overflow-hidden rounded-b-2xl">
         {loading ? (
           <div className="py-16 flex justify-center"><LoadingSpinner /></div>
         ) : sortedComprobantes.length === 0 ? (
@@ -850,6 +850,7 @@ export function ComprobantesPage() {
             )}
           </>
         )}
+        </div>{/* end overflow-hidden rounded-b-2xl */}
       </div>
 
       {/* ── Detail slide-in panel ── */}

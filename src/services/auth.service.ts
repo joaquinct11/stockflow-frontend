@@ -1,6 +1,29 @@
+import axios from 'axios';
 import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
-import type { LoginDTO, RegistrationRequestDTO, JwtResponse } from '../types';
+import type { LoginDTO, RegistrationRequestDTO, JwtResponse, TenantInfo } from '../types';
+
+export interface PlanCatalogoDTO {
+  codigo: string;
+  segmento: string;
+  rubroOperativo: string;
+  nivel: 'BASICO' | 'PRO';
+  precioMensual: number;
+  maxUsuarios: number;
+  maxSucursales: number;
+  maxProductos: number;
+  labelVisible: string | null;
+}
+
+export interface CrearNegocioRequest {
+  nombreNegocio: string;
+  rubro?: string;
+  ruc?: string;
+  telefono?: string;
+  emailContacto?: string;
+  planId: string;
+  planCodigo?: string;
+}
 
 // ✅ NUEVO: DTO para cambiar contraseña
 export interface ChangePasswordRequest {
@@ -50,18 +73,25 @@ export const authService = {
       API_ENDPOINTS.AUTH.LOGIN,
       credentials
     );
-    
-    // ✅ Guardar AMBOS tokens
-    localStorage.setItem('accessToken', data.accessToken);
-    localStorage.setItem('refreshToken', data.refreshToken);
-    localStorage.setItem('user', JSON.stringify(data));
-    
-    if (import.meta.env.DEV) { console.log('✅ Tokens guardados:', {
-      accessToken: data.accessToken.substring(0, 20) + '...',
-      refreshToken: data.refreshToken.substring(0, 20) + '...',
-      expiresIn: data.expiresIn,
-    });}
-    
+
+    if (data.selectionToken) {
+      // Case B: multi-tenant — limpiar sesión anterior y guardar solo selectionToken
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.setItem('selectionToken', data.selectionToken);
+      if (data.tenants) {
+        localStorage.setItem('pendingTenants', JSON.stringify(data.tenants));
+      }
+      if (import.meta.env.DEV) { console.log('🏢 Multi-tenant: selectionToken obtenido, esperando selección de tenant');}
+    } else if (data.accessToken && data.refreshToken) {
+      // Case A: single-tenant — guardar tokens completos
+      localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('refreshToken', data.refreshToken);
+      localStorage.setItem('user', JSON.stringify(data));
+      if (import.meta.env.DEV) { console.log('✅ Tokens guardados (single-tenant)');}
+    }
+
     return data;
   },
 
@@ -73,12 +103,13 @@ export const authService = {
       API_ENDPOINTS.AUTH.REGISTER,
       registrationData
     );
-    
-    // ✅ Guardar AMBOS tokens
-    localStorage.setItem('accessToken', data.accessToken);
-    localStorage.setItem('refreshToken', data.refreshToken);
-    localStorage.setItem('user', JSON.stringify(data));
-    
+
+    if (data.accessToken && data.refreshToken) {
+      localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('refreshToken', data.refreshToken);
+      localStorage.setItem('user', JSON.stringify(data));
+    }
+
     return data;
   },
 
@@ -153,26 +184,97 @@ export const authService = {
         { refreshToken }
       );
 
-      // ✅ Guardar NUEVOS tokens
-      localStorage.setItem('accessToken', data.accessToken);
-      localStorage.setItem('refreshToken', data.refreshToken);
+      if (data.accessToken && data.refreshToken) {
+        localStorage.setItem('accessToken', data.accessToken);
+        localStorage.setItem('refreshToken', data.refreshToken);
 
-      // ✅ Actualizar user en localStorage
-      const user = localStorage.getItem('user');
-      if (user) {
-        const parsedUser = JSON.parse(user);
-        const updatedUser = { ...parsedUser, ...data };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        const user = localStorage.getItem('user');
+        if (user) {
+          const parsedUser = JSON.parse(user);
+          const updatedUser = { ...parsedUser, ...data };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
       }
 
       if (import.meta.env.DEV) { console.log('🔄 Tokens refrescados exitosamente');}
       return data;
     } catch (error) {
       if (import.meta.env.DEV) { console.error('❌ Error refrescando tokens:', error);}
-      // Si el refresh falla, limpiar todo
       authService.logout();
       throw error;
     }
+  },
+
+  /**
+   * Crear nuevo negocio (tenant) para el usuario ya autenticado.
+   * Envía selectionToken como Bearer (flujo SelectTenant) o usa axiosInstance si ya hay accessToken.
+   */
+  crearNegocio: async (request: CrearNegocioRequest): Promise<TenantInfo> => {
+    const selectionToken = localStorage.getItem('selectionToken');
+    const accessToken = localStorage.getItem('accessToken');
+
+    if (selectionToken && (!accessToken || accessToken === 'null' || accessToken === '')) {
+      const { data } = await axios.post<TenantInfo>(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8080/api'}${API_ENDPOINTS.AUTH.CREATE_TENANT}`,
+        request,
+        { headers: { Authorization: `Bearer ${selectionToken}` } }
+      );
+      return data;
+    }
+
+    const { data } = await axiosInstance.post<TenantInfo>(
+      API_ENDPOINTS.AUTH.CREATE_TENANT,
+      request
+    );
+    return data;
+  },
+
+  /**
+   * Seleccionar tenant.
+   * - Flujo login (Case B): usa selectionToken como Bearer.
+   * - Flujo cambio de negocio: no hay selectionToken → usa axiosInstance (accessToken automático).
+   */
+  selectTenant: async (tenantId: string): Promise<JwtResponse> => {
+    const selectionToken = localStorage.getItem('selectionToken');
+
+    let data: JwtResponse;
+    if (selectionToken) {
+      const response = await axios.post<JwtResponse>(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8080/api'}${API_ENDPOINTS.AUTH.SELECT_TENANT}`,
+        { tenantId },
+        { headers: { Authorization: `Bearer ${selectionToken}` } }
+      );
+      data = response.data;
+    } else {
+      // Cambio de negocio desde sesión activa: el interceptor añade accessToken automáticamente
+      const response = await axiosInstance.post<JwtResponse>(
+        API_ENDPOINTS.AUTH.SELECT_TENANT,
+        { tenantId }
+      );
+      data = response.data;
+    }
+
+    if (!data.accessToken || !data.refreshToken) {
+      throw new Error('Respuesta inválida de select-tenant');
+    }
+
+    localStorage.setItem('accessToken', data.accessToken);
+    localStorage.setItem('refreshToken', data.refreshToken);
+    localStorage.setItem('user', JSON.stringify(data));
+    localStorage.removeItem('selectionToken');
+    localStorage.removeItem('pendingTenants');
+
+    if (import.meta.env.DEV) { console.log('✅ Tenant seleccionado:', tenantId);}
+    return data;
+  },
+
+  /**
+   * Obtener los tenants accesibles para el usuario autenticado.
+   * Usa el accessToken actual (sesión activa).
+   */
+  getMisTenants: async (): Promise<TenantInfo[]> => {
+    const { data } = await axiosInstance.get<TenantInfo[]>(API_ENDPOINTS.AUTH.TENANTS);
+    return data;
   },
 
   /**
@@ -184,19 +286,18 @@ export const authService = {
       const refreshToken = localStorage.getItem('refreshToken');
 
       if (refreshToken) {
-        // Enviar refreshToken al backend para revocarlo
         await axiosInstance.post(API_ENDPOINTS.AUTH.LOGOUT, { refreshToken });
         if (import.meta.env.DEV) { console.log('✅ Sesión revocada en el backend');}
       }
     } catch (error) {
       if (import.meta.env.DEV) { console.error('⚠️ Error revocando sesión en backend:', error);}
-      // Continuar con logout local aunque falle el backend
     } finally {
-      // Limpiar localStorage
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
-      localStorage.removeItem('token'); // ✅ Eliminar token viejo si existe
+      localStorage.removeItem('token');
+      localStorage.removeItem('selectionToken');
+      localStorage.removeItem('pendingTenants');
       if (import.meta.env.DEV) { console.log('🗑️ Datos de sesión eliminados del localStorage');}
     }
   },
@@ -227,7 +328,8 @@ export const authService = {
    * Verificar si el usuario está autenticado
    */
   isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('accessToken') && !!localStorage.getItem('user');
+    const token = localStorage.getItem('accessToken');
+    return !!token && token !== 'null' && token !== '' && !!localStorage.getItem('user');
   },
 
   /**
@@ -244,5 +346,38 @@ export const authService = {
   getTenantId: (): string | null => {
     const user = authService.getCurrentUser();
     return user?.tenantId || null;
+  },
+
+  /**
+   * Precios de planes para el rubro indicado.
+   * Endpoint de compatibilidad — no requiere autenticación.
+   */
+  getPreciosPlan: async (rubro: string): Promise<{ basicoMensual: number; proMensual: number }> => {
+    const { data } = await axiosInstance.get<{ basicoMensual: number; proMensual: number }>(
+      `/auth/planes/precios?rubro=${encodeURIComponent(rubro)}`
+    );
+    return data;
+  },
+
+  /**
+   * Planes Básico y Pro de un segmento comercial.
+   * Endpoint público — no requiere autenticación.
+   */
+  getPlanesSegmento: async (segmento: string): Promise<PlanCatalogoDTO[]> => {
+    const { data } = await axiosInstance.get<PlanCatalogoDTO[]>(
+      `/auth/planes/catalogo?segmento=${encodeURIComponent(segmento)}`
+    );
+    return data;
+  },
+
+  /**
+   * Detalle de un plan específico por código (e.g. "VETERINARIA_BASICO").
+   * Endpoint público — no requiere autenticación.
+   */
+  getPlanPorCodigo: async (codigo: string): Promise<PlanCatalogoDTO> => {
+    const { data } = await axiosInstance.get<PlanCatalogoDTO>(
+      `/auth/planes/${encodeURIComponent(codigo)}`
+    );
+    return data;
   },
 };

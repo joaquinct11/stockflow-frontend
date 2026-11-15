@@ -14,6 +14,11 @@ export interface ClienteDTO {
   createdAt?: string;
 }
 
+export interface ClienteStatsDTO {
+  total: number;
+  activos: number;
+}
+
 export const clienteService = {
   async getAll(): Promise<ClienteDTO[]> {
     const { data } = await axiosInstance.get<ClienteDTO[]>(API_ENDPOINTS.CLIENTES.LIST);
@@ -62,5 +67,10 @@ export const clienteService = {
 
   async delete(id: number): Promise<void> {
     await axiosInstance.delete(API_ENDPOINTS.CLIENTES.DELETE(id));
+  },
+
+  async getStats(): Promise<ClienteStatsDTO> {
+    const { data } = await axiosInstance.get<ClienteStatsDTO>(API_ENDPOINTS.CLIENTES.STATS);
+    return data;
   },
 };

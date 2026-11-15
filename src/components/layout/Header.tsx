@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Moon, Sun, LogOut, User, Menu, ChevronDown, Settings, AlertTriangle, Info, CheckCircle, X, BellOff, Building2, MapPin } from 'lucide-react';
+import { Bell, Moon, Sun, LogOut, User, Menu, ChevronDown, Settings, AlertTriangle, Info, CheckCircle, X, BellOff, Building2, MapPin, ArrowLeftRight, Plus } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useThemeStore } from '../../store/themeStore';
 import { useAuthStore } from '../../store/authStore';
@@ -59,7 +59,7 @@ function formatRelativo(fecha: string): string {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { isDark, toggleTheme } = useThemeStore();
-  const { user, logout } = useAuthStore();
+  const { user, logout, startTenantSwitch, knownTenants, tenantsLoading, tenantsError } = useAuthStore();
   const { sucursales, sucursalActual, setSucursalActual } = useSucursalStore();
   const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -185,6 +185,32 @@ export function Header({ onMenuClick }: HeaderProps) {
   const handleProfileClick = () => { setIsDropdownOpen(false); navigate('/dashboard/perfil'); };
   const handleSettingsClick = () => { setIsDropdownOpen(false); navigate('/dashboard/configuracion'); };
 
+  const handleDropdownToggle = () => {
+    setIsDropdownOpen(prev => !prev);
+  };
+
+  const handleSwitchTenant = async () => {
+    setIsDropdownOpen(false);
+    try {
+      const tenants = knownTenants ?? await authService.getMisTenants();
+      startTenantSwitch(tenants);
+      navigate('/select-tenant');
+    } catch {
+      toast.error('No se pudo cargar los negocios disponibles.');
+    }
+  };
+
+  const handleAddNegocio = async () => {
+    setIsDropdownOpen(false);
+    try {
+      const tenants = knownTenants ?? await authService.getMisTenants();
+      startTenantSwitch(tenants);
+      navigate('/select-tenant', { state: { openAdd: true } });
+    } catch {
+      toast.error('No se pudo iniciar el flujo. Intenta de nuevo.');
+    }
+  };
+
   // ── Helpers de UI ───────────────────────────────────────────────────────────
   const colorForTipo = (tipo: string) => {
     const c = tipoAColor(tipo);
@@ -217,7 +243,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-[45] flex h-[76px] items-center gap-4 border-b border-line bg-surface/80 backdrop-blur-md px-4 lg:px-6">
+    <header className="sticky top-0 z-[45] flex h-[60px] lg:h-[76px] items-center gap-4 border-b border-line bg-surface/80 backdrop-blur-md px-4 lg:px-6">
 
       {/* Hamburguesa móvil */}
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick}>
@@ -435,7 +461,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         {/* User dropdown */}
         <div className="relative" ref={dropdownRef}>
           <button
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            onClick={handleDropdownToggle}
             className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted transition-colors"
           >
             {/* Avatar con iniciales */}
@@ -474,6 +500,25 @@ export function Header({ onMenuClick }: HeaderProps) {
                 </div>
               </div>
 
+              {/* Info negocio activo + plan */}
+              {user?.tenantNombre && (
+                <div className="px-4 py-2.5 border-b">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Negocio actual</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate flex-1 min-w-0">{user.tenantNombre}</p>
+                    {user?.suscripcion?.planId && (
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${
+                        user.suscripcion.planId.toUpperCase() === 'PRO'
+                          ? 'bg-violet-500/15 text-violet-400'
+                          : 'bg-sky-500/10 text-sky-400'
+                      }`}>
+                        {user.suscripcion.planId.toUpperCase() === 'PRO' ? 'PRO' : 'Básico'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Opciones */}
               <div className="py-1">
                 <button
@@ -490,6 +535,31 @@ export function Header({ onMenuClick }: HeaderProps) {
                   <Settings size={15} className="text-muted-foreground" />
                   Configuración
                 </button>
+                {/* Estado de carga de tenants */}
+                {tenantsLoading && (
+                  <div className="px-4 py-2 flex items-center gap-2.5 text-xs text-muted-foreground/50">
+                    <span className="h-3 w-3 rounded-full border border-muted-foreground/30 border-t-transparent animate-spin shrink-0" />
+                    Cargando negocios…
+                  </div>
+                )}
+                {!tenantsLoading && !tenantsError && knownTenants !== null && knownTenants.length > 1 && (
+                  <button
+                    onClick={handleSwitchTenant}
+                    className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-2.5 text-sm font-medium transition-colors"
+                  >
+                    <ArrowLeftRight size={15} className="text-muted-foreground" />
+                    Cambiar de negocio
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={handleAddNegocio}
+                    className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-2.5 text-sm font-medium transition-colors"
+                  >
+                    <Plus size={15} className="text-muted-foreground" />
+                    Agregar otro negocio
+                  </button>
+                )}
               </div>
 
               <div className="border-t my-1" />

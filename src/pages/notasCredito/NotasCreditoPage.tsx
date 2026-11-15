@@ -92,9 +92,8 @@ const POR_PAGINA = 8;
 
 export function NotasCreditoPage() {
   const { config: negocioConfig } = useTenantConfigStore();
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   // data
   const [notas, setNotas] = useState<NotaCreditoDTO[]>([]);
@@ -251,23 +250,16 @@ export function NotasCreditoPage() {
           <h1 className="text-[1.6rem] font-bold tracking-tight leading-none">Notas de Crédito</h1>
           <p className="text-sm text-muted-foreground mt-1.5">
             Notas generadas por devoluciones de venta · {filtradas.length} de {notas.length}
-            {isMultiLocal && sucursalActual ? ` · ${sucursalActual.nombre}` : ''}
+            {sucursalActual ? ` · ${sucursalActual.nombre}` : ''}
           </p>
         </div>
-        <button type="button" onClick={fetchNotas} disabled={loading}
-          className="flex items-center gap-2 h-[38px] px-[15px] text-[.855rem] font-semibold text-muted-foreground bg-card border border-border rounded-[10px] cursor-pointer hover:border-primary hover:text-primary transition-colors disabled:opacity-50">
-          <span style={{ display: 'grid', placeItems: 'center', animation: loading ? 'fx-spin .8s linear infinite' : undefined }}>
-            <RefreshCw size={15} />
-          </span>
-          Actualizar
-        </button>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="kpi-grid gap-3">
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Total emitidas</p>
-          <p className="text-[1.72rem] font-bold mt-[9px] tabular-nums" style={{ letterSpacing: '-.032em' }}>{notas.length}</p>
+          <p className="text-[1.72rem] font-bold mt-[9px] tabular-nums text-primary" style={{ letterSpacing: '-.032em' }}>{notas.length}</p>
           <p className="text-[.79rem] text-muted-foreground mt-[5px]">Generadas por devoluciones</p>
         </div>
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
@@ -277,7 +269,7 @@ export function NotasCreditoPage() {
         </div>
         <div className="p-[16px_18px] bg-card border border-border rounded-[14px] shadow-sm">
           <p className="font-mono text-[.68rem] font-semibold tracking-[.09em] uppercase text-muted-foreground">Monto por canjear</p>
-          <p className="text-[1.72rem] font-bold mt-[9px] tabular-nums" style={{ letterSpacing: '-.032em' }}>S/ {kpiMonto.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className="text-[1.72rem] font-bold mt-[9px] tabular-nums text-emerald-600 dark:text-emerald-400" style={{ letterSpacing: '-.032em' }}>S/ {kpiMonto.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           <p className="text-[.79rem] text-muted-foreground mt-[5px]">A favor de los clientes</p>
         </div>
         <div className={`p-[16px_18px] rounded-[14px] shadow-sm border ${kpiVence7.length > 0 ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-700/40' : 'bg-card border-border'}`}>

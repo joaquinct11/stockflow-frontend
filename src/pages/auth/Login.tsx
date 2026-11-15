@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
+// useAuthStore también se usa directamente (getState) para setPendingSelection en Case B
 import { Input } from '../../components/ui/Input';
 import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -22,16 +23,28 @@ export function Login() {
     setError(false);
     try {
       const response = await authService.login(formData);
-      try {
-        const profile = await authService.obtenerPerfil();
-        setUser({ ...response, permisos: profile.permisos || [] });
-      } catch {
-        setUser(response);
+
+      if (response.selectionToken) {
+        // Case B: multi-tenant — ir a selección de tenant
+        const { setPendingSelection } = useAuthStore.getState();
+        setPendingSelection(response.selectionToken, response.tenants ?? []);
+        navigate('/select-tenant');
+        return;
       }
-      toast.success(`¡Bienvenido ${response.nombre}!`);
-      const redirect = searchParams.get('redirect');
-      navigate(redirect && redirect.startsWith('/') ? redirect : '/dashboard');
-    } catch (err: any) {
+
+      // Case A: single-tenant — flujo normal
+      if (response.accessToken) {
+        try {
+          const profile = await authService.obtenerPerfil();
+          setUser({ ...response, permisos: profile.permisos || [] });
+        } catch {
+          setUser(response);
+        }
+        toast.success(`¡Bienvenido ${response.nombre}!`);
+        const redirect = searchParams.get('redirect');
+        navigate(redirect && redirect.startsWith('/') ? redirect : '/dashboard');
+      }
+    } catch (err) {
       if (import.meta.env.DEV) console.error('❌ Error en login:', err);
       setError(true);
     } finally {

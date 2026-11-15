@@ -3,6 +3,52 @@ import { movimientoService } from '../../services/movimiento.service';
 import { productoService } from '../../services/producto.service';
 import { proveedorService } from '../../services/proveedor.service';
 import type { MovimientoInventarioDTO, ProductoDTO, ProveedorDTO } from '../../types';
+
+// ── Lógica pura de Kardex ──────────────────────────────────────────────────────
+
+export interface KardexFilaCalculo {
+  movimiento: MovimientoInventarioDTO;
+  esEntrada: boolean;
+  esSalida: boolean;
+  esAjuste: boolean;
+  stockAcumulado: number;
+}
+
+export function calcularSaldoKardex(
+  movimientos: MovimientoInventarioDTO[],
+  stockActual: number,
+): KardexFilaCalculo[] {
+  // Reconstruye el stock antes del primer movimiento del período
+  const netChange = movimientos.reduce((acc, m) => {
+    if (
+      m.tipo === 'ENTRADA' ||
+      m.tipo === 'SALDO_INICIAL' ||
+      m.tipo === 'DEVOLUCION' ||
+      m.tipo === 'DEVOLUCION_OT'
+    ) return acc + m.cantidad;
+    if (m.tipo === 'SALIDA' || m.tipo === 'CONSUMO_OT') return acc - m.cantidad;
+    if (m.tipo === 'AJUSTE') return acc + m.cantidad;
+    return acc;
+  }, 0);
+
+  let stockAcumulado = stockActual - netChange;
+
+  return movimientos.map((m) => {
+    const esEntrada =
+      m.tipo === 'ENTRADA' ||
+      m.tipo === 'SALDO_INICIAL' ||
+      m.tipo === 'DEVOLUCION' ||
+      m.tipo === 'DEVOLUCION_OT';
+    const esSalida = m.tipo === 'SALIDA' || m.tipo === 'CONSUMO_OT';
+    const esAjuste = m.tipo === 'AJUSTE';
+
+    if (esEntrada)      stockAcumulado += m.cantidad;
+    else if (esSalida)  stockAcumulado -= m.cantidad;
+    else if (esAjuste)  stockAcumulado += m.cantidad;
+
+    return { movimiento: m, esEntrada, esSalida, esAjuste, stockAcumulado };
+  });
+}
 import { useSucursalStore } from '../../store/sucursalStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -34,9 +80,8 @@ import { usePermissions } from '../../hooks/usePermissions';
 export function KardexPage() {
   const { canView, puede } = usePermissions();
   const hasViewPermission = canView('INVENTARIO');
-  const { sucursalActual, sucursales, loaded: sucursalLoaded } = useSucursalStore();
-  const isMultiLocal = sucursales.length > 1;
-  const sucursalId = isMultiLocal && sucursalActual ? sucursalActual.id : undefined;
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
+  const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
   const [productos, setProductos] = useState<ProductoDTO[]>([]);
   const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
@@ -140,10 +185,14 @@ export function KardexPage() {
         return <TrendingUp className="h-4 w-4 text-green-600" />;
       case 'SALIDA':
         return <TrendingDown className="h-4 w-4 text-red-600" />;
+      case 'CONSUMO_OT':
+        return <TrendingDown className="h-4 w-4 text-red-500" />;
       case 'AJUSTE':
         return <RotateCcw className="h-4 w-4 text-blue-600" />;
       case 'DEVOLUCION':
         return <ArrowLeftRight className="h-4 w-4 text-orange-600" />;
+      case 'DEVOLUCION_OT':
+        return <ArrowLeftRight className="h-4 w-4 text-orange-500" />;
       case 'SALDO_INICIAL':
         return <Star className="h-4 w-4 text-purple-600" />;
       default:
@@ -157,10 +206,14 @@ export function KardexPage() {
         return <Badge variant="success">Entrada</Badge>;
       case 'SALIDA':
         return <Badge variant="destructive">Salida</Badge>;
+      case 'CONSUMO_OT':
+        return <Badge variant="destructive">Consumo OT</Badge>;
       case 'AJUSTE':
         return <Badge variant="outline">Ajuste</Badge>;
       case 'DEVOLUCION':
         return <Badge variant="warning">Devolución</Badge>;
+      case 'DEVOLUCION_OT':
+        return <Badge variant="warning">Devolución OT</Badge>;
       case 'SALDO_INICIAL':
         return <Badge variant="secondary">Saldo Inicial</Badge>;
       default:
@@ -427,30 +480,8 @@ export function KardexPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(() => {
-                  const netChange = kardexMovimientos.reduce((acc, m) => {
-                    if (m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL' || m.tipo === 'DEVOLUCION') return acc + m.cantidad;
-                    if (m.tipo === 'SALIDA') return acc - m.cantidad;
-                    if (m.tipo === 'AJUSTE') return acc + m.cantidad;
-                    return acc;
-                  }, 0);
-                  let stockAcumulado = (kardexProducto?.stockActual ?? 0) - netChange;
-                  return kardexMovimientos.map((m) => {
-                    const esEntrada =
-                      m.tipo === 'ENTRADA' ||
-                      m.tipo === 'SALDO_INICIAL' ||
-                      m.tipo === 'DEVOLUCION';
-                    const esSalida = m.tipo === 'SALIDA';
-                    const esAjuste = m.tipo === 'AJUSTE';
-
-                    if (esEntrada) {
-                      stockAcumulado += m.cantidad;
-                    } else if (esSalida) {
-                      stockAcumulado -= m.cantidad;
-                    } else if (esAjuste) {
-                      stockAcumulado += m.cantidad;
-                    }
-
+                {calcularSaldoKardex(kardexMovimientos, kardexProducto?.stockActual ?? 0).map(
+                  ({ movimiento: m, esEntrada, esSalida, stockAcumulado }) => {
                     const costoUnitario = m.costoUnitario ?? 0;
                     const costoTotal =
                       costoUnitario > 0 ? costoUnitario * m.cantidad : undefined;
@@ -503,8 +534,8 @@ export function KardexPage() {
                         </TableCell>
                       </TableRow>
                     );
-                  });
-                })()}
+                  },
+                )}
               </TableBody>
             </Table>
           </div>

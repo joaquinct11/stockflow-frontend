@@ -12,7 +12,7 @@ export function ProtectedMenuItem({
 }: ProtectedMenuItemProps) {
   const { puede } = usePermissions();
 
-  if (!puede(permiso as any)) {
+  if (!puede(permiso)) {
     return null; // No renderiza si no tiene permiso
   }
 

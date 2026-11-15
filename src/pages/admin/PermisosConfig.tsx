@@ -53,7 +53,9 @@ const PG: { label: string; color: string; icon: string; codes: string[] }[] = [
   { label: 'Movimientos',         color: '#f59e0b', icon: IC.layers, codes: ['VER_INVENTARIO','CREAR_INVENTARIO'] },
   { label: 'Usuarios',            color: '#64748b', icon: IC.users,  codes: ['VER_USUARIOS','CREAR_USUARIO','EDITAR_USUARIO','CAMBIAR_ESTADO_USUARIO','ELIMINAR_USUARIO'] },
   { label: 'Certificados',        color: '#f97316', icon: IC.award,  codes: ['VER_CERTIFICADOS','CREAR_CERTIFICADO','EDITAR_CERTIFICADO','ELIMINAR_CERTIFICADO'] },
-  { label: 'Comisiones',          color: '#10b981', icon: IC.chart,  codes: ['VER_COMISION','CREAR_COMISION','EDITAR_COMISION','ELIMINAR_COMISION'] },
+  { label: 'Comisiones',          color: '#10b981', icon: IC.chart,  codes: ['VER_COMISIONES','CREAR_COMISION','EDITAR_COMISION','ELIMINAR_COMISION'] },
+  { label: 'Equipos de clientes', color: '#6366f1', icon: IC.layers, codes: ['VER_EQUIPOS','CREAR_EQUIPO','EDITAR_EQUIPO','CAMBIAR_ESTADO_EQUIPO'] },
+  { label: 'Órdenes de Trabajo',  color: '#f59e0b', icon: IC.clip,   codes: ['VER_OT','VER_TODAS_OT','CREAR_OT','EDITAR_OT','CAMBIAR_ESTADO_OT','ASIGNAR_TECNICO_OT','REGISTRAR_CONSUMO_OT','DEVOLVER_CONSUMO_OT','CLASIFICAR_CONSUMO_OT','CERRAR_TECNICO_OT','FACTURAR_OT','ANULAR_FACTURA_OT','REGISTRAR_ENTREGA_OT'] },
   { label: 'Suscripciones',       color: '#8b5cf6', icon: IC.card,   codes: ['VER_SUSCRIPCIONES'] },
   { label: 'Reportes',            color: '#a855f7', icon: IC.chart,  codes: ['VER_REPORTES'] },
 ];
@@ -80,6 +82,12 @@ const ROLES_META: Record<string, {
     desc: 'Gestiona stock, recibe mercadería y maneja compras.',
     tone: T.warn, icon: IC.box,
     sin: ['Ventas y POS', 'Clientes', 'Facturación', 'Configuración'],
+  },
+  TECNICO_SERVICIO: {
+    label: 'Técnico de servicio',
+    desc: 'Opera órdenes de trabajo, registra consumos y realiza el cierre técnico.',
+    tone: '#1e40af', icon: IC.build,
+    sin: ['Caja', 'Facturación', 'Devoluciones y NC', 'Reportes'],
   },
 };
 
@@ -145,7 +153,7 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   CREAR_CERTIFICADO:        { label: 'Registrar certificados',           descripcion: 'Agregar nuevos certificados' },
   EDITAR_CERTIFICADO:       { label: 'Editar certificados',              descripcion: 'Modificar datos de certificados' },
   ELIMINAR_CERTIFICADO:     { label: 'Eliminar certificados',            descripcion: 'Borrar certificados del sistema' },
-  VER_COMISION:             { label: 'Ver comisiones',                   descripcion: 'Acceder al módulo de comisiones' },
+  VER_COMISIONES:           { label: 'Ver comisiones',                   descripcion: 'Acceder al módulo de comisiones' },
   CREAR_COMISION:           { label: 'Registrar comisiones',             descripcion: 'Agregar nuevas comisiones' },
   EDITAR_COMISION:          { label: 'Editar comisiones',                descripcion: 'Modificar comisiones ya registradas' },
   ELIMINAR_COMISION:        { label: 'Eliminar comisiones',              descripcion: 'Borrar comisiones del sistema' },
@@ -153,6 +161,23 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   CREAR_SERVICIO:           { label: 'Agregar servicios',                descripcion: 'Crear nuevos servicios en el catálogo' },
   EDITAR_SERVICIO:          { label: 'Editar servicios',                 descripcion: 'Modificar nombre, precio y datos del servicio' },
   ELIMINAR_SERVICIO:        { label: 'Eliminar servicios',               descripcion: 'Borrar servicios del catálogo' },
+  VER_EQUIPOS:              { label: 'Ver equipos de clientes',          descripcion: 'Acceder al listado de equipos registrados' },
+  CREAR_EQUIPO:             { label: 'Registrar equipos',                descripcion: 'Agregar nuevos equipos a clientes' },
+  EDITAR_EQUIPO:            { label: 'Editar equipos',                   descripcion: 'Modificar datos de un equipo registrado' },
+  CAMBIAR_ESTADO_EQUIPO:    { label: 'Activar / desactivar equipos',     descripcion: 'Habilitar o inhabilitar equipos' },
+  VER_OT:                   { label: 'Ver órdenes de trabajo',           descripcion: 'Acceder al listado de órdenes de trabajo (propias si es técnico)' },
+  VER_TODAS_OT:             { label: 'Ver todas las OT del negocio',     descripcion: 'Ver todas las órdenes sin importar el técnico asignado (ADMIN/GERENTE)' },
+  CREAR_OT:                 { label: 'Crear órdenes de trabajo',         descripcion: 'Registrar nuevas órdenes de trabajo' },
+  EDITAR_OT:                { label: 'Editar órdenes de trabajo',        descripcion: 'Modificar datos de una orden de trabajo' },
+  CAMBIAR_ESTADO_OT:        { label: 'Cambiar estado de OT',             descripcion: 'Avanzar el estado de una orden de trabajo' },
+  ASIGNAR_TECNICO_OT:       { label: 'Asignar técnico a OT',             descripcion: 'Asignar o reasignar el técnico responsable' },
+  REGISTRAR_CONSUMO_OT:     { label: 'Registrar consumo en OT',          descripcion: 'Registrar materiales usados en la orden' },
+  DEVOLVER_CONSUMO_OT:      { label: 'Devolver consumo en OT',           descripcion: 'Registrar devolución de material consumido en la orden' },
+  CLASIFICAR_CONSUMO_OT:    { label: 'Clasificar consumo en OT',         descripcion: 'Clasificar material como instalado, recuperable, dañado o perdido' },
+  CERRAR_TECNICO_OT:        { label: 'Cierre técnico de OT',             descripcion: 'Realizar el cierre técnico con diagnóstico y solución aplicada' },
+  FACTURAR_OT:              { label: 'Facturar OT',                      descripcion: 'Generar la venta asociada a una OT cerrada técnicamente' },
+  ANULAR_FACTURA_OT:        { label: 'Anular facturación de OT',         descripcion: 'Anular la facturación de una orden de trabajo ya facturada' },
+  REGISTRAR_ENTREGA_OT:     { label: 'Registrar entrega de OT',          descripcion: 'Registrar la entrega formal del equipo al cliente (FACTURADA → ENTREGADA)' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -192,7 +217,7 @@ function ini(name: string): string {
 function getPermCode(p: Permiso): string { return (p?.nombre ?? '').toString(); }
 
 const DEALER_HIDDEN = ['Devoluciones y NC', 'Órdenes de Compra', 'Recepciones'];
-const SERVICIOS_ONLY = ['Catálogo de Servicios', 'Comisiones'];
+const SERVICIOS_ONLY = ['Catálogo de Servicios', 'Comisiones', 'Equipos de clientes', 'Órdenes de Trabajo'];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function IcoSvg({ path, size = 15 }: { path: string; size?: number }) {
@@ -227,119 +252,6 @@ function ToggleSwitch({ on, disabled, onChange }: { on: boolean; disabled?: bool
   );
 }
 
-// ─── Role Detail Modal ────────────────────────────────────────────────────────
-function RoleModal({ rolKey, basePerms, onClose }: {
-  rolKey: string;
-  basePerms: string[];
-  onClose: () => void;
-}) {
-  const meta = ROLES_META[rolKey];
-  if (!meta) return null;
-
-  const grupos = PG.map(g => {
-    const inc = g.codes.filter(c => basePerms.includes(c));
-    if (!inc.length) return null;
-    return { label: g.label, color: g.color, icon: g.icon, count: `${inc.length}/${g.codes.length}`, items: inc.map(c => PERM_LABELS[c]?.label ?? c) };
-  }).filter(Boolean) as { label: string; color: string; icon: string; count: string; items: string[] }[];
-
-  const sinAcceso = meta.sin;
-
-  return createPortal(
-    <div
-      onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(9,11,16,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 720, maxHeight: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column', background: T.surface, border: `1px solid ${T.line}`, borderRadius: 18, boxShadow: '0 30px 80px -30px rgba(0,0,0,.55)', overflow: 'hidden' }}
-      >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '20px 22px 16px', borderBottom: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
-          <span style={{ width: 38, height: 38, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 11, background: `${meta.tone}22`, color: meta.tone }}>
-            <IcoSvg path={meta.icon} size={18} />
-          </span>
-          <div style={{ minWidth: 0 }}>
-            <h2 style={{ fontSize: '1.08rem', fontWeight: 700, letterSpacing: '-.02em', margin: 0 }}>Permisos del rol {meta.label}</h2>
-            <div style={{ fontSize: '.8rem', color: T.text3, marginTop: 4 }}>{meta.desc} · {rolKey === 'ADMIN' ? 'Todos los permisos' : `${basePerms.length} permisos`}</div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ width: 30, height: 30, flexShrink: 0, marginLeft: 'auto', display: 'grid', placeItems: 'center', color: T.text3, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 22px 20px' }}>
-          {rolKey === 'ADMIN' ? (
-            <div style={{ padding: '32px 0', textAlign: 'center' }}>
-              <span style={{ width: 52, height: 52, margin: '0 auto', display: 'grid', placeItems: 'center', borderRadius: 14, background: T.primarySoft, color: T.primary }}>
-                <IcoSvg path={IC.shield} size={24} />
-              </span>
-              <div style={{ fontSize: '1rem', fontWeight: 650, marginTop: 14 }}>Acceso total a todos los módulos</div>
-              <p style={{ fontSize: '.86rem', lineHeight: 1.55, color: T.text3, margin: '7px auto 0', maxWidth: 400 }}>Los administradores no tienen restricciones. Tienen acceso completo a todas las funcionalidades del sistema.</p>
-            </div>
-          ) : (
-            <>
-              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.68rem', fontWeight: 600, letterSpacing: '.09em', textTransform: 'uppercase', color: T.text3, marginBottom: 10 }}>Incluye</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
-                {grupos.map(g => (
-                  <div key={g.label} style={{ padding: '11px 13px', borderRadius: 11, background: T.surface3, border: `1px solid ${T.lineSoft}`, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={tileStyle(g.color, 24)}><IcoSvg path={g.icon} size={13} /></span>
-                      <span style={{ flex: 1, fontSize: '.84rem', fontWeight: 650 }}>{g.label}</span>
-                      <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.72rem', color: T.text3 }}>{g.count}</span>
-                    </div>
-                    <div style={{ display: 'grid', gap: 4, marginTop: 8 }}>
-                      {g.items.map(it => (
-                        <div key={it} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.77rem', color: T.text2 }}>
-                          <span style={{ color: T.ok, display: 'grid' }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7"/></svg>
-                          </span>
-                          {it}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {sinAcceso.length > 0 && (
-                <>
-                  <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.68rem', fontWeight: 600, letterSpacing: '.09em', textTransform: 'uppercase', color: T.text3, margin: '20px 0 10px' }}>Sin acceso por defecto</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {sinAcceso.map(s => (
-                      <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 10px', fontSize: '.76rem', fontWeight: 600, color: T.text3, background: T.surface2, borderRadius: 8 }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: '.76rem', color: T.text3, marginTop: 12 }}>Puedes habilitar cualquiera de estos a un empleado específico como permiso adicional.</div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ display: 'flex', gap: 9, padding: '14px 22px', borderTop: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
-          <span style={{ flex: 1 }} />
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ minWidth: 104, height: 44, padding: '0 18px', fontFamily: 'Inter,sans-serif', fontSize: '.9rem', fontWeight: 600, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}
-          >
-            Cerrar
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function PermisosConfig() {
   const { config: negocioConfig } = useTenantConfigStore();
@@ -356,9 +268,6 @@ export function PermisosConfig() {
   const [saving, setSaving]                 = useState(false);
   const [userSearch, setUserSearch]         = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-  const [modalRol, setModalRol]             = useState<string | null>(null);
-  const [modalRolBasePerms, setModalRolBasePerms] = useState<string[]>([]);
-
   useEffect(() => { fetchInitialData(); }, []);
 
   async function fetchInitialData() {
@@ -421,17 +330,6 @@ export function PermisosConfig() {
 
   function handleDiscard() { setUserPermisos([...savedPermisos]); }
 
-  async function openRoleModal(rolKey: string) {
-    setModalRolBasePerms([]);
-    setModalRol(rolKey);
-    if (rolKey !== 'ADMIN') {
-      try {
-        const perms = await adminService.getDefaultPermisos(rolKey).catch(() => [] as string[]);
-        setModalRolBasePerms(perms);
-      } catch { /* ignore */ }
-    }
-  }
-
   const selectedUser = usuarios.find(u => u.id === selectedUserId) ?? null;
   const hasUnsaved   = JSON.stringify([...userPermisos].sort()) !== JSON.stringify([...savedPermisos].sort());
 
@@ -441,13 +339,6 @@ export function PermisosConfig() {
       u.nombre.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
     );
   }, [usuarios, userSearch]);
-
-  const countByRol = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const u of usuarios) m[u.rolNombre] = (m[u.rolNombre] ?? 0) + 1;
-    // count admins too
-    return m;
-  }, [usuarios]);
 
   const extraGroups = useMemo(() => {
     const catalog = Array.isArray(permisosCatalog) ? permisosCatalog : [];
@@ -480,8 +371,6 @@ export function PermisosConfig() {
     );
   }
 
-  const rolKeys = Object.keys(ROLES_META);
-
   return (
     <div style={{ paddingBottom: 110 }}>
       <style>{`@keyframes fx-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }`}</style>
@@ -492,37 +381,13 @@ export function PermisosConfig() {
           <h1 style={{ fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-.028em', margin: 0, color: T.text }}>Roles y permisos</h1>
           <p style={{ fontSize: '.865rem', color: T.text3, margin: '7px 0 0' }}>Elige qué puede hacer cada empleado en cada módulo</p>
         </div>
-        {/* Role card buttons */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {rolKeys.map(k => {
-            const meta = ROLES_META[k];
-            const n = countByRol[k] ?? (k === 'ADMIN' ? 1 : 0);
-            return (
-              <button
-                key={k}
-                type="button"
-                onClick={() => openRoleModal(k)}
-                title="Ver permisos del rol"
-                style={{ display: 'flex', alignItems: 'center', gap: 9, height: 40, padding: '0 12px 0 6px', fontFamily: 'Inter,sans-serif', background: T.surface, border: `1px solid ${T.line}`, borderRadius: 11, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: T.shadow, transition: 'border-color .15s' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = T.primaryLine)}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = T.line)}
-              >
-                <span style={{ width: 28, height: 28, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 8, background: `${meta.tone}22`, color: meta.tone }}>
-                  <IcoSvg path={meta.icon} size={14} />
-                </span>
-                <span style={{ fontSize: '.84rem', fontWeight: 650, color: T.text }}>{meta.label}</span>
-                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.72rem', fontWeight: 600, color: T.text3 }}>{n}</span>
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* ── Two-panel layout ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 14 }}>
+      <div className="permisos-grid">
 
         {/* Left: Employee list */}
-        <div style={{ flex: '0 1 310px', minWidth: 250, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow, overflow: 'hidden' }}>
+        <div className="permisos-panel-left" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow, overflow: 'hidden' }}>
           {/* Search */}
           <div style={{ padding: 12, borderBottom: `1px solid ${T.lineSoft}` }}>
             <div style={{ position: 'relative' }}>
@@ -572,7 +437,7 @@ export function PermisosConfig() {
         </div>
 
         {/* Right: Permissions panel */}
-        <div style={{ flex: '1 1 560px', minWidth: 0, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow, overflow: 'hidden' }}>
+        <div className="permisos-panel-right" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow, overflow: 'hidden' }}>
 
           {/* Empty state */}
           {!selectedUser && (
@@ -772,14 +637,7 @@ export function PermisosConfig() {
         document.body
       )}
 
-      {/* ── Role detail modal ── */}
-      {modalRol && (
-        <RoleModal
-          rolKey={modalRol}
-          basePerms={modalRolBasePerms}
-          onClose={() => setModalRol(null)}
-        />
-      )}
+
     </div>
   );
 }

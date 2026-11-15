@@ -280,7 +280,7 @@ export function ImportarProductosModal({ isOpen, onClose, onSuccess, unidadesMed
       } catch { toast.error('Error al leer el archivo'); }
     };
     reader.readAsBinaryString(file);
-  }, []);
+  }, [setFileName, setRows, setStep]);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

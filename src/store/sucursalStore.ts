@@ -42,7 +42,7 @@ export const useSucursalStore = create<SucursalState>((set) => ({
 
   clearSucursales: () => {
     localStorage.removeItem(STORAGE_KEY);
-    set({ sucursales: [], sucursalActual: null, loaded: true });
+    set({ sucursales: [], sucursalActual: null, loaded: false });
   },
 
   setLoading: (loading) => set({ loading }),

@@ -23,6 +23,7 @@ const TIPO_CONFIG = {
   proveedor: { icon: Truck,    label: 'Proveedores', color: 'text-violet-500', bg: 'bg-violet-500/10' },
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function debounce<T extends (...args: any[]) => void>(fn: T, ms: number) {
   let timer: ReturnType<typeof setTimeout>;
   return (...args: Parameters<T>) => {
