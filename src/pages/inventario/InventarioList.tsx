@@ -534,9 +534,9 @@ export function InventarioList() {
   const lotesFiltrados = useMemo(() => {
     return lotes.filter((l) => {
       // filtro de estado
-      if (lotesFiltro === 'vencidos'   && l.diasRestantes >= 0)  return false;
-      if (lotesFiltro === 'proximos30' && (l.diasRestantes < 0 || l.diasRestantes > 30))  return false;
-      if (lotesFiltro === 'proximos90' && (l.diasRestantes < 0 || l.diasRestantes > 90))  return false;
+      if (lotesFiltro === 'vencidos'   && (l.diasRestantes == null || l.diasRestantes >= 0))  return false;
+      if (lotesFiltro === 'proximos30' && (l.diasRestantes == null || l.diasRestantes < 0 || l.diasRestantes > 30))  return false;
+      if (lotesFiltro === 'proximos90' && (l.diasRestantes == null || l.diasRestantes < 0 || l.diasRestantes > 90))  return false;
       // filtro de texto
       if (lotesSearch) {
         const q = lotesSearch.toLowerCase();
@@ -845,13 +845,14 @@ export function InventarioList() {
                   </thead>
                   <tbody>
                     {lotesFiltrados.slice((lotesPage - 1) * LOTES_PER_PAGE, lotesPage * LOTES_PER_PAGE).map(l => {
-                      const vencido = l.diasRestantes < 0;
-                      const critico = !vencido && l.diasRestantes <= 7;
-                      const proximo = !vencido && l.diasRestantes <= 90;
-                      const estadoColor = vencido ? T.bad : critico ? T.bad : proximo ? T.warn : T.ok;
-                      const estadoBg = vencido ? T.badSoft : critico ? T.badSoft : proximo ? T.warnSoft : T.okSoft;
-                      const estadoLabel = vencido ? 'Vencido' : critico ? 'Crítico' : proximo ? `${l.diasRestantes}d` : 'Vigente';
-                      const rowBg = vencido ? `${T.bad}08` : critico ? `${T.warn}08` : '';
+                      const sinFecha = l.diasRestantes == null;
+                      const vencido = !sinFecha && l.diasRestantes! < 0;
+                      const critico = !sinFecha && !vencido && l.diasRestantes! <= 7;
+                      const proximo = !sinFecha && !vencido && l.diasRestantes! <= 90;
+                      const estadoColor = sinFecha ? T.text3 : vencido ? T.bad : critico ? T.bad : proximo ? T.warn : T.ok;
+                      const estadoBg = sinFecha ? T.surface2 : vencido ? T.badSoft : critico ? T.badSoft : proximo ? T.warnSoft : T.okSoft;
+                      const estadoLabel = sinFecha ? 'Sin vencimiento' : vencido ? 'Vencido' : critico ? 'Crítico' : proximo ? `${l.diasRestantes}d` : 'Vigente';
+                      const rowBg = sinFecha ? '' : vencido ? `${T.bad}08` : critico ? `${T.warn}08` : '';
                       return (
                         <tr key={l.movimientoId} style={{ borderTop: `1px solid ${T.lineSoft}`, background: rowBg }}
                           onMouseEnter={e => (e.currentTarget.style.background = T.surface3)}
@@ -865,7 +866,7 @@ export function InventarioList() {
                           </td>
                           <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
                             <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.82rem', fontWeight: 600, color: T.text }}>{l.fechaVencimiento ? new Date(l.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>
-                            <div style={{ fontSize: '.72rem', color: estadoColor, marginTop: 2 }}>{vencido ? `Venció hace ${Math.abs(l.diasRestantes)}d` : `${l.diasRestantes}d restantes`}</div>
+                            <div style={{ fontSize: '.72rem', color: estadoColor, marginTop: 2 }}>{sinFecha ? '' : vencido ? `Venció hace ${Math.abs(l.diasRestantes!)}d` : `${l.diasRestantes}d restantes`}</div>
                           </td>
                           {esFarmacia && <td style={{ padding: '11px 14px', whiteSpace: 'nowrap', fontFamily: "'IBM Plex Mono',monospace", fontSize: '.78rem', color: T.text2 }}>{l.registroSanitario || '—'}</td>}
                           <td style={{ padding: '11px 14px', maxWidth: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: T.text2 }}>{l.proveedorNombre || '—'}</td>

@@ -372,7 +372,8 @@ export function Dashboard() {
       const now = new Date();
       const fmt = (d: Date) => d.toISOString().slice(0, 19);
 
-      // Movimientos: recientes solo con VER_INVENTARIO; próximos a vencer también para VENDEDOR (VER_PRODUCTOS)
+      // Movimientos recientes: solo con VER_INVENTARIO
+      // Próximos a vencer: también disponible para VENDEDOR (VER_PRODUCTOS) — el backend ya autoriza este rol
       let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
       let proximosVencerPromise: Promise<MovimientoInventarioDTO[]>;
       if (puedeVerInventario) {
@@ -383,11 +384,12 @@ export function Dashboard() {
             if (import.meta.env.DEV) { console.warn('⚠️ Error cargando movimientos:', err); }
             return [];
           });
-        proximosVencerPromise = movimientoService.getProximosAVencer(90).catch(() => []);
       } else {
         movimientosPromise = Promise.resolve([]);
-        proximosVencerPromise = Promise.resolve([]);
       }
+      proximosVencerPromise = (puedeVerInventario || puedeVerProductos)
+        ? movimientoService.getProximosAVencer(90).catch(() => [])
+        : Promise.resolve([]);
 
       // Ventas: según permisos efectivos del usuario
       const rangeStart = getRangeStart(timeFilter, now);
@@ -1479,27 +1481,40 @@ export function Dashboard() {
                   </div>
                   <span className="text-[.75rem] text-muted-foreground">próximos 90 días</span>
                 </div>
-                <div className="overflow-y-auto overflow-x-hidden max-h-[180px]" style={{ overscrollBehavior: 'contain' }}>
+                <div className="overflow-y-auto overflow-x-hidden max-h-[260px]" style={{ overscrollBehavior: 'contain' }}>
                   {stats.productosProximosAVencer.map((producto) => {
                     const fechaParts = producto.fechaVencimiento.split('T')[0].split('-');
                     const fv = new Date(parseInt(fechaParts[0]), parseInt(fechaParts[1]) - 1, parseInt(fechaParts[2]));
-                    const diasRestantes = Math.ceil((fv.getTime() - new Date(new Date().toLocaleDateString('en-US')).getTime()) / (1000 * 60 * 60 * 24));
-                    const badgeClass = diasRestantes <= 30
-                      ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30'
-                      : diasRestantes <= 60
-                        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30'
-                        : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30';
+                    const hoyMs = new Date(new Date().toLocaleDateString('en-US')).getTime();
+                    const diasRestantes = Math.ceil((fv.getTime() - hoyMs) / (1000 * 60 * 60 * 24));
+                    const fechaFmt = fv.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+
+                    type EstadoVenc = { label: string; badge: string };
+                    const estado: EstadoVenc = diasRestantes < 0
+                      ? { label: 'Vencido', badge: 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30' }
+                      : diasRestantes <= 7
+                        ? { label: 'Crítico', badge: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30' }
+                        : diasRestantes <= 30
+                          ? { label: 'Próximo', badge: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30' }
+                          : { label: 'Vigente', badge: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30' };
+
                     return (
-                      <div key={`${producto.id}-${producto.fechaVencimiento}`} className="flex items-center gap-3 px-[18px] py-[12px] border-b border-border/50 last:border-b-0">
+                      <div key={`${producto.id}-${producto.fechaVencimiento}`} className="flex items-start gap-3 px-[18px] py-[11px] border-b border-border/50 last:border-b-0">
                         <div className="min-w-0 flex-1">
                           <p className="text-[.86rem] font-semibold truncate">{producto.nombre}</p>
-                          <p className="font-mono text-[.71rem] text-muted-foreground mt-[3px]">
-                            {producto.lote ? `Lote ${producto.lote} · ` : ''}{producto.stockActual} und
+                          <p className="font-mono text-[.70rem] text-muted-foreground mt-[2px]">
+                            {producto.codigoBarras ? `${producto.codigoBarras} · ` : ''}{producto.lote ? `Lote ${producto.lote} · ` : ''}{producto.stockActual} und
                           </p>
+                          <p className="font-mono text-[.70rem] text-muted-foreground/70 mt-[1px]">Vence {fechaFmt}</p>
                         </div>
-                        <span className={`flex-shrink-0 text-[.74rem] font-bold rounded-[7px] px-2 py-1 ${badgeClass}`}>
-                          {diasRestantes} días
-                        </span>
+                        <div className="flex flex-col items-end gap-[3px] flex-shrink-0">
+                          <span className={`text-[.72rem] font-bold rounded-[6px] px-[7px] py-[2px] ${estado.badge}`}>
+                            {estado.label}
+                          </span>
+                          <span className="font-mono text-[.69rem] text-muted-foreground">
+                            {diasRestantes < 0 ? `${Math.abs(diasRestantes)}d pasado` : `${diasRestantes}d restantes`}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
