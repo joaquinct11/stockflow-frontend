@@ -11,6 +11,10 @@ export interface SucursalDTO {
   bloqueadaPorPlan?: boolean;
   tenantId?: string;
   createdAt?: string;
+  /** Ubigeo SUNAT (6 dígitos). Requerido para usar la sucursal como punto GRE. */
+  ubigeo?: string;
+  /** Dirección formateada para documentos tributarios (GRE). */
+  direccionCompleta?: string;
 }
 
 export const sucursalService = {

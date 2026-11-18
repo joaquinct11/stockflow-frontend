@@ -30,6 +30,7 @@ import {
   Calendar,
   MonitorCog,
   Wrench,
+  Truck,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -97,6 +98,7 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
   const esVeterinaria    = rubro === 'VETERINARIA';
   const esPro        = isPro || sucursales.length > 0;
   const isTecnicoServicio = user?.rol === 'TECNICO_SERVICIO';
+  const puedeGRE = isAdmin || puede('VER_GRE') || puede('EMITIR_GRE');
 
   // Trial info para la barra del sidebar
   const trialEndDate = (user?.suscripcion?.trialEndDate) as string | undefined;
@@ -143,7 +145,8 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
           { title: 'Cuadre de Caja',   href: '/dashboard/caja',             icon: Wallet,        show: canAccess('POS') },
           { title: 'Historial de ventas', href: '/dashboard/ventas', icon: ShoppingCart, show: canAccess('VENTAS') },
           { title: 'Facturación',      href: '/dashboard/facturacion',      icon: FileText,      show: canAccess('FACTURACION') },
-          { title: 'Notas de Crédito', href: '/dashboard/notas-credito',    icon: Receipt,       show: isAdmin || puede('VER_NOTAS_CREDITO') },
+          { title: 'Notas de Crédito',    href: '/dashboard/notas-credito',    icon: Receipt,       show: isAdmin || puede('VER_NOTAS_CREDITO') },
+          { title: 'Guías de Remisión',   href: '/dashboard/guias-remision',   icon: Truck,         show: puedeGRE },
         ],
       },
       {
@@ -210,14 +213,14 @@ export function Sidebar({ isOpen, onClose, collapsed, onCollapsedChange }: Sideb
       { type: 'item', title: 'Reportes',         href: '/dashboard/reportes',       icon: BarChart3,    show: canAccess('REPORTES') },
       { type: 'item', title: 'Configuración',    href: '/dashboard/configuracion',  icon: Settings,     show: !isTecnicoServicio },
     ],
-    [canAccess, isAdmin, puede, user?.rol, esPro, esRopa, esServicios, esBoticaFarmacia, esVeterinaria, isTecnicoServicio]
+    [canAccess, isAdmin, puede, user?.rol, esPro, esRopa, esServicios, esBoticaFarmacia, esVeterinaria, isTecnicoServicio, puedeGRE]
   );
 
   const defaultExpanded = useMemo(() => {
     const ventasOpen =
       isPathActive('/dashboard/ventas') || isPathActive('/dashboard/facturacion') ||
       isPathActive('/dashboard/notas-credito') || isPathActive('/dashboard/caja') ||
-      location.pathname === '/pos';
+      isPathActive('/dashboard/guias-remision') || location.pathname === '/pos';
     const gastosOpen =
       isPathActive('/dashboard/gastos') || isPathActive('/dashboard/compras') ||
       isPathActive('/dashboard/recepciones');

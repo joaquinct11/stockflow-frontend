@@ -400,6 +400,10 @@ export interface TenantConfigDTO {
   serieFactura?: string;
   /** Rubro del negocio: BOTICA | FARMACIA | MINIMARKET | FERRETERIA | RESTAURANTE | TIENDA | OTRO */
   rubro?: string;
+  /** Ubigeo SUNAT del punto de despacho (6 dígitos). Solo para GRE sin sucursal de origen. No es el ubigeo fiscal. */
+  ubigeoDespacho?: string;
+  /** Dirección física del almacén de despacho para documentos GRE. No reemplaza la dirección fiscal. */
+  direccionDespacho?: string;
 }
 
 // ✅ NUEVO
