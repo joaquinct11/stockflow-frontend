@@ -58,6 +58,7 @@ const PG: { label: string; color: string; icon: string; codes: string[] }[] = [
   { label: 'Órdenes de Trabajo',  color: '#f59e0b', icon: IC.clip,   codes: ['VER_OT','VER_TODAS_OT','CREAR_OT','EDITAR_OT','CAMBIAR_ESTADO_OT','ASIGNAR_TECNICO_OT','REGISTRAR_CONSUMO_OT','DEVOLVER_CONSUMO_OT','CLASIFICAR_CONSUMO_OT','CERRAR_TECNICO_OT','FACTURAR_OT','ANULAR_FACTURA_OT','REGISTRAR_ENTREGA_OT'] },
   { label: 'Suscripciones',       color: '#8b5cf6', icon: IC.card,   codes: ['VER_SUSCRIPCIONES'] },
   { label: 'Reportes',            color: '#a855f7', icon: IC.chart,  codes: ['VER_REPORTES'] },
+  { label: 'Visibilidad Financiera', color: '#0891b2', icon: IC.chart, codes: ['VER_COSTO_PRODUCTO','VER_MARGEN_GANANCIA'] },
 ];
 
 // ─── Roles metadata ───────────────────────────────────────────────────────────
@@ -178,6 +179,9 @@ const PERM_LABELS: Record<string, { label: string; descripcion: string }> = {
   FACTURAR_OT:              { label: 'Facturar OT',                      descripcion: 'Generar la venta asociada a una OT cerrada técnicamente' },
   ANULAR_FACTURA_OT:        { label: 'Anular facturación de OT',         descripcion: 'Anular la facturación de una orden de trabajo ya facturada' },
   REGISTRAR_ENTREGA_OT:     { label: 'Registrar entrega de OT',          descripcion: 'Registrar la entrega formal del equipo al cliente (FACTURADA → ENTREGADA)' },
+  VER_COSTO_PRODUCTO:       { label: 'Ver costo de productos',           descripcion: 'Muestra el costo unitario en listados de productos, inventario y kardex' },
+  VER_MARGEN_GANANCIA:      { label: 'Ver margen de ganancia',           descripcion: 'Muestra el margen calculado sobre precio de venta versus costo' },
+  VER_VALOR_INVENTARIO:     { label: 'Ver valorización del inventario',  descripcion: 'Muestra el valor total del inventario valorizado al costo' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

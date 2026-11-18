@@ -71,8 +71,11 @@ type StockFilter  = '' | 'CERO' | 'BAJO' | 'NORMAL';
 
 
 export function ProductosList() {
-  const { canCreate, canEdit, canDelete, canView } = usePermissions();
+  const { canCreate, canEdit, canDelete, canView, puede } = usePermissions();
   const hasViewPermission = canView('PRODUCTOS');
+  const puedeVerCosto  = puede('VER_COSTO_PRODUCTO');
+  const puedeVerMargen = puede('VER_MARGEN_GANANCIA');
+  const puedeVerValor  = puede('VER_VALOR_INVENTARIO');
   const { user } = useAuthStore();
   const { config: negocioConfig } = useTenantConfigStore();
   const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
@@ -454,7 +457,7 @@ export function ProductosList() {
       stockActual: producto.stockActual || 0,
       stockMinimo: producto.stockMinimo || 10,
       stockMaximo: producto.stockMaximo || 500,
-      costoUnitario: producto.costoUnitario,
+      costoUnitario: puedeVerCosto ? producto.costoUnitario : 0,
       precioVenta: producto.precioVenta,
       activo: producto.activo,
       tenantId: producto.tenantId,
@@ -667,6 +670,18 @@ export function ProductosList() {
 
   const totalProductos = productosPorTipo.length;
   const productosConStockBajo = productosPorTipo.filter((p) => (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)).length;
+  const esVendedor = user?.rol === 'VENDEDOR';
+  const productosSinStock = productosPorTipo.filter((p) => p.activo !== false && (p.stockActual ?? 0) === 0).length;
+  const productosProximosAVencer = (() => {
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    return productosPorTipo.filter(p => {
+      if (p.activo === false) return false;
+      if (!p.proximaFechaVencimiento) return false;
+      const fv = new Date(p.proximaFechaVencimiento + 'T00:00:00');
+      const dias = Math.ceil((fv.getTime() - hoy.getTime()) / 86400000);
+      return dias >= 0 && dias <= 30;
+    }).length;
+  })();
 
   // Stats para rubro EMPRESA_SERVICIOS
   const categoriasUnicas = new Set(productosPorTipo.map((p) => p.categoriaNombre).filter(Boolean)).size;
@@ -704,7 +719,7 @@ export function ProductosList() {
     }
 
     const filas = [
-      ['Nombre', 'Código barras', 'Categoría', 'Unidad', 'Stock actual', 'Stock mínimo', 'Precio venta', 'Costo unitario'],
+      ['Nombre', 'Código barras', 'Categoría', 'Unidad', 'Stock actual', 'Stock mínimo', 'Precio venta', ...(puedeVerCosto ? ['Costo unitario'] : [])],
       ...lista.map(p => [
         p.nombre,
         p.codigoBarras ?? '',
@@ -713,7 +728,7 @@ export function ProductosList() {
         p.stockActual ?? 0,
         p.stockMinimo ?? '',
         p.precioVenta,
-        p.costoUnitario ?? '',
+        ...(puedeVerCosto ? [p.costoUnitario ?? ''] : []),
       ]),
     ];
 
@@ -806,12 +821,17 @@ export function ProductosList() {
             </div>
           ))}
         </>) : (<>
-          {[
+          {(esVendedor ? [
+            { label: 'Total Productos',    val: totalProductos,            color: T.primary, sub: 'En inventario activo'    },
+            { label: 'Sin stock',          val: productosSinStock,          color: T.warn,    sub: 'Productos agotados'       },
+            { label: 'Stock Bajo',         val: productosConStockBajo,      color: '#f59e0b', sub: 'Por debajo del mínimo'   },
+            { label: 'Próximos a vencer',  val: productosProximosAVencer,   color: T.bad,     sub: 'Vencen en 30 días'       },
+          ] : [
             { label: 'Total Productos', val: totalProductos, color: T.primary, sub: 'En inventario activo' },
-            { label: 'Stock Bajo', val: productosConStockBajo, color: T.warn, sub: 'Requieren atención' },
-            { label: 'Valor Inventario', val: `S/.${valorTotalInventario.toFixed(2)}`, color: T.ok, sub: 'Valorizado al costo' },
-            { label: 'Precios en riesgo', val: productosConPrecioRiesgoso, color: T.bad, sub: 'Precio ≤ costo' },
-          ].map(k => (
+            { label: 'Stock Bajo',      val: productosConStockBajo, color: T.warn, sub: 'Requieren atención' },
+            ...(puedeVerValor  ? [{ label: 'Valor Inventario', val: `S/.${valorTotalInventario.toFixed(2)}`, color: T.ok,  sub: 'Valorizado al costo' }] : []),
+            ...(puedeVerMargen ? [{ label: 'Precios en riesgo', val: productosConPrecioRiesgoso,              color: T.bad, sub: 'Precio ≤ costo' }]       : []),
+          ]).map(k => (
             <div key={k.label} style={{ padding: '16px 18px', background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow }}>
               <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.68rem', fontWeight: 600, letterSpacing: '.09em', textTransform: 'uppercase', color: T.text3 }}>{k.label}</div>
               <div style={{ fontSize: '1.72rem', fontWeight: 700, letterSpacing: '-.032em', marginTop: 9, fontVariantNumeric: 'tabular-nums', color: k.color }}>{k.val}</div>
@@ -916,7 +936,7 @@ export function ProductosList() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: T.surface3 }}>
-                  {[esServicios ? 'Servicio' : 'Producto', ...(!esServicios ? ['Código', 'Categoría', 'Stock', 'Costo', 'Precio'] : ['Categoría', 'Precio']), 'Estado', ''].map((h, i) => (
+                  {[esServicios ? 'Servicio' : 'Producto', ...(!esServicios ? ['Código', 'Categoría', 'Stock', ...(puedeVerCosto ? ['Costo'] : []), 'Precio'] : ['Categoría', 'Precio']), 'Estado', ''].map((h, i) => (
                     <th key={i} style={{ padding: '10px 14px', textAlign: i === (esServicios ? 4 : 8) ? 'right' : 'left', fontFamily: "'IBM Plex Mono',monospace", fontSize: '.72rem', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, borderBottom: `1px solid ${T.line}`, whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -969,15 +989,15 @@ export function ProductosList() {
                           </div>
                         </div>
                       </td>}
-                      {/* Costo (solo productos) */}
-                      {!esServicios && <td style={{ padding: '11px 14px', borderBottom: `1px solid ${T.lineSoft}` }}>
-                        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.83rem', color: T.text2 }}>S/.{producto.costoUnitario.toFixed(2)}</span>
+                      {/* Costo (solo productos, solo si tiene permiso) */}
+                      {!esServicios && puedeVerCosto && <td style={{ padding: '11px 14px', borderBottom: `1px solid ${T.lineSoft}` }}>
+                        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.83rem', color: T.text2 }}>{producto.costoUnitario != null ? `S/.${producto.costoUnitario.toFixed(2)}` : '—'}</span>
                       </td>}
                       {/* Precio */}
                       <td style={{ padding: '11px 14px', borderBottom: `1px solid ${T.lineSoft}` }}>
                         <div>
                           <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.88rem', fontWeight: 700, color: T.text }}>S/.{producto.precioVenta.toFixed(2)}</span>
-                          {!esServicios && margen !== null && (
+                          {!esServicios && puedeVerMargen && margen !== null && (
                             <div style={{ fontSize: '.72rem', fontWeight: 600, color: margenColor, marginTop: 2 }}>{margen.toFixed(1)}% margen</div>
                           )}
                         </div>
@@ -1095,11 +1115,27 @@ export function ProductosList() {
                   1 · Identificación
                 </div>
 
-                {/* Foto + Nombre + Código */}
-                <div style={{ display: 'grid', gridTemplateColumns: '128px minmax(0,1fr)', gap: 16 }}>
+                {/* Foto + Nombre + Código — grid responsive con template-areas */}
+                <style>{`
+                  .pf-foto-grid {
+                    display: grid;
+                    grid-template-columns: 128px minmax(0, 1fr);
+                    grid-template-areas: "foto nombre" "foto barcode";
+                    gap: 16px;
+                  }
+                  .pf-foto-grid.pf-sin-barcode {
+                    grid-template-areas: "foto nombre";
+                  }
+                  @media (max-width: 640px) {
+                    .pf-foto-grid {
+                      grid-template-areas: "foto nombre" "barcode barcode";
+                    }
+                  }
+                `}</style>
+                <div className={`pf-foto-grid${esServicios ? ' pf-sin-barcode' : ''}`}>
                   {/* Foto */}
                   <button type="button" onClick={() => imgInputRef.current?.click()} title="Subir foto del producto"
-                    style={{ height: 128, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: `1.5px dashed ${imgPreview ? T.primaryLine : T.line}`, borderRadius: 12, background: imgPreview ? T.primarySoft : T.surface3, cursor: 'pointer', overflow: 'hidden', padding: 0 }}
+                    style={{ gridArea: 'foto', alignSelf: 'start', height: 128, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: `1.5px dashed ${imgPreview ? T.primaryLine : T.line}`, borderRadius: 12, background: imgPreview ? T.primarySoft : T.surface3, cursor: 'pointer', overflow: 'hidden', padding: 0 }}
                     onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = T.primary; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = imgPreview ? T.primaryLine : T.line; }}>
                     {imgPreview
@@ -1112,77 +1148,74 @@ export function ProductosList() {
                     }
                   </button>
 
-                  {/* Nombre + Código */}
-                  <div style={{ display: 'grid', gap: 12, minWidth: 0 }}>
-                    {/* Nombre */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>
-                        Nombre <span style={{ color: T.bad }}>*</span>
-                      </label>
-                      <div style={{ position: 'relative' }}>
-                        <FxInput
-                          type="text"
-                          value={formData.nombre}
-                          onChange={e => setFormData({ ...formData, nombre: e.target.value })}
-                          onFocus={() => { if (nombreSugerencias.length > 0) setMostrarSugerencias(true); }}
-                          onBlur={() => { setTimeout(() => setMostrarSugerencias(false), 150); }}
-                          placeholder={esServicios ? 'Nombre del servicio' : 'Nombre del producto'}
-                          required
-                          minLength={3}
-                          style={{ paddingLeft: 13 }}
-                        />
-                        {mostrarSugerencias && nombreSugerencias.length > 0 && (
-                          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200, background: T.surface, border: `1px solid ${T.warnLine}`, borderRadius: 10, boxShadow: '0 8px 24px -8px rgba(0,0,0,.25)', overflow: 'hidden' }}>
-                            <div style={{ padding: '8px 12px', fontSize: '.76rem', fontWeight: 600, color: T.warn, background: T.warnSoft, borderBottom: `1px solid ${T.warnLine}`, display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                              Ya existen productos con nombre similar
-                            </div>
-                            {nombreSugerencias.map(p => (
-                              <button key={p.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => setMostrarSugerencias(false)}
-                                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', fontSize: '.84rem', color: T.text, background: 'transparent', border: 0, borderBottom: `1px solid ${T.lineSoft}`, cursor: 'default', textAlign: 'left' }}
-                                onMouseEnter={e => (e.currentTarget.style.background = T.surface2)}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                                <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</span>
-                                {p.codigoBarras && <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.76rem', color: T.text3, flexShrink: 0 }}>{p.codigoBarras}</span>}
-                              </button>
-                            ))}
+                  {/* Nombre */}
+                  <div style={{ gridArea: 'nombre', minWidth: 0 }}>
+                    <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>
+                      Nombre <span style={{ color: T.bad }}>*</span>
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <FxInput
+                        type="text"
+                        value={formData.nombre}
+                        onChange={e => setFormData({ ...formData, nombre: e.target.value })}
+                        onFocus={() => { if (nombreSugerencias.length > 0) setMostrarSugerencias(true); }}
+                        onBlur={() => { setTimeout(() => setMostrarSugerencias(false), 150); }}
+                        placeholder={esServicios ? 'Nombre del servicio' : 'Nombre del producto'}
+                        required
+                        minLength={3}
+                        style={{ paddingLeft: 13 }}
+                      />
+                      {mostrarSugerencias && nombreSugerencias.length > 0 && (
+                        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200, background: T.surface, border: `1px solid ${T.warnLine}`, borderRadius: 10, boxShadow: '0 8px 24px -8px rgba(0,0,0,.25)', overflow: 'hidden' }}>
+                          <div style={{ padding: '8px 12px', fontSize: '.76rem', fontWeight: 600, color: T.warn, background: T.warnSoft, borderBottom: `1px solid ${T.warnLine}`, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                            Ya existen productos con nombre similar
                           </div>
-                        )}
+                          {nombreSugerencias.map(p => (
+                            <button key={p.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => setMostrarSugerencias(false)}
+                              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', fontSize: '.84rem', color: T.text, background: 'transparent', border: 0, borderBottom: `1px solid ${T.lineSoft}`, cursor: 'default', textAlign: 'left' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = T.surface2)}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                              <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</span>
+                              {p.codigoBarras && <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.76rem', color: T.text3, flexShrink: 0 }}>{p.codigoBarras}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Código de barras — grid-area: barcode; ocupa col derecha en desktop, fila completa en mobile */}
+                  {!esServicios && (
+                    <div style={{ gridArea: 'barcode', minWidth: 0 }}>
+                      <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Código de barras</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>
+                          <FxInput
+                            type="text"
+                            inputMode="numeric"
+                            value={formData.codigoBarras}
+                            onChange={e => setFormData({ ...formData, codigoBarras: e.target.value })}
+                            placeholder="Escanea o escribe el código"
+                            style={{ paddingLeft: 38, fontFamily: "'IBM Plex Mono',monospace", fontSize: '.86rem', letterSpacing: '.03em' }}
+                          />
+                        </div>
+                        <button type="button"
+                          onClick={() => {
+                            const d = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10));
+                            const check = (10 - (d.reduce((s, x, i) => s + x * (i % 2 === 0 ? 1 : 3), 0) % 10)) % 10;
+                            setFormData(p => ({ ...p, codigoBarras: [...d, check].join('') }));
+                          }}
+                          style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 7, height: 44, padding: '0 14px', fontSize: '.82rem', fontWeight: 650, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = T.primary; (e.currentTarget as HTMLButtonElement).style.color = T.primary; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = T.line; (e.currentTarget as HTMLButtonElement).style.color = T.text2; }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+                          Generar
+                        </button>
                       </div>
                     </div>
-
-                    {/* Código de barras */}
-                    {!esServicios && (
-                      <div>
-                        <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Código de barras</label>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>
-                            <FxInput
-                              type="text"
-                              inputMode="numeric"
-                              value={formData.codigoBarras}
-                              onChange={e => setFormData({ ...formData, codigoBarras: e.target.value })}
-                              placeholder="Escanea o escribe el código"
-                              style={{ paddingLeft: 38, fontFamily: "'IBM Plex Mono',monospace", fontSize: '.86rem', letterSpacing: '.03em' }}
-                            />
-                          </div>
-                          <button type="button"
-                            onClick={() => {
-                              const d = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10));
-                              const check = (10 - (d.reduce((s, x, i) => s + x * (i % 2 === 0 ? 1 : 3), 0) % 10)) % 10;
-                              setFormData(p => ({ ...p, codigoBarras: [...d, check].join('') }));
-                            }}
-                            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, height: 44, padding: '0 14px', fontSize: '.82rem', fontWeight: 650, color: T.text2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = T.primary; (e.currentTarget as HTMLButtonElement).style.color = T.primary; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = T.line; (e.currentTarget as HTMLButtonElement).style.color = T.text2; }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
-                            Generar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
 
                 {/* Categoría + Unidad */}
@@ -1268,7 +1301,7 @@ export function ProductosList() {
 
                 {/* Costo + Precio */}
                 <div className="form-grid-2col" style={{ gap: 14 }}>
-                  {!esServicios && (
+                  {!esServicios && puedeVerCosto && (
                     <div>
                       <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>Costo unitario</label>
                       <div style={{ position: 'relative' }}>
@@ -1293,7 +1326,7 @@ export function ProductosList() {
                 </div>
 
                 {/* Margen indicator */}
-                {margenForm !== null && !esServicios && (
+                {margenForm !== null && !esServicios && puedeVerCosto && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '8px 12px', borderRadius: 9, background: margenForm < 0 ? T.badSoft : margenForm < 15 ? T.warnSoft : T.okSoft, border: `1px solid ${margenForm < 0 ? T.bad : margenForm < 15 ? T.warnLine : T.ok}33` }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: margenColor, flexShrink: 0 }} />
                     <span style={{ flex: 1, fontSize: '.8rem', color: T.text2 }}>Margen sobre el precio de venta</span>

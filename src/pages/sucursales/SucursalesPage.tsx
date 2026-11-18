@@ -167,6 +167,8 @@ interface FormState {
   direccion: string;
   telefono: string;
   email: string;
+  ubigeo: string;
+  direccionCompleta: string;
   intento: boolean;
 }
 
@@ -179,7 +181,7 @@ export function SucursalesPage() {
   const [loading, setLoading] = useState(true);
   const [seg, setSeg] = useState<Seg>('TODAS');
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<FormState>({ id: null, nombre: '', direccion: '', telefono: '', email: '', intento: false });
+  const [form, setForm] = useState<FormState>({ id: null, nombre: '', direccion: '', telefono: '', email: '', ubigeo: '', direccionCompleta: '', intento: false });
   const [desactivarId, setDesactivarId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -219,22 +221,23 @@ export function SucursalesPage() {
   );
 
   const abrirCrear = () => {
-    setForm({ id: null, nombre: '', direccion: '', telefono: '', email: '', intento: false });
+    setForm({ id: null, nombre: '', direccion: '', telefono: '', email: '', ubigeo: '', direccionCompleta: '', intento: false });
     setFormOpen(true);
   };
 
   const abrirEditar = (s: SucursalDTO) => {
-    setForm({ id: s.id!, nombre: s.nombre, direccion: s.direccion ?? '', telefono: s.telefono ?? '', email: s.email ?? '', intento: false });
+    setForm({ id: s.id!, nombre: s.nombre, direccion: s.direccion ?? '', telefono: s.telefono ?? '', email: s.email ?? '', ubigeo: s.ubigeo ?? '', direccionCompleta: s.direccionCompleta ?? '', intento: false });
     setFormOpen(true);
   };
 
   const handleGuardar = async () => {
     const nombre = form.nombre.trim();
     const emailErr = !!form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
-    if (!nombre || emailErr) { setForm(f => ({ ...f, intento: true })); return; }
+    const ubigeoInvalido = form.ubigeo.length > 0 && !/^\d{6}$/.test(form.ubigeo);
+    if (!nombre || emailErr || ubigeoInvalido) { setForm(f => ({ ...f, intento: true })); return; }
     setSaving(true);
     try {
-      const dto = { nombre, direccion: form.direccion.trim(), telefono: form.telefono.trim(), email: form.email.trim() };
+      const dto = { nombre, direccion: form.direccion.trim(), telefono: form.telefono.trim(), email: form.email.trim(), ubigeo: form.ubigeo.trim() || undefined, direccionCompleta: form.direccionCompleta.trim() || undefined };
       if (form.id) {
         await sucursalService.actualizar(form.id, dto);
         notify.success('Sucursal actualizada');
@@ -281,6 +284,7 @@ export function SucursalesPage() {
   const fNombre     = form.nombre.trim();
   const fEmailErr   = !!form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
   const fNombreErr  = form.intento && !fNombre;
+  const fUbigeoErr  = form.ubigeo.length > 0 && !/^\d{6}$/.test(form.ubigeo);
   const esNueva     = form.id == null;
   const editTarget  = sucursales.find(s => s.id === desactivarId);
 
@@ -360,6 +364,43 @@ export function SucursalesPage() {
                 onChange={e => setForm(f => ({ ...f, email: e.target.value.trim() }))}
               />
               {fEmailErr && form.intento && <div style={{ fontSize: '.76rem', fontWeight: 600, color: T.bad, marginTop: 6 }}>Revisa el formato del email.</div>}
+            </div>
+          </div>
+
+          {/* GRE */}
+          <div style={{ paddingTop: 6, borderTop: `1px solid ${T.lineSoft}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '.67rem', fontWeight: 600, letterSpacing: '.09em', textTransform: 'uppercase' as const, color: T.text3 }}>GRE — Guías de Remisión</span>
+            </div>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>
+                  Ubigeo SUNAT
+                  <span style={{ fontWeight: 400, color: T.text3, marginLeft: 6 }}>6 dígitos · ej: 150101</span>
+                </label>
+                <FieldInput
+                  icon={<IcPin size={15} />}
+                  error={fUbigeoErr && form.intento}
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="150101"
+                  value={form.ubigeo}
+                  onChange={e => setForm(f => ({ ...f, ubigeo: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                />
+                {fUbigeoErr && form.intento && <div style={{ fontSize: '.76rem', fontWeight: 600, color: T.bad, marginTop: 6 }}>El ubigeo debe tener exactamente 6 dígitos.</div>}
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '.8rem', fontWeight: 600, color: T.text2, marginBottom: 6 }}>
+                  Dirección completa para documentos
+                </label>
+                <FieldInput
+                  icon={<IcPin size={15} />}
+                  placeholder="Ej: Av. Los Olivos 456, Cercado de Lima, Lima"
+                  value={form.direccionCompleta}
+                  onChange={e => setForm(f => ({ ...f, direccionCompleta: e.target.value }))}
+                />
+                <div style={{ fontSize: '.74rem', color: T.text3, marginTop: 4 }}>Aparece en las GRE cuando esta sucursal es el punto de partida o llegada.</div>
+              </div>
             </div>
           </div>
 
