@@ -13,6 +13,7 @@ const routeMap: Record<string, BreadcrumbEntry> = {
   '/dashboard/caja':            { group: 'Ventas',     label: 'Cuadre de Caja' },
   '/dashboard/facturacion':     { group: 'Ventas',     label: 'Facturación' },
   '/dashboard/notas-credito':   { group: 'Ventas',     label: 'Notas de Crédito' },
+  '/dashboard/guias-remision':  { group: 'Ventas',     label: 'Guías de Remisión' },
   // Gastos (grupo)
   '/dashboard/gastos':          { group: 'Gastos',     label: 'Gastos y Egresos' },
   '/dashboard/compras/ordenes': { group: 'Gastos',     label: 'Órdenes de Compra' },

@@ -37,6 +37,11 @@ export interface StockLoteDisponibleDTO {
 }
 
 export const movimientoService = {
+  getCountHoy: async (): Promise<number> => {
+    const { data } = await axiosInstance.get<number>(API_ENDPOINTS.MOVIMIENTOS.HOY_COUNT);
+    return data;
+  },
+
   /**
    * Obtener todos los movimientos del tenant actual
    */

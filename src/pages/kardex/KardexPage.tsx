@@ -80,6 +80,8 @@ import { usePermissions } from '../../hooks/usePermissions';
 export function KardexPage() {
   const { canView, puede } = usePermissions();
   const hasViewPermission = canView('INVENTARIO');
+  const puedeVerCosto = puede('VER_COSTO_PRODUCTO');
+  const puedeVerValor = puede('VER_VALOR_INVENTARIO');
   const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
   const sucursalId = sucursalActual ? sucursalActual.id : undefined;
 
@@ -287,6 +289,7 @@ export function KardexPage() {
         </Card>
 
         {/* Valor */}
+        {puedeVerValor && (
         <Card className="relative overflow-hidden border-0 shadow-sm">
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -299,6 +302,7 @@ export function KardexPage() {
             <p className="text-3xl font-bold tracking-tight text-emerald-600">S/.{kardexStats.valor.toFixed(2)}</p>
           </CardContent>
         </Card>
+        )}
       </div>
 
       {!hasViewPermission ? (
@@ -356,7 +360,7 @@ export function KardexPage() {
                           </TableHead>
                           <TableHead>Categoría</TableHead>
                           <TableHead className="text-center">Stock Actual</TableHead>
-                          <TableHead className="text-right">Costo Unit.</TableHead>
+                          {puedeVerCosto && <TableHead className="text-right">Costo Unit.</TableHead>}
                           <TableHead className="text-right">Precio Venta</TableHead>
                           <TableHead className="text-right">Ver detalle</TableHead>
                         </TableRow>
@@ -387,9 +391,11 @@ export function KardexPage() {
                                 {producto.stockActual}
                               </span>
                             </TableCell>
+                            {puedeVerCosto && (
                             <TableCell className="text-right text-muted-foreground text-sm">
-                              S/.{producto.costoUnitario.toFixed(2)}
+                              {producto.costoUnitario != null ? `S/.${producto.costoUnitario.toFixed(2)}` : '—'}
                             </TableCell>
+                            )}
                             <TableCell className="text-right text-muted-foreground text-sm">
                               S/.{producto.precioVenta.toFixed(2)}
                             </TableCell>
@@ -475,8 +481,8 @@ export function KardexPage() {
                   <TableHead className="text-center">Entradas</TableHead>
                   <TableHead className="text-center">Salidas</TableHead>
                   <TableHead className="text-center">Stock</TableHead>
-                  <TableHead className="text-right">Costo Unit.</TableHead>
-                  <TableHead className="text-right">Costo Total</TableHead>
+                  {puedeVerCosto && <TableHead className="text-right">Costo Unit.</TableHead>}
+                  {puedeVerCosto && <TableHead className="text-right">Costo Total</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -523,15 +529,19 @@ export function KardexPage() {
                           {stockAcumulado}
                         </TableCell>
 
+                        {puedeVerCosto && (
                         <TableCell className="text-right text-muted-foreground text-sm">
                           {costoUnitario > 0 ? `S/.${costoUnitario.toFixed(2)}` : '-'}
                         </TableCell>
+                        )}
 
+                        {puedeVerCosto && (
                         <TableCell className="text-right text-muted-foreground text-sm">
                           {costoTotal != null && costoTotal > 0
                             ? `S/.${costoTotal.toFixed(2)}`
                             : '-'}
                         </TableCell>
+                        )}
                       </TableRow>
                     );
                   },

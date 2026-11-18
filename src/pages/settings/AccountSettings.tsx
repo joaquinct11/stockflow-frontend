@@ -8,7 +8,7 @@ import { tenantConfigService } from '../../services/tenantConfig.service';
 import { notify } from '../../lib/notify';
 import type { DeleteAccountValidationDTO, TenantConfigDTO } from '../../types';
 
-type Section = 'negocio' | 'facturacion' | 'peligro';
+type Section = 'negocio' | 'facturacion' | 'gre' | 'peligro';
 
 const RUBROS: Record<string, string> = {
   BOTICA: 'Botica', FARMACIA: 'Farmacia', MINIMARKET: 'Minimarket',
@@ -20,6 +20,7 @@ const FORM_EMPTY: TenantConfigDTO = {
   nombreNegocio: '', ruc: '', direccion: '', telefono: '',
   emailContacto: '', ciudad: '', logoBase64: null, moneda: 'S/.',
   igvPorcentaje: 18, piePaginaPdf: '', serieBoleta: 'B001', serieFactura: 'F001', rubro: 'OTRO',
+  ubigeoDespacho: '', direccionDespacho: '',
 };
 
 export function AccountSettings() {
@@ -79,6 +80,7 @@ export function AccountSettings() {
         igvPorcentaje: data.igvPorcentaje ?? 18, piePaginaPdf: data.piePaginaPdf ?? '',
         serieBoleta: data.serieBoleta ?? 'B001', serieFactura: data.serieFactura ?? 'F001',
         rubro: data.rubro ?? 'OTRO',
+        ubigeoDespacho: data.ubigeoDespacho ?? '', direccionDespacho: data.direccionDespacho ?? '',
       };
       setForm(f);
       setSavedForm(f);
@@ -161,7 +163,8 @@ export function AccountSettings() {
     : (form.serieBoleta ?? '')[0] !== 'B' ? 'Debe empezar con B.' : '';
   const sfErr = !/^[A-Z0-9]{4}$/.test(form.serieFactura ?? '') ? 'Debe tener 4 caracteres.'
     : (form.serieFactura ?? '')[0] !== 'F' ? 'Debe empezar con F.' : '';
-  const canSave = [rucErr, nomErr, emailErr, igvErr, sbErr, sfErr].filter(Boolean).length === 0;
+  const ubigeoErr = (form.ubigeoDespacho ?? '').length > 0 && !/^\d{6}$/.test(form.ubigeoDespacho ?? '');
+  const canSave = [rucErr, nomErr, emailErr, igvErr, sbErr, sfErr, ubigeoErr ? 'x' : ''].filter(Boolean).length === 0;
 
   const cambios = (Object.keys(form) as Array<keyof TenantConfigDTO>).filter(k => form[k] !== savedForm[k]);
   const dirty = cambios.length > 0 && isAdmin;
@@ -239,6 +242,10 @@ export function AccountSettings() {
       {
         key: 'facturacion' as Section, label: 'Facturación',
         path: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1ZM16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11',
+      },
+      {
+        key: 'gre' as Section, label: 'Guías de Remisión',
+        path: 'M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3m-1 11a2 2 0 1 0 4 0 2 2 0 0 0-4 0M9 20a2 2 0 1 0 4 0 2 2 0 0 0-4 0M5 17h4m2 0h6m-4-6H3',
       },
     ] : []),
     {
@@ -462,6 +469,69 @@ export function AccountSettings() {
     </section>
   );
 
+  const renderGRE = () => (
+    <section style={card}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '13px', padding: '20px 22px 18px', borderBottom: `1px solid ${C.lineSoft}` }}>
+        <span style={iconTile()}>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3m-1 11a2 2 0 1 0 4 0 2 2 0 0 0-4 0M9 20a2 2 0 1 0 4 0 2 2 0 0 0-4 0M5 17h4m2 0h6m-4-6H3"/>
+          </svg>
+        </span>
+        <div>
+          <h2 style={{ fontSize: '1.05rem', fontWeight: 700, letterSpacing: '-.02em', margin: 0, color: C.text }}>Guías de Remisión — Punto de despacho</h2>
+          <p style={{ fontSize: '.82rem', lineHeight: 1.5, color: C.text3, margin: '4px 0 0' }}>Se utiliza cuando emites una GRE sin seleccionar una sucursal de origen. No reemplaza tu dirección fiscal.</p>
+        </div>
+      </div>
+
+      {configLoading ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '40px 22px', color: C.text3, fontSize: '.88rem' }}>
+          <span style={{ width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${C.primary}`, borderTopColor: 'transparent', animation: 'fx-spin 1s linear infinite', flexShrink: 0 }} />
+          Cargando configuración...
+        </div>
+      ) : (
+        <div style={{ padding: '20px 22px 24px', display: 'grid', gap: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', padding: '11px 13px', borderRadius: '11px', background: C.primarySoft, fontSize: '.8rem', lineHeight: 1.5, color: C.text2 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px' }}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <span>Solo configura este punto si emites GRE directamente desde el almacén principal sin seleccionar una sucursal. Si ya tienes sucursales con ubigeo configurado, este campo no se utiliza.</span>
+          </div>
+
+          <div>
+            <div style={fieldLabel}>
+              Ubigeo SUNAT
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '.7rem', fontWeight: 500, color: C.text3 }}>6 dígitos · ej: 150101 = Lima / Lima / Lima</span>
+            </div>
+            <div style={{ position: 'relative' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text3} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+              <input
+                type="text" inputMode="numeric" maxLength={6}
+                value={form.ubigeoDespacho ?? ''}
+                onChange={e => set('ubigeoDespacho', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="150101"
+                style={{ ...inp(ubigeoErr, 38, true) }}
+              />
+            </div>
+            {ubigeoErr && <div style={errMsg}>El ubigeo debe tener exactamente 6 dígitos.</div>}
+          </div>
+
+          <div>
+            <div style={fieldLabel}>Dirección de despacho</div>
+            <div style={{ position: 'relative' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text3} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3m-1 11a2 2 0 1 0 4 0 2 2 0 0 0-4 0M9 20a2 2 0 1 0 4 0 2 2 0 0 0-4 0"/></svg>
+              <input
+                type="text"
+                value={form.direccionDespacho ?? ''}
+                onChange={e => set('direccionDespacho', e.target.value)}
+                placeholder="Ej: Av. Los Olivos 456, Cercado de Lima"
+                style={inp(false, 38)}
+              />
+            </div>
+            <div style={{ fontSize: '.74rem', color: C.text3, marginTop: '5px' }}>Aparecerá como dirección de partida en las GRE que emitas sin sucursal.</div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+
   const renderPeligro = () => (
     <section style={{ ...card, border: `1px solid ${C.badBorder}` }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '13px', padding: '20px 22px 18px', borderBottom: `1px solid ${C.lineSoft}` }}>
@@ -567,6 +637,21 @@ export function AccountSettings() {
     <>
       <style>{`
         @keyframes fx-spin { to { transform: rotate(360deg); } }
+        @media (max-width: 768px) {
+          .settings-layout { grid-template-columns: 1fr !important; }
+          .settings-nav {
+            position: static !important;
+            display: flex !important;
+            flex-direction: row !important;
+            overflow-x: auto !important;
+            gap: 4px !important;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 2px;
+          }
+          .settings-nav::-webkit-scrollbar { display: none; }
+          .settings-nav > button { flex-shrink: 0 !important; width: auto !important; }
+        }
       `}</style>
 
       <div style={{ maxWidth: '1240px' }}>
@@ -601,7 +686,7 @@ export function AccountSettings() {
           gap: '22px', marginTop: '22px', alignItems: 'start',
         }}>
           {/* ── Left nav ──────────────────────────────────────────────────── */}
-          <nav style={{ position: 'sticky', top: '20px', display: 'grid', gap: '3px' }}>
+          <nav className="settings-nav" style={{ position: 'sticky', top: '20px', display: 'grid', gap: '3px' }}>
             {SECS.map(({ key, label, path, danger }) => {
               const on = activeSection === key;
               return (
@@ -620,6 +705,7 @@ export function AccountSettings() {
           <div style={{ display: 'grid', gap: '18px', minWidth: 0 }}>
             {isAdmin && activeSection === 'negocio' && renderNegocio()}
             {isAdmin && activeSection === 'facturacion' && renderFacturacion()}
+            {isAdmin && activeSection === 'gre' && renderGRE()}
             {(activeSection === 'peligro' || !isAdmin) && renderPeligro()}
           </div>
 

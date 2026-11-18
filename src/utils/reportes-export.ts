@@ -763,14 +763,18 @@ export function exportarOCPDF(oc: OrdenCompraDTO, negocio?: TenantConfigDTO | nu
 export function exportarStockExcel(
   productos: ProductoDTO[],
   nombreUnidad: (id: number) => string,
+  mostrarCosto = true,
 ): void {
   const wb = XLSX.utils.book_new();
   const fecha = new Date().toLocaleDateString('es-PE');
 
+  const headerRow = ['Código', 'Producto', 'Categoría', 'Unidad', 'Stock Actual', 'Stock Mín.', 'Estado',
+    ...(mostrarCosto ? ['Costo Unit. (S/)', 'Precio Venta (S/)', 'Valorizado (S/)'] : ['Precio Venta (S/)'])];
+
   const rows: (string | number)[][] = [
     [`Stock Actual — ${fecha}`],
     [],
-    ['Código', 'Producto', 'Categoría', 'Unidad', 'Stock Actual', 'Stock Mín.', 'Estado', 'Costo Unit. (S/)', 'Precio Venta (S/)', 'Valorizado (S/)'],
+    headerRow,
     ...productos.map((p) => [
       p.codigoBarras ?? '',
       p.nombre,
@@ -779,12 +783,13 @@ export function exportarStockExcel(
       p.stockActual ?? 0,
       p.stockMinimo ?? 0,
       (p.stockActual ?? 0) <= (p.stockMinimo ?? 0) ? 'BAJO STOCK' : 'OK',
-      p.costoUnitario ?? 0,
-      p.precioVenta ?? 0,
-      (p.stockActual ?? 0) * (p.costoUnitario ?? 0),
+      ...(mostrarCosto
+        ? [p.costoUnitario ?? 0, p.precioVenta ?? 0, (p.stockActual ?? 0) * (p.costoUnitario ?? 0)]
+        : [p.precioVenta ?? 0]),
     ]),
-    [],
-    ['', 'TOTAL VALORIZADO', '', '', '', '', '', '', '', productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0)],
+    ...(mostrarCosto
+      ? [[], ['', 'TOTAL VALORIZADO', '', '', '', '', '', '', '', productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0)]]
+      : []),
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -801,20 +806,25 @@ export function exportarStockPDF(
   productos: ProductoDTO[],
   nombreUnidad: (id: number) => string,
   negocio?: TenantConfigDTO | null,
+  mostrarCosto = true,
 ): void {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const fecha = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
 
-  const valorTotal = productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0);
+  const valorTotal = mostrarCosto ? productos.reduce((acc, p) => acc + (p.stockActual ?? 0) * (p.costoUnitario ?? 0), 0) : 0;
   const bajoStockCount = productos.filter((p) => (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)).length;
+  const subtitleExtra = mostrarCosto ? `  ·  Valorizado: ${sol(valorTotal)}` : '';
   const y = dibujarEncabezadoNegocio(doc, negocio, 'Stock Actual',
-    `${fecha}  ·  ${productos.length} productos  ·  ${bajoStockCount} bajo stock  ·  Valorizado: ${sol(valorTotal)}`);
+    `${fecha}  ·  ${productos.length} productos  ·  ${bajoStockCount} bajo stock${subtitleExtra}`);
 
+  const headCols = mostrarCosto
+    ? ['Código', 'Producto', 'Categoría', 'UM', 'Stock', 'Mín.', 'Estado', 'Costo', 'Precio Venta', 'Valorizado']
+    : ['Código', 'Producto', 'Categoría', 'UM', 'Stock', 'Mín.', 'Estado', 'Precio Venta'];
 
   autoTable(doc, {
     startY: y,
-    head: [['Código', 'Producto', 'Categoría', 'UM', 'Stock', 'Mín.', 'Estado', 'Costo', 'Precio Venta', 'Valorizado']],
+    head: [headCols],
     body: productos.map((p) => [
       p.codigoBarras ?? '—',
       p.nombre,
@@ -823,9 +833,9 @@ export function exportarStockPDF(
       String(p.stockActual ?? 0),
       String(p.stockMinimo ?? 0),
       (p.stockActual ?? 0) <= (p.stockMinimo ?? 0) ? 'BAJO STOCK' : 'OK',
-      sol(p.costoUnitario),
-      sol(p.precioVenta),
-      sol((p.stockActual ?? 0) * (p.costoUnitario ?? 0)),
+      ...(mostrarCosto
+        ? [sol(p.costoUnitario), sol(p.precioVenta), sol((p.stockActual ?? 0) * (p.costoUnitario ?? 0))]
+        : [sol(p.precioVenta)]),
     ]),
     styles: { fontSize: 7.5, cellPadding: 2 },
     headStyles: { fillColor: [99, 102, 241], textColor: 255, fontStyle: 'bold' },
@@ -836,8 +846,7 @@ export function exportarStockPDF(
       5: { halign: 'center' },
       6: { halign: 'center', fontStyle: 'bold' },
       7: { halign: 'right' },
-      8: { halign: 'right' },
-      9: { halign: 'right', fontStyle: 'bold' },
+      ...(mostrarCosto ? { 8: { halign: 'right' as const }, 9: { halign: 'right' as const, fontStyle: 'bold' as const } } : {}),
     },
     didParseCell: (data) => {
       if (data.column.index === 6 && data.cell.raw === 'BAJO STOCK') {

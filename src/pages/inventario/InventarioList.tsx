@@ -62,6 +62,9 @@ if (typeof document !== 'undefined' && !document.getElementById('fx-inv-kf')) {
 export function InventarioList() {
   const { userId, tenantId } = useCurrentUser();
   const { canCreate, canView, puede } = usePermissions();
+  const puedeVerCosto  = puede('VER_COSTO_PRODUCTO');
+  const puedeVerValor  = puede('VER_VALOR_INVENTARIO');
+  const [movimientosHoy, setMovimientosHoy] = useState<number>(0);
   const location = useLocation();
   const { config: negocioConfig } = useTenantConfigStore();
   const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
@@ -182,6 +185,11 @@ export function InventarioList() {
     if (!sucursalLoaded) return;
     if (hasViewPermission) {
       fetchData();
+      if (!puedeVerValor) {
+        movimientoService.getCountHoy()
+          .then(setMovimientosHoy)
+          .catch(() => setMovimientosHoy(0));
+      }
     } else if (canCreate('INVENTARIO')) {
       fetchFormData();
       setLoading(false);
@@ -602,7 +610,7 @@ export function InventarioList() {
                   <div onClick={() => setShowExportMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
                   <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 41, width: 220, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: '0 22px 50px -22px rgba(0,0,0,.45)', padding: 6, animation: 'fx-in .16s ease' }}>
                     <button type="button"
-                      onClick={() => { setShowExportMenu(false); try { exportarStockExcel(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—'); } catch (err) { notify.fromError(err, 'Error al exportar'); } }}
+                      onClick={() => { setShowExportMenu(false); try { exportarStockExcel(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—', puedeVerCosto); } catch (err) { notify.fromError(err, 'Error al exportar'); } }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, height: 38, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.845rem', fontWeight: 500, color: T.text, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}
                       onMouseEnter={e => (e.currentTarget.style.background = T.surface2)}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -610,7 +618,7 @@ export function InventarioList() {
                       Stock en Excel
                     </button>
                     <button type="button"
-                      onClick={() => { setShowExportMenu(false); try { exportarStockPDF(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—', negocioConfig); } catch (err) { notify.fromError(err, 'Error al exportar'); } }}
+                      onClick={() => { setShowExportMenu(false); try { exportarStockPDF(filteredProductos, (id) => unidadById.get(id)?.nombre ?? '—', negocioConfig, puedeVerCosto); } catch (err) { notify.fromError(err, 'Error al exportar'); } }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, height: 38, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.845rem', fontWeight: 500, color: T.text, background: 'transparent', border: 0, borderRadius: 8, cursor: 'pointer' }}
                       onMouseEnter={e => (e.currentTarget.style.background = T.surface2)}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -644,7 +652,9 @@ export function InventarioList() {
         {[
           { label: 'Productos en inventario', value: String(invStats.total), sub: `${productosFisicos.reduce((a,p) => a + (p.stockActual ?? 0), 0)} unidades totales`, valColor: T.text },
           { label: 'Requieren reabastecimiento', value: String(invStats.bajoStock), sub: invStats.bajoStock > 0 ? 'Stock igual o menor al mínimo' : 'Todo en orden', valColor: invStats.bajoStock > 0 ? T.bad : T.ok },
-          { label: 'Valorizado al costo', value: `S/ ${invStats.valor.toFixed(2)}`, sub: 'Stock actual × costo unitario', valColor: T.text },
+          ...(puedeVerValor
+            ? [{ label: 'Valorizado al costo', value: `S/ ${invStats.valor.toFixed(2)}`, sub: 'Stock actual × costo unitario', valColor: T.text }]
+            : [{ label: 'Movimientos de hoy', value: String(movimientosHoy), sub: 'Operaciones registradas', valColor: T.primary }]),
         ].map((k) => (
           <div key={k.label} style={{ padding: '16px 18px', background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: T.shadow }}>
             <div style={{ ...MONO_LABEL, marginBottom: 0 }}>{k.label}</div>
@@ -737,8 +747,8 @@ export function InventarioList() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.84rem', minWidth: 820 }}>
                     <thead>
                       <tr style={{ background: T.surface3 }}>
-                        {['Producto','Categoría','Unidad','Stock actual','Costo unit.','Precio venta','Kardex'].map((h, i) => (
-                          <th key={h} style={{ textAlign: i >= 3 ? 'right' : 'left', padding: i === 0 ? '10px 18px' : i === 6 ? '10px 18px 10px 14px' : '10px 14px', fontSize: '.72rem', fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, whiteSpace: 'nowrap' }}>{h}</th>
+                        {['Producto','Categoría','Unidad','Stock actual',...(puedeVerCosto ? ['Costo unit.'] : []),'Precio venta','Kardex'].map((h, i) => (
+                          <th key={h} style={{ textAlign: i >= 3 ? 'right' : 'left', padding: i === 0 ? '10px 18px' : i === (puedeVerCosto ? 6 : 5) ? '10px 18px 10px 14px' : '10px 14px', fontSize: '.72rem', fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -772,7 +782,7 @@ export function InventarioList() {
                               </span>
                             </div>
                           </td>
-                          <td style={{ padding: '11px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>S/ {p.costoUnitario.toFixed(2)}</td>
+                          {puedeVerCosto && <td style={{ padding: '11px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>{p.costoUnitario != null ? `S/ ${p.costoUnitario.toFixed(2)}` : '—'}</td>}
                           <td style={{ padding: '11px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: T.text }}>S/ {p.precioVenta.toFixed(2)}</td>
                           <td style={{ padding: '11px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                             <button type="button" onClick={e => { e.stopPropagation(); openKardex(p); }}
@@ -1395,8 +1405,8 @@ export function InventarioList() {
 
             {/* Filtros kardex */}
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '12px 22px', borderBottom: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
-              <div style={{ display: 'flex', gap: 3, padding: 3, background: T.surface2, borderRadius: 10, maxWidth: '100%', overflowX: 'auto' }}>
-                {['TODOS','ENTRADA','SALIDA','AJUSTE','DEVOLUCION','SALDO_INICIAL','MERMA','CONSUMO_OT','DEVOLUCION_OT'].map(t => {
+              <div style={{ display: 'flex', gap: 3, padding: 3, background: T.surface2, borderRadius: 10, overflowX: 'auto', flex: '1 1 auto', minWidth: 0 }}>
+                {(['TODOS','ENTRADA','SALIDA','AJUSTE','DEVOLUCION','SALDO_INICIAL','MERMA',...(esServicios ? ['CONSUMO_OT','DEVOLUCION_OT'] as const : [])] as const).map(t => {
                   const active = kardexTipoFilter === t;
                   return (
                     <button key={t} type="button" onClick={() => setKardexTipoFilter(t)}
@@ -1407,12 +1417,12 @@ export function InventarioList() {
                   );
                 })}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 auto' }}>
                 <input type="date" value={kardexDesde} onChange={e => setKardexDesde(e.target.value)}
-                  style={{ height: 34, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, outline: 'none' }} />
+                  style={{ height: 34, padding: '0 8px', boxSizing: 'border-box', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, outline: 'none' }} />
                 <span style={{ fontSize: '.78rem', color: T.text3 }}>a</span>
                 <input type="date" value={kardexHasta} onChange={e => setKardexHasta(e.target.value)}
-                  style={{ height: 34, padding: '0 10px', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, outline: 'none' }} />
+                  style={{ height: 34, padding: '0 8px', boxSizing: 'border-box', fontFamily: 'Inter,sans-serif', fontSize: '.8rem', color: T.text, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, outline: 'none' }} />
                 {(kardexDesde || kardexHasta || kardexTipoFilter !== 'TODOS') && (
                   <button type="button" onClick={() => { setKardexDesde(''); setKardexHasta(''); setKardexTipoFilter('TODOS'); }}
                     style={{ fontSize: '.78rem', color: T.primary, background: 'transparent', border: 0, cursor: 'pointer', textDecoration: 'underline' }}>Limpiar</button>
@@ -1433,7 +1443,7 @@ export function InventarioList() {
                   <thead>
                     <tr style={{ position: 'sticky', top: 0, zIndex: 1, background: T.surface3 }}>
                       <th style={{ width: 28, padding: '10px 6px 10px 22px' }}></th>
-                      {['Fecha','Movimiento','Documento','Entrada','Salida','Saldo','Costo unit.','Costo total'].map((h, i) => (
+                      {['Fecha','Movimiento','Documento','Entrada','Salida','Saldo',...(puedeVerCosto ? ['Costo unit.','Costo total'] : [])].map((h, i) => (
                         <th key={h} style={{ textAlign: i >= 3 ? 'right' : 'left', padding: '10px 14px', fontSize: '.72rem', fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase', color: T.text3, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -1476,8 +1486,8 @@ export function InventarioList() {
                             <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 650, color: T.ok, fontVariantNumeric: 'tabular-nums' }}>{esEntrada ? `+${m.cantidad}` : ''}</td>
                             <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 650, color: T.bad, fontVariantNumeric: 'tabular-nums' }}>{(esSalida || esMerma || m.tipo === 'CONSUMO_OT') ? `-${m.cantidad}` : ''}</td>
                             <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: T.text }}>{stockAcumulado}</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>{m.costoUnitario != null ? `S/ ${m.costoUnitario.toFixed(2)}` : '—'}</td>
-                            <td style={{ padding: '10px 22px 10px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>{costoTotal != null && costoTotal > 0 ? `S/ ${costoTotal.toFixed(2)}` : '—'}</td>
+                            {puedeVerCosto && <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>{m.costoUnitario != null ? `S/ ${m.costoUnitario.toFixed(2)}` : '—'}</td>}
+                            {puedeVerCosto && <td style={{ padding: '10px 22px 10px 14px', textAlign: 'right', whiteSpace: 'nowrap', color: T.text2, fontVariantNumeric: 'tabular-nums' }}>{costoTotal != null && costoTotal > 0 ? `S/ ${costoTotal.toFixed(2)}` : '—'}</td>}
                           </tr>
                         );
                         if (esSalida && isExpanded) {

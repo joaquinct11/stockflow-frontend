@@ -94,6 +94,7 @@ export const API_ENDPOINTS = {
     LOTES_POR_PRODUCTO: (productoId: number) => `/movimientos-inventario/lotes/producto/${productoId}`,
     LOTES_DISPONIBLES: (productoId: number, sucursalId?: number) =>
       `/movimientos-inventario/lotes/disponibles?productoId=${productoId}${sucursalId ? `&sucursalId=${sucursalId}` : ''}`,
+    HOY_COUNT: '/movimientos-inventario/hoy/count',
     CREATE: '/movimientos-inventario',
     UPDATE: (id: number) => `/movimientos-inventario/${id}`,
     DELETE: (id: number) => `/movimientos-inventario/${id}`,
@@ -355,5 +356,17 @@ export const API_ENDPOINTS = {
     // Comprobantes por tipo
     VENTAS_COMPROBANTES: (desde: string, hasta: string) =>
       `/reportes/ventas/comprobantes?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+  },
+
+  GUIAS_REMISION: {
+    LIST: '/guias-remision',
+    GET: (id: number) => `/guias-remision/${id}`,
+    CREATE: '/guias-remision',
+    ACTUALIZAR: (id: number) => `/guias-remision/${id}`,
+    ELIMINAR: (id: number) => `/guias-remision/${id}`,
+    EMITIR: (id: number) => `/guias-remision/${id}/emitir`,
+    CONFIRMAR_RECEPCION: (id: number) => `/guias-remision/${id}/confirmar-recepcion`,
+    CANCELAR: (id: number) => `/guias-remision/${id}/cancelar`,
+    PDF: (id: number) => `/guias-remision/${id}/pdf`,
   },
 };
