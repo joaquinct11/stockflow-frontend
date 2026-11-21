@@ -10,6 +10,7 @@ import type { SucursalDTO } from '../../services/sucursal.service';
 import type { ProductoDTO, ProductoPresentacionDTO } from '../../types';
 import type { CrearGuiaRemisionRequest, EditarBorradorRequest, GuiaRemisionItemDTO, GuiaRemisionResponse, TipoTrasladoGRE, ModalidadTransporteGRE } from '../../types/gre.types';
 import { Button } from '../../components/ui/Button';
+import { UbigeoSelector } from '../../components/gre/UbigeoSelector';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { MOTIVO_TRASLADO_OPTIONS, TIPO_DOC_OPTIONS, UNIDAD_MEDIDA_OPTIONS, abreviaturaToSunat } from './gre.helpers';
 
@@ -419,11 +420,6 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
     }
   };
 
-  // Validación inline de ubigeos (longitud > 0 y no es 6 dígitos)
-  const ubigeoPartidaErr = form.ubigeoPartida.length > 0 && form.ubigeoPartida.length !== 6
-    ? 'Debe tener exactamente 6 dígitos' : null;
-  const ubigeoLlegadaErr = form.ubigeoLlegada.length > 0 && form.ubigeoLlegada.length !== 6
-    ? 'Debe tener exactamente 6 dígitos' : null;
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-5"
@@ -756,28 +752,16 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
           {step === 3 && (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Field label="Ubigeo de partida" optional>
-                    <input type="text" inputMode="numeric" maxLength={6} value={form.ubigeoPartida}
-                      onChange={e => set('ubigeoPartida', e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="150101"
-                      className={inputCls + (ubigeoPartidaErr ? ' border-red-400 focus:border-red-400' : '')} />
-                  </Field>
-                  {ubigeoPartidaErr && (
-                    <p className="mt-1 text-[.72rem] text-red-500">{ubigeoPartidaErr}</p>
-                  )}
-                </div>
-                <div>
-                  <Field label="Ubigeo de llegada" optional>
-                    <input type="text" inputMode="numeric" maxLength={6} value={form.ubigeoLlegada}
-                      onChange={e => set('ubigeoLlegada', e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="040101"
-                      className={inputCls + (ubigeoLlegadaErr ? ' border-red-400 focus:border-red-400' : '')} />
-                  </Field>
-                  {ubigeoLlegadaErr && (
-                    <p className="mt-1 text-[.72rem] text-red-500">{ubigeoLlegadaErr}</p>
-                  )}
-                </div>
+                <UbigeoSelector
+                  label="Ubigeo de partida (opcional)"
+                  value={form.ubigeoPartida}
+                  onChange={codigo => set('ubigeoPartida', codigo)}
+                />
+                <UbigeoSelector
+                  label="Ubigeo de llegada (opcional)"
+                  value={form.ubigeoLlegada}
+                  onChange={codigo => set('ubigeoLlegada', codigo)}
+                />
               </div>
               <Field label="Dirección de partida">
                 <input type="text" value={form.direccionPartida}

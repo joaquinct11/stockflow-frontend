@@ -250,6 +250,14 @@ export const API_ENDPOINTS = {
     CREAR_PLAN:        '/culqi/admin/crear-plan',
   },
 
+  UBIGEOS: {
+    DEPARTAMENTOS: '/ubigeos/departamentos',
+    PROVINCIAS: (departamento: string) => `/ubigeos/provincias?departamento=${encodeURIComponent(departamento)}`,
+    DISTRITOS: (departamento: string, provincia: string) =>
+      `/ubigeos/distritos?departamento=${encodeURIComponent(departamento)}&provincia=${encodeURIComponent(provincia)}`,
+    BY_CODIGO: (codigo: string) => `/ubigeos/${encodeURIComponent(codigo)}`,
+  },
+
   DIGEMID: {
     CATALOGO_BUSCAR: (q: string) => `/digemid/catalogo/buscar?q=${encodeURIComponent(q)}`,
     PRODUCTOS: '/digemid/productos',
