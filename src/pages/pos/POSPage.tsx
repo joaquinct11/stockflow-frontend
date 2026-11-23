@@ -146,6 +146,7 @@ export function POSPage() {
     nombre: '', tipoDocumento: 'DNI', numeroDocumento: '',
   });
   const [guardandoCliente, setGuardandoCliente] = useState(false);
+  const searchVersionRef = useRef(0);
 
   // ── Estado de caja ────────────────────────────────────────────────────
   const [cajaActiva, setCajaActiva] = useState<CajaDTO | null>(null);
@@ -682,17 +683,39 @@ export function POSPage() {
     if (clienteSeleccionado) return;
     const q = clienteQuery.trim();
     if (!q) { setClienteResultados([]); setShowRegistrarCliente(false); return; }
+
+    const version = ++searchVersionRef.current;
     setBuscandoCliente(true);
     const t = setTimeout(async () => {
       try {
-        const resultados = /^\d+$/.test(q) ? await clienteService.buscarPorDocumento(q) : await clienteService.search(q);
-        setClienteResultados(resultados); setShowRegistrarCliente(resultados.length === 0);
-        if (resultados.length === 0 && /^\d+$/.test(q)) {
+        const isNumeric = /^\d+$/.test(q);
+        const resultados = isNumeric
+          ? await clienteService.buscarPorDocumento(q)
+          : await clienteService.search(q);
+
+        if (version !== searchVersionRef.current) return; // respuesta obsoleta
+
+        setClienteResultados(resultados);
+        setShowRegistrarCliente(resultados.length === 0);
+        if (resultados.length === 0 && isNumeric) {
           setNuevoClienteForm(prev => ({ ...prev, numeroDocumento: q }));
           setReceptor(r => ({ ...r, docNumero: q }));
         }
-      } catch { setClienteResultados([]); }
-      finally { setBuscandoCliente(false); }
+
+        // Auto-selección: documento completo (DNI=8 / RUC=11) con única coincidencia exacta
+        if (
+          isNumeric &&
+          (q.length === 8 || q.length === 11) &&
+          resultados.length === 1 &&
+          resultados[0].numeroDocumento === q
+        ) {
+          seleccionarCliente(resultados[0]);
+        }
+      } catch {
+        if (version === searchVersionRef.current) setClienteResultados([]);
+      } finally {
+        if (version === searchVersionRef.current) setBuscandoCliente(false);
+      }
     }, 300);
     return () => clearTimeout(t);
   }, [clienteQuery, clienteSeleccionado]);

@@ -117,6 +117,7 @@ export interface EditarBorradorRequest {
   unidadMedidaPeso?: string;
   numeroBultos?: number;
   observaciones?: string;
+  sucursalOrigenId?: number;
   destinatarioTipoDoc?: string;
   destinatarioNumDoc?: string;
   destinatarioRazonSocial?: string;

@@ -4,6 +4,13 @@ import { authService } from '../services/auth.service';
 import { useSucursalStore } from './sucursalStore';
 import { useTenantConfigStore } from './tenantConfigStore';
 
+// Guard de deduplicación para initialize():
+// - _initPromise: evita llamadas concurrentes (todas comparten la misma Promise)
+// - _initialized: evita re-ejecución después del primer éxito (ej. ProtectedRoute remontar)
+// Se resetea en logout() y startTenantSwitch().
+let _initPromise: Promise<void> | null = null;
+let _initialized = false;
+
 interface AuthState {
   user: JwtResponse | null;
   isAuthenticated: boolean;
@@ -48,6 +55,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setUser: (user) => {
     if (import.meta.env.DEV) { console.log('✅ Usuario establecido:', user.email);}
+    _initialized = true;
     set({ user, isAuthenticated: true });
     localStorage.setItem('user', JSON.stringify(user));
     if (user.accessToken) { localStorage.setItem('accessToken', user.accessToken); }
@@ -66,6 +74,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   completeTenantSelection: (user) => {
     if (import.meta.env.DEV) { console.log('✅ Selección de tenant completada:', user.tenantId);}
+    _initialized = true;
     const availTenants = get().availableTenants;
     set({
       user,
@@ -93,6 +102,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   startTenantSwitch: (tenants) => {
     if (import.meta.env.DEV) { console.log('🔄 Iniciando cambio de negocio, tenants disponibles:', tenants.length); }
+    _initialized = false;
     useSucursalStore.getState().clearSucursales();
     useTenantConfigStore.getState().clearConfig();
     set({
@@ -106,6 +116,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     if (import.meta.env.DEV) { console.log('🚪 Cerrando sesión');}
+    _initialized = false;
+    _initPromise = null;
     set({
       user: null,
       isAuthenticated: false,
@@ -172,7 +184,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Si ya estamos en modo cambio de negocio (establecido por startTenantSwitch),
     // no reinicializar desde localStorage — preservar el estado en memoria.
     if (get().pendingTenantSelection) return;
+    // Guard de deduplicación: evita GET /auth/me múltiple cuando varios componentes
+    // montan concurrentemente (main.tsx + App.tsx + ProtectedRoute, StrictMode doble-mount).
+    if (_initialized) return;
+    if (_initPromise) return _initPromise;
 
+    _initPromise = (async () => {
     if (import.meta.env.DEV) { console.log('🔄 Inicializando AuthStore...');}
 
     const accessToken = localStorage.getItem('accessToken');
@@ -223,5 +240,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (import.meta.env.DEV) { console.log('❌ No hay sesión guardada o tokens incompletos');}
       set({ user: null, isAuthenticated: false });
     }
+    _initialized = true;
+    })().finally(() => { _initPromise = null; });
+
+    return _initPromise;
   },
 }));

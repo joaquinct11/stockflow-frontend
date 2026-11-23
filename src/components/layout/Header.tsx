@@ -85,11 +85,18 @@ export function Header({ onMenuClick }: HeaderProps) {
     } catch { /* silencioso */ }
   }, []);
 
-  // Polling del badge cada 2 minutos
+  // Polling del badge cada 5 minutos; pausa cuando la pestaña está oculta
   useEffect(() => {
     fetchCount();
-    const interval = setInterval(fetchCount, 120_000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchCount();
+    }, 300_000);
+    const handleVisibility = () => { if (!document.hidden) fetchCount(); };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchCount]);
 
   const cargarNotificaciones = useCallback(async () => {
