@@ -1364,6 +1364,7 @@ export function Dashboard() {
                 </div>
                 <div className="overflow-y-auto overflow-x-hidden max-h-[260px]" style={{ overscrollBehavior: 'contain' }}>
                   {stats.productosProximosAVencer.map((producto) => {
+                    if (!producto.fechaVencimiento) return null;
                     const fechaParts = producto.fechaVencimiento.split('T')[0].split('-');
                     const fv = new Date(parseInt(fechaParts[0]), parseInt(fechaParts[1]) - 1, parseInt(fechaParts[2]));
                     const hoyMs = new Date(new Date().toLocaleDateString('en-US')).getTime();

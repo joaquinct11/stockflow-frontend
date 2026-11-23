@@ -28,6 +28,7 @@ export interface ProximoVencerItemDTO {
   codigoBarras?: string;
   stockActual: number;
   fechaVencimiento?: string;
+  lote?: string;
 }
 
 export const productoService = {

@@ -63,7 +63,6 @@ const CitasPage           = lazy(() => import('./pages/citas/CitasPage').then(m 
 const EquiposPage         = lazy(() => import('./pages/equipos/EquiposPage'));
 const OrdenesTrabajoPage  = lazy(() => import('./pages/ordenes-trabajo/OrdenesTrabajoPage'));
 const OtDetailPage        = lazy(() => import('./pages/ordenes-trabajo/OtDetailPage'));
-const GuiasRemisionList   = lazy(() => import('./pages/guiasRemision/GuiasRemisionList').then(m => ({ default: m.GuiasRemisionList })));
 const GREComingSoon       = lazy(() => import('./pages/guiasRemision/GREComingSoon').then(m => ({ default: m.GREComingSoon })));
 
 const PageLoader = () => (

@@ -83,7 +83,7 @@ export interface DevolucionWizardProps {
 
 type SeleccionItems = Record<number, number>; // detalleVentaId → cantidad a devolver
 
-export function DevolucionWizard({ sucursalId, onCancel, onSuccess }: DevolucionWizardProps) {
+export function DevolucionWizard({ onCancel, onSuccess }: DevolucionWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
