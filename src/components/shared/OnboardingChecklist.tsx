@@ -286,7 +286,9 @@ export function OnboardingChecklist() {
 
   useEffect(() => {
     if (!esAdmin || dismissed || !open) return;
-    const id = setInterval(fetchProgreso, 20000);
+    const id = setInterval(() => {
+      if (!document.hidden) fetchProgreso();
+    }, 60000);
     return () => clearInterval(id);
   }, [esAdmin, dismissed, open]);
 

@@ -67,6 +67,8 @@ export const API_ENDPOINTS = {
     UPDATE: (id: number) => `/ventas/${id}`,
     ANULAR: (id: number) => `/ventas/${id}/anular`,
     ASIGNAR_CLIENTE: (id: number) => `/ventas/${id}/cliente`,
+    BUSCAR: '/ventas/buscar',
+    ESTADO_DEVOLUCION: (id: number) => `/ventas/${id}/estado-devolucion`,
   },
   
   SUSCRIPCIONES: {

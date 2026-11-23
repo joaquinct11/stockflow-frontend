@@ -18,9 +18,11 @@ export function AppLayout() {
   const { isAuthenticated, user, knownTenants, tenantsLoading, setKnownTenants, setTenantsLoading, setTenantsError } = useAuthStore();
   const { setSucursales, setSucursalActual, clearSucursales, setLoading: setSucursalLoading } = useSucursalStore();
 
-  // Cargar config del negocio al montar
+  // Cargar config del negocio al montar — solo si no está ya cargada (evita doble fetch en StrictMode
+  // y cuando ProtectedRoute o AppLayout remontan con isAuthenticated ya en true).
   useEffect(() => {
     if (!isAuthenticated) return;
+    if (useTenantConfigStore.getState().config !== null) return;
     tenantConfigService.getConfig()
       .then(setConfig)
       .catch(() => { /* silencioso */ });
@@ -37,9 +39,11 @@ export function AppLayout() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  // Cargar sucursales al montar — solo tenants PRO tendrán datos; BÁSICO recibirá []
+  // Cargar sucursales al montar — solo tenants PRO tendrán datos; BÁSICO recibirá [].
+  // Guard loaded: evita re-fetch en StrictMode y cuando el layout remontan con sesión ya activa.
   useEffect(() => {
     if (!isAuthenticated) { clearSucursales(); return; }
+    if (useSucursalStore.getState().loaded) return;
     setSucursalLoading(true);
     sucursalService.listar()
       .then((sucursales) => {

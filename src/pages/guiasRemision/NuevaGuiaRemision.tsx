@@ -6,8 +6,9 @@ import { guiaRemisionService } from '../../services/guiaRemision.service';
 import { sucursalService } from '../../services/sucursal.service';
 import { productoService } from '../../services/producto.service';
 import { productoPresentacionService } from '../../services/productoPresentacion.service';
+import { ventaService } from '../../services/venta.service';
 import type { SucursalDTO } from '../../services/sucursal.service';
-import type { ProductoDTO, ProductoPresentacionDTO } from '../../types';
+import type { ProductoDTO, ProductoPresentacionDTO, VentaDTO } from '../../types';
 import type { CrearGuiaRemisionRequest, EditarBorradorRequest, GuiaRemisionItemDTO, GuiaRemisionResponse, TipoTrasladoGRE, ModalidadTransporteGRE } from '../../types/gre.types';
 import { Button } from '../../components/ui/Button';
 import { UbigeoSelector } from '../../components/gre/UbigeoSelector';
@@ -154,6 +155,42 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
   const { config: negocio } = useTenantConfigStore();
   const esFarmacia = negocio?.rubro === 'BOTICA' || negocio?.rubro === 'FARMACIA';
 
+  // F-10: detección de capacidades del tenant
+  const tieneSucursales = sucursales.length > 0;
+  const tieneDespacho = !!negocio?.ubigeoDespacho && !!negocio?.direccionDespacho;
+
+  // Selector de ventas
+  const [ventasAll, setVentasAll] = useState<VentaDTO[]>([]);
+  const [ventasLoading, setVentasLoading] = useState(false);
+  const [ventasCargadas, setVentasCargadas] = useState(false);
+  const [ventaSearch, setVentaSearch] = useState('');
+  const [ventaSelectorOpen, setVentaSelectorOpen] = useState(false);
+
+  const cargarVentas = async () => {
+    if (ventasCargadas || ventasLoading) return;
+    setVentasLoading(true);
+    try {
+      const data = await ventaService.getAll();
+      setVentasAll(data);
+      setVentasCargadas(true);
+    } catch {
+      // silent
+    } finally {
+      setVentasLoading(false);
+    }
+  };
+
+  const ventasFiltradas = ventasAll.filter(v => {
+    if (!ventaSearch) return true;
+    const q = ventaSearch.toLowerCase();
+    return (
+      String(v.id).includes(q) ||
+      (v.clienteNombre?.toLowerCase().includes(q) ?? false)
+    );
+  }).slice(0, 20);
+
+  const ventaSeleccionada = ventasAll.find(v => String(v.id) === form.ventaId) ?? null;
+
   // Refs para evitar que los efectos de precarga sobreescriban los ubigeos guardados en modo edición.
   // Se inicializan con el ID de sucursal del editData: si no cambia, el efecto hace skip.
   const prevOrigenIdRef = useRef<string>(
@@ -193,6 +230,17 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
     setForm(prev => ({ ...prev, ubigeoPartida: ubigeoAuto, direccionPartida: dirAuto }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.sucursalOrigenId, sucursales]);
+
+  // F-10 Caso B: tenant legacy sin sucursales, con punto de despacho — precargar ubigeo de partida
+  useEffect(() => {
+    if (tieneSucursales || !tieneDespacho || editData) return;
+    setForm(prev => ({
+      ...prev,
+      ubigeoPartida: prev.ubigeoPartida || negocio!.ubigeoDespacho!,
+      direccionPartida: prev.direccionPartida || negocio!.direccionDespacho!,
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tieneSucursales, tieneDespacho]);
 
   // Precarga ubigeo/dirección de llegada cuando el usuario cambia la sucursal de destino.
   // NUNCA usa tenant.ubigeoDespacho como fallback para el destino.
@@ -304,6 +352,13 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
     if (step === 1) {
       if (form.tipoTraslado === 'DELIVERY') {
         if (!form.destinatarioRazonSocial.trim()) return 'Ingresa la razón social del destinatario';
+        if (!form.ventaId) {
+          if (tieneSucursales && !form.sucursalOrigenId)
+            return 'Selecciona la sucursal de origen para el despacho independiente';
+          if (!tieneSucursales && !tieneDespacho)
+            return 'Configura el punto de despacho en Configuración → Negocio antes de emitir guías DELIVERY independientes';
+          // Caso B: sin sucursales pero con ubigeo/dirección → permitir
+        }
       } else {
         if (!form.sucursalOrigenId) return 'Selecciona la sucursal de origen';
         if (!form.sucursalDestinoId) return 'Selecciona la sucursal de destino';
@@ -361,6 +416,9 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
         destinatarioRazonSocial: form.destinatarioRazonSocial || undefined,
         destinatarioDireccion: form.destinatarioDireccion || undefined,
         ventaId: form.ventaId ? Number(form.ventaId) : undefined,
+        // Caso A: despacho independiente con sucursales → incluir origen
+        // Caso B: tenant legacy sin sucursales → no enviar sucursalOrigenId (backend usa ubigeoDespacho)
+        sucursalOrigenId: !form.ventaId && tieneSucursales && form.sucursalOrigenId ? Number(form.sucursalOrigenId) : undefined,
       } : {
         sucursalOrigenId: Number(form.sucursalOrigenId),
         sucursalDestinoId: Number(form.sucursalDestinoId),
@@ -396,6 +454,9 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
           observaciones: req.observaciones,
           pesoBrutoTotal: req.pesoBrutoTotal,
           numeroBultos: req.numeroBultos,
+          sucursalOrigenId: form.tipoTraslado === 'DELIVERY' && !form.ventaId && tieneSucursales && form.sucursalOrigenId
+            ? Number(form.sucursalOrigenId)
+            : undefined,
           destinatarioTipoDoc: req.destinatarioTipoDoc,
           destinatarioNumDoc: req.destinatarioNumDoc,
           destinatarioRazonSocial: req.destinatarioRazonSocial,
@@ -572,11 +633,138 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
                       onChange={e => set('destinatarioDireccion', e.target.value)}
                       placeholder="Dirección de entrega" className={inputCls} />
                   </Field>
-                  <Field label="N° de venta asociada" optional>
-                    <input type="number" min="1" value={form.ventaId}
-                      onChange={e => set('ventaId', e.target.value)}
-                      placeholder="ID de venta" className={inputCls} />
-                  </Field>
+                  {/* Selector de ventas */}
+                  <div className="space-y-[6px]">
+                    <label className="block text-[.8rem] font-semibold text-foreground/70">
+                      Venta asociada
+                      <span className="ml-1 text-[.75rem] font-normal text-muted-foreground/60">(opcional)</span>
+                    </label>
+                    <div className="relative">
+                      {(form.ventaId) ? (
+                        <div className="flex items-center gap-2 px-3 py-[10px] border border-border rounded-[10px] bg-background text-sm">
+                          <span className="flex-1 text-foreground">
+                            <span className="text-muted-foreground mr-1">#{ventaSeleccionada?.id ?? form.ventaId}</span>
+                            {ventaSeleccionada?.clienteNombre ?? (ventasCargadas ? 'Sin nombre' : '—')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => { set('ventaId', ''); setVentaSearch(''); }}
+                            className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                            aria-label="Quitar venta">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                          <input
+                            type="text"
+                            placeholder="Buscar por n° venta o cliente…"
+                            value={ventaSearch}
+                            onFocus={() => { setVentaSelectorOpen(true); cargarVentas(); }}
+                            onBlur={() => setTimeout(() => setVentaSelectorOpen(false), 150)}
+                            onChange={e => { setVentaSearch(e.target.value); setVentaSelectorOpen(true); }}
+                            className={inputCls + ' pl-9'}
+                          />
+                        </div>
+                      )}
+                      {ventaSelectorOpen && !form.ventaId && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-30 max-h-52 overflow-y-auto">
+                          {ventasLoading && (
+                            <div className="px-4 py-3 text-sm text-muted-foreground">Cargando ventas...</div>
+                          )}
+                          {!ventasLoading && ventasFiltradas.length === 0 && (
+                            <div className="px-4 py-3 text-sm text-muted-foreground">
+                              {ventasCargadas ? 'Sin resultados' : 'Sin ventas disponibles'}
+                            </div>
+                          )}
+                          {!ventasLoading && ventasFiltradas.map(v => (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onMouseDown={() => {
+                                setForm(prev => ({
+                                  ...prev,
+                                  ventaId: String(v.id),
+                                  ...(v.clienteNombre && !prev.destinatarioRazonSocial
+                                    ? { destinatarioRazonSocial: v.clienteNombre }
+                                    : {}),
+                                }));
+                                setVentaSearch('');
+                                setVentaSelectorOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors flex items-center justify-between gap-3">
+                              <span className="text-sm text-foreground">
+                                <span className="text-muted-foreground mr-1.5">#{v.id}</span>
+                                {v.clienteNombre ?? 'Sin nombre'}
+                              </span>
+                              <span className="text-[.72rem] text-muted-foreground flex-shrink-0">
+                                {v.total != null ? `S/ ${Number(v.total).toFixed(2)}` : ''}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Despacho independiente (sin venta): Casos A, B, C */}
+                  {!form.ventaId && (
+                    <>
+                      {/* Caso A: tenant con sucursales → selector obligatorio */}
+                      {tieneSucursales && (
+                        <>
+                          <div className="rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/40 px-4 py-3 text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <span>
+                              <strong>Despacho independiente</strong> — sin venta asociada, debes indicar
+                              desde qué sucursal sale la mercadería para registrar la salida de inventario.
+                            </span>
+                          </div>
+                          <Field label="Sucursal de origen (obligatorio)">
+                            <select value={form.sucursalOrigenId}
+                              onChange={e => set('sucursalOrigenId', e.target.value)}
+                              className={inputCls}>
+                              <option value="">Seleccionar sucursal de despacho…</option>
+                              {sucursales.map(s => (
+                                <option key={s.id} value={String(s.id)}>{s.nombre}</option>
+                              ))}
+                            </select>
+                          </Field>
+                        </>
+                      )}
+
+                      {/* Caso B: tenant legacy con punto de despacho → aviso informativo */}
+                      {!tieneSucursales && tieneDespacho && (
+                        <div className="rounded-xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-700/40 px-4 py-3 text-sm text-blue-700 dark:text-blue-400 flex items-start gap-2">
+                          <Package className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <div className="space-y-0.5">
+                            <p><strong>Punto de despacho configurado</strong></p>
+                            <p className="text-blue-600 dark:text-blue-300">
+                              {negocio!.direccionDespacho}
+                              {negocio!.ubigeoDespacho ? ` (${negocio!.ubigeoDespacho})` : ''}
+                            </p>
+                            <p className="text-[.75rem] text-blue-500 dark:text-blue-400">
+                              La salida de inventario se registrará desde este punto.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Caso C: tenant legacy sin punto de despacho → bloqueo */}
+                      {!tieneSucursales && !tieneDespacho && (
+                        <div className="rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-700/40 px-4 py-3 text-sm text-red-700 dark:text-red-400 flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <span>
+                            <strong>Punto de despacho no configurado.</strong>{' '}
+                            Para emitir una guía DELIVERY sin venta, primero configura la dirección
+                            y ubigeo de despacho en{' '}
+                            <strong>Configuración → Negocio</strong>.
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </>
               ) : (
                 <>

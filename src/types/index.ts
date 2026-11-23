@@ -275,7 +275,7 @@ export interface ProductoVarianteDTO {
 export interface DevolucionDetalleItemDTO {
   productoId: number;
   cantidadDevuelta: number;
-  precioUnitario: number;
+  precioUnitario?: number; // Opcional: el backend lo deriva del DetalleVenta si no se envía
 }
 
 export interface CrearDevolucionDTO {
@@ -452,6 +452,8 @@ export interface MovimientoInventarioDTO {
   sucursalId?: number;
   /** movimientoId del lote a ajustar — solo para AJUSTE en productos con lotes */
   ajusteLoteMovimientoId?: number;
+  /** Para DEVOLUCION: ID de la venta original; el backend recupera lote/fechaVencimiento automáticamente */
+  ventaId?: number;
 }
 
 /** Tipos de movimiento que se muestran en la lista principal de Movimientos Inventario */

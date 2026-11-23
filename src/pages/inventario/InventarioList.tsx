@@ -18,6 +18,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { exportarStockExcel, exportarStockPDF } from '../../utils/reportes-export';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
 import { ImportarProductosModal } from '../../components/inventario/ImportarProductosModal';
+import { DevolucionWizard } from '../../components/inventario/DevolucionWizard';
 
 const T = {
   bg: '#F6F7F9', surface: '#FFFFFF', surface2: '#F1F3F6', surface3: '#EDF0F4',
@@ -82,6 +83,7 @@ export function InventarioList() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [movStep, setMovStep] = useState<1 | 2 | 3>(1);
+  const [wizardDevActivo, setWizardDevActivo] = useState(false);
 
   // Auto-abrir dialog si viene desde acceso rápido del dashboard
   useEffect(() => {
@@ -384,7 +386,8 @@ export function InventarioList() {
     }
 
     // Para farmacia: fecha de vencimiento obligatoria en ENTRADA y DEVOLUCIÓN
-    if (esFarmacia && (formData.tipo === 'ENTRADA' || formData.tipo === 'DEVOLUCION') && !formData.fechaVencimiento) {
+    // Excepción Caso A: si hay ventaId, el backend recupera la fecha automáticamente del lote original
+    if (esFarmacia && (formData.tipo === 'ENTRADA' || formData.tipo === 'DEVOLUCION') && !formData.fechaVencimiento && !formData.ventaId) {
       notify.error('Los medicamentos requieren fecha de vencimiento');
       return;
     }
@@ -479,6 +482,7 @@ export function InventarioList() {
       lote: '',
       fechaVencimiento: undefined,
       registroSanitario: '',
+      ventaId: undefined,
     });
     setSelectedProducto(null);
     setSelectedProveedorMov(null);
@@ -493,6 +497,7 @@ export function InventarioList() {
     setAjusteCostoStr('');
     setAjustePrecioStr('');
     setMovStep(1);
+    setWizardDevActivo(false);
     setIsDialogOpen(false);
   };
 
@@ -950,7 +955,8 @@ export function InventarioList() {
               </button>
             </div>
 
-            {/* Stepper */}
+            {/* Stepper — oculto en wizard de devoluciones */}
+            {!wizardDevActivo && (
             <div style={{ display: 'flex', gap: 6, padding: '14px 22px', borderBottom: `1px solid ${T.lineSoft}`, flexShrink: 0 }}>
               {(['Tipo', 'Producto', 'Detalles'] as const).map((label, i) => {
                 const n = i + 1;
@@ -964,12 +970,26 @@ export function InventarioList() {
                 );
               })}
             </div>
+            )}
 
             {/* Body */}
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '20px 22px 22px' }}>
 
+              {/* ── Wizard DEVOLUCION (reemplaza pasos 2/3) ── */}
+              {wizardDevActivo && (
+                <DevolucionWizard
+                  sucursalId={sucursalId}
+                  onCancel={resetForm}
+                  onSuccess={() => {
+                    resetForm();
+                    // recargar lista de movimientos
+                    movimientoService.getAll(sucursalId).catch(() => null);
+                  }}
+                />
+              )}
+
               {/* ── Paso 1: Tipo ── */}
-              {movStep === 1 && (
+              {!wizardDevActivo && movStep === 1 && (
                 <>
                   <div style={MONO_LABEL}>¿Qué tipo de movimiento?</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 }}>
@@ -993,6 +1013,7 @@ export function InventarioList() {
                               ...prev,
                               tipo: t.key as MovimientoInventarioDTO['tipo'],
                               ...(t.key !== 'ENTRADA' && { proveedorId: undefined, costoUnitario: undefined, lote: '', fechaVencimiento: undefined, registroSanitario: '' }),
+              ...(t.key !== 'DEVOLUCION' && { ventaId: undefined }),
                             }));
                           }}
                           style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', fontFamily: 'Inter,sans-serif', textAlign: 'left', background: active ? t.colorSoft : T.surface, border: `1.5px solid ${active ? t.color : T.line}`, borderRadius: 12, cursor: 'pointer', transition: 'all .14s' }}>
@@ -1011,7 +1032,7 @@ export function InventarioList() {
               )}
 
               {/* ── Paso 2: Producto + Cantidad ── */}
-              {movStep === 2 && (
+              {!wizardDevActivo && movStep === 2 && (
                 <>
                   <div style={{ ...MONO_LABEL, marginBottom: 12 }}>Producto *</div>
                   <Autocomplete
@@ -1164,7 +1185,7 @@ export function InventarioList() {
               )}
 
               {/* ── Paso 3: Detalles ── */}
-              {movStep === 3 && (
+              {!wizardDevActivo && movStep === 3 && (
                 <>
                   {/* Resumen del producto seleccionado */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', marginBottom: 20, borderRadius: 12, background: T.surface2, fontSize: '.82rem' }}>
@@ -1324,6 +1345,38 @@ export function InventarioList() {
                     </>
                   )}
 
+                  {/* DEVOLUCION farmacia: trazabilidad del lote devuelto */}
+                  {formData.tipo === 'DEVOLUCION' && esFarmacia && (
+                    <div style={{ padding: '15px 16px', borderRadius: 12, background: T.warnSoft, border: `1px solid ${T.warnLine}`, marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: T.warn }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1Z"/></svg>
+                        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.68rem', fontWeight: 600, letterSpacing: '.09em', textTransform: 'uppercase', color: T.warn }}>Trazabilidad del lote devuelto</span>
+                      </div>
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={LABEL}>Nº Venta de origen <span style={{ fontWeight: 400, color: T.text3 }}>(opcional — recupera lote automáticamente)</span></label>
+                        <FxInput type="number" inputMode="numeric" value={formData.ventaId ?? ''} placeholder="Ej: 1023"
+                          onChange={e => {
+                            const v = parseInt(e.target.value, 10);
+                            setFormData(prev => ({ ...prev, ventaId: isNaN(v) ? undefined : v }));
+                          }} />
+                      </div>
+                      {!formData.ventaId && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14 }}>
+                          <div>
+                            <label style={LABEL}>Lote <span style={{ fontWeight: 400, color: T.text3 }}>(opcional)</span></label>
+                            <FxInput type="text" value={formData.lote ?? ''} placeholder="LOT-2026-001" style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '.86rem' }}
+                              onChange={e => setFormData(prev => ({ ...prev, lote: e.target.value }))} />
+                          </div>
+                          <div>
+                            <label style={LABEL}>Fecha de vencimiento *</label>
+                            <FxInput type="date" value={formData.fechaVencimiento ?? ''}
+                              onChange={e => setFormData(prev => ({ ...prev, fechaVencimiento: e.target.value || undefined }))} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Referencia / Descripción (todos los tipos) */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14 }}>
                     <div>
@@ -1339,7 +1392,8 @@ export function InventarioList() {
               )}
             </div>
 
-            {/* Footer */}
+            {/* Footer — oculto cuando el wizard gestiona su propia navegación */}
+            {!wizardDevActivo && (
             <div style={MODAL_FTR}>
               {movStep === 1 ? (
                 <button type="button" onClick={resetForm} style={BTN_SEC}>Cancelar</button>
@@ -1352,7 +1406,11 @@ export function InventarioList() {
               {movStep < 3 ? (
                 <button type="button" style={BTN_PRI}
                   onClick={() => {
-                    if (movStep === 1) { setMovStep(2); return; }
+                    if (movStep === 1) {
+                      // DEVOLUCION usa el wizard en lugar del flujo normal
+                      if (formData.tipo === 'DEVOLUCION') { setWizardDevActivo(true); return; }
+                      setMovStep(2); return;
+                    }
                     if (formData.productoId === 0) { notify.error('Selecciona un producto'); return; }
                     if (esRopa && variantesProducto.length > 0 && !selectedVarianteId) { notify.error('Selecciona una variante'); return; }
                     if (formData.tipo !== 'AJUSTE' && formData.cantidad <= 0) { notify.error('La cantidad debe ser mayor a 0'); return; }
@@ -1367,6 +1425,7 @@ export function InventarioList() {
                 </button>
               )}
             </div>
+            )}
           </div>
         </div>,
         document.body

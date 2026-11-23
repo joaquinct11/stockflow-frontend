@@ -2,6 +2,30 @@ import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
 import type { VentaDTO } from '../types';
 
+// F-13: tipos para wizard de devoluciones
+export interface VentaResumenDTO {
+  id: number;
+  createdAt: string;
+  clienteNombre: string;
+  clienteDocumento: string | null;
+  total: number;
+  estado: string;
+}
+
+export interface ItemDevolucionEstadoDTO {
+  detalleVentaId: number;
+  productoId: number;
+  productoNombre: string;
+  varianteId: number | null;
+  varianteDescripcion: string | null;
+  stockLoteId: number | null;
+  presentacionId: number | null;
+  factor: number;
+  cantidadVendida: number;
+  cantidadDevuelta: number;
+  cantidadPendiente: number;
+}
+
 export const ventaService = {
   /**
    * Obtener todas las ventas del tenant actual
@@ -86,6 +110,18 @@ export const ventaService = {
 
   asignarCliente: async (id: number, clienteId: number): Promise<VentaDTO> => {
     const { data } = await axiosInstance.patch<VentaDTO>(API_ENDPOINTS.VENTAS.ASIGNAR_CLIENTE(id), { clienteId });
+    return data;
+  },
+
+  // F-13: búsqueda de ventas para wizard de devoluciones
+  buscar: async (q: string): Promise<VentaResumenDTO[]> => {
+    const { data } = await axiosInstance.get<VentaResumenDTO[]>(API_ENDPOINTS.VENTAS.BUSCAR, { params: { q } });
+    return data;
+  },
+
+  // F-13: estado de devolución por ítem de venta
+  getEstadoDevolucion: async (ventaId: number): Promise<ItemDevolucionEstadoDTO[]> => {
+    const { data } = await axiosInstance.get<ItemDevolucionEstadoDTO[]>(API_ENDPOINTS.VENTAS.ESTADO_DEVOLUCION(ventaId));
     return data;
   },
 };
