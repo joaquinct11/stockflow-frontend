@@ -389,7 +389,7 @@ function App() {
                 }
               />
 
-              {/* Guías de Remisión — módulo en desarrollo, mostrar coming soon */}
+              {/* Guías de Remisión — coming soon */}
               <Route
                 path="guias-remision"
                 element={

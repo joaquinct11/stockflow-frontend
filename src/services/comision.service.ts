@@ -18,9 +18,13 @@ export interface ComisionDTO {
 export const METODOS_PAGO_COMISION = ['TRANSFERENCIA', 'EFECTIVO', 'DEPOSITO', 'OTRO'] as const;
 
 export const comisionService = {
-  listar: async (sucursalId?: number): Promise<ComisionDTO[]> => {
+  listar: async (sucursalId?: number, desde?: string, hasta?: string): Promise<ComisionDTO[]> => {
+    const params: Record<string, unknown> = {};
+    if (sucursalId) params.sucursalId = sucursalId;
+    if (desde) params.desde = desde;
+    if (hasta) params.hasta = hasta;
     const { data } = await axiosInstance.get<ComisionDTO[]>('/comisiones', {
-      params: sucursalId ? { sucursalId } : undefined,
+      params: Object.keys(params).length ? params : undefined,
     });
     return data;
   },

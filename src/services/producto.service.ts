@@ -2,6 +2,35 @@ import { axiosInstance } from '../api/axios.config';
 import { API_ENDPOINTS } from '../api/endpoints';
 import type { ProductoDTO } from '../types';
 
+export interface DashboardSummaryDTO {
+  totalProductos: number;
+  /** Total activos con stockActual < stockMinimo (sinStock + bajoMinimo). */
+  bajoStockCount: number;
+  /** Activos con stockActual <= 0 (calculado server-side, no derivar de bajoStockItems). */
+  sinStockCount: number;
+  /** Activos con 0 < stockActual < stockMinimo (calculado server-side). */
+  stockBajoMinimoCount: number;
+  bajoStockItems: BajoStockItemDTO[];
+  productosProximosAVencer: ProximoVencerItemDTO[];
+}
+
+export interface BajoStockItemDTO {
+  id: number;
+  nombre: string;
+  codigoBarras?: string;
+  stockActual: number;
+  stockMinimo: number;
+}
+
+export interface ProximoVencerItemDTO {
+  id: number;
+  nombre: string;
+  codigoBarras?: string;
+  stockActual: number;
+  fechaVencimiento?: string;
+  lote?: string;
+}
+
 export const productoService = {
   /**
    * Obtener todos los productos del tenant actual
@@ -93,6 +122,14 @@ export const productoService = {
     const { data } = await axiosInstance.patch<ProductoDTO>(
       `/productos/${id}/activo`,
       { activo }
+    );
+    return data;
+  },
+
+  getDashboardSummary: async (sucursalId?: number): Promise<DashboardSummaryDTO> => {
+    const { data } = await axiosInstance.get<DashboardSummaryDTO>(
+      '/productos/dashboard-summary',
+      { params: sucursalId ? { sucursalId } : undefined }
     );
     return data;
   },

@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { productoService } from '../../services/producto.service';
+import { productoService, type DashboardSummaryDTO } from '../../services/producto.service';
 import { ventaService } from '../../services/venta.service';
-import { movimientoService } from '../../services/movimiento.service';
 import { dashboardService, type ActividadRecienteDTO } from '../../services/dashboard.service';
 import { mascotaService, type MascotaStatsDTO } from '../../services/mascota.service';
 import { clienteService, type ClienteStatsDTO } from '../../services/cliente.service';
-import type { ProductoDTO, VentaDTO, MovimientoInventarioDTO, SuscripcionDTO } from '../../types';
+import type { VentaDTO, SuscripcionDTO } from '../../types';
 import { Package, ShoppingCart, AlertCircle, Clock, RefreshCw, Calendar, CreditCard, Zap, ClipboardList, BarChart2, FileText, Award, Users, ArrowRightLeft, PlusSquare, Wrench, MonitorCog } from 'lucide-react';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { gastoService } from '../../services/gasto.service';
@@ -86,15 +85,6 @@ function getVentaDate(v: VentaDTO): Date | null {
   const d = raw instanceof Date ? raw : new Date(raw as string | number);
   if (Number.isNaN(d.getTime())) return null;
   return d;
-}
-
-interface ProductoConVencimiento {
-  id?: number;
-  nombre: string;
-  codigoBarras?: string;
-  stockActual: number;
-  fechaVencimiento: string;
-  lote?: string;
 }
 
 function tipoActividadStyle(tipo: string) {
@@ -221,9 +211,8 @@ export function Dashboard() {
   const oseConfigured = useOseConfigured();
 
   const [loading, setLoading] = useState(true);
-  const [productos, setProductos] = useState<ProductoDTO[]>([]);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummaryDTO | null>(null);
   const [ventas, setVentas] = useState<VentaDTO[]>([]);
-  const [movimientos, setMovimientos] = useState<MovimientoInventarioDTO[]>([]);
   const [canLoadVentas, setCanLoadVentas] = useState<boolean>(false);
   const [productosError, setProductosError] = useState(false);
   const [mascotaStats, setMascotaStats] = useState<MascotaStatsDTO | null>(null);
@@ -329,15 +318,15 @@ export function Dashboard() {
       .finally(() => setActividadLoading(false));
   }, [sucursalLoaded, sucursalActual?.id, rawRol]);
 
-  // Comisiones del mes — solo para dealer
+  // Comisiones del mes — solo para dealer (filtra server-side con desde/hasta)
   useEffect(() => {
     if (!esServicios || rol !== 'ADMIN') return;
-    comisionService.listar()
+    const hoy = new Date();
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0, 10);
+    const hasta = hoy.toISOString().slice(0, 10);
+    comisionService.listar(undefined, desde, hasta)
       .then((lista) => {
-        const mesActual = new Date().toISOString().slice(0, 7); // yyyy-MM
-        const total = lista
-          .filter((c) => c.fecha?.startsWith(mesActual))
-          .reduce((s, c) => s + c.monto, 0);
+        const total = lista.reduce((s, c) => s + c.monto, 0);
         setTotalComisionesMes(total);
       })
       .catch(() => setTotalComisionesMes(0));
@@ -363,38 +352,19 @@ export function Dashboard() {
       let _mascotaStatsError = false;
       let _clienteStatsError = false;
 
-      // Productos: solo si tiene VER_PRODUCTOS
-      const productosPromise = puedeVerProductos
-        ? productoService.getAll(sucursalActual ? sucursalActual.id : undefined)
-            .catch(() => { _productosError = true; return [] as ProductoDTO[]; })
-        : Promise.resolve([] as ProductoDTO[]);
+      // Dashboard summary: reemplaza getAll de productos + movimientosProximosAVencer
+      const sucId = sucursalActual ? sucursalActual.id : undefined;
+      const dashboardSummaryPromise = puedeVerProductos
+        ? productoService.getDashboardSummary(sucId)
+            .catch(() => { _productosError = true; return null as DashboardSummaryDTO | null; })
+        : Promise.resolve(null as DashboardSummaryDTO | null);
 
       const now = new Date();
       const fmt = (d: Date) => d.toISOString().slice(0, 19);
 
-      // Movimientos recientes: solo con VER_INVENTARIO
-      // Próximos a vencer: también disponible para VENDEDOR (VER_PRODUCTOS) — el backend ya autoriza este rol
-      let movimientosPromise: Promise<MovimientoInventarioDTO[]>;
-      let proximosVencerPromise: Promise<MovimientoInventarioDTO[]>;
-      if (puedeVerInventario) {
-        const sucId = sucursalActual ? sucursalActual.id : undefined;
-        movimientosPromise = movimientoService
-          .getRecientes(30, sucId)
-          .catch((err) => {
-            if (import.meta.env.DEV) { console.warn('⚠️ Error cargando movimientos:', err); }
-            return [];
-          });
-      } else {
-        movimientosPromise = Promise.resolve([]);
-      }
-      proximosVencerPromise = (puedeVerInventario || puedeVerProductos)
-        ? movimientoService.getProximosAVencer(90).catch(() => [])
-        : Promise.resolve([]);
-
       // Ventas: según permisos efectivos del usuario
       const rangeStart = getRangeStart(timeFilter, now);
       let ventasPromise: Promise<VentaDTO[]>;
-      const sucId = sucursalActual ? sucursalActual.id : undefined;
       if (puedeVerVentas) {
         _ventasCanLoad = true;
         ventasPromise = ventaService.getByPeriod(fmt(rangeStart), fmt(now), sucId)
@@ -420,16 +390,14 @@ export function Dashboard() {
             .catch(() => { _clienteStatsError = true; return null as ClienteStatsDTO | null; })
         : Promise.resolve(null as ClienteStatsDTO | null);
 
-      const [productosData, ventasData, movimientosData, proximosVencerData, mascotaStatsData, clienteStatsData] = await Promise.all([
-        productosPromise,
+      const [dashboardSummaryData, ventasData, mascotaStatsData, clienteStatsData] = await Promise.all([
+        dashboardSummaryPromise,
         ventasPromise,
-        movimientosPromise,
-        proximosVencerPromise,
         mascotaStatsPromise,
         clienteStatsPromise,
       ]);
 
-      setProductos(productosData);
+      setDashboardSummary(dashboardSummaryData);
       setVentas(ventasData);
       setProductosError(_productosError);
       setCanLoadVentas(_ventasCanLoad);
@@ -437,10 +405,6 @@ export function Dashboard() {
       setClienteStats(clienteStatsData);
       setMascotaStatsError(_mascotaStatsError);
       setClienteStatsError(_clienteStatsError);
-      // Combina movimientos recientes + próximos a vencer (sin duplicados por id)
-      const movimientosIds = new Set((movimientosData ?? []).map(m => m.id));
-      const extra = (proximosVencerData ?? []).filter(m => !movimientosIds.has(m.id));
-      setMovimientos([...(movimientosData ?? []), ...extra]);
     } catch (error) {
       notify.fromError(error, 'No se pudieron cargar los datos del dashboard. Intenta recargar la página.');
       if (import.meta.env.DEV) { console.error('❌ Error en fetchData:', error);}
@@ -461,91 +425,6 @@ export function Dashboard() {
   }, [ventas, timeFilter]);
 
   const stats = useMemo(() => {
-    const productosParaStock = esServicios
-      ? productos.filter((p) => p.tipo === 'PRODUCTO' || !p.tipo)
-      : productos;
-    const bajoStock = productosParaStock.filter((p) => p.stockActual <= p.stockMinimo);
-
-    // productos próximos a vencer en 90 días (desde movimientos)
-    const ahora = new Date();
-    ahora.setHours(0, 0, 0, 0);
-
-    const proximosMes = new Date(ahora);
-    proximosMes.setDate(proximosMes.getDate() + 90);
-
-    if (import.meta.env.DEV) { console.log('📅 Debug vencimientos:');}
-    if (import.meta.env.DEV) { console.log('   Hoy:', ahora.toLocaleDateString('es-PE'));}
-    if (import.meta.env.DEV) { console.log('   Próximos 90 días hasta:', proximosMes.toLocaleDateString('es-PE'));}
-    if (import.meta.env.DEV) { console.log('   Total movimientos:', movimientos.length);}
-
-    // Construir mapa de productos por ID
-    const productosById = new Map<number, ProductoDTO>();
-    productos.forEach((p) => productosById.set(p.id!, p));
-
-    // Filtrar movimientos con fechaVencimiento (ENTRADA o SALDO_INICIAL)
-    const movimientosConVencimiento = movimientos.filter(
-      (m) => m.fechaVencimiento && (m.tipo === 'ENTRADA' || m.tipo === 'SALDO_INICIAL')
-    );
-
-    if (import.meta.env.DEV) { console.log('   Movimientos con vencimiento:', movimientosConVencimiento.length);}
-
-    // Agrupar por producto y obtener el vencimiento más próximo
-    const productosProximosMap = new Map<number, ProductoConVencimiento>();
-
-    movimientosConVencimiento.forEach((mov) => {
-      // Parsear fechaVencimiento (formato YYYY-MM-DD)
-      const fechaParts = mov.fechaVencimiento!.split('T')[0].split('-');
-      const fv = new Date(
-        parseInt(fechaParts[0]), 
-        parseInt(fechaParts[1]) - 1, 
-        parseInt(fechaParts[2])
-      );
-      fv.setHours(0, 0, 0, 0);
-
-      if (import.meta.env.DEV) { console.log(
-        `   Movimiento ${mov.id}: Producto ${mov.productoId}, Vence: ${fv.toLocaleDateString('es-PE')}`
-      );}
-
-      // Solo si vence entre hoy y +90 días
-      if (fv >= ahora && fv <= proximosMes) {
-        const prod = productosById.get(mov.productoId);
-
-        if (import.meta.env.DEV) { console.log(
-          `     ✅ En rango. Stock: ${prod?.stockActual}, Nombre: ${prod?.nombre}`
-        );}
-
-        if (prod && prod.stockActual > 0) {
-          const key = mov.productoId;
-          const existing = productosProximosMap.get(key);
-
-          // Mantener el vencimiento más próximo
-          if (!existing || fv < new Date(existing.fechaVencimiento)) {
-            productosProximosMap.set(key, {
-              id: prod.id,
-              nombre: prod.nombre,
-              codigoBarras: prod.codigoBarras,
-              stockActual: prod.stockActual,
-              fechaVencimiento: mov.fechaVencimiento!,
-              lote: mov.lote,
-            });
-          }
-        }
-      } else {
-        if (import.meta.env.DEV) { console.log(`     ❌ Fuera de rango`);}
-      }
-    });
-
-    // Convertir a array y ordenar por fecha de vencimiento
-    const productosProximosAVencer = Array.from(productosProximosMap.values())
-      .sort(
-        (a, b) =>
-          new Date(a.fechaVencimiento.split('T')[0]).getTime() -
-          new Date(b.fechaVencimiento.split('T')[0]).getTime()
-      )
-      .slice(0, 10);
-
-    if (import.meta.env.DEV) { console.log('🎯 Productos próximos a vencer (FINAL):', productosProximosAVencer);}
-
     // ventas filtradas (excluye anuladas — dinero retenido como NC no es ingreso realizado)
     const ventasNoAnuladas = filteredVentas.filter(v => v.estado !== 'ANULADA');
     const ingresoFiltrado = ventasNoAnuladas.reduce((acc, v) => acc + (v.total || 0), 0);
@@ -572,10 +451,12 @@ export function Dashboard() {
       .reduce((acc, v) => acc + (v.detalles?.reduce((s, d) => s + (d.cantidad ?? 0), 0) ?? 0), 0);
 
     return {
-      totalProductos: productos.length,
-      bajoStockCount: bajoStock.length,
-      bajoStockItems: bajoStock.slice(0, 5),
-      productosProximosAVencer,
+      totalProductos: dashboardSummary?.totalProductos ?? 0,
+      bajoStockCount: dashboardSummary?.bajoStockCount ?? 0,
+      sinStockCount: dashboardSummary?.sinStockCount ?? 0,
+      stockBajoMinimoCount: dashboardSummary?.stockBajoMinimoCount ?? 0,
+      bajoStockItems: dashboardSummary?.bajoStockItems ?? [],
+      productosProximosAVencer: dashboardSummary?.productosProximosAVencer ?? [],
       totalVentasFiltradas: ventasNoAnuladas.length,
       ingresoFiltrado,
       cogsTotal,
@@ -583,7 +464,7 @@ export function Dashboard() {
       unidadesVendidas,
       unidadesHoy,
     };
-  }, [productos, ventas, filteredVentas, movimientos, esServicios]);
+  }, [dashboardSummary, ventas, filteredVentas]);
 
 
   if (loading) return <LoadingSpinner />;
@@ -1269,7 +1150,7 @@ export function Dashboard() {
                 <p className="text-[.78rem] text-muted-foreground mt-3 leading-relaxed">
                   {stats.bajoStockCount === 0
                     ? 'Sin alertas de stock'
-                    : `${stats.bajoStockItems.filter(p => p.stockActual === 0).length} sin stock · ${stats.bajoStockItems.filter(p => p.stockActual > 0).length} por debajo del mínimo`}
+                    : `${stats.sinStockCount} sin stock · ${stats.stockBajoMinimoCount} por debajo del mínimo`}
                 </p>
               </div>
             )}
@@ -1355,7 +1236,7 @@ export function Dashboard() {
                 <p className="text-[.78rem] text-muted-foreground mt-3 leading-relaxed">
                   {stats.bajoStockCount === 0
                     ? 'Sin alertas de stock'
-                    : `${stats.bajoStockItems.filter(p => p.stockActual === 0).length} sin stock · ${stats.bajoStockItems.filter(p => p.stockActual > 0).length} por debajo del mínimo`}
+                    : `${stats.sinStockCount} sin stock · ${stats.stockBajoMinimoCount} por debajo del mínimo`}
                 </p>
               </div>
             )}
@@ -1483,6 +1364,7 @@ export function Dashboard() {
                 </div>
                 <div className="overflow-y-auto overflow-x-hidden max-h-[260px]" style={{ overscrollBehavior: 'contain' }}>
                   {stats.productosProximosAVencer.map((producto) => {
+                    if (!producto.fechaVencimiento) return null;
                     const fechaParts = producto.fechaVencimiento.split('T')[0].split('-');
                     const fv = new Date(parseInt(fechaParts[0]), parseInt(fechaParts[1]) - 1, parseInt(fechaParts[2]));
                     const hoyMs = new Date(new Date().toLocaleDateString('en-US')).getTime();
