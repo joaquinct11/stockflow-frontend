@@ -23,6 +23,7 @@ interface Props {
   canCancelar: boolean;
   canEditar: boolean;
   canEliminar: boolean;
+  oseConfigured?: boolean | null;
   onClose: () => void;
   onUpdate: (updated: GuiaRemisionResponse) => void;
   onDelete: (id: number) => void;
@@ -33,6 +34,7 @@ export function GuiaRemisionDetail({
   guia, loading,
   canEmitir, canConfirmar, canCancelar,
   canEditar, canEliminar,
+  oseConfigured,
   onClose, onUpdate, onDelete, onEdit,
 }: Props) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -72,6 +74,10 @@ export function GuiaRemisionDetail({
 
   const handleDownload = async () => {
     if (!guia) return;
+    if (guia.pdfUrl) {
+      window.open(guia.pdfUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
     setActionLoading('pdf');
     try {
       const blob = await guiaRemisionService.downloadPdf(guia.id);
@@ -225,20 +231,26 @@ export function GuiaRemisionDetail({
           <div className="flex-shrink-0 px-5 py-4 border-t border-border flex flex-wrap gap-2 bg-card">
             {/* Emitir */}
             {canEmitir && guia.estadoTributario === 'BORRADOR' && (
-              <Button
-                onClick={() => handle('emitir', () => guiaRemisionService.emitir(guia.id))}
-                disabled={actionLoading !== null}
-                className="flex items-center gap-1.5"
-              >
-                {actionLoading === 'emitir'
-                  ? <RefreshCw className="w-4 h-4 animate-spin" />
-                  : <Send className="w-4 h-4" />}
-                Emitir GRE
-              </Button>
+              oseConfigured === false ? (
+                <p className="text-xs text-muted-foreground self-center">
+                  Activa la facturación electrónica para emitir esta guía.
+                </p>
+              ) : (
+                <Button
+                  onClick={() => handle('emitir', () => guiaRemisionService.emitir(guia.id))}
+                  disabled={actionLoading !== null}
+                  className="flex items-center gap-1.5"
+                >
+                  {actionLoading === 'emitir'
+                    ? <RefreshCw className="w-4 h-4 animate-spin" />
+                    : <Send className="w-4 h-4" />}
+                  Emitir GRE
+                </Button>
+              )
             )}
 
-            {/* Re-emitir en ERROR */}
-            {canEmitir && guia.estadoTributario === 'ERROR' && (
+            {/* Re-emitir en ERROR — solo si OSE habilitado */}
+            {canEmitir && guia.estadoTributario === 'ERROR' && oseConfigured !== false && (
               <Button
                 onClick={() => handle('emitir', () => guiaRemisionService.emitir(guia.id))}
                 disabled={actionLoading !== null}

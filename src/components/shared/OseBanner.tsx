@@ -25,7 +25,7 @@ export function OseBanner() {
       <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
 
       <p className="flex-1 min-w-0 text-xs font-medium text-amber-800 dark:text-amber-300 leading-snug">
-        <strong>Facturación no configurada</strong> · Sin esto no puedes emitir boletas/facturas SUNAT.
+        <strong>Facturación no configurada</strong> · Configura la facturación electrónica para emitir comprobantes de pago y Guías de Remisión Electrónicas (GRE) ante SUNAT.
       </p>
 
       <div className="flex items-center gap-2 shrink-0 ml-auto">

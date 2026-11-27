@@ -12,6 +12,25 @@ export interface VentaResumenDTO {
   estado: string;
 }
 
+// F-15: detalle de venta formateado para precargar GRE DELIVERY motivo 01
+export interface VentaDetalleGREDTO {
+  ventaId: number;
+  estado: string;
+  clienteNombre: string;
+  /** Código SUNAT: 1=DNI, 4=CE, 6=RUC, 7=PASAPORTE */
+  clienteTipoDoc: string | null;
+  clienteNumDoc: string | null;
+  clienteDireccion: string | null;
+  items: {
+    productoId: number;
+    productoNombre: string;
+    cantidad: number;
+    factor: number;
+    presentacionId: number | null;
+    unidadMedida: string;
+  }[];
+}
+
 export interface ItemDevolucionEstadoDTO {
   detalleVentaId: number;
   productoId: number;
@@ -122,6 +141,12 @@ export const ventaService = {
   // F-13: estado de devolución por ítem de venta
   getEstadoDevolucion: async (ventaId: number): Promise<ItemDevolucionEstadoDTO[]> => {
     const { data } = await axiosInstance.get<ItemDevolucionEstadoDTO[]>(API_ENDPOINTS.VENTAS.ESTADO_DEVOLUCION(ventaId));
+    return data;
+  },
+
+  // F-15: datos de venta formateados para precargar una GRE DELIVERY motivo 01
+  getDetalleParaGRE: async (ventaId: number): Promise<VentaDetalleGREDTO> => {
+    const { data } = await axiosInstance.get<VentaDetalleGREDTO>(`/ventas/${ventaId}/detalle-para-gre`);
     return data;
   },
 };

@@ -10,6 +10,7 @@ import { productoPresentacionService } from '../../services/productoPresentacion
 import type { ProductoDTO, UnidadMedidaDTO, CategoriaDTO, ProductoVarianteDTO } from '../../types';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import toast from 'react-hot-toast';
+import { notify } from '../../lib/notify';
 import * as XLSX from 'xlsx';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/authStore';
@@ -496,7 +497,7 @@ export function ProductosList() {
           precioMayorista: p.precioMayorista != null ? Number(p.precioMayorista) : undefined,
           cantidadMinimaMayorista: p.cantidadMinimaMayorista ?? undefined,
         })));
-      } catch { setPresentacionesBorrador([]); }
+      } catch (err) { setPresentacionesBorrador([]); notify.fromError(err, 'Error al cargar presentaciones'); }
     } else {
       setPresentacionesBorrador([]);
     }

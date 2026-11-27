@@ -96,8 +96,13 @@ function tipoActividadStyle(tipo: string) {
     case 'ENTRADA':     return { bg: 'bg-sky-100 dark:bg-sky-900/40',     text: 'text-sky-700 dark:text-sky-400',     letter: 'E' };
     case 'AJUSTE':      return { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-400', letter: 'A' };
     case 'MERMA':       return { bg: 'bg-red-100 dark:bg-red-900/40',     text: 'text-red-700 dark:text-red-400',     letter: 'M' };
-    case 'ORDEN_COMPRA':return { bg: 'bg-violet-100 dark:bg-violet-900/40',text: 'text-violet-700 dark:text-violet-400',letter: 'O'};
-    default:            return { bg: 'bg-muted',                          text: 'text-muted-foreground',              letter: '?' };
+    case 'ORDEN_COMPRA':       return { bg: 'bg-violet-100 dark:bg-violet-900/40', text: 'text-violet-700 dark:text-violet-400', letter: 'O' };
+    case 'GRE_CREADA':         return { bg: 'bg-slate-100 dark:bg-slate-800/60',   text: 'text-slate-600 dark:text-slate-300',   letter: 'G' };
+    case 'GRE_EMITIDA':        return { bg: 'bg-teal-100 dark:bg-teal-900/40',     text: 'text-teal-700 dark:text-teal-400',     letter: 'G' };
+    case 'GRE_RECEPCION_CONFIRMADA': return { bg: 'bg-cyan-100 dark:bg-cyan-900/40', text: 'text-cyan-700 dark:text-cyan-400',  letter: 'G' };
+    case 'GRE_CANCELADA':      return { bg: 'bg-red-100 dark:bg-red-900/40',       text: 'text-red-700 dark:text-red-400',       letter: 'G' };
+    case 'GRE_ERROR_LUCODE':   return { bg: 'bg-orange-100 dark:bg-orange-900/40', text: 'text-orange-700 dark:text-orange-400', letter: 'G' };
+    default:                   return { bg: 'bg-muted',                            text: 'text-muted-foreground',                letter: '?' };
   }
 }
 

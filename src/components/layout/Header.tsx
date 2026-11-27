@@ -59,7 +59,7 @@ function formatRelativo(fecha: string): string {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { isDark, toggleTheme } = useThemeStore();
-  const { user, logout, startTenantSwitch, knownTenants, tenantsLoading, tenantsError } = useAuthStore();
+  const { user, logout, startTenantSwitch, knownTenants, tenantsLoading, tenantsError, tenantLoading } = useAuthStore();
   const { sucursales, sucursalActual, setSucursalActual } = useSucursalStore();
   const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -508,7 +508,12 @@ export function Header({ onMenuClick }: HeaderProps) {
               </div>
 
               {/* Info negocio activo + plan */}
-              {user?.tenantNombre && (
+              {tenantLoading && !user?.tenantNombre ? (
+                <div className="px-4 py-2.5 border-b">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Negocio actual</p>
+                  <div className="h-4 w-28 bg-muted rounded animate-pulse" />
+                </div>
+              ) : user?.tenantNombre ? (
                 <div className="px-4 py-2.5 border-b">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Negocio actual</p>
                   <div className="flex items-center gap-2 min-w-0">
@@ -524,7 +529,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                     )}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Opciones */}
               <div className="py-1">

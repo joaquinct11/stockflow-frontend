@@ -1,12 +1,10 @@
 import type { EstadoTributarioGRE, EstadoLogisticoGRE, TipoTrasladoGRE, ModalidadTransporteGRE } from '../../types/gre.types';
 
+/** Solo motivos soportados en esta versión. Los históricos (02, 08, 09, 13) siguen
+ *  siendo válidos para consultar GRE ya creadas pero no se ofrecen al crear nuevas. */
 export const MOTIVO_TRASLADO_OPTIONS = [
   { value: '01', label: '01 - Venta' },
-  { value: '02', label: '02 - Compra' },
   { value: '04', label: '04 - Traslado entre establecimientos' },
-  { value: '08', label: '08 - Importación' },
-  { value: '09', label: '09 - Exportación' },
-  { value: '13', label: '13 - Otros' },
 ];
 
 export const TIPO_DOC_OPTIONS = [
