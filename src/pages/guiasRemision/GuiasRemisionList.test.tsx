@@ -43,6 +43,18 @@ vi.mock('../../components/ui/ConfirmDialog', () => ({
   ConfirmDialog: () => null,
 }));
 
+vi.mock('../../store/sucursalStore', () => ({
+  useSucursalStore: vi.fn(() => ({ sucursalActual: null, loaded: true })),
+}));
+
+vi.mock('../../hooks/useOseConfigured', () => ({
+  useOseConfigured: vi.fn(() => true),
+}));
+
+vi.mock('../../components/ui/Pagination', () => ({
+  Pagination: () => null,
+}));
+
 // ---- Imports de los mocks ----
 import { usePermissions } from '../../hooks/usePermissions';
 import { guiaRemisionService } from '../../services/guiaRemision.service';
