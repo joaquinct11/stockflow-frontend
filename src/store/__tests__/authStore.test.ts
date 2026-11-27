@@ -32,6 +32,7 @@ function mockUser(overrides = {}) {
     tenantId: 'tenant-A',
     permisos: ['VER_CITAS', 'CREAR_CITA'],
     suscripcion: { estado: 'ACTIVA' },
+    tenantNombre: 'Farmacia Test',
     ...overrides,
   };
 }
@@ -44,6 +45,7 @@ function mockProfile(overrides = {}) {
     tenantId: 'tenant-A',
     permisos: ['VER_CITAS', 'CREAR_CITA'],
     sucursalId: null,
+    nombreFarmacia: 'Farmacia Los Olivos',
     ...overrides,
   };
 }
@@ -61,6 +63,7 @@ function resetStore() {
     user: null,
     isAuthenticated: false,
     suscripcionEstado: null,
+    tenantLoading: false,
     pendingTenantSelection: false,
     availableTenants: [],
     selectionToken: null,
@@ -71,6 +74,7 @@ function resetStore() {
 
 describe('authStore', () => {
   beforeEach(() => {
+    useAuthStore.getState().logout();
     clearLocalStorage();
     resetStore();
     vi.clearAllMocks();
@@ -346,7 +350,112 @@ describe('authStore', () => {
     });
   });
 
-  // ── 8. Invariante: isAuthenticated y pendingTenantSelection son mutuamente excluyentes ──
+  // ── 8. tenantNombre y tenantLoading — carga del nombre del negocio (F-26) ───
+
+  describe('tenantNombre y tenantLoading (F-26)', () => {
+    it('c01: initialize() sin tenantNombre en localStorage → tenantLoading=true durante la carga async', async () => {
+      const user = mockUser({ tenantNombre: undefined });
+      localStorage.setItem('accessToken', user.accessToken);
+      localStorage.setItem('refreshToken', user.refreshToken);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      let tenantLoadingDuranteAsync = false;
+      vi.mocked(authService.obtenerPerfil).mockImplementationOnce(async () => {
+        tenantLoadingDuranteAsync = useAuthStore.getState().tenantLoading;
+        return mockProfile() as any;
+      });
+
+      await useAuthStore.getState().initialize();
+
+      expect(tenantLoadingDuranteAsync).toBe(true);
+      expect(useAuthStore.getState().tenantLoading).toBe(false);
+    });
+
+    it('c02: initialize() con éxito → tenantNombre actualizado y tenantLoading=false', async () => {
+      const user = mockUser({ tenantNombre: undefined });
+      localStorage.setItem('accessToken', user.accessToken);
+      localStorage.setItem('refreshToken', user.refreshToken);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      vi.mocked(authService.obtenerPerfil).mockResolvedValueOnce(mockProfile() as any);
+
+      await useAuthStore.getState().initialize();
+
+      const state = useAuthStore.getState();
+      expect(state.user?.tenantNombre).toBe('Farmacia Los Olivos');
+      expect(state.tenantLoading).toBe(false);
+    });
+
+    it('c03: initialize() con tenantNombre en localStorage → tenantLoading=false en primer render', async () => {
+      const user = mockUser({ tenantNombre: 'Farmacia Previa' });
+      localStorage.setItem('accessToken', user.accessToken);
+      localStorage.setItem('refreshToken', user.refreshToken);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      let tenantLoadingAlInicio = true;
+      vi.mocked(authService.obtenerPerfil).mockImplementationOnce(async () => {
+        tenantLoadingAlInicio = useAuthStore.getState().tenantLoading;
+        return mockProfile({ nombreFarmacia: 'Farmacia Previa' }) as any;
+      });
+
+      await useAuthStore.getState().initialize();
+
+      expect(tenantLoadingAlInicio).toBe(false);
+      expect(useAuthStore.getState().tenantLoading).toBe(false);
+    });
+
+    it('c04: initialize() y obtenerPerfil falla → tenantLoading=false, sesión activa con datos locales', async () => {
+      const user = mockUser({ tenantNombre: undefined });
+      localStorage.setItem('accessToken', user.accessToken);
+      localStorage.setItem('refreshToken', user.refreshToken);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      vi.mocked(authService.obtenerPerfil).mockRejectedValueOnce(new Error('Timeout'));
+
+      await useAuthStore.getState().initialize();
+
+      const state = useAuthStore.getState();
+      expect(state.tenantLoading).toBe(false);
+      expect(state.isAuthenticated).toBe(true);
+    });
+
+    it('c05: setUser() sin tenantNombre → llama obtenerPerfil y actualiza tenantNombre', async () => {
+      vi.mocked(authService.obtenerPerfil).mockResolvedValueOnce(mockProfile() as any);
+
+      useAuthStore.getState().setUser(mockUser({ tenantNombre: undefined }) as any);
+      // Flush microtask queue para que la Promise interna resuelva
+      await Promise.resolve();
+
+      const state = useAuthStore.getState();
+      expect(authService.obtenerPerfil).toHaveBeenCalledOnce();
+      expect(state.user?.tenantNombre).toBe('Farmacia Los Olivos');
+      expect(state.tenantLoading).toBe(false);
+    });
+
+    it('c06: setUser() con tenantNombre presente → no llama obtenerPerfil, tenantLoading=false', () => {
+      useAuthStore.getState().setUser(mockUser({ tenantNombre: 'Farmacia Existente' }) as any);
+
+      expect(authService.obtenerPerfil).not.toHaveBeenCalled();
+      expect(useAuthStore.getState().tenantLoading).toBe(false);
+    });
+
+    it('c07: setUser() y obtenerPerfil falla → tenantLoading=false, tenantNombre permanece vacío', async () => {
+      vi.mocked(authService.obtenerPerfil).mockRejectedValueOnce(new Error('Network error'));
+
+      useAuthStore.getState().setUser(mockUser({ tenantNombre: undefined }) as any);
+      // La cadena .then().catch() sobre una Promise rechazada necesita 2 ticks:
+      // tick 1: propaga el rechazo de .then() a la Promise resultado
+      // tick 2: ejecuta el handler de .catch()
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const state = useAuthStore.getState();
+      expect(state.tenantLoading).toBe(false);
+      expect(state.isAuthenticated).toBe(true);
+    });
+  });
+
+  // ── 9. Invariante: isAuthenticated y pendingTenantSelection son mutuamente excluyentes ──
 
   describe('invariante de estado', () => {
     it('isAuthenticated=true nunca coexiste con pendingTenantSelection=true', () => {

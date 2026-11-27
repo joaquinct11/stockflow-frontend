@@ -6,6 +6,7 @@ import type {
   CrearGuiaRemisionRequest,
   EditarBorradorRequest,
   ConfirmarRecepcionRequest,
+  EstadoTributarioGRE,
 } from '../types/gre.types';
 
 export interface PageResponse<T> {
@@ -16,11 +17,38 @@ export interface PageResponse<T> {
   size: number;
 }
 
+export interface GuiaRemisionStats {
+  total: number;
+  emitidas: number;
+  pendientes: number;
+  conError: number;
+}
+
 export const guiaRemisionService = {
-  listar: async (page = 0, size = 20): Promise<PageResponse<GuiaRemisionListItem>> => {
+  listar: async (
+    page = 0,
+    size = 10,
+    q?: string,
+    estado?: EstadoTributarioGRE | '',
+    sucursalId?: number,
+  ): Promise<PageResponse<GuiaRemisionListItem>> => {
+    const params: Record<string, unknown> = { page, size, sort: 'createdAt,desc' };
+    if (q && q.trim()) params.q = q.trim();
+    if (estado) params.estado = estado;
+    if (sucursalId) params.sucursalId = sucursalId;
     const { data } = await axiosInstance.get<PageResponse<GuiaRemisionListItem>>(
       API_ENDPOINTS.GUIAS_REMISION.LIST,
-      { params: { page, size, sort: 'createdAt,desc' } }
+      { params }
+    );
+    return data;
+  },
+
+  stats: async (sucursalId?: number): Promise<GuiaRemisionStats> => {
+    const params: Record<string, unknown> = {};
+    if (sucursalId) params.sucursalId = sucursalId;
+    const { data } = await axiosInstance.get<GuiaRemisionStats>(
+      `${API_ENDPOINTS.GUIAS_REMISION.LIST}/stats`,
+      { params }
     );
     return data;
   },

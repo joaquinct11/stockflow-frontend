@@ -31,10 +31,12 @@ export const LIMITES_PRO: PlanLimites    = { usuarios: 15, productos: 5000, sucu
 
 export function usePlan(): PlanInfo {
   const { user } = useAuthStore();
-  const rawPlanId  = user?.suscripcion?.planId?.toUpperCase();
+  // F-28.3: normalización explícita para tenants Legacy donde planId puede ser null/undefined.
+  // (null ?? '') → '' → no es 'PRO' → isBasico = true. Comportamiento seguro por defecto.
+  const rawPlanId  = (user?.suscripcion?.planId ?? '').toUpperCase();
   const isPro      = rawPlanId === 'PRO';
   const planId     = isPro ? 'PRO' : 'BASICO';
-  const planCodigo = user?.suscripcion?.planCodigo;
+  const planCodigo = user?.suscripcion?.planCodigo ?? null;
   const segmento   = segmentoFromPlanCodigo(planCodigo);
 
   const fallback = isPro ? LIMITES_PRO : LIMITES_BASICO;

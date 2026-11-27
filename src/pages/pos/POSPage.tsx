@@ -46,6 +46,8 @@ interface CartItem {
   varianteDescripcion?: string;
   stockLoteId?: number;
   stockLoteLabel?: string;
+  /** Precio de venta del lote seleccionado; sticky al cambiar cantidad, solo aplica a unidad base (sin presentación). */
+  precioLote?: number;
   presentacionId?: number;
   /** Cuántas unidades base descuenta del stock. 1 = unidad principal. */
   factor?: number;
@@ -183,18 +185,22 @@ export function POSPage() {
    *
    * Prioridad:
    *  1. precioOverride (solo para variantes ropa / descuento manual autorizado externamente).
-   *  2. Config mayorista propia de la presentación (si la tiene completa).
-   *  3. Config mayorista del producto base, comparando unidades equivalentes
+   *  2. precioLote (precio de venta del lote seleccionado; sticky, solo aplica sin presentación).
+   *  3. Config mayorista propia de la presentación (si la tiene completa).
+   *  4. Config mayorista del producto base, comparando unidades equivalentes
    *     (cantidad × factor). Aplica cuando la presentación NO tiene config propia.
-   *  4. precioVenta de la presentación (o del producto si no hay presentación).
+   *  5. precioVenta de la presentación (o del producto si no hay presentación).
    */
   const calcularPrecioItem = (
     producto: ProductoDTO,
     cantidad: number,
     precioOverride?: number,
     presentacion?: PresentacionPrecio | null,
+    precioLote?: number,
   ): number => {
     if (precioOverride != null && precioOverride > 0) return precioOverride;
+    // precioLote solo aplica a la unidad base (sin presentación); es sticky: no varía con cantidad
+    if (precioLote != null && precioLote > 0 && !presentacion) return precioLote;
     if (presentacion) {
       // La presentación tiene su propia config mayorista completa → usarla directamente
       if (presentacion.precioMayorista != null && presentacion.cantidadMinima != null) {
@@ -236,7 +242,7 @@ export function POSPage() {
         return {
           ...i,
           cantidad: nuevaCantidad,
-          precioUnitario: calcularPrecioItem(i.producto, nuevaCantidad, undefined, i.presentacion),
+          precioUnitario: calcularPrecioItem(i.producto, nuevaCantidad, undefined, i.presentacion, i.precioLote),
         };
       }));
     }
@@ -572,6 +578,7 @@ export function POSPage() {
     switchToCart = false, precioOverride?: number, stockLoteId?: number, stockLoteLabel?: string,
     presentacionId?: number, factor?: number,
     presentacion?: PresentacionPrecio | null,
+    precioLote?: number,
   ) => {
     const key = cartItemKey({ producto, varianteId, stockLoteId });
     const existing = cart.find(i => cartItemKey(i) === key);
@@ -592,14 +599,14 @@ export function POSPage() {
         newCart[idx] = {
           ...newCart[idx],
           cantidad: nuevaCantidad,
-          // Recalcular precio usando config de la presentación almacenada en el ítem
-          precioUnitario: calcularPrecioItem(newCart[idx].producto, nuevaCantidad, precioOverride, newCart[idx].presentacion),
+          // Recalcular precio usando config de la presentación y precioLote almacenados en el ítem
+          precioUnitario: calcularPrecioItem(newCart[idx].producto, nuevaCantidad, precioOverride, newCart[idx].presentacion, newCart[idx].precioLote),
         };
         return newCart;
       }
       const nuevaCantidad = 1;
-      const precio = calcularPrecioItem(producto, nuevaCantidad, precioOverride, presentacion);
-      return [...prev, { producto, cantidad: nuevaCantidad, precioUnitario: precio, varianteId, varianteDescripcion, stockLoteId, stockLoteLabel, presentacionId, factor: factor ?? 1, presentacion: presentacion ?? null }];
+      const precio = calcularPrecioItem(producto, nuevaCantidad, precioOverride, presentacion, precioLote);
+      return [...prev, { producto, cantidad: nuevaCantidad, precioUnitario: precio, varianteId, varianteDescripcion, stockLoteId, stockLoteLabel, precioLote, presentacionId, factor: factor ?? 1, presentacion: presentacion ?? null }];
     });
     if (switchToCart) setMobileCartOpen(true);
     refocus();
@@ -619,7 +626,7 @@ export function POSPage() {
       return {
         ...item,
         cantidad: nuevaCantidad,
-        precioUnitario: calcularPrecioItem(item.producto, nuevaCantidad, undefined, item.presentacion),
+        precioUnitario: calcularPrecioItem(item.producto, nuevaCantidad, undefined, item.presentacion, item.precioLote),
       };
     }).filter(item => item.cantidad > 0));
   };
@@ -1903,9 +1910,11 @@ export function POSPage() {
                           setPendingPresentacion(null);
                           agregarItemAlCarrito(
                             lotePickerProducto, undefined, pp?.label, false,
-                            undefined,  // sin precioOverride — precio desde config de presentación
+                            undefined,  // sin precioOverride — precio desde config de presentación o lote
                             lote.id, label, pp?.id, pp?.factor ?? 1,
                             pp ? { precioVenta: pp.precio, precioMayorista: pp.precioMayorista, cantidadMinima: pp.cantidadMinima, factor: pp.factor ?? 1 } : null,
+                            // precioLote solo aplica a unidad base; calcularPrecioItem lo ignora cuando hay presentación
+                            lote.precioVenta != null && lote.precioVenta > 0 ? lote.precioVenta : undefined,
                           );
                           setLotePickerOpen(false);
                         }}

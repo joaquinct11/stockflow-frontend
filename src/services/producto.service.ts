@@ -76,6 +76,26 @@ export const productoService = {
   },
 
   /**
+   * Buscar productos para GRE: retorna stockActual por sucursal cuando se pasa sucursalId.
+   */
+  searchGre: async (nombre: string, sucursalId?: number): Promise<ProductoDTO[]> => {
+    const { data } = await axiosInstance.get<ProductoDTO[]>(
+      API_ENDPOINTS.PRODUCTOS.SEARCH_GRE(nombre, sucursalId)
+    );
+    return data;
+  },
+
+  /**
+   * F-23: Obtener variantes activas de un producto con stock en la sucursal indicada.
+   */
+  getVariantesConStock: async (productoId: number, sucursalId?: number): Promise<import('../types/gre.types').VarianteConStockDTO[]> => {
+    const { data } = await axiosInstance.get(
+      API_ENDPOINTS.PRODUCTOS.VARIANTES_CON_STOCK(productoId, sucursalId)
+    );
+    return data;
+  },
+
+  /**
    * Obtener productos con stock bajo
    */
   getLowStock: async (): Promise<ProductoDTO[]> => {
