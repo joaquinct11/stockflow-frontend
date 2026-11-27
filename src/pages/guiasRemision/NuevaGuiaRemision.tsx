@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronRight, ChevronLeft, Plus, Trash2, Search, Truck, Package, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, ChevronRight, ChevronLeft, Plus, Trash2, Search, Truck, Package, CheckCircle2, AlertTriangle, Building2, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { guiaRemisionService } from '../../services/guiaRemision.service';
 import { sucursalService } from '../../services/sucursal.service';
 import { productoService } from '../../services/producto.service';
 import { productoPresentacionService } from '../../services/productoPresentacion.service';
 import { ventaService } from '../../services/venta.service';
+import type { VentaResumenDTO } from '../../services/venta.service';
 import type { SucursalDTO } from '../../services/sucursal.service';
-import type { ProductoDTO, ProductoPresentacionDTO, VentaDTO } from '../../types';
-import type { CrearGuiaRemisionRequest, EditarBorradorRequest, GuiaRemisionItemDTO, GuiaRemisionResponse, TipoTrasladoGRE, ModalidadTransporteGRE } from '../../types/gre.types';
+import type { ProductoDTO, ProductoPresentacionDTO } from '../../types';
+import type { CrearGuiaRemisionRequest, EditarBorradorRequest, GuiaRemisionItemDTO, GuiaRemisionResponse, TipoTrasladoGRE, ModalidadTransporteGRE, VarianteConStockDTO } from '../../types/gre.types';
 import { Button } from '../../components/ui/Button';
 import { UbigeoSelector } from '../../components/gre/UbigeoSelector';
 import { useTenantConfigStore } from '../../store/tenantConfigStore';
-import { MOTIVO_TRASLADO_OPTIONS, TIPO_DOC_OPTIONS, UNIDAD_MEDIDA_OPTIONS, abreviaturaToSunat } from './gre.helpers';
+import { usePlan } from '../../hooks/usePlan';
+import { TIPO_DOC_OPTIONS, UNIDAD_MEDIDA_OPTIONS, abreviaturaToSunat } from './gre.helpers';
 
 interface ItemForm {
   productoId: number | null;
@@ -25,6 +28,12 @@ interface ItemForm {
   presentacionId?: number;
   presentacionNombre?: string;
   factorConversion?: number;
+  /** F-23: ID de la variante seleccionada (talla/color/SKU). Null si el producto no tiene variantes. */
+  varianteId?: number | null;
+  varianteTalla?: string;
+  varianteColor?: string;
+  varianteSku?: string;
+  varianteStock?: number;
 }
 
 interface FormData {
@@ -61,19 +70,45 @@ interface FormData {
   transportistaDenominacion: string;
 }
 
+/** Retorna la fecha actual en la zona horaria de Perú (America/Lima) como YYYY-MM-DD. */
+function fechaHoyLima(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date());
+}
+
+function numDocConfig(tipoDoc: string): { maxLength: number; onlyDigits: boolean } {
+  if (tipoDoc === '1') return { maxLength: 8, onlyDigits: true };
+  if (tipoDoc === '6') return { maxLength: 11, onlyDigits: true };
+  return { maxLength: 20, onlyDigits: false };
+}
+
+function errorNumDoc(tipoDoc: string, numDoc: string): string | null {
+  if (tipoDoc === '-') return null;
+  const v = numDoc.trim();
+  if (!v) return 'Ingresa el número de documento';
+  if (tipoDoc === '1') {
+    if (!/^\d{8}$/.test(v)) return 'El DNI debe tener exactamente 8 dígitos';
+  } else if (tipoDoc === '6') {
+    if (!/^\d{11}$/.test(v)) return 'El RUC debe tener exactamente 11 dígitos';
+  } else {
+    if (v.length > 20) return 'El documento no puede superar 20 caracteres';
+  }
+  return null;
+}
+
 const defaultItem = (): ItemForm => ({
   productoId: null,
   productoNombre: '',
   descripcion: '',
   cantidad: '1',
   unidadMedida: 'NIU',
+  varianteId: null,
 });
 
 const defaultForm = (): FormData => ({
   tipoTraslado: 'DELIVERY',
   motivoTrasladoCodigo: '01',
   modalidadTransporte: 'PRIVADO',
-  fechaTraslado: new Date().toISOString().slice(0, 10),
+  fechaTraslado: fechaHoyLima(),
   observaciones: '',
   pesoBrutoTotal: '',
   numeroBultos: '',
@@ -155,41 +190,61 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
   const { config: negocio } = useTenantConfigStore();
   const esFarmacia = negocio?.rubro === 'BOTICA' || negocio?.rubro === 'FARMACIA';
 
+  const navigate = useNavigate();
+  const { limites, isBasico, planId: diagPlanId } = usePlan();
+
+  // F-28.3: diagnóstico temporal para verificar valores en tenant Legacy
+  if (import.meta.env.DEV && form.tipoTraslado === 'SUCURSALES') {
+    console.debug('[GRE-F28] plan:', { planId: diagPlanId, isBasico, limiteSucursales: limites.sucursales, totalSucursales: sucursales.length });
+  }
+
   // F-10: detección de capacidades del tenant
-  const tieneSucursales = sucursales.length > 0;
+  // F-28.2: filtrar solo sucursales activas (s.activo !== false) para normalizar datos Legacy
+  // donde el campo puede llegar como null/undefined en vez de true/false explícito.
+  const sucursalesActivas = sucursales.filter(s => s.activo !== false);
+  const tieneSucursales = sucursalesActivas.length > 0;
   const tieneDespacho = !!negocio?.ubigeoDespacho && !!negocio?.direccionDespacho;
 
-  // Selector de ventas
-  const [ventasAll, setVentasAll] = useState<VentaDTO[]>([]);
+  // F-28.4: conteo efectivo de sucursales.
+  // Los tenants Legacy que nunca hicieron upgrade no tienen registros en la tabla sucursales
+  // pero sí tienen un establecimiento principal implícito (configurado en Tenant/negocio).
+  // Si hay 0 sucursales registradas y negocio != null, el tenant tiene al menos 1 establecimiento.
+  // La condición negocio != null es la comprobación de que existe un establecimiento principal válido.
+  const tienePrincipalImplicita = sucursalesActivas.length === 0 && negocio != null;
+  const conteoEfectivo = tienePrincipalImplicita ? 1 : sucursalesActivas.length;
+
+  // F-28.1 / F-28.2 / F-28.4: detectar si no hay sucursales destino disponibles.
+  // Usa conteoEfectivo para incluir el establecimiento principal implícito Legacy.
+  const sinSucursalesDestino = form.tipoTraslado === 'SUCURSALES' && conteoEfectivo <= 1;
+  // isBasico es true tanto para Básico nuevo como Básico Legacy (sin planCodigo).
+  // Si es Básico y solo tiene 1 establecimiento efectivo, el límite está alcanzado.
+  const limiteAlcanzado = isBasico
+    ? conteoEfectivo >= 1
+    : conteoEfectivo >= limites.sucursales;
+
+  // F-15: selector de ventas con búsqueda reactiva
+  const [ventasResultados, setVentasResultados] = useState<VentaResumenDTO[]>([]);
   const [ventasLoading, setVentasLoading] = useState(false);
-  const [ventasCargadas, setVentasCargadas] = useState(false);
   const [ventaSearch, setVentaSearch] = useState('');
   const [ventaSelectorOpen, setVentaSelectorOpen] = useState(false);
+  const [ventaSeleccionadaInfo, setVentaSeleccionadaInfo] = useState<VentaResumenDTO | null>(null);
 
-  const cargarVentas = async () => {
-    if (ventasCargadas || ventasLoading) return;
+  useEffect(() => {
+    const q = ventaSearch.trim();
+    if (!q) { setVentasResultados([]); return; }
     setVentasLoading(true);
-    try {
-      const data = await ventaService.getAll();
-      setVentasAll(data);
-      setVentasCargadas(true);
-    } catch {
-      // silent
-    } finally {
-      setVentasLoading(false);
-    }
-  };
-
-  const ventasFiltradas = ventasAll.filter(v => {
-    if (!ventaSearch) return true;
-    const q = ventaSearch.toLowerCase();
-    return (
-      String(v.id).includes(q) ||
-      (v.clienteNombre?.toLowerCase().includes(q) ?? false)
-    );
-  }).slice(0, 20);
-
-  const ventaSeleccionada = ventasAll.find(v => String(v.id) === form.ventaId) ?? null;
+    const timer = setTimeout(async () => {
+      try {
+        const results = await ventaService.buscar(q);
+        setVentasResultados(results.filter(v => v.estado !== 'ANULADA'));
+      } catch {
+        setVentasResultados([]);
+      } finally {
+        setVentasLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [ventaSearch]);
 
   // Refs para evitar que los efectos de precarga sobreescriban los ubigeos guardados en modo edición.
   // Se inicializan con el ID de sucursal del editData: si no cambia, el efecto hace skip.
@@ -209,6 +264,10 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
   // Presentaciones por item (solo farmacia)
   const [presentacionesPorItem, setPresentacionesPorItem] = useState<Record<number, ProductoPresentacionDTO[]>>({});
   const [cargandoPres, setCargandoPres] = useState<Record<number, boolean>>({});
+
+  // F-23: Variantes por item (productos con talla/color)
+  const [variantesPorItem, setVariantesPorItem] = useState<Record<number, VarianteConStockDTO[]>>({});
+  const [cargandoVar, setCargandoVar] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     sucursalService.listar()
@@ -230,6 +289,28 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
     setForm(prev => ({ ...prev, ubigeoPartida: ubigeoAuto, direccionPartida: dirAuto }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.sucursalOrigenId, sucursales]);
+
+  // F-14: cuando cambia la sucursal de origen en modo SUCURSALES, refrescar stockActual de items ya agregados.
+  useEffect(() => {
+    if (form.tipoTraslado !== 'SUCURSALES' || !form.sucursalOrigenId) return;
+    const sucursalId = Number(form.sucursalOrigenId);
+    const productosConId = form.items.filter(i => i.productoId != null);
+    if (productosConId.length === 0) return;
+    const nombres = [...new Set(productosConId.map(i => i.productoNombre).filter(Boolean))];
+    Promise.all(nombres.map(n => productoService.searchGre(n, sucursalId))).then(resultados => {
+      const stockMap = new Map<number, number>();
+      resultados.flat().forEach(p => { if (p.id != null) stockMap.set(p.id, p.stockActual ?? 0); });
+      setForm(prev => ({
+        ...prev,
+        items: prev.items.map(i =>
+          i.productoId != null && stockMap.has(i.productoId)
+            ? { ...i, stockActual: stockMap.get(i.productoId) }
+            : i
+        ),
+      }));
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.sucursalOrigenId, form.tipoTraslado]);
 
   // F-10 Caso B: tenant legacy sin sucursales, con punto de despacho — precargar ubigeo de partida
   useEffect(() => {
@@ -285,7 +366,10 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
     if (q.length < 2) { setProductos([]); return; }
     setSearchingProd(true);
     try {
-      const data = await productoService.search(q);
+      const sucursalId = form.tipoTraslado === 'SUCURSALES' && form.sucursalOrigenId
+        ? Number(form.sucursalOrigenId)
+        : undefined;
+      const data = await productoService.searchGre(q, sucursalId);
       setProductos(data.filter(p => p.activo !== false).slice(0, 10));
     } catch {
       setProductos([]);
@@ -307,6 +391,11 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
         presentacionId: undefined,
         presentacionNombre: undefined,
         factorConversion: 1,
+        varianteId: null,
+        varianteTalla: undefined,
+        varianteColor: undefined,
+        varianteSku: undefined,
+        varianteStock: undefined,
       };
       return { ...prev, items };
     });
@@ -325,6 +414,9 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
         setCargandoPres(prev => ({ ...prev, [idx]: false }));
       }
     }
+
+    // F-23: cargar variantes (talla/color) si el producto las tiene
+    await cargarVariantes(idx, p.id!);
   };
 
   const selectPresentacion = (idx: number, pres: ProductoPresentacionDTO | null) => {
@@ -345,6 +437,54 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
     });
   };
 
+  // F-23: Cargar variantes cuando se selecciona un producto con talla/color
+  const cargarVariantes = async (idx: number, productoId: number) => {
+    const sucursalId = form.sucursalOrigenId ? Number(form.sucursalOrigenId) : undefined;
+    setCargandoVar(prev => ({ ...prev, [idx]: true }));
+    try {
+      const vars = await productoService.getVariantesConStock(productoId, sucursalId);
+      setVariantesPorItem(prev => ({ ...prev, [idx]: vars }));
+      if (vars.length === 0) {
+        setForm(prev => {
+          const items = [...prev.items];
+          items[idx] = { ...items[idx], varianteId: null };
+          return { ...prev, items };
+        });
+      }
+    } catch {
+      setVariantesPorItem(prev => ({ ...prev, [idx]: [] }));
+    } finally {
+      setCargandoVar(prev => ({ ...prev, [idx]: false }));
+    }
+  };
+
+  const selectVariante = (idx: number, varId: string) => {
+    const vars = variantesPorItem[idx] ?? [];
+    if (!varId) {
+      setForm(prev => {
+        const items = [...prev.items];
+        items[idx] = { ...items[idx], varianteId: null, varianteTalla: undefined, varianteColor: undefined, varianteSku: undefined, varianteStock: undefined };
+        return { ...prev, items };
+      });
+      return;
+    }
+    const v = vars.find(x => String(x.id) === varId);
+    if (!v) return;
+    setForm(prev => {
+      const items = [...prev.items];
+      items[idx] = {
+        ...items[idx],
+        varianteId: v.id,
+        varianteTalla: v.talla,
+        varianteColor: v.color,
+        varianteSku: v.sku,
+        varianteStock: v.stockEnSucursal,
+        stockActual: v.stockEnSucursal,
+      };
+      return { ...prev, items };
+    });
+  };
+
   const validate = (): string | null => {
     if (step === 0) {
       if (!form.fechaTraslado) return 'Ingresa la fecha de traslado';
@@ -352,6 +492,8 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
     if (step === 1) {
       if (form.tipoTraslado === 'DELIVERY') {
         if (!form.destinatarioRazonSocial.trim()) return 'Ingresa la razón social del destinatario';
+        const docErr = errorNumDoc(form.destinatarioTipoDoc, form.destinatarioNumDoc);
+        if (docErr) return docErr;
         if (!form.ventaId) {
           if (tieneSucursales && !form.sucursalOrigenId)
             return 'Selecciona la sucursal de origen para el despacho independiente';
@@ -385,6 +527,36 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
   };
 
   const nextStep = () => {
+    // F-16: GRE independiente (sin venta) — Caso A bloquea, Caso B auto-ajusta
+    if (step === 2 && !form.ventaId) {
+      const ajustados: string[] = [];
+      const itemsAdj = form.items.map((item, idx) => {
+        const stockDisp = item.stockActual ?? null;
+        if (stockDisp === null || !item.productoId || stockDisp <= 0) return item;
+        const factor = item.factorConversion ?? 1;
+        const maxCant = Math.floor(stockDisp / factor);
+        const cant = Number(item.cantidad) || 0;
+        if (maxCant > 0 && cant > maxCant) {
+          ajustados.push(item.productoNombre || `Item ${idx + 1}`);
+          return { ...item, cantidad: String(maxCant) };
+        }
+        return item;
+      });
+      const sinStockItem = itemsAdj.find(it => it.productoId != null && (it.stockActual ?? null) === 0);
+      if (sinStockItem) {
+        toast.error(`Sin stock disponible para "${sinStockItem.productoNombre || 'un producto'}"`);
+        return;
+      }
+      if (ajustados.length > 0) toast(`Cantidad ajustada al stock disponible: ${ajustados.join(', ')}`);
+      if (itemsAdj.length === 0) { toast.error('Agrega al menos un item'); return; }
+      for (const item of itemsAdj) {
+        if (!item.productoId) { toast.error('Selecciona un producto para cada item'); return; }
+        if (!item.cantidad || Number(item.cantidad) <= 0) { toast.error('La cantidad debe ser mayor a cero'); return; }
+      }
+      setForm(prev => ({ ...prev, items: itemsAdj }));
+      setStep(prev => Math.min(STEPS.length - 1, prev + 1));
+      return;
+    }
     const err = validate();
     if (err) { toast.error(err); return; }
     setStep(prev => Math.min(STEPS.length - 1, prev + 1));
@@ -400,6 +572,7 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
       cantidad: Number(i.cantidad),
       unidadMedida: i.unidadMedida,
       presentacionId: i.presentacionId ?? undefined,
+      varianteId: i.varianteId ?? undefined,
     }));
 
     const req: CrearGuiaRemisionRequest = {
@@ -545,29 +718,195 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
           {/* PASO 0: Traslado */}
           {step === 0 && (
             <>
-              <Field label="Tipo de traslado">
-                <div className="flex gap-3">
-                  {(['DELIVERY', 'SUCURSALES'] as TipoTrasladoGRE[]).map(t => (
-                    <label key={t} className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" value={t} checked={form.tipoTraslado === t}
-                        onChange={() => set('tipoTraslado', t)}
-                        className="accent-blue-500" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
-                        {t === 'DELIVERY' ? 'Delivery (a cliente)' : 'Entre sucursales'}
-                      </span>
-                    </label>
-                  ))}
+              {/* Selector visual de tipo de traslado */}
+              <div>
+                <p className="text-[.8rem] font-semibold text-foreground/70 mb-2.5">
+                  ¿Qué tipo de traslado realizarás?<span className="ml-0.5 text-red-500">*</span>
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    {
+                      tipo: 'DELIVERY' as TipoTrasladoGRE,
+                      Icon: Truck,
+                      titulo: 'Enviar a un cliente',
+                      desc: 'Despachar productos de una venta o realizar una entrega independiente.',
+                    },
+                    {
+                      tipo: 'SUCURSALES' as TipoTrasladoGRE,
+                      Icon: Building2,
+                      titulo: 'Trasladar entre sucursales',
+                      desc: 'Transferir inventario de un establecimiento a otro.',
+                    },
+                  ] as const).map(({ tipo, Icon, titulo, desc }) => {
+                    const selected = form.tipoTraslado === tipo;
+                    return (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => {
+                          const motivo = tipo === 'DELIVERY' ? '01' : '04';
+                          setForm(prev => ({
+                            ...prev,
+                            tipoTraslado: tipo,
+                            motivoTrasladoCodigo: motivo,
+                            ...(tipo !== 'DELIVERY' ? { ventaId: '', items: [defaultItem()] } : {}),
+                          }));
+                          if (tipo !== 'DELIVERY') { setVentaSeleccionadaInfo(null); setVentaSearch(''); }
+                        }}
+                        className={`flex flex-col gap-2.5 p-4 rounded-[13px] border-2 text-left transition-all cursor-pointer
+                          ${selected
+                            ? 'border-primary bg-primary/5 shadow-sm shadow-primary/10'
+                            : 'border-border bg-card hover:border-primary/40 hover:bg-muted/30'}`}
+                      >
+                        <span className={`w-9 h-9 grid place-items-center rounded-[9px] transition-colors
+                          ${selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                          <Icon size={18} />
+                        </span>
+                        <div>
+                          <p className={`text-[.9rem] font-[650] leading-tight ${selected ? 'text-primary' : 'text-foreground'}`}>
+                            {titulo}
+                          </p>
+                          <p className="text-[.77rem] text-muted-foreground mt-1 leading-snug">{desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              </Field>
+                {/* Motivo auto-asignado — badge informativo */}
+                <p className="mt-2 text-[.74rem] text-muted-foreground">
+                  Motivo SUNAT asignado automáticamente:{' '}
+                  <span className="font-semibold text-foreground/80">
+                    {form.tipoTraslado === 'DELIVERY' ? '01 — Venta' : '04 — Traslado entre establecimientos'}
+                  </span>
+                </p>
+              </div>
 
-              <Field label="Motivo de traslado (cód. SUNAT)">
-                <select value={form.motivoTrasladoCodigo} onChange={e => set('motivoTrasladoCodigo', e.target.value)}
-                  className={inputCls}>
-                  {MOTIVO_TRASLADO_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </Field>
+              {/* F-15: selector de venta, solo DELIVERY */}
+              {form.tipoTraslado === 'DELIVERY' && (
+                <div className="space-y-[6px]">
+                  <label className="block text-[.8rem] font-semibold text-foreground/70">
+                    Venta asociada
+                    <span className="ml-1 text-[.75rem] font-normal text-muted-foreground/60">(opcional)</span>
+                  </label>
+                  <div className="relative">
+                    {form.ventaId ? (
+                      <div className="flex items-center gap-2 px-3 py-[10px] border border-primary/30 rounded-[10px] bg-primary/5 text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
+                        <span className="flex-1 min-w-0 text-foreground">
+                          <span className="font-medium text-primary">Venta #{form.ventaId}</span>
+                          {ventaSeleccionadaInfo && (
+                            <span className="text-muted-foreground ml-2 truncate">{ventaSeleccionadaInfo.clienteNombre}</span>
+                          )}
+                          {ventaSeleccionadaInfo?.clienteDocumento && (
+                            <span className="text-muted-foreground ml-1.5 text-[.72rem]">· {ventaSeleccionadaInfo.clienteDocumento}</span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm(prev => ({ ...prev, ventaId: '', items: [defaultItem()] }));
+                            setVentaSeleccionadaInfo(null);
+                            setVentaSearch('');
+                          }}
+                          className="text-xs text-primary hover:underline flex-shrink-0 font-medium"
+                          aria-label="Cambiar venta">
+                          Cambiar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="Buscar por n° de venta, cliente o DNI/RUC…"
+                          value={ventaSearch}
+                          onFocus={() => setVentaSelectorOpen(true)}
+                          onBlur={() => setTimeout(() => setVentaSelectorOpen(false), 150)}
+                          onChange={e => { setVentaSearch(e.target.value); setVentaSelectorOpen(true); }}
+                          className={inputCls + ' pl-9'}
+                        />
+                      </div>
+                    )}
+                    {ventaSelectorOpen && !form.ventaId && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-30 max-h-52 overflow-y-auto">
+                        {ventasLoading && (
+                          <div className="px-4 py-3 text-sm text-muted-foreground">Buscando ventas...</div>
+                        )}
+                        {!ventasLoading && ventaSearch.trim() && ventasResultados.length === 0 && (
+                          <div className="px-4 py-3 text-sm text-muted-foreground">Sin resultados</div>
+                        )}
+                        {!ventasLoading && !ventaSearch.trim() && (
+                          <div className="px-4 py-3 text-sm text-muted-foreground">Escribe para buscar ventas…</div>
+                        )}
+                        {!ventasLoading && ventasResultados.map(v => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onMouseDown={async () => {
+                              setVentaSeleccionadaInfo(v);
+                              setVentaSearch('');
+                              setVentaSelectorOpen(false);
+                              setForm(prev => ({ ...prev, ventaId: String(v.id) }));
+                              try {
+                                const detalle = await ventaService.getDetalleParaGRE(v.id);
+                                setForm(prev => ({
+                                  ...prev,
+                                  ventaId: String(detalle.ventaId),
+                                  destinatarioRazonSocial: detalle.clienteNombre || prev.destinatarioRazonSocial,
+                                  ...(detalle.clienteTipoDoc ? { destinatarioTipoDoc: detalle.clienteTipoDoc } : {}),
+                                  ...(detalle.clienteNumDoc ? { destinatarioNumDoc: detalle.clienteNumDoc } : {}),
+                                  ...(detalle.clienteDireccion ? { destinatarioDireccion: detalle.clienteDireccion } : {}),
+                                  items: detalle.items.length > 0
+                                    ? detalle.items.map(i => ({
+                                        productoId: i.productoId,
+                                        productoNombre: i.productoNombre,
+                                        descripcion: i.productoNombre,
+                                        cantidad: String(i.cantidad),
+                                        unidadMedida: i.unidadMedida || 'NIU',
+                                        presentacionId: i.presentacionId ?? undefined,
+                                        factorConversion: i.factor || 1,
+                                      }))
+                                    : prev.items,
+                                }));
+                              } catch {
+                                setForm(prev => ({
+                                  ...prev,
+                                  destinatarioRazonSocial: v.clienteNombre || prev.destinatarioRazonSocial,
+                                }));
+                              }
+                            }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm text-foreground">
+                                  <span className="font-medium text-muted-foreground mr-1.5">#{v.id}</span>
+                                  <span>{v.clienteNombre ?? 'Sin nombre'}</span>
+                                  {v.clienteDocumento && (
+                                    <span className="text-muted-foreground ml-1.5 text-[.72rem]">{v.clienteDocumento}</span>
+                                  )}
+                                </div>
+                                {v.createdAt && (
+                                  <div className="text-[.72rem] text-muted-foreground mt-0.5">
+                                    {new Date(v.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                    {v.estado && (
+                                      <span className={`ml-2 px-1 py-0.5 rounded text-[.65rem] font-medium ${
+                                        v.estado === 'COMPLETADA' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted text-muted-foreground'
+                                      }`}>{v.estado}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[.72rem] text-muted-foreground flex-shrink-0">
+                                {v.total != null ? `S/ ${Number(v.total).toFixed(2)}` : ''}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Fecha de traslado">
@@ -612,16 +951,53 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <Field label="Tipo documento">
-                      <select value={form.destinatarioTipoDoc} onChange={e => set('destinatarioTipoDoc', e.target.value)}
+                      <select value={form.destinatarioTipoDoc}
+                        onChange={e => {
+                          const newTipo = e.target.value;
+                          const { maxLength, onlyDigits } = numDocConfig(newTipo);
+                          setForm(prev => {
+                            let numDoc = onlyDigits ? prev.destinatarioNumDoc.replace(/\D/g, '') : prev.destinatarioNumDoc;
+                            numDoc = numDoc.slice(0, maxLength);
+                            return { ...prev, destinatarioTipoDoc: newTipo, destinatarioNumDoc: numDoc };
+                          });
+                        }}
                         className={inputCls}>
                         {TIPO_DOC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </Field>
-                    <Field label="N° documento" optional>
-                      <input type="text" value={form.destinatarioNumDoc}
-                        onChange={e => set('destinatarioNumDoc', e.target.value)}
-                        placeholder="20100000000" className={inputCls} />
-                    </Field>
+                    {(() => {
+                      const { maxLength, onlyDigits } = numDocConfig(form.destinatarioTipoDoc);
+                      return (
+                        <Field label="N° documento" optional={form.destinatarioTipoDoc === '-'}>
+                          <>
+                            <input
+                              type="text"
+                              value={form.destinatarioNumDoc}
+                              maxLength={maxLength}
+                              inputMode={onlyDigits ? 'numeric' : 'text'}
+                              onChange={e => {
+                                let v = e.target.value;
+                                if (onlyDigits) v = v.replace(/\D/g, '');
+                                set('destinatarioNumDoc', v.slice(0, maxLength));
+                              }}
+                              onPaste={e => {
+                                e.preventDefault();
+                                const pasted = e.clipboardData.getData('text');
+                                let v = onlyDigits ? pasted.replace(/\D/g, '') : pasted;
+                                set('destinatarioNumDoc', v.slice(0, maxLength));
+                              }}
+                              placeholder="20100000000"
+                              className={inputCls}
+                            />
+                            {form.destinatarioNumDoc.trim() && errorNumDoc(form.destinatarioTipoDoc, form.destinatarioNumDoc) && (
+                              <p className="text-xs text-red-500 mt-1">
+                                {errorNumDoc(form.destinatarioTipoDoc, form.destinatarioNumDoc)}
+                              </p>
+                            )}
+                          </>
+                        </Field>
+                      );
+                    })()}
                   </div>
                   <Field label="Razón social / Nombre">
                     <input type="text" value={form.destinatarioRazonSocial}
@@ -633,80 +1009,18 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
                       onChange={e => set('destinatarioDireccion', e.target.value)}
                       placeholder="Dirección de entrega" className={inputCls} />
                   </Field>
-                  {/* Selector de ventas */}
-                  <div className="space-y-[6px]">
-                    <label className="block text-[.8rem] font-semibold text-foreground/70">
-                      Venta asociada
-                      <span className="ml-1 text-[.75rem] font-normal text-muted-foreground/60">(opcional)</span>
-                    </label>
-                    <div className="relative">
-                      {(form.ventaId) ? (
-                        <div className="flex items-center gap-2 px-3 py-[10px] border border-border rounded-[10px] bg-background text-sm">
-                          <span className="flex-1 text-foreground">
-                            <span className="text-muted-foreground mr-1">#{ventaSeleccionada?.id ?? form.ventaId}</span>
-                            {ventaSeleccionada?.clienteNombre ?? (ventasCargadas ? 'Sin nombre' : '—')}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => { set('ventaId', ''); setVentaSearch(''); }}
-                            className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                            aria-label="Quitar venta">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                          <input
-                            type="text"
-                            placeholder="Buscar por n° venta o cliente…"
-                            value={ventaSearch}
-                            onFocus={() => { setVentaSelectorOpen(true); cargarVentas(); }}
-                            onBlur={() => setTimeout(() => setVentaSelectorOpen(false), 150)}
-                            onChange={e => { setVentaSearch(e.target.value); setVentaSelectorOpen(true); }}
-                            className={inputCls + ' pl-9'}
-                          />
-                        </div>
-                      )}
-                      {ventaSelectorOpen && !form.ventaId && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-30 max-h-52 overflow-y-auto">
-                          {ventasLoading && (
-                            <div className="px-4 py-3 text-sm text-muted-foreground">Cargando ventas...</div>
-                          )}
-                          {!ventasLoading && ventasFiltradas.length === 0 && (
-                            <div className="px-4 py-3 text-sm text-muted-foreground">
-                              {ventasCargadas ? 'Sin resultados' : 'Sin ventas disponibles'}
-                            </div>
-                          )}
-                          {!ventasLoading && ventasFiltradas.map(v => (
-                            <button
-                              key={v.id}
-                              type="button"
-                              onMouseDown={() => {
-                                setForm(prev => ({
-                                  ...prev,
-                                  ventaId: String(v.id),
-                                  ...(v.clienteNombre && !prev.destinatarioRazonSocial
-                                    ? { destinatarioRazonSocial: v.clienteNombre }
-                                    : {}),
-                                }));
-                                setVentaSearch('');
-                                setVentaSelectorOpen(false);
-                              }}
-                              className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors flex items-center justify-between gap-3">
-                              <span className="text-sm text-foreground">
-                                <span className="text-muted-foreground mr-1.5">#{v.id}</span>
-                                {v.clienteNombre ?? 'Sin nombre'}
-                              </span>
-                              <span className="text-[.72rem] text-muted-foreground flex-shrink-0">
-                                {v.total != null ? `S/ ${Number(v.total).toFixed(2)}` : ''}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                  {/* F-15: banner de venta vinculada (seleccionada en paso Traslado) */}
+                  {form.ventaId && (
+                    <div className="flex items-center gap-2 px-3 py-[10px] border border-primary/30 rounded-[10px] bg-primary/5 text-sm">
+                      <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
+                      <span className="flex-1 min-w-0 text-foreground">
+                        Datos precargados desde <span className="font-medium text-primary">Venta #{form.ventaId}</span>
+                        {ventaSeleccionadaInfo && (
+                          <span className="text-muted-foreground ml-1.5 truncate">· {ventaSeleccionadaInfo.clienteNombre}</span>
+                        )}
+                      </span>
                     </div>
-                  </div>
+                  )}
 
                   {/* Despacho independiente (sin venta): Casos A, B, C */}
                   {!form.ventaId && (
@@ -768,17 +1082,50 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
                 </>
               ) : (
                 <>
-                  {sucursales.length === 0 ? (
-                    <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/40 px-4 py-3 rounded-xl">
-                      No se encontraron sucursales. Verifica que tengas sucursales registradas en Configuración.
-                    </p>
+                  {/* F-28.1: estado vacío unificado cuando no hay sucursales destino */}
+                  {sinSucursalesDestino ? (
+                    <div
+                      role="status"
+                      aria-label="Sin sucursales destino disponibles"
+                      className="flex flex-col items-center gap-4 py-10 px-4 rounded-xl bg-muted/40 border border-border/50 text-center">
+                      <Building2 className="w-10 h-10 text-muted-foreground/40" />
+                      <div className="space-y-1.5">
+                        <p className="text-sm font-semibold text-foreground/80">No tienes otras sucursales</p>
+                        {limiteAlcanzado ? (
+                          <>
+                            <p className="text-[.8rem] text-muted-foreground max-w-xs mx-auto">
+                              Tu plan actual permite tener una sola sucursal activa. Para trasladar inventario
+                              entre establecimientos necesitas contar con al menos dos sucursales.
+                            </p>
+                            <div className="pt-2 space-y-1">
+                              <button
+                                type="button"
+                                onClick={() => navigate('/checkout/culqi?plan=PRO')}
+                                className="inline-flex items-center gap-1.5 text-[.8rem] font-semibold text-primary hover:underline"
+                              >
+                                Actualiza a Plan Pro
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                              <p className="text-[.75rem] text-muted-foreground">
+                                Desbloquea más sucursales y gestiona los traslados de inventario desde Fluxus.
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-[.8rem] text-muted-foreground max-w-xs mx-auto">
+                            Para trasladar inventario entre establecimientos necesitas al menos dos sucursales activas.
+                            Registra una nueva sucursal en <strong>Configuración → Sucursales</strong>.
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <>
                       <Field label="Sucursal de origen">
                         <select value={form.sucursalOrigenId} onChange={e => set('sucursalOrigenId', e.target.value)}
                           className={inputCls}>
                           <option value="">Seleccionar origen</option>
-                          {sucursales.map(s => (
+                          {sucursalesActivas.map(s => (
                             <option key={s.id} value={String(s.id)}>{s.nombre}</option>
                           ))}
                         </select>
@@ -787,7 +1134,7 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
                         <select value={form.sucursalDestinoId} onChange={e => set('sucursalDestinoId', e.target.value)}
                           className={inputCls}>
                           <option value="">Seleccionar destino</option>
-                          {sucursales.filter(s => String(s.id) !== form.sucursalOrigenId).map(s => (
+                          {sucursalesActivas.filter(s => String(s.id) !== form.sucursalOrigenId).map(s => (
                             <option key={s.id} value={String(s.id)}>{s.nombre}</option>
                           ))}
                         </select>
@@ -890,6 +1237,30 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
                                 {p.unidadMedidaNombre ?? p.unidadMedidaAbreviatura} ×{p.factor}
                               </option>
                             ))}
+                          </select>
+                        </Field>
+                      ) : null
+                    )}
+
+                    {/* F-23: Selector de variante (talla/color) */}
+                    {item.productoId && (
+                      cargandoVar[idx] ? (
+                        <p className="text-[.75rem] text-muted-foreground">Cargando variantes...</p>
+                      ) : (variantesPorItem[idx] ?? []).length > 0 ? (
+                        <Field label="Variante">
+                          <select
+                            value={item.varianteId ?? ''}
+                            onChange={e => selectVariante(idx, e.target.value)}
+                            className={inputCls}>
+                            <option value="">Sin variante</option>
+                            {(variantesPorItem[idx] ?? []).map(v => {
+                              const label = [v.talla, v.color, v.sku].filter(Boolean).join(' / ');
+                              return (
+                                <option key={v.id} value={v.id}>
+                                  {label || `Variante #${v.id}`} — Stock: {v.stockEnSucursal}
+                                </option>
+                              );
+                            })}
                           </select>
                         </Field>
                       ) : null
@@ -1033,7 +1404,15 @@ export function NuevaGuiaRemision({ onClose, onCreate, editData, onUpdate }: Pro
           </Button>
 
           {step < STEPS.length - 1 ? (
-            <Button onClick={nextStep} className="flex items-center gap-1.5">
+            <Button
+              onClick={nextStep}
+              disabled={
+                (step === 2 && !form.ventaId && form.items.some(it => it.productoId != null && (it.stockActual ?? null) === 0)) ||
+                // F-28.1: deshabilitar en paso 1 si SUCURSALES sin destinos disponibles (0 o 1 sucursal)
+                (step === 1 && sinSucursalesDestino)
+              }
+              className="flex items-center gap-1.5"
+            >
               Siguiente
               <ChevronRight className="w-4 h-4" />
             </Button>

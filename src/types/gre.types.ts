@@ -9,6 +9,17 @@ export interface GuiaRemisionItemDTO {
   cantidad: number;
   unidadMedida?: string;
   presentacionId?: number;
+  /** F-23: ID de la variante seleccionada (talla/color). Nullable para productos sin variantes. */
+  varianteId?: number;
+}
+
+/** F-23: Variante de producto con stock en la sucursal de origen. */
+export interface VarianteConStockDTO {
+  id: number;
+  talla?: string;
+  color?: string;
+  sku?: string;
+  stockEnSucursal: number;
 }
 
 export interface TransporteDTO {
@@ -45,6 +56,7 @@ export interface GuiaRemisionListItem {
   estadoTributario: EstadoTributarioGRE;
   estadoLogistico: EstadoLogisticoGRE;
   ventaId?: number;
+  pdfUrl?: string;
   createdAt: string;
 }
 

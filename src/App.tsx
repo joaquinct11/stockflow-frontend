@@ -63,7 +63,7 @@ const CitasPage           = lazy(() => import('./pages/citas/CitasPage').then(m 
 const EquiposPage         = lazy(() => import('./pages/equipos/EquiposPage'));
 const OrdenesTrabajoPage  = lazy(() => import('./pages/ordenes-trabajo/OrdenesTrabajoPage'));
 const OtDetailPage        = lazy(() => import('./pages/ordenes-trabajo/OtDetailPage'));
-const GREComingSoon       = lazy(() => import('./pages/guiasRemision/GREComingSoon').then(m => ({ default: m.GREComingSoon })));
+const GuiasRemisionList   = lazy(() => import('./pages/guiasRemision/GuiasRemisionList').then(m => ({ default: m.GuiasRemisionList })));
 
 const PageLoader = () => (
   <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: '#6b7280', fontFamily: 'Inter, sans-serif' }}>
@@ -395,7 +395,7 @@ function App() {
                 element={
                   <SubscripcionGuard>
                     <RoleProtectedRoute allowedRoles={['ADMIN', 'GERENTE']} anyPermission={['VER_GRE', 'EMITIR_GRE']}>
-                      <GREComingSoon />
+                      <GuiasRemisionList />
                     </RoleProtectedRoute>
                   </SubscripcionGuard>
                 }

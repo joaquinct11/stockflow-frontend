@@ -16,6 +16,8 @@ interface AuthState {
   isAuthenticated: boolean;
   /** Estado de suscripción del tenant, actualizado independientemente del JWT */
   suscripcionEstado: string | null;
+  /** true mientras se obtiene tenantNombre desde /auth/me; evita flash de sección vacía */
+  tenantLoading: boolean;
 
   // Multi-tenant: estado pendiente de selección de tenant
   pendingTenantSelection: boolean;
@@ -46,6 +48,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   suscripcionEstado: null,
+  tenantLoading: false,
   pendingTenantSelection: false,
   availableTenants: [],
   selectionToken: null,
@@ -56,10 +59,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setUser: (user) => {
     if (import.meta.env.DEV) { console.log('✅ Usuario establecido:', user.email);}
     _initialized = true;
-    set({ user, isAuthenticated: true });
+    set({ user, isAuthenticated: true, tenantLoading: !user.tenantNombre });
     localStorage.setItem('user', JSON.stringify(user));
     if (user.accessToken) { localStorage.setItem('accessToken', user.accessToken); }
     if (user.refreshToken) { localStorage.setItem('refreshToken', user.refreshToken); }
+    // Si el login no devuelve tenantNombre, lo obtenemos de /auth/me para mostrar el negocio en el Header
+    if (!user.tenantNombre) {
+      authService.obtenerPerfil()
+        .then(profile => {
+          const updatedUser = { ...user, tenantNombre: profile.nombreFarmacia };
+          set({ user: updatedUser, tenantLoading: false });
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        })
+        .catch(() => set({ tenantLoading: false }));
+    }
   },
 
   setPendingSelection: (selectionToken, tenants) => {
@@ -86,10 +99,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       knownTenants: availTenants.length > 0 ? availTenants : get().knownTenants,
       tenantsLoading: false,
       tenantsError: false,
+      tenantLoading: !user.tenantNombre,
     });
     localStorage.setItem('user', JSON.stringify(user));
     if (user.accessToken) { localStorage.setItem('accessToken', user.accessToken); }
     if (user.refreshToken) { localStorage.setItem('refreshToken', user.refreshToken); }
+    if (!user.tenantNombre) {
+      authService.obtenerPerfil()
+        .then(profile => {
+          const updatedUser = { ...user, tenantNombre: profile.nombreFarmacia };
+          set({ user: updatedUser, tenantLoading: false });
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        })
+        .catch(() => set({ tenantLoading: false }));
+    }
   },
 
   resetPendingSelection: () => {
@@ -122,6 +145,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user: null,
       isAuthenticated: false,
       suscripcionEstado: null,
+      tenantLoading: false,
       pendingTenantSelection: false,
       availableTenants: [],
       selectionToken: null,
@@ -204,7 +228,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Sesión completa
       const user = JSON.parse(storedUser);
       if (import.meta.env.DEV) { console.log('✅ Sesión restaurada para:', user.email);}
-      set({ user, isAuthenticated: true });
+      // tenantLoading=true solo si falta tenantNombre; evita skeleton innecesario en recargas posteriores
+      set({ user, isAuthenticated: true, tenantLoading: !user.tenantNombre });
 
       try {
         const profile = await authService.obtenerPerfil();
@@ -218,10 +243,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           sucursalId: profile.sucursalId ?? null,
           tenantNombre: profile.nombreFarmacia,
         };
-        set({ user: updatedUser });
+        set({ user: updatedUser, tenantLoading: false });
         localStorage.setItem('user', JSON.stringify(updatedUser));
         if (import.meta.env.DEV) { console.log('✅ Permisos actualizados desde /api/auth/me:', profile.permisos);}
       } catch (error) {
+        set({ tenantLoading: false });
         if (import.meta.env.DEV) { console.warn('⚠️ No se pudo actualizar permisos desde /api/auth/me, usando datos locales:', error);}
       }
     } else if (storedSelectionToken && storedPendingTenants) {

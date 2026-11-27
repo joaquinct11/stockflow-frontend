@@ -1,13 +1,18 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Plus, Search, Truck, FileDown, RefreshCw, X, FileText, CheckCircle2, AlertCircle, Clock, Eye, Pencil, Trash2, RotateCcw } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Plus, Search, Truck, FileDown, RefreshCw, X, FileText, CheckCircle2, AlertCircle, Clock, Eye, Pencil, Trash2, RotateCcw, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { guiaRemisionService } from '../../services/guiaRemision.service';
 import type { GuiaRemisionListItem, EstadoTributarioGRE, GuiaRemisionResponse } from '../../types/gre.types';
+import type { GuiaRemisionStats } from '../../services/guiaRemision.service';
 import { Button } from '../../components/ui/Button';
+import { Pagination } from '../../components/ui/Pagination';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useOseConfigured } from '../../hooks/useOseConfigured';
+import { useSucursalStore } from '../../store/sucursalStore';
+import { OseBanner } from '../../components/shared/OseBanner';
 import { notify } from '../../lib/notify';
 import {
   EstadoTributarioBadge,
@@ -18,6 +23,7 @@ import {
 } from './gre.helpers';
 import { GuiaRemisionDetail } from './GuiaRemisionDetail';
 import { NuevaGuiaRemision } from './NuevaGuiaRemision';
+
 
 const ESTADO_OPTIONS: { value: EstadoTributarioGRE | ''; label: string }[] = [
   { value: '', label: 'Todos los estados' },
@@ -30,6 +36,8 @@ const ESTADO_OPTIONS: { value: EstadoTributarioGRE | ''; label: string }[] = [
 
 export function GuiasRemisionList() {
   const { puede, isAdmin, isGerente } = usePermissions();
+  const oseConfigured = useOseConfigured();
+  const { sucursalActual, loaded: sucursalLoaded } = useSucursalStore();
 
   const canVer     = isAdmin || isGerente || puede('VER_GRE');
   const canEmitir  = isAdmin || isGerente || puede('EMITIR_GRE');
@@ -38,16 +46,21 @@ export function GuiasRemisionList() {
   const canEditar  = isAdmin || isGerente || puede('EDITAR_GRE_BORRADOR');
   const canEliminar = isAdmin || isGerente || puede('ELIMINAR_GRE_BORRADOR');
 
+  const PAGE_SIZE = 10;
+
   const [items, setItems] = useState<GuiaRemisionListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  const PAGE_SIZE = 20;
+  const [stats, setStats] = useState<GuiaRemisionStats | null>(null);
 
   const [filterEstado, setFilterEstado] = useState<EstadoTributarioGRE | ''>('');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const initialLoadDoneRef = useRef(false);
+  const initialLoadCompletedRef = useRef(false);
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detailGuia, setDetailGuia] = useState<GuiaRemisionResponse | null>(null);
@@ -61,23 +74,57 @@ export function GuiasRemisionList() {
   const [editLoadingId, setEditLoadingId] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: number; numero: string } | null>(null);
 
-  const fetchList = useCallback(async (p: number) => {
-    setLoading(true);
+  const sucursalId = sucursalActual?.id;
+
+  const fetchStats = useCallback(async (sucId?: number) => {
     try {
-      const res = await guiaRemisionService.listar(p, PAGE_SIZE);
+      const s = await guiaRemisionService.stats(sucId);
+      setStats(s);
+    } catch { /* no bloquea la UI */ }
+  }, []);
+
+  const fetchList = useCallback(async (p: number, size: number, q: string, estado: EstadoTributarioGRE | '', sucId?: number) => {
+    try {
+      const res = await guiaRemisionService.listar(p, size, q, estado, sucId);
       setItems(res.content);
       setTotalPages(res.totalPages);
       setTotalElements(res.totalElements);
     } catch {
       toast.error('Error al cargar guías de remisión');
-    } finally {
-      setLoading(false);
     }
   }, []);
 
+  // Carga inicial coordinada: espera lista + stats juntos antes de mostrar datos
   useEffect(() => {
-    if (canVer) fetchList(page);
-  }, [canVer, page, fetchList]);
+    if (!canVer || !sucursalLoaded || initialLoadDoneRef.current) return;
+    initialLoadDoneRef.current = true;
+    Promise.all([
+      fetchList(0, PAGE_SIZE, '', '', sucursalId),
+      fetchStats(sucursalId),
+    ]).finally(() => {
+      initialLoadCompletedRef.current = true;
+      setInitialLoading(false);
+    });
+  }, [canVer, sucursalLoaded, sucursalId, fetchList, fetchStats]);
+
+  // Cargas posteriores (paginación, filtros, búsqueda, cambio de sucursal).
+  useEffect(() => {
+    if (!canVer || !initialLoadCompletedRef.current) return;
+    setItems([]); // evitar mostrar resultados de sucursal anterior durante la carga
+    setListLoading(true);
+    fetchList(page, PAGE_SIZE, search, filterEstado, sucursalId).finally(() => setListLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canVer, page, search, filterEstado, sucursalId, fetchList]);
+
+  // Resetear página y refrescar stats al cambiar de sucursal (después de la carga inicial)
+  const prevSucursalIdRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!initialLoadCompletedRef.current) return;
+    if (prevSucursalIdRef.current === sucursalId) return;
+    prevSucursalIdRef.current = sucursalId;
+    setPage(0);
+    fetchStats(sucursalId);
+  }, [sucursalId, fetchStats]);
 
   const openDetail = async (id: number) => {
     setSelectedId(id);
@@ -106,13 +153,25 @@ export function GuiasRemisionList() {
 
   const handleNuevaCreada = () => {
     setShowNueva(false);
-    fetchList(0);
     setPage(0);
+    setListLoading(true);
+    Promise.all([
+      fetchList(0, PAGE_SIZE, search, filterEstado),
+      fetchStats(),
+    ]).finally(() => setListLoading(false));
   };
 
   const handleDeleteGuia = (id: number) => {
-    setItems(prev => prev.filter(i => i.id !== id));
+    setItems(prev => {
+      const updated = prev.filter(i => i.id !== id);
+      // Si la página queda vacía y no es la primera, retroceder
+      if (updated.length === 0 && page > 0) {
+        setPage(p => p - 1);
+      }
+      return updated;
+    });
     setTotalElements(prev => Math.max(0, prev - 1));
+    setStats(s => s ? { ...s, total: Math.max(0, s.total - 1) } : s);
   };
 
   const handleEditGuia = (guia: GuiaRemisionResponse) => {
@@ -124,8 +183,12 @@ export function GuiasRemisionList() {
     handleDetailUpdate(updated);
   };
 
-  const handleDownloadPdf = async (e: React.MouseEvent, id: number, numero: string) => {
+  const handleDownloadPdf = async (e: React.MouseEvent, id: number, numero: string, pdfUrl?: string) => {
     e.stopPropagation();
+    if (pdfUrl) {
+      window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
     setDownloadingId(id);
     try {
       const blob = await guiaRemisionService.downloadPdf(id);
@@ -184,24 +247,14 @@ export function GuiasRemisionList() {
     }
   };
 
-  const filteredItems = items.filter(item => {
-    if (filterEstado && item.estadoTributario !== filterEstado) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        item.numeroCompleto.toLowerCase().includes(q) ||
-        (item.destinatarioRazonSocial ?? '').toLowerCase().includes(q) ||
-        (item.sucursalOrigenNombre ?? '').toLowerCase().includes(q) ||
-        (item.sucursalDestinoNombre ?? '').toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  // Filtrado y búsqueda se hacen en el backend; items ya es el resultado de la página actual.
+  const filteredItems = items;
 
-  // ── KPI stats derivados de los items cargados ────────────────────────
-  const kpiEmitidas   = items.filter(i => i.estadoTributario === 'EMITIDA').length;
-  const kpiPendientes = items.filter(i => i.estadoTributario === 'BORRADOR' || i.estadoTributario === 'EMITIENDO').length;
-  const kpiError      = items.filter(i => i.estadoTributario === 'ERROR').length;
+  // ── KPI stats globales (no dependen de la página actual) ────────────
+  const kpiTotal      = stats?.total      ?? 0;
+  const kpiEmitidas   = stats?.emitidas   ?? 0;
+  const kpiPendientes = stats?.pendientes ?? 0;
+  const kpiError      = stats?.conError   ?? 0;
 
   if (!canVer) {
     return (
@@ -213,8 +266,14 @@ export function GuiasRemisionList() {
     );
   }
 
+  if (initialLoading) {
+    return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  }
+
   return (
     <div className="space-y-5">
+
+      {oseConfigured === false && <OseBanner />}
 
       {/* ── Header ── */}
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -244,7 +303,7 @@ export function GuiasRemisionList() {
             Total de guías
           </p>
           <p className="text-[1.72rem] font-bold tracking-tight mt-[9px] tabular-nums text-primary">
-            {totalElements}
+            {kpiTotal}
           </p>
           <p className="text-[.79rem] text-muted-foreground mt-1">Registradas en el sistema</p>
         </div>
@@ -299,12 +358,12 @@ export function GuiasRemisionList() {
               placeholder="Buscar por número, destinatario…"
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && setSearch(searchInput)}
+              onKeyDown={e => { if (e.key === 'Enter') { setSearch(searchInput); setPage(0); } }}
               className="w-full h-10 pl-9 pr-3 text-sm bg-muted/50 border border-transparent rounded-xl outline-none focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             />
             {searchInput && (
               <button
-                onClick={() => { setSearchInput(''); setSearch(''); }}
+                onClick={() => { setSearchInput(''); setSearch(''); setPage(0); }}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
@@ -315,7 +374,7 @@ export function GuiasRemisionList() {
           {/* Filtro estado */}
           <select
             value={filterEstado}
-            onChange={e => setFilterEstado(e.target.value as EstadoTributarioGRE | '')}
+            onChange={e => { setFilterEstado(e.target.value as EstadoTributarioGRE | ''); setPage(0); }}
             className="h-10 px-3 text-sm bg-muted/50 border border-transparent rounded-xl outline-none focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-foreground"
           >
             {ESTADO_OPTIONS.map(o => (
@@ -325,17 +384,27 @@ export function GuiasRemisionList() {
 
           {/* Reload */}
           <button
-            onClick={() => fetchList(page)}
-            className="flex items-center justify-center h-10 w-10 rounded-xl text-muted-foreground bg-muted/50 border border-transparent hover:bg-muted transition-colors"
+            onClick={() => {
+              setListLoading(true);
+              Promise.all([
+                fetchList(page, PAGE_SIZE, search, filterEstado),
+                fetchStats(),
+              ]).finally(() => setListLoading(false));
+            }}
+            disabled={listLoading}
+            className="flex items-center justify-center h-10 w-10 rounded-xl text-muted-foreground bg-muted/50 border border-transparent hover:bg-muted transition-colors disabled:opacity-50"
             title="Recargar"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${listLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
 
         {/* Tabla / empty / loading */}
-        {loading ? (
-          <div className="flex justify-center py-16"><LoadingSpinner /></div>
+        {listLoading ? (
+          <div className="flex justify-center items-center gap-2 py-10 text-muted-foreground text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Cargando…
+          </div>
         ) : filteredItems.length === 0 ? (
           <div className="py-4">
             <EmptyState
@@ -397,8 +466,8 @@ export function GuiasRemisionList() {
                           <Eye size={15} />
                         </button>
 
-                        {/* Reintentar — solo ERROR */}
-                        {item.estadoTributario === 'ERROR' && canEmitir && (
+                        {/* Reintentar — solo ERROR, y solo si OSE está habilitado */}
+                        {item.estadoTributario === 'ERROR' && canEmitir && oseConfigured !== false && (
                           <button type="button" onClick={e => handleInlineRetry(e, item.id)} title="Reintentar emisión"
                             disabled={retryingId === item.id}
                             className="w-[30px] h-[30px] grid place-items-center text-muted-foreground bg-transparent border-0 rounded-lg cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-700 dark:hover:text-amber-400 transition-colors disabled:opacity-40">
@@ -417,7 +486,7 @@ export function GuiasRemisionList() {
 
                         {/* PDF — EMITIDA */}
                         {item.estadoTributario === 'EMITIDA' && (
-                          <button type="button" onClick={e => handleDownloadPdf(e, item.id, item.numeroCompleto)} title="Descargar PDF"
+                          <button type="button" onClick={e => handleDownloadPdf(e, item.id, item.numeroCompleto, item.pdfUrl)} title="Descargar PDF"
                             disabled={downloadingId === item.id}
                             className="w-[30px] h-[30px] grid place-items-center text-muted-foreground bg-transparent border-0 rounded-lg cursor-pointer hover:bg-primary/10 hover:text-primary transition-colors disabled:opacity-40">
                             {downloadingId === item.id
@@ -444,25 +513,15 @@ export function GuiasRemisionList() {
         )}
 
         {/* Paginación */}
-        {!loading && totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 text-sm text-muted-foreground rounded-b-2xl">
-            <span>Página {page + 1} de {totalPages}</span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="px-3 py-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-foreground"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-                className="px-3 py-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-foreground"
-              >
-                Siguiente
-              </button>
-            </div>
+        {!initialLoading && !listLoading && totalPages > 1 && (
+          <div className="px-4 py-3 border-t border-border/50">
+            <Pagination
+              currentPage={page + 1}
+              totalPages={totalPages}
+              totalItems={totalElements}
+              itemsPerPage={PAGE_SIZE}
+              onPageChange={(p) => setPage(p - 1)}
+            />
           </div>
         )}
       </div>
@@ -477,6 +536,7 @@ export function GuiasRemisionList() {
           canCancelar={canCancel}
           canEditar={canEditar}
           canEliminar={canEliminar}
+          oseConfigured={oseConfigured}
           onClose={closeDetail}
           onUpdate={handleDetailUpdate}
           onDelete={handleDeleteGuia}

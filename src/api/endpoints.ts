@@ -50,12 +50,16 @@ export const API_ENDPOINTS = {
     GET: (id: number) => `/productos/${id}`,
     GET_BY_BARCODE: (barcode: string) => `/productos/codigo/${barcode}`,
     SEARCH: (nombre: string) => `/productos/buscar?nombre=${nombre}`,
+    SEARCH_GRE: (nombre: string, sucursalId?: number) =>
+      `/productos/buscar-gre?nombre=${nombre}${sucursalId ? `&sucursalId=${sucursalId}` : ''}`,
     GET_BY_TENANT: (tenantId: string) => `/productos/tenant/${tenantId}`,
     GET_LOW_STOCK: (tenantId: string) => `/productos/tenant/${tenantId}/bajo-stock`,
     CREATE: '/productos',
     UPDATE: (id: number) => `/productos/${id}`,
     DELETE: (id: number) => `/productos/${id}`,
     IMPORTAR: '/productos/importar',
+    VARIANTES_CON_STOCK: (id: number, sucursalId?: number) =>
+      `/productos/${id}/variantes-con-stock${sucursalId ? `?sucursalId=${sucursalId}` : ''}`,
   },
   
   VENTAS: {
